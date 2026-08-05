@@ -1,6 +1,6 @@
-# Mobile Groove
+# PatchNomad
 
-Mobile Groove is a handheld tracker based on ChipNomad. It combines AY/YM synthesis with the 47 accessible Mutable Instruments Braids models.
+PatchNomad is a handheld tracker based on ChipNomad. It combines AY/YM synthesis with the 47 accessible Mutable Instruments Braids models.
 
 ## Controls
 

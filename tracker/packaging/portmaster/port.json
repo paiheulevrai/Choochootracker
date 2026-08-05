@@ -1,13 +1,13 @@
 {
   "version": 4,
-  "name": "mobilegroove.zip",
+  "name": "patchnomad.zip",
   "items": [
-    "MobileGroove.sh",
-    "mobilegroove"
+    "PatchNomad.sh",
+    "patchnomad"
   ],
   "items_opt": [],
   "attr": {
-    "title": "Mobile Groove",
+    "title": "PatchNomad",
     "porter": [
       "surga"
     ],

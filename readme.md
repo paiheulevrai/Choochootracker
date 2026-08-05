@@ -1,6 +1,24 @@
-# Mobile Groove
+# TODO pour P-E (humain)
+- valider la réactivité des inputs (pas de lag)
+- valider le pitch tracking (dans l’écran Project, passe Linear Pitch sur OFF, puis remets-le sur ON. Cela régénère la bonne table. Si le pitch devient correct, on appliquera la correction permanente et un test de fréquence par octave.)
+- passer du temps sur le software et faire une liste de choses qui ne vont pas
+- expliquer comment doit évoluer la structure avec des chips (menu principal, déterminant le nombre de tracks), on n'a plus de chips et on est à 8 tracks tout le temps
+- valider tous les boutons et les combinaisons, notamment Menu + X ;
+- tester sauvegarde, chargement, autosave et redémarrage ;
+- tester le son sur haut-parleurs et casque : saturation, clics, stéréo ;
+- mesurer 3, 6, 8 puis 12 voix Braids à 96 kHz ;
+- vérifier si les inputs ralentissent pendant une lecture chargée ;
+- laisser tourner un morceau 20 à 30 minutes pour tester stabilité et chauffe ;
+- essayer plusieurs modèles Braids, surtout les percussions, FM et modèles physiques ;
+- noter les écrans ou actions difficiles à comprendre sans manuel.
+- Pour la structure, précise aussi ces décisions :
+   - nombre fixe de 8 pistes ou configurable ;
+   - moteur choisi par instrument plutôt que par “chip” ;
+   - possibilité de mélanger AY, Braids et Sample librement ;
 
-Mobile Groove est le nom de travail d'un fork de [ChipNomad](https://github.com/Megus/chipnomad-tracker). L'idée est de garder son tracker inspiré de LSDJ et d'élargir sa palette sonore avec des moteurs de synthèse modernes.
+# PatchNomad
+
+PatchNomad est un fork de [ChipNomad](https://github.com/Megus/chipnomad-tracker). L'idée est de garder son tracker inspiré de LSDJ et d'élargir sa palette sonore avec des moteurs de synthèse modernes.
 
 Le projet vise d'abord l'Anbernic RG353V via PortMaster. Une version Windows doit rester facile à compiler pour le développement et le débogage.
 
@@ -98,7 +116,7 @@ Les voix silencieuses ne doivent pas consommer de temps DSP inutilement.
 
 L'instrument `AYSample` actuel reste disponible pour les sons volontairement chiptune et pour la compatibilité avec les anciens projets.
 
-Il ne convient pas à la philosophie de Mobile Groove : l'import actuel convertit les WAV en mono unsigned 8 bits, limite les données à 16 384 échantillons, puis les joue à travers le DAC 4 bits de l'AY.
+Il ne convient pas à la philosophie de PatchNomad : l'import actuel convertit les WAV en mono unsigned 8 bits, limite les données à 16 384 échantillons, puis les joue à travers le DAC 4 bits de l'AY.
 
 Un instrument `Sample` séparé assurera une lecture propre :
 
@@ -243,4 +261,4 @@ Le sampler PCM 16 bits fait partie de l'étape suivante. Son architecture est d�
 - automation de type DAW ;
 - compatibilité avec des microcontrôleurs, DSP dédiés ou modules Eurorack.
 
-Mobile Groove reste un tracker portable. La synthèse est plus riche et les samples sont propres, mais l'application doit rester immédiate et amusante.
+PatchNomad reste un tracker portable. La synthèse est plus riche et les samples sont propres, mais l'application doit rester immédiate et amusante.

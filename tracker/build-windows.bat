@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo Building Mobile Groove for Windows...
+echo Building PatchNomad for Windows...
 
 set "MSYS2_ROOT=C:\msys64"
 if not exist "%MSYS2_ROOT%\usr\bin\bash.exe" (

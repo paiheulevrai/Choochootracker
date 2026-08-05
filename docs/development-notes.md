@@ -3,7 +3,7 @@
 ## Braids integration
 
 - Braids exposes 47 production models, indexed from 0 to 46. `QUESTION_MARK` is not part of the accessible set.
-- The original DSP and lookup tables assume a 96 kHz render rate. Mobile Groove therefore uses 96 kHz until measurements on the RG353V justify a resampling path.
+- The original DSP and lookup tables assume a 96 kHz render rate. PatchNomad therefore uses 96 kHz until measurements on the RG353V justify a resampling path.
 - One `BraidsVoice` belongs to each tracker track. Voices are monophonic, while AY and Braids instruments can coexist in one song.
 - Percussive models from `STRUCK_BELL` through `SNARE` keep Braids' internal `STRIKE` decay. Tonal models use the added audio-rate ADSR.
 - Braids must bypass AY register output. Treating every non-empty instrument as AY caused invalid register work until the AY path was explicitly restricted to AY1, AY2 and AYSample.
@@ -30,16 +30,16 @@ make -f Makefile.portmaster PortMaster
 make -f Makefile.portmaster PortMaster-deploy
 ```
 
-The first command creates `tracker/build/portmaster/mobilegroove.aarch64`. The second creates `releases/mobilegroove.zip` with the current PortMaster directory layout.
+The first command creates `tracker/build/portmaster/patchnomad.aarch64`. The second creates `releases/patchnomad.zip` with the current PortMaster directory layout.
 
 The release build uses LTO. It takes about two minutes when the repository lives under `/mnt/c`, but produces a stripped binary of roughly 415 KiB. The current binary requires glibc 2.27 and links dynamically to SDL2, libstdc++, libgcc, libm and libc. SDL2 is not bundled because PortMaster and the target firmware provide it.
 
 Useful checks:
 
 ```sh
-file tracker/build/portmaster/mobilegroove.aarch64
-aarch64-linux-gnu-readelf -d tracker/build/portmaster/mobilegroove.aarch64
-unzip -t releases/mobilegroove.zip
+file tracker/build/portmaster/patchnomad.aarch64
+aarch64-linux-gnu-readelf -d tracker/build/portmaster/patchnomad.aarch64
+unzip -t releases/patchnomad.zip
 ```
 
 References: [PortMaster build environments](https://portmaster.games/build-environments.html) and [PortMaster packaging guide](https://portmaster.games/packaging.html).

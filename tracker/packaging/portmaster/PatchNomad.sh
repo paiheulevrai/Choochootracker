@@ -16,7 +16,7 @@ source "$controlfolder/control.txt"
 [ -f "${controlfolder}/mod_${CFW_NAME}.txt" ] && source "${controlfolder}/mod_${CFW_NAME}.txt"
 get_controls
 
-GAMEDIR="/$directory/ports/mobilegroove"
+GAMEDIR="/$directory/ports/patchnomad"
 CONFDIR="$GAMEDIR/conf"
 mkdir -p "$CONFDIR"
 cd "$GAMEDIR" || exit 1
@@ -27,11 +27,10 @@ export XDG_DATA_HOME="$CONFDIR"
 export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
 export HOTKEY=guide
 
-bind_directories ~/.chipnomad "$CONFDIR/.chipnomad"
+bind_directories ~/.patchnomad "$CONFDIR/.patchnomad"
 
-GPTOKEYB_JUST_PATH=${GPTOKEYB% *}
-"$GPTOKEYB_JUST_PATH" "mobilegroove.${DEVICE_ARCH}" -v -c "./mobilegroove.gptk" &
-pm_platform_helper "$GAMEDIR/mobilegroove.${DEVICE_ARCH}"
-"./mobilegroove.${DEVICE_ARCH}"
+$GPTOKEYB "patchnomad.${DEVICE_ARCH}" -c "./patchnomad.gptk" &
+pm_platform_helper "$GAMEDIR/patchnomad.${DEVICE_ARCH}"
+"./patchnomad.${DEVICE_ARCH}"
 
 pm_finish

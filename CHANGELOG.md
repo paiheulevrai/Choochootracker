@@ -1,6 +1,6 @@
 # ChipNomad changelog
 
-## Mobile Groove - unreleased
+## PatchNomad - unreleased
 
 - Added the 47 accessible Mutable Instruments Braids models as one instrument type.
 - Added one monophonic Braids voice per tracker track with AY/Braids mixing.

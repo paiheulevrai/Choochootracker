@@ -11,6 +11,7 @@ settings.txt
 /font-generator/font_preview.png
 /font-generator/generate
 /font-generator/fonts
+/output/
 /website/hugo/public/
 /website/hugo/resources/_gen/
 libchipnomad.so
