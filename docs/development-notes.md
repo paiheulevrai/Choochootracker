@@ -17,9 +17,37 @@
 - The PortMaster source package should target `aarch64` first: the RG353V uses a 64-bit RK3566 CPU, and keeping an untested ARMHF build doubles the work without helping this target.
 - PortMaster officially supports WSL2/chroot, cross-compilation and Docker. This project uses WSL2/cross-compilation; Docker remains optional.
 
+## PortMaster build
+
+The ARM64 build uses Ubuntu 20.04 under WSL2. Install `make`, `g++-aarch64-linux-gnu`, `pkg-config`, `libsdl2-dev:arm64`, `zip`, `unzip` and `file`.
+
+Ubuntu multiarch needs separate package mirrors. Keep the x86 repositories on `archive.ubuntu.com` and `security.ubuntu.com` with `[arch=amd64]`. Add the Focal ARM64 repositories from `http://ports.ubuntu.com/ubuntu-ports` with `[arch=arm64]`. Without those qualifiers, APT requests ARM64 indexes from the x86 mirror and returns 404 errors.
+
+From the `tracker` directory inside WSL:
+
+```sh
+make -f Makefile.portmaster PortMaster
+make -f Makefile.portmaster PortMaster-deploy
+```
+
+The first command creates `tracker/build/portmaster/mobilegroove.aarch64`. The second creates `releases/mobilegroove.zip` with the current PortMaster directory layout.
+
+The release build uses LTO. It takes about two minutes when the repository lives under `/mnt/c`, but produces a stripped binary of roughly 415 KiB. The current binary requires glibc 2.27 and links dynamically to SDL2, libstdc++, libgcc, libm and libc. SDL2 is not bundled because PortMaster and the target firmware provide it.
+
+Useful checks:
+
+```sh
+file tracker/build/portmaster/mobilegroove.aarch64
+aarch64-linux-gnu-readelf -d tracker/build/portmaster/mobilegroove.aarch64
+unzip -t releases/mobilegroove.zip
+```
+
+References: [PortMaster build environments](https://portmaster.games/build-environments.html) and [PortMaster packaging guide](https://portmaster.games/packaging.html).
+
 ## Current validation
 
 - All 47 Braids models render finite, non-silent output in the desktop tests.
 - Filter modes and slopes, ADSR release, tracker routing and AY muting are covered by tests.
 - The Windows executable compiles and survives an SDL dummy audio/video smoke test.
 - The remaining hardware question is whether eight simultaneous voices hold 96 kHz without underruns on the RG353V.
+- The ARM64 binary and PortMaster ZIP build successfully under WSL2. They still need to run on the RG353V.

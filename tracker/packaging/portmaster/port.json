@@ -1,17 +1,17 @@
 {
   "version": 4,
-  "name": "chipnomad.zip",
+  "name": "mobilegroove.zip",
   "items": [
-    "ChipNomad.sh",
-    "chipnomad"
+    "MobileGroove.sh",
+    "mobilegroove"
   ],
   "items_opt": [],
   "attr": {
-    "title": "ChipNomad"  ,
+    "title": "Mobile Groove",
     "porter": [
-      "Megus"
+      "surga"
     ],
-    "desc": "ChipNomad is a chiptune tracker for handheld consoles. Currently supports AY-3-8910 and YM2149F chips.",
+    "desc": "A mobile tracker combining AY/YM synthesis with 47 Mutable Instruments Braids models.",
     "desc_md": null,
     "inst": "Ready to run",
     "inst_md": null,
@@ -28,9 +28,8 @@
       "!lowres"
     ],
     "arch": [
-      "aarch64",
-      "armhf"
+      "aarch64"
     ],
-    "min_glibc": ""
+    "min_glibc": "2.27"
   }
 }

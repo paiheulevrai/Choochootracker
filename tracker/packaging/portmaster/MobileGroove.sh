@@ -12,33 +12,26 @@ else
   controlfolder="/roms/ports/PortMaster"
 fi
 
-source $controlfolder/control.txt
-
+source "$controlfolder/control.txt"
 [ -f "${controlfolder}/mod_${CFW_NAME}.txt" ] && source "${controlfolder}/mod_${CFW_NAME}.txt"
-
 get_controls
 
-GAMEDIR=/$directory/ports/chipnomad/
-CONFDIR="$GAMEDIR/conf/"
-
-mkdir -p "$GAMEDIR/conf"
-
-cd $GAMEDIR
+GAMEDIR="/$directory/ports/mobilegroove"
+CONFDIR="$GAMEDIR/conf"
+mkdir -p "$CONFDIR"
+cd "$GAMEDIR" || exit 1
 
 > "$GAMEDIR/log.txt" && exec > >(tee "$GAMEDIR/log.txt") 2>&1
 
 export XDG_DATA_HOME="$CONFDIR"
-export LD_LIBRARY_PATH="$GAMEDIR/libs.${DEVICE_ARCH}:$LD_LIBRARY_PATH"
 export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
-
-# if XDG Path does not work
-# Use bind_directories to reroute that to a location within the ports folder.
-bind_directories ~/.chipnomad $GAMEDIR/conf/.chipnomad
-
 export HOTKEY=guide
+
+bind_directories ~/.chipnomad "$CONFDIR/.chipnomad"
+
 GPTOKEYB_JUST_PATH=${GPTOKEYB% *}
-$GPTOKEYB_JUST_PATH "chipnomad.${DEVICE_ARCH}" -v -c "./chipnomad.gptk" &
-pm_platform_helper "$GAMEDIR/chipnomad.${DEVICE_ARCH}"
-./chipnomad.${DEVICE_ARCH}
+"$GPTOKEYB_JUST_PATH" "mobilegroove.${DEVICE_ARCH}" -v -c "./mobilegroove.gptk" &
+pm_platform_helper "$GAMEDIR/mobilegroove.${DEVICE_ARCH}"
+"./mobilegroove.${DEVICE_ARCH}"
 
 pm_finish

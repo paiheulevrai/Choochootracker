@@ -1,54 +1,44 @@
-# PortMaster makefile
+# Native ARM64 PortMaster build from Ubuntu/WSL2.
 
-# PortMaster platform identifier
 PLATFORM = portmaster
-
 include Makefile.common
 
-# PortMaster-specific settings
 LIBS = $(COMMON_LIBS) platforms/sdl2
-OUTPUT_EXT =
-DOCKER64 = docker run --privileged --platform=linux/arm64 --rm --user $$(id -u):$$(id -g) -v`pwd`/..:/src -w/src/tracker
-DOCKER32 = docker run --privileged --platform=linux/armhf --rm --user $$(id -u):$$(id -g) -v`pwd`/..:/src -w/src/tracker
+CXX = aarch64-linux-gnu-g++
+STRIP = aarch64-linux-gnu-strip
+PKG_CONFIG ?= pkg-config
+PKG_CONFIG_LIBDIR ?= /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
 
-# PortMaster build settings (placeholder - to be implemented)
-XTRA_CFLAGS = -DPORTMASTER_BUILD -I${SYSROOT}/usr/include -L${SYSROOT}/usr/lib
-XTRA_LIBS = -lSDL2 -lm
-CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(XTRA_CFLAGS)
+SDL_CFLAGS = $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --cflags sdl2)
+SDL_LIBS = $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --libs sdl2)
+CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(SDL_CFLAGS) -DPORTMASTER_BUILD -DGAMEPAD_SUPPORT
+OUTPUT = -o $(BUILD)/mobilegroove.aarch64
 
-.PHONY: .PortMaster
-.PortMaster:
-	mkdir -p $(BUILD)
-	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(XTRA_LIBS) -o $(BUILD)/chipnomad.$(CPU)
-	chmod +x $(BUILD)/chipnomad.$(CPU)
+PACKAGE_ROOT = $(BUILD)/package
+PORT_DIR = $(PACKAGE_ROOT)/mobilegroove
+RELEASE = ../releases/mobilegroove.zip
 
 .PHONY: PortMaster
-PortMaster:
-	@./check-docker.sh || exit 1
-#	@echo "Ensuring PortMaster ARM64 Docker image is available..."
-#	@docker pull monkeyx/retro_builder:arm64 || echo "Warning: Failed to pull ARM64 image"
-	$(DOCKER64) monkeyx/retro_builder:arm64 make -f Makefile.portmaster .PortMaster CC=g++ CPU=aarch64
+PortMaster: $(BUILD)/mobilegroove.aarch64
 
-.PHONY: PortMaster32
-PortMaster32:
-	@./check-docker.sh || exit 1
-#	@echo "Ensuring PortMaster ARM32 Docker image is available..."
-#	@docker pull monkeyx/retro_builder:arm32 || echo "Warning: Failed to pull ARM32 image"
-	$(DOCKER32) monkeyx/retro_builder:arm32 make -f Makefile.portmaster .PortMaster CC=g++ CPU=armhf
+$(BUILD)/mobilegroove.aarch64: $(SRC_FILES) Makefile.portmaster Makefile.common
+	mkdir -p $(BUILD)
+	$(CXX) $(CFLAGS) $(SDL_LIBS) -lm $(OUTPUT)
+	$(STRIP) $(BUILD)/mobilegroove.aarch64
 
 .PHONY: PortMaster-deploy
-PortMaster-deploy: PortMaster PortMaster32
-	@echo "Creating PortMaster deployment package..."
-	@mkdir -p ../../releases
-	@rm -rf /tmp/chipnomad-pm-package
-	@mkdir -p /tmp/chipnomad-pm-package/chipnomad
-	@cp $(BUILD)/chipnomad.aarch64 /tmp/chipnomad-pm-package/chipnomad/
-	@cp $(BUILD)/chipnomad.armhf /tmp/chipnomad-pm-package/chipnomad/
-	@cp -r packaging/portmaster/* /tmp/chipnomad-pm-package/
-	@mv /tmp/chipnomad-pm-package/chipnomad.gptk /tmp/chipnomad-pm-package/chipnomad/
-	@cp -r packaging/common/* /tmp/chipnomad-pm-package/chipnomad/
-	@sed -i '' "s/BUILD_DATE_PLACEHOLDER/$$(date +%Y%m%dT%H%M%S)/g" /tmp/chipnomad-pm-package/gameinfo.xml
-	@cd /tmp/chipnomad-pm-package && zip -r ChipNomad-$$(date +%Y-%m-%d)-$(VERSION)-PortMaster.zip .
-	@mv /tmp/chipnomad-pm-package/ChipNomad-*-PortMaster.zip ../../releases/
-	@rm -rf /tmp/chipnomad-pm-package
-	@echo "PortMaster package created in ../../releases/"
+PortMaster-deploy: PortMaster
+	mkdir -p $(PORT_DIR)/licenses ../releases
+	cp $(BUILD)/mobilegroove.aarch64 $(PORT_DIR)/
+	cp packaging/portmaster/mobilegroove.gptk $(PORT_DIR)/
+	cp -r packaging/common/. $(PORT_DIR)/
+	cp ../LICENSE $(PORT_DIR)/licenses/LICENSE.mobile-groove.md
+	cp packaging/portmaster/license/* $(PORT_DIR)/licenses/
+	cp packaging/portmaster/MobileGroove.sh $(PACKAGE_ROOT)/
+	cp packaging/portmaster/port.json packaging/portmaster/README.md packaging/portmaster/gameinfo.xml packaging/portmaster/cover.png packaging/portmaster/screenshot.png $(PACKAGE_ROOT)/
+	chmod +x $(PACKAGE_ROOT)/MobileGroove.sh $(PORT_DIR)/mobilegroove.aarch64
+	sed -i "s/BUILD_DATE_PLACEHOLDER/$$(date +%Y%m%dT%H%M%S)/" $(PACKAGE_ROOT)/gameinfo.xml
+	rm -f $(BUILD)/mobilegroove.zip $(RELEASE)
+	cd $(PACKAGE_ROOT) && zip -qr ../mobilegroove.zip .
+	cp $(BUILD)/mobilegroove.zip $(RELEASE)
+	@echo "PortMaster package created: $(RELEASE)"

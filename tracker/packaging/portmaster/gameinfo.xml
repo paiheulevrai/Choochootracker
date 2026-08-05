@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <gameList>
   <game>
-    <path>./ChipNomad.sh</path>
-    <name>ChipNomad</name>
-    <desc>ChipNomad is a chiptune tracker for handheld consoles.</desc>
+    <path>./MobileGroove.sh</path>
+    <name>Mobile Groove</name>
+    <desc>A mobile tracker combining AY/YM synthesis with Mutable Instruments Braids.</desc>
     <releasedate>BUILD_DATE_PLACEHOLDER</releasedate>
-    <developer>Megus</developer>
-    <publisher>Megus</publisher>
+    <developer>Mobile Groove contributors</developer>
+    <publisher>Mobile Groove contributors</publisher>
     <genre>Music</genre>
     <image>./cover.png</image>
   </game>

@@ -1,27 +1,18 @@
-**ChipNomad** is a chiptune tracker for handheld consoles. Currently supports AY-3-8910 and YM2149F.
+# Mobile Groove
 
-ChipNomad is heavily inspired by LSDJ and M8 Tracker.
-
-Documentation is on the [ChipNomad Website](https://chipnomad.org)
+Mobile Groove is a handheld tracker based on ChipNomad. It combines AY/YM synthesis with the 47 accessible Mutable Instruments Braids models.
 
 ## Controls
 
-Navigation is similar to LSDj.
+- D-Pad: move
+- A: edit
+- B: option
+- Start: play
+- Select: shift
+- Select + D-Pad: change screen
+- B + A: clear value
+- Menu + X: exit
 
-- D-Pad - move cursor
-- A - EDIT button (enter value)
-- B - OPT button
-- Start - PLAY button
-- Select - SHIFT button
+The first PortMaster build targets aarch64 devices such as the Anbernic RG353V. Audio runs at 96 kHz; the eight-voice target still requires measurement on real hardware.
 
-- Shift + D-Pad - navigate between screens
-- B+A - clear value
-- Menu + X - exit ChipNomad
-
-## Acknowledgements
-
-ChipNomad wouldn't be possible without:
-
-- [LSDj](https://www.littlesounddj.com/lsd/index.php) by Johan Kotlinski
-- [Dirtywave M8 Tracker](https://dirtywave.com) by Trash80
-- [Ayumi AY chip emulator](https://github.com/true-grue/ayumi) by Peter Sovietov
+ChipNomad is by Megus. Braids and stmlib are by Emilie Gillet / Mutable Instruments.

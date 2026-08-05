@@ -7,6 +7,7 @@
 - Added 12/24 dB low-pass, band-pass and high-pass filtering plus audio-rate ADSR.
 - Added Braids modulation destinations, instrument editing and project persistence.
 - Added a native MSYS2 Windows build at 96 kHz and automated Braids integration tests.
+- Added a Docker-free WSL2 ARM64 build and PortMaster package for the RG353V.
 
 ## v1.0.4 (July 12, 2026)
 

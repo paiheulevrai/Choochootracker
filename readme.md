@@ -8,7 +8,7 @@ Ce n'est pas un DAW et cela ne cherche pas à le devenir. C'est un petit instrum
 
 ## État actuel
 
-La base Windows compile et démarre. Le moteur Braids est intégré au tracker avec une voix monophonique par piste, les 47 modèles accessibles, le filtre, l'ADSR, le mélange avec AY, les modulations et la sauvegarde des paramètres. La suite prioritaire est le build ARM64 et le benchmark réel sur RG353V, avant le sampler PCM 16 bits.
+La base Windows compile et démarre. Le moteur Braids est intégré au tracker avec une voix monophonique par piste, les 47 modèles accessibles, le filtre, l'ADSR, le mélange avec AY, les modulations et la sauvegarde des paramètres. Le binaire ARM64 et le package PortMaster sont également produits sous WSL2. La prochaine étape est le test réel et le benchmark sur RG353V, avant le sampler PCM 16 bits.
 
 ## Principes
 
@@ -198,8 +198,8 @@ Le packaging PortMaster existant dans ChipNomad fournit déjà une bonne base, m
 
 ### 5. Porter et mesurer sur RG353V
 
-- Produire le binaire ARM64 sous WSL2.
-- Préparer le package PortMaster.
+- [x] Produire le binaire ARM64 sous WSL2.
+- [x] Préparer le package PortMaster.
 - Tester les contrôles, la sortie audio et la stabilité sur la console.
 - Mesurer trois, six, huit et douze voix à 96 kHz.
 - Optimiser seulement ce que le benchmark identifie comme coûteux.
