@@ -1,0 +1,47 @@
+# RG35xx makefile
+
+# RG35xx platform identifier
+PLATFORM = rg35xx
+
+include Makefile.common
+
+# RG35xx-specific settings
+LIBS = $(COMMON_LIBS) platforms/sdl12
+OUTPUT_EXT =
+DOCKER = docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v`pwd`/..:/src -w/src/tracker
+
+XTRA_CFLAGS = -DRG35XX_BUILD -I${SYSROOT}/usr/include -L${SYSROOT}/usr/lib
+XTRA_LIBS = -lSDL
+CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(XTRA_CFLAGS)
+
+.PHONY: .RG35xx
+.RG35xx:
+	mkdir -p $(BUILD)
+	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(XTRA_LIBS) -o $(BUILD)/chipnomad.rg35xx
+	chmod +x $(BUILD)/chipnomad.rg35xx
+
+.PHONY: RG35xx
+RG35xx:
+	$(DOCKER) nfriedly/miyoo-toolchain:steward make -f Makefile.rg35xx .RG35xx CC=g++
+
+# RG35xx deployment
+APP := ChipNomad
+
+.PHONY: .RG35xx-sh
+.RG35xx-sh:
+	echo "#!/bin/sh" > $(BUILD)/launcher.sh
+	echo "HOME=\$$(dirname \"\$$0\")/$(APP)" >> $(BUILD)/launcher.sh
+	echo "cd \$$HOME" >> $(BUILD)/launcher.sh
+	echo "LD_PRELOAD=./j2k.so ./chipnomad.rg35xx" >> $(BUILD)/launcher.sh
+	chmod +x $(BUILD)/launcher.sh
+
+.PHONY: RG35xx-deploy
+RG35xx-deploy: RG35xx .RG35xx-sh
+	mkdir -p $(BUILD)/deploy/$(APP) ../../releases
+	cp $(BUILD)/chipnomad.rg35xx $(BUILD)/deploy/$(APP)
+	cp $(BUILD)/launcher.sh $(BUILD)/deploy/$(APP).sh
+	cp packaging/rg35xx/j2k.so $(BUILD)/deploy/$(APP)
+	cp -r packaging/common/* $(BUILD)/deploy/$(APP)
+	cd $(BUILD)/deploy && zip -r $(APP)-$$(date +%Y-%m-%d)-$(VERSION)-RG35xx.zip $(APP) $(APP).sh
+	mv $(BUILD)/deploy/$(APP)-*-RG35xx.zip ../../releases/
+	rm -rf $(BUILD)/deploy

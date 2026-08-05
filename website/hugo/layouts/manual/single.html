@@ -1,0 +1,13 @@
+{{ define "title" }}
+   {{ .Title }} — {{ .Site.Title }}
+{{ end }}
+{{ define "main" }}
+  <main class="page-content" aria-role="main">
+    <div class="home manual-content">
+      {{ if and .Parent (not .Parent.IsHome) }}
+        {{ partial "breadcrumbs.html" . }}
+      {{ end }}
+      {{ .Content }}
+    </div>
+  </main>
+{{ end }}

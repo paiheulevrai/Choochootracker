@@ -1,0 +1,54 @@
+# PortMaster makefile
+
+# PortMaster platform identifier
+PLATFORM = portmaster
+
+include Makefile.common
+
+# PortMaster-specific settings
+LIBS = $(COMMON_LIBS) platforms/sdl2
+OUTPUT_EXT =
+DOCKER64 = docker run --privileged --platform=linux/arm64 --rm --user $$(id -u):$$(id -g) -v`pwd`/..:/src -w/src/tracker
+DOCKER32 = docker run --privileged --platform=linux/armhf --rm --user $$(id -u):$$(id -g) -v`pwd`/..:/src -w/src/tracker
+
+# PortMaster build settings (placeholder - to be implemented)
+XTRA_CFLAGS = -DPORTMASTER_BUILD -I${SYSROOT}/usr/include -L${SYSROOT}/usr/lib
+XTRA_LIBS = -lSDL2 -lm
+CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(XTRA_CFLAGS)
+
+.PHONY: .PortMaster
+.PortMaster:
+	mkdir -p $(BUILD)
+	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(XTRA_LIBS) -o $(BUILD)/chipnomad.$(CPU)
+	chmod +x $(BUILD)/chipnomad.$(CPU)
+
+.PHONY: PortMaster
+PortMaster:
+	@./check-docker.sh || exit 1
+#	@echo "Ensuring PortMaster ARM64 Docker image is available..."
+#	@docker pull monkeyx/retro_builder:arm64 || echo "Warning: Failed to pull ARM64 image"
+	$(DOCKER64) monkeyx/retro_builder:arm64 make -f Makefile.portmaster .PortMaster CC=g++ CPU=aarch64
+
+.PHONY: PortMaster32
+PortMaster32:
+	@./check-docker.sh || exit 1
+#	@echo "Ensuring PortMaster ARM32 Docker image is available..."
+#	@docker pull monkeyx/retro_builder:arm32 || echo "Warning: Failed to pull ARM32 image"
+	$(DOCKER32) monkeyx/retro_builder:arm32 make -f Makefile.portmaster .PortMaster CC=g++ CPU=armhf
+
+.PHONY: PortMaster-deploy
+PortMaster-deploy: PortMaster PortMaster32
+	@echo "Creating PortMaster deployment package..."
+	@mkdir -p ../../releases
+	@rm -rf /tmp/chipnomad-pm-package
+	@mkdir -p /tmp/chipnomad-pm-package/chipnomad
+	@cp $(BUILD)/chipnomad.aarch64 /tmp/chipnomad-pm-package/chipnomad/
+	@cp $(BUILD)/chipnomad.armhf /tmp/chipnomad-pm-package/chipnomad/
+	@cp -r packaging/portmaster/* /tmp/chipnomad-pm-package/
+	@mv /tmp/chipnomad-pm-package/chipnomad.gptk /tmp/chipnomad-pm-package/chipnomad/
+	@cp -r packaging/common/* /tmp/chipnomad-pm-package/chipnomad/
+	@sed -i '' "s/BUILD_DATE_PLACEHOLDER/$$(date +%Y%m%dT%H%M%S)/g" /tmp/chipnomad-pm-package/gameinfo.xml
+	@cd /tmp/chipnomad-pm-package && zip -r ChipNomad-$$(date +%Y-%m-%d)-$(VERSION)-PortMaster.zip .
+	@mv /tmp/chipnomad-pm-package/ChipNomad-*-PortMaster.zip ../../releases/
+	@rm -rf /tmp/chipnomad-pm-package
+	@echo "PortMaster package created in ../../releases/"

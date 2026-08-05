@@ -1,0 +1,64 @@
+# macOS makefile
+
+# macOS platform identifier
+PLATFORM = macos
+
+include Makefile.common
+
+# Set compilers
+CC = clang
+CXX = clang++
+
+# macOS-specific settings
+LIBS = $(COMMON_LIBS) platforms/sdl2
+OUTPUT_EXT =
+
+# SDL2 Framework path
+SDL2_FRAMEWORK = platforms/macos/Frameworks/SDL2.framework
+
+# macOS-specific flags (Universal Binary: ARM64 + x86_64)
+# Using SDL2.framework for better portability
+XTRA_CFLAGS = -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 -F$(SDL2_FRAMEWORK)/.. -DDESKTOP_BUILD -DMACOS_BUILD
+XTRA_LIBS = -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 -F$(SDL2_FRAMEWORK)/.. -framework SDL2 -framework Cocoa -lm -rpath @executable_path/../Frameworks
+CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(XTRA_CFLAGS)
+OUTPUT = -o $(BUILD)/chipnomad$(OUTPUT_EXT)
+
+.PHONY: macOS
+macOS:
+	@if [ ! -d "$(SDL2_FRAMEWORK)" ]; then \
+		echo "❌ SDL2.framework not found!"; \
+		echo ""; \
+		echo "Please run: ./platforms/macos/check-sdl2.sh"; \
+		echo "Or see: platforms/macos/Frameworks/README.md"; \
+		exit 1; \
+	fi
+	$(call build_target)
+
+# macOS deployment
+APP := ChipNomad
+APP_BUNDLE := $(APP).app
+
+.PHONY: macOS-app-bundle
+macOS-app-bundle: macOS
+	@echo "Creating macOS .app bundle..."
+	@rm -rf $(BUILD)/$(APP_BUNDLE)
+	@mkdir -p $(BUILD)/$(APP_BUNDLE)/Contents/{MacOS,Resources,Frameworks}
+	@cp $(BUILD)/chipnomad $(BUILD)/$(APP_BUNDLE)/Contents/MacOS/
+	@cp -r packaging/common/* $(BUILD)/
+	@cp packaging/macos/README.txt $(BUILD)/
+	@iconutil -c icns packaging/macos/ChipNomad.iconset -o $(BUILD)/$(APP_BUNDLE)/Contents/Resources/ChipNomad.icns 2>/dev/null || echo "Warning: Icon generation failed"
+	@echo "Copying SDL2.framework to bundle..."
+	@cp -R $(SDL2_FRAMEWORK) $(BUILD)/$(APP_BUNDLE)/Contents/Frameworks/
+	@cp packaging/macos/Info.plist $(BUILD)/$(APP_BUNDLE)/Contents/
+	@sed -i '' "s/VERSION_PLACEHOLDER/$(VERSION)/g" $(BUILD)/$(APP_BUNDLE)/Contents/Info.plist
+	@codesign --force --sign - $(BUILD)/$(APP_BUNDLE)/Contents/Frameworks/SDL2.framework/SDL2
+	@codesign --force --sign - $(BUILD)/$(APP_BUNDLE)
+	@echo ".app bundle created at $(BUILD)/$(APP_BUNDLE)"
+
+.PHONY: macOS-deploy
+macOS-deploy: macOS-app-bundle
+	@echo "Creating macOS deployment package..."
+	@mkdir -p ../../releases
+	@cd $(BUILD) && zip -ry $(APP)-$$(date +%Y-%m-%d)-$(VERSION)-macOS.zip $(APP_BUNDLE) $(COMMON_DATA_DIRS) README.txt
+	@mv $(BUILD)/$(APP)-*-macOS.zip ../../releases/
+	@echo "macOS package created in ../../releases/"

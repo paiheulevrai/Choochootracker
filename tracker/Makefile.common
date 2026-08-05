@@ -1,0 +1,39 @@
+# Common makefile settings and source files
+
+# Version (parsed from source)
+VERSION = $(shell grep 'appVersion.*=' src/version.cpp | cut -d'"' -f2)
+
+# Common source directories
+COMMON_LIBS = src ../chipnomad_lib ../chipnomad_lib/chips ../chipnomad_lib/synth ../chipnomad_lib/external/ayumi ../chipnomad_lib/external/mutable/braids ../chipnomad_lib/external/mutable/stmlib/utils ../chipnomad_lib/export src/corelib src/import src/screens platforms/shared
+
+# Base build directory
+BUILD_BASE = build
+
+# Platform-specific build directory (to be set by platform makefiles)
+BUILD = $(BUILD_BASE)/$(PLATFORM)
+
+# Common includes and sources
+INCLUDES = $(addprefix -I, $(LIBS)) -I../chipnomad_lib -I../chipnomad_lib/external/mutable
+C_SOURCES = $(foreach dir, $(LIBS), $(wildcard $(dir)/*.c))
+CPP_SOURCES = $(foreach dir, $(LIBS), $(wildcard $(dir)/*.cpp)) $(foreach dir, $(LIBS), $(wildcard $(dir)/*.cc))
+SOURCES = $(C_SOURCES) $(CPP_SOURCES)
+SRC_FILES = $(foreach dir, $(LIBS), $(wildcard $(dir)/*.c)) $(foreach dir, $(LIBS), $(wildcard $(dir)/*.cpp)) $(foreach dir, $(LIBS), $(wildcard $(dir)/*.h))
+
+# Always use C++ compiler for better compatibility with future C++ modules
+# C files are compiled as C++ (C is mostly compatible with C++)
+COMPILER = $(CXX)
+STD_FLAG = -std=c++17
+CPP_LIBS =
+
+# Common compiler flags
+COMMON_CFLAGS = $(STD_FLAG) -Wall -g -Os -flto
+
+# Common data directories from packaging/common (auto-discovered)
+COMMON_DATA_DIRS = $(patsubst packaging/common/%/,%,$(wildcard packaging/common/*/))
+
+# Build target helper
+define build_target
+	mkdir -p $(BUILD)
+	$(COMPILER) $(CFLAGS) $(CPP_LIBS) $(XTRA_LIBS) $(OUTPUT)
+	chmod +x $(BUILD)/chipnomad$(OUTPUT_EXT)
+endef

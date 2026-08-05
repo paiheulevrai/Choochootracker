@@ -1,0 +1,618 @@
+#include <stdarg.h>
+#include <string.h>
+#include "screens.h"
+#include "screen_settings.h"
+#include "chipnomad_lib.h"
+#include "corelib_gfx.h"
+#include "corelib_file.h"
+#include "utils.h"
+#include "copy_paste.h"
+
+const AppScreen* currentScreen = NULL;
+
+static int messageTimer = -1;
+static char messageBuffer[42] = "";
+
+static AppScreen const* pendingScreen;
+static int pendingScreenInput;
+
+void drawScreenMap() {
+  const static int smY = 15;
+
+  const ColorScheme cs = appSettings.colorScheme;
+  gfxSetBgColor(cs.background);
+  gfxSetFgColor(cs.textInfo);
+  gfxClearRect(35, smY, 5, 5);
+
+  // Core screens
+  gfxPrint(35, smY + 1, "SCPIT");
+
+  // Additional screens
+  if (currentScreen == &screenSong || currentScreen == &screenProject) {
+    gfxPrint(35, smY, "P");
+  } else if (currentScreen == &screenPhrase || currentScreen == &screenGroove) {
+    gfxPrint(37, smY, "G");
+  } else if (currentScreen == &screenInstrument || currentScreen == &screenInstrumentPool) {
+    gfxPrint(38, smY + 2, "P");
+    gfxPrint(38, smY, "M");
+  } else if (currentScreen == &screenModulation) {
+    gfxPrint(38, smY + 2, "P");
+  } else if (currentScreen == &screenTable || currentScreen == &screenWavetable) {
+    gfxPrint(39, smY + 2, "W");
+  }
+
+  // Show Settings below Song
+  if (currentScreen == &screenSong) {
+    gfxPrint(35, smY + 2, "S");
+  }
+
+  // Highlight current screen
+  gfxSetFgColor(cs.textDefault);
+  if (currentScreen == &screenSong) {
+    gfxPrint(35, smY + 1, "S");
+  } else if (currentScreen == &screenChain) {
+    gfxPrint(36, smY + 1, "C");
+  } else if (currentScreen == &screenPhrase) {
+    gfxPrint(37, smY + 1, "P");
+  } else if (currentScreen == &screenInstrument) {
+    gfxPrint(38, smY + 1, "I");
+  } else if (currentScreen == &screenInstrumentPool) {
+    gfxPrint(38, smY + 2, "P");
+  } else if (currentScreen == &screenModulation) {
+    gfxPrint(38, smY, "M");
+  } else if (currentScreen == &screenTable) {
+    gfxPrint(39, smY + 1, "T");
+  } else if (currentScreen == &screenWavetable) {
+    gfxPrint(39, smY + 2, "W");
+  } else if (currentScreen == &screenProject) {
+    gfxPrint(35, smY, "P");
+  } else if (currentScreen == &screenGroove) {
+    gfxPrint(37, smY, "G");
+  } else if (currentScreen == &screenSettings) {
+    gfxPrint(35, smY + 2, "S");
+  }
+}
+
+void screenSetup(const AppScreen* screen, int input) {
+  pendingScreen = screen;
+  pendingScreenInput = input;
+}
+
+void screenDraw() {
+  if (pendingScreen != NULL) {
+    currentScreen = pendingScreen;
+    currentScreen->setup(pendingScreenInput);
+    gfxSetBgColor(appSettings.colorScheme.background);
+    gfxSetCursorColor(appSettings.colorScheme.cursor);
+    gfxClearRect(0, 0, 40, 20);
+    currentScreen->fullRedraw();
+    drawScreenMap();
+
+    pendingScreen = NULL;
+  }
+
+  currentScreen->draw();
+
+  // Draw cached message
+  if (strlen(messageBuffer) > 0) {
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxClearRect(0, 19, 40, 1);
+    gfxPrint(0, 19, messageBuffer);
+  }
+
+  if (messageTimer >= 0) {
+    messageTimer--;
+    if (messageTimer == 0) {
+      messageBuffer[0] = '\0';
+      gfxClearRect(0, 19, 40, 1);
+    }
+  }
+}
+
+
+void screenMessage(int time, const char* format, ...) {
+  // Don't clear timed messages
+  if (messageTimer > 0 && strlen(format) == 0) {
+    return;
+  }
+
+  messageTimer = time;
+
+  va_list args;
+  va_start(args, format);
+  vsnprintf(messageBuffer, 41, format, args);
+  va_end(args);
+
+  // Clear message area immediately if setting empty message
+  if (strlen(messageBuffer) == 0) {
+    gfxClearRect(0, 19, 40, 1);
+  }
+}
+
+void screensInitAll(void) {
+  screenSong.init();
+  screenChain.init();
+  screenPhrase.init();
+  screenTable.init();
+  screenWavetable.init();
+  screenInstrument.init();
+  screenGroove.init();
+  resetCopyBuffers();
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Spreadsheet screen functions
+//
+
+static void screenDrawSelection(ScreenData* screen, int drawOrErase, int col1, int row1, int col2, int row2) {
+  if (drawOrErase) {
+    gfxSetFgColor(appSettings.colorScheme.selection);
+  } else {
+    gfxSetFgColor(appSettings.colorScheme.background);
+  }
+
+  screen->drawSelection(col1, row1, col2, row2);
+}
+
+static void validateCursorBounds(ScreenData* screen) {
+  // Validate row bounds
+  if (screen->cursorRow >= screen->rows) {
+    screen->cursorRow = screen->rows - 1;
+  }
+  if (screen->cursorRow < 0) {
+    screen->cursorRow = 0;
+  }
+
+  // Validate column bounds for current row
+  int maxCol = screen->getColumnCount(screen->cursorRow) - 1;
+  if (screen->cursorCol > maxCol) {
+    screen->cursorCol = maxCol;
+  }
+  if (screen->cursorCol < 0) {
+    screen->cursorCol = 0;
+  }
+}
+
+void screenFullRedraw(ScreenData* screen) {
+  validateCursorBounds(screen);
+
+  if (screen->cursorRow < screen->topRow) {
+    screen->topRow = screen->cursorRow;
+  } else if (screen->cursorRow >= screen->topRow + 16) {
+    screen->topRow = screen->cursorRow - 15;
+  }
+
+  gfxSetBgColor(appSettings.colorScheme.background);
+  gfxClearRect(0, 0, 40, 20);
+  drawScreenMap();
+
+  // Static content
+  screen->drawStatic();
+
+  // Cells
+  int selCol1 = 0, selCol2 = 0, selRow1 = 0, selRow2 = 0;
+  if (screen->selectMode == 1) {
+    getSelectionBounds(screen, &selCol1, &selRow1, &selCol2, &selRow2);
+  }
+
+  int maxRow = screen->topRow + 16;
+  if (maxRow > screen->rows) maxRow = screen->rows;
+
+  for (int row = screen->topRow; row < maxRow; row++) {
+    for (int col = 0; col < screen->getColumnCount(row); col++) {
+      CellState state = CellState::normal;
+      if (screen->selectMode == 1 && col >= selCol1 && col <= selCol2 && row >= selRow1 && row <= selRow2) {
+        state = CellState::selected;
+      } else if (screen->cursorCol == col && screen->cursorRow == row) {
+        state = CellState::focus;
+      }
+
+      screen->drawField(col, row, state);
+    }
+  }
+
+  // Row headers
+  for (int row = screen->topRow; row < maxRow; row++) {
+    screen->drawRowHeader(row, (screen->cursorRow == row) ? CellState::focus : CellState::normal);
+  }
+
+  // Column headers make sense only for spreadsheet-like screens, so we get the number of columns of the first row
+  for (int col = 0; col < screen->getColumnCount(0); col++) {
+    screen->drawColHeader(col, (screen->cursorCol == col) ? CellState::focus : CellState::normal);
+  }
+
+  // Cursor/selection
+  if (screen->selectMode == 1) {
+    screenDrawSelection(screen, 1, selCol1, selRow1, selCol2, selRow2);
+  } else {
+    screen->drawCursor(screen->cursorCol, screen->cursorRow);
+  }
+}
+
+void screenDrawOverlays(ScreenData* screen) {
+  if (screen->selectMode == 1) {
+    int selCol1, selRow1, selCol2, selRow2;
+    getSelectionBounds(screen, &selCol1, &selRow1, &selCol2, &selRow2);
+    screenDrawSelection(screen, 1, selCol1, selRow1, selCol2, selRow2);
+  }
+}
+
+
+// Cursor navigation within a spreadhseet-like page
+static int isCellValid(ScreenData* screen, int col, int row) {
+  if (screen->isCellValid) return screen->isCellValid(col, row);
+  return 1;
+}
+
+static void inputCursorCommon(ScreenData* screen, int keys, int* handled, int* redrawn) {
+  if (keys == keyLeft) {
+    if (screen->cursorCol > 0) {
+      screen->cursorCol--;
+      // If we landed on a dead cell, move up until valid
+      while (!isCellValid(screen, screen->cursorCol, screen->cursorRow) && screen->cursorRow > 0) {
+        screen->cursorRow--;
+      }
+    }
+    *handled = 1;
+  } else if (keys == keyRight) {
+    if (screen->cursorCol < screen->getColumnCount(screen->cursorRow) - 1) {
+      screen->cursorCol++;
+      // If we landed on a dead cell, move up until valid
+      while (!isCellValid(screen, screen->cursorCol, screen->cursorRow) && screen->cursorRow > 0) {
+        screen->cursorRow--;
+      }
+    }
+    *handled = 1;
+  } else if (keys == keyUp) {
+    int origRow = screen->cursorRow;
+    while (screen->cursorRow > 0) {
+      screen->cursorRow--;
+      int columns = screen->getColumnCount(screen->cursorRow);
+      if (screen->cursorCol >= columns) screen->cursorCol = columns - 1;
+      if (isCellValid(screen, screen->cursorCol, screen->cursorRow)) break;
+    }
+    if (!isCellValid(screen, screen->cursorCol, screen->cursorRow)) {
+      screen->cursorRow = origRow; // Can't move, stay put
+    }
+    if (screen->cursorRow < screen->topRow) {
+      screen->topRow = screen->cursorRow;
+      screenFullRedraw(screen);
+      *redrawn = 1;
+    }
+    *handled = 1;
+  } else if (keys == keyDown) {
+    int origRow = screen->cursorRow;
+    while (screen->cursorRow < screen->rows - 1) {
+      screen->cursorRow++;
+      int columns = screen->getColumnCount(screen->cursorRow);
+      if (screen->cursorCol >= columns) screen->cursorCol = columns - 1;
+      if (isCellValid(screen, screen->cursorCol, screen->cursorRow)) break;
+    }
+    if (!isCellValid(screen, screen->cursorCol, screen->cursorRow)) {
+      screen->cursorRow = origRow; // Can't move, stay put
+    }
+    if (screen->cursorRow >= screen->topRow + 16) {
+      screen->topRow = screen->cursorRow - 15;
+      screenFullRedraw(screen);
+      *redrawn = 1;
+    }
+    *handled = 1;
+  }
+}
+
+static int inputNormalMode(ScreenData* screen, int keys, int tapCount) {
+  int oldCursorCol = screen->cursorCol;
+  int oldCursorRow = screen->cursorRow;
+  int handled = 0;
+  int redrawn = 0;
+
+  inputCursorCommon(screen, keys, &handled, &redrawn);
+
+  if (!handled) {
+    if (keys == (keyShift | keyOpt) && screen->selectMode == 0) {
+      // Enter select mode
+      screen->selectMode = 1;
+      screen->selectStartRow = screen->cursorRow;
+      screen->selectStartCol = screen->cursorCol;
+      screen->selectAnchorRow = screen->cursorRow;
+      screen->selectAnchorCol = screen->cursorCol;
+      screenFullRedraw(screen);
+      handled = 1;
+      redrawn = 1;
+    } else if (keys == (keyDown | keyOpt)) {
+      // Page down
+      if (screen->cursorRow + 16 < screen->rows) {
+        screen->cursorRow += 16;
+        screen->topRow += 16;
+        if (screen->topRow + 16 >= screen->rows) screen->topRow = screen->rows - 16;
+        screenFullRedraw(screen);
+        int columns = screen->getColumnCount(screen->cursorRow);
+        if (screen->cursorCol >= columns) screen->cursorCol = columns - 1;
+        redrawn = 1;
+        handled = 1;
+      }
+    } else if (keys == (keyUp | keyOpt)) {
+      // Page up
+      if (screen->cursorRow - 16 >= 0) {
+        screen->cursorRow -= 16;
+        screen->topRow -= 16;
+        if (screen->topRow < 0) screen->topRow = 0;
+        screenFullRedraw(screen);
+        int columns = screen->getColumnCount(screen->cursorRow);
+        if (screen->cursorCol >= columns) screen->cursorCol = columns - 1;
+        redrawn = 1;
+        handled = 1;
+      }
+    } else if (keys == keyEdit && tapCount == 1) {
+      // Edit: insert/copy value
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::tap);
+    } else if (keys == keyEdit && tapCount == 2) {
+      // Edit: double tap (usually increment to an empty value)
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::doubleTap);
+    } else if (keys == (keyRight | keyEdit)) {
+      // Edit: value small increase (usually by 1)
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::increase);
+    } else if (keys == (keyLeft | keyEdit)) {
+      // Edit: value small decrease (usually by 1)
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::decrease);
+    } else if (keys == (keyUp | keyEdit)) {
+      // Edit: value big increase
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::increaseBig);
+    } else if (keys == (keyDown | keyEdit)) {
+      // Edit: value big decrease
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::decreaseBig);
+    } else if (keys == (keyEdit | keyOpt)) {
+      // Edit: clear value
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::clear);
+    } else if (keys == (keyShift | keyEdit)) {
+      // Edit: paste
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::paste);
+    }
+  }
+
+  if (handled && !redrawn) {
+    validateCursorBounds(screen);
+    if (oldCursorCol != screen->cursorCol || oldCursorRow != screen->cursorRow) {
+      // Erase old cursor and headers
+      screen->drawField(oldCursorCol, oldCursorRow, CellState::normal);
+      screen->drawRowHeader(oldCursorRow, CellState::normal);
+      screen->drawColHeader(oldCursorCol, CellState::normal);
+      // Draw new headers
+      screen->drawRowHeader(screen->cursorRow, CellState::focus);
+      screen->drawColHeader(screen->cursorCol, CellState::focus);
+    }
+
+    // Refresh field and cursor
+    screen->drawField(screen->cursorCol, screen->cursorRow, CellState::focus);
+    screen->drawCursor(screen->cursorCol, screen->cursorRow);
+  }
+
+  return handled;
+}
+
+static int optPressed = 0;
+static int shallowClonePressed = 0;
+
+static void moveCursorToSelectionStart(ScreenData* screen) {
+  int startCol, startRow, endCol, endRow;
+  getSelectionBounds(screen, &startCol, &startRow, &endCol, &endRow);
+  screen->cursorCol = startCol;
+  screen->cursorRow = startRow;
+}
+
+static void moveCursorBelowSelection(ScreenData* screen) {
+  int startCol, startRow, endCol, endRow;
+  getSelectionBounds(screen, &startCol, &startRow, &endCol, &endRow);
+  screen->cursorCol = startCol;
+  // Move below selection, unless last row is in selection
+  if (endRow < screen->rows - 1) {
+    screen->cursorRow = endRow + 1;
+  } else {
+    screen->cursorRow = screen->rows - 1;
+  }
+}
+
+static void redrawSelection(ScreenData* screen) {
+  int startCol, startRow, endCol, endRow;
+  getSelectionBounds(screen, &startCol, &startRow, &endCol, &endRow);
+  for (int r = startRow; r <= endRow; r++) {
+    for (int c = startCol; c <= endCol; c++) {
+      screen->drawField(c, r, CellState::selected);
+    }
+  }
+}
+
+static int inputSelectMode(ScreenData* screen, int keys, int tapCount) {
+  int oldCursorCol = screen->cursorCol;
+  int oldCursorRow = screen->cursorRow;
+  int handled = 0;
+  int redrawn = 0;
+
+  inputCursorCommon(screen, keys, &handled, &redrawn);
+
+  if (!handled) {
+    if (keys == (keyShift | keyOpt)) {
+      // Switch selection mode
+      int exitSelection = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::switchSelection);
+      if (exitSelection) {
+        screen->selectMode = 0;
+        screen->cursorRow = screen->selectAnchorRow;
+        screen->cursorCol = screen->selectAnchorCol;
+      }
+      screenFullRedraw(screen);
+      redrawn = 1;
+      handled = 1;
+    } else if (keys == 0 && optPressed) {
+      // Copy and exit select mode on Opt release (no keys pressed)
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::copy);
+      if (handled) {
+        screenMessage(MESSAGE_TIME, "Copied selection");
+        moveCursorBelowSelection(screen);
+      }
+      screen->selectMode = 0;
+      screenFullRedraw(screen);
+      redrawn = 1;
+      optPressed = 0;
+    } else if (keys == 0 && shallowClonePressed) {
+      // Exit select mode on Shift release after shallow clone
+      screen->selectMode = 0;
+      screenFullRedraw(screen);
+      redrawn = 1;
+      shallowClonePressed = 0;
+      handled = 1;
+    } else if (keys == (keyEdit | keyOpt)) {
+      // Cut and exit select mode
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::cut);
+      if (handled) {
+        screenMessage(MESSAGE_TIME, "Cut selection");
+        moveCursorToSelectionStart(screen);
+      }
+      screen->selectMode = 0;
+      screenFullRedraw(screen);
+      redrawn = 1;
+      optPressed = 0;
+    } else if (keys == (keyRight | keyEdit)) {
+      // Multi-edit: increase values in selection
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::multiIncrease);
+    } else if (keys == (keyLeft | keyEdit)) {
+      // Multi-edit: decrease values in selection
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::multiDecrease);
+    } else if (keys == (keyUp | keyEdit)) {
+      // Multi-edit: big increase values in selection
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::multiIncreaseBig);
+    } else if (keys == (keyDown | keyEdit)) {
+      // Multi-edit: big decrease values in selection
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::multiDecreaseBig);
+    } else if (keys == (keyShift | keyEdit) && !shallowClonePressed) {
+      // Shallow clone
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::shallowClone);
+      shallowClonePressed = 1;
+    } else if (keys == (keyShift | keyEdit) && shallowClonePressed) {
+      // Deep clone (second press while Shift still held)
+      handled = screen->onEdit(screen->cursorCol, screen->cursorRow, CellEditAction::deepClone);
+      screen->selectMode = 0;
+      shallowClonePressed = 0;
+      screenFullRedraw(screen);
+      redrawn = 1;
+    } else if (keys & keyOpt) {
+      optPressed = 1;
+    }
+  }
+
+  if (handled && !redrawn) {
+    validateCursorBounds(screen);
+    if (oldCursorCol != screen->cursorCol || oldCursorRow != screen->cursorRow) {
+      // Calculate old and new selection bounds
+      int oldSelCol1 = min(screen->selectStartCol, oldCursorCol);
+      int oldSelCol2 = max(screen->selectStartCol, oldCursorCol);
+      int oldSelRow1 = min(screen->selectStartRow, oldCursorRow);
+      int oldSelRow2 = max(screen->selectStartRow, oldCursorRow);
+
+      int newSelCol1, newSelRow1, newSelCol2, newSelRow2;
+      getSelectionBounds(screen, &newSelCol1, &newSelRow1, &newSelCol2, &newSelRow2);
+
+      // Erase old selection rectangle
+      screenDrawSelection(screen, 0, oldSelCol1, oldSelRow1, oldSelCol2, oldSelRow2);
+
+      // Re-render cells that are no longer selected
+      for (int row = oldSelRow1; row <= oldSelRow2; row++) {
+        for (int col = oldSelCol1; col <= oldSelCol2; col++) {
+          if (!(col >= newSelCol1 && col <= newSelCol2 && row >= newSelRow1 && row <= newSelRow2)) {
+            CellState state = (col == screen->cursorCol && row == screen->cursorRow) ? CellState::focus : CellState::normal;
+            screen->drawField(col, row, state);
+          }
+        }
+      }
+
+      // Render cells that are now selected
+      for (int row = newSelRow1; row <= newSelRow2; row++) {
+        for (int col = newSelCol1; col <= newSelCol2; col++) {
+          if (!(col >= oldSelCol1 && col <= oldSelCol2 && row >= oldSelRow1 && row <= oldSelRow2)) {
+            screen->drawField(col, row, CellState::selected);
+          }
+        }
+      }
+    } else {
+      // Cursor didn't move, redraw selection for multi-edit/shallow copy
+      redrawSelection(screen);
+    }
+    // Draw new selection rectangle
+    int selCol1, selRow1, selCol2, selRow2;
+    getSelectionBounds(screen, &selCol1, &selRow1, &selCol2, &selRow2);
+    screenDrawSelection(screen, 1, selCol1, selRow1, selCol2, selRow2);
+  }
+
+  return handled;
+}
+
+int screenInput(ScreenData* screen, int isKeyDown, int keys, int tapCount) {
+  // Discard key up events unless no buttons are pressed (for existing logic that expects keys == 0)
+  if (!isKeyDown && keys != 0) return 0;
+
+  return (screen->selectMode == 1) ? inputSelectMode(screen, keys, tapCount) : inputNormalMode(screen, keys, tapCount);
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Utility functions
+//
+
+void setCellColor(CellState state, int isEmpty, int hasContent) {
+  const ColorScheme cs = appSettings.colorScheme;
+
+  if (state == CellState::selected) {
+    if (isEmpty) {
+      gfxSetFgColor(cs.textEmpty);
+    } else {
+      gfxSetFgColor(cs.selection);
+    }
+  } else if (state == CellState::focus) {
+    gfxSetFgColor(cs.textDefault);
+  } else if (isEmpty) {
+    gfxSetFgColor(cs.textEmpty);
+  } else if (hasContent) {
+    gfxSetFgColor(cs.textValue);
+  } else {
+    gfxSetFgColor(cs.textInfo);
+  }
+}
+
+void getSelectionBounds(ScreenData* screen, int* startCol, int* startRow, int* endCol, int* endRow) {
+  *startCol = min(screen->selectStartCol, screen->cursorCol);
+  *endCol = max(screen->selectStartCol, screen->cursorCol);
+  *startRow = min(screen->selectStartRow, screen->cursorRow);
+  *endRow = max(screen->selectStartRow, screen->cursorRow);
+}
+
+int isSingleColumnSelection(ScreenData* screen) {
+  int startCol, startRow, endCol, endRow;
+  getSelectionBounds(screen, &startCol, &startRow, &endCol, &endRow);
+  return startCol == endCol;
+}
+
+LoopRange screenGetLoopRange(const AppScreen* screen) {
+  extern LoopRange songScreenGetLoopRange(void);
+  extern LoopRange chainScreenGetLoopRange(void);
+  extern LoopRange phraseScreenGetLoopRange(void);
+
+  if (screen == &screenSong) {
+    return songScreenGetLoopRange();
+  } else if (screen == &screenChain) {
+    return chainScreenGetLoopRange();
+  } else if (screen == &screenPhrase) {
+    return phraseScreenGetLoopRange();
+  }
+
+  LoopRange range = {0};
+  return range;
+}
+
+ScreenPlaybackLevel screenGetPlaybackLevel(const AppScreen* screen) {
+  if (screen && screen->getPlaybackLevel) {
+    return (ScreenPlaybackLevel)screen->getPlaybackLevel();
+  }
+  return ScreenPlaybackLevel::none;
+}

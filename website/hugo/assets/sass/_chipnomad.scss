@@ -1,0 +1,55 @@
+@use 'sass:math';
+@use 'sass:color';
+@use 'variables' as *;
+
+.cn-download {
+  text-align: center;
+  margin-top: $spacing-unit;
+  margin-bottom: $spacing-unit;
+
+  a {
+    display: inline-block;
+    @include relative-font-size(1.5);
+    font-weight: bold;
+    text-decoration: none;
+    padding: math.div($spacing-unit, 3) $spacing-unit * 1.5;
+    border-radius: 40px;
+    background-color: $link-color;
+    color: $background-color;
+    transition: background-color 0.2s;
+
+    &:hover {
+      background-color: color.adjust($link-color, $lightness: 10%);
+      text-decoration: none;
+      color: $background-color;
+    }
+  }
+}
+
+.big-text {
+  @include relative-font-size(1.5);
+}
+
+.img-shadow img {
+  filter: drop-shadow(0px 4px 2px $brand-color);
+}
+
+.social-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.social-buttons a {
+  display: inline-block;
+  transition: transform 0.2s;
+}
+
+.social-buttons a:hover {
+  transform: scale(1.1);
+}
+
+.social-buttons img {
+  width: 40px;
+  height: 40px;
+}

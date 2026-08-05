@@ -1,0 +1,56 @@
+# Windows makefile
+
+# Windows platform identifier
+PLATFORM = windows
+
+include Makefile.common
+
+# Windows-specific settings
+LIBS = $(COMMON_LIBS) platforms/sdl2
+OUTPUT_EXT = .exe
+
+# Native Windows development uses the SDL2 package installed by MSYS2.
+# SDL_main is already provided by platforms/shared/main.cpp.
+SDL_CFLAGS = $(filter-out -Dmain=SDL_main,$(shell sdl2-config --cflags))
+SDL_LIBS = $(shell sdl2-config --libs)
+
+XTRA_CFLAGS = $(SDL_CFLAGS) -DDESKTOP_BUILD -D__USE_MINGW_ANSI_STDIO=1
+XTRA_LIBS = $(SDL_LIBS) -static-libgcc -static-libstdc++
+CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(XTRA_CFLAGS)
+OUTPUT = -o $(BUILD)/chipnomad$(OUTPUT_EXT)
+
+.PHONY: windows
+windows:
+	mkdir -p $(BUILD)
+	$(CXX) $(CFLAGS) $(XTRA_LIBS) $(OUTPUT)
+	cp "$$(dirname "$$(command -v sdl2-config)")/SDL2.dll" $(BUILD)/
+	cp "$$(dirname "$$(command -v sdl2-config)")/libwinpthread-1.dll" $(BUILD)/
+
+# Docker-based Windows build (internal target)
+.PHONY: .windows-docker
+.windows-docker:
+	mkdir -p $(BUILD)
+	$(CC) -std=c++17 -O2 \
+		-I/opt/SDL2/x86_64-w64-mingw32/include \
+		$(INCLUDES) $(SOURCES) \
+		-L/opt/SDL2/x86_64-w64-mingw32/lib \
+		-lmingw32 -lSDL2main -lSDL2 \
+		-static-libgcc -static-libstdc++ \
+		-DDESKTOP_BUILD -D__USE_MINGW_ANSI_STDIO=1 \
+		-o $(BUILD)/chipnomad.exe
+	cp /opt/SDL2/x86_64-w64-mingw32/bin/SDL2.dll $(BUILD)/
+
+# Windows deployment using Docker
+.PHONY: windows-deploy
+windows-deploy:
+	@echo "Creating Windows deployment package..."
+	@./check-docker.sh || exit 1
+	@echo "Building Windows cross-compilation Docker image..."
+	@docker build -f Dockerfile.windows -t chipnomad-windows-builder . || (echo "Error: Failed to build Docker image" && exit 1)
+	@docker run --rm -v "$$(pwd)/..:/workspace" -w /workspace/tracker chipnomad-windows-builder make -f Makefile.windows .windows-docker CC=x86_64-w64-mingw32-g++
+	@mkdir -p ../../releases
+	@cp -r packaging/common/* $(BUILD)/
+	@cp packaging/windows/README.txt $(BUILD)/
+	@cd $(BUILD) && zip -r ChipNomad-$$(date +%Y-%m-%d)-$(VERSION)-Windows.zip chipnomad.exe SDL2.dll $(COMMON_DATA_DIRS) README.txt
+	@mv $(BUILD)/ChipNomad-*-Windows.zip ../../releases/
+	@echo "Windows package created in ../../releases/"

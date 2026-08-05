@@ -1,0 +1,9 @@
+<nav class="breadcrumbs">
+  {{ range .Ancestors.Reverse }}
+    {{ if not .IsHome }}
+      <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+      <span class="separator">›</span>
+    {{ end }}
+  {{ end }}
+  <span class="current">{{ .Title }}</span>
+</nav>
