@@ -20,7 +20,7 @@ static void settingsDrawField(int col, int row, CellState state);
 static int settingsOnEdit(int col, int row, CellEditAction action);
 
 static ScreenData screenSettingsData = {
-  .rows = 8,
+  .rows = 9,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,
@@ -95,21 +95,21 @@ void settingsDrawStatic(void) {
 }
 
 void settingsDrawCursor(int col, int row) {
-  if (row == 0 && col == 0) {
-    gfxCursor(23, 2, 3);
-  } else if (row == 1 && col == 0) {
-    gfxCursor(23, 3, 4);
+  if ((row == 0 || row == 1) && col == 0) {
+    gfxCursor(23, 2 + row, 3);
   } else if (row == 2 && col == 0) {
-    gfxCursor(23, 4, 6);
+    gfxCursor(23, 4, 4);
   } else if (row == 3 && col == 0) {
-    gfxCursor(23, 5, 3);
+    gfxCursor(23, 5, 6);
   } else if (row == 4 && col == 0) {
-    gfxCursor(0, 6, 11);
+    gfxCursor(23, 6, 3);
   } else if (row == 5 && col == 0) {
-    gfxCursor(0, 7, 9);
+    gfxCursor(0, 7, 11);
   } else if (row == 6 && col == 0) {
-    gfxCursor(0, 8, 16);
+    gfxCursor(0, 8, 9);
   } else if (row == 7 && col == 0) {
+    gfxCursor(0, 9, 16);
+  } else if (row == 8 && col == 0) {
     gfxCursor(0, 17, 14);
   }
 }
@@ -123,36 +123,41 @@ void settingsDrawColHeader(int col, CellState state) {
 void settingsDrawField(int col, int row, CellState state) {
   if (row == 0 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 2, "Pitch conflict warning");
+    gfxPrint(0, 2, "Repeat delay");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(23, 2, appSettings.pitchConflictWarning ? "ON " : "OFF");
+    gfxPrintf(23, 2, "%03d", appSettings.keyRepeatDelay);
   } else if (row == 1 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 3, "Mix volume");
+    gfxPrint(0, 3, "Repeat speed");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    int mixVolumePercent = (int)(appSettings.mixVolume * 100.0f + 0.5f);
-    gfxPrintf(23, 3, "%03d%%", mixVolumePercent);
+    gfxPrintf(23, 3, "%03d", appSettings.keyRepeatSpeed);
   } else if (row == 2 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 4, "Quality");
+    gfxPrint(0, 4, "Mix volume");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    const char* qualityNames[] = {"LOW   ", "MEDIUM", "HIGH  ", "BEST  "};
-    gfxPrint(23, 4, qualityNames[appSettings.quality]);
+    int mixVolumePercent = (int)(appSettings.mixVolume * 100.0f + 0.5f);
+    gfxPrintf(23, 4, "%03d%%", mixVolumePercent);
   } else if (row == 3 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 5, "Sample dithering");
+    gfxPrint(0, 5, "Quality");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(23, 5, appSettings.aySampleDithering ? "ON " : "OFF");
+    const char* qualityNames[] = {"LOW   ", "MEDIUM", "HIGH  ", "BEST  "};
+    gfxPrint(23, 5, qualityNames[appSettings.quality]);
   } else if (row == 4 && col == 0) {
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxPrint(0, 6, "Sample dithering");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(0, 6, "Key mapping");
+    gfxPrint(23, 6, appSettings.aySampleDithering ? "ON " : "OFF");
   } else if (row == 5 && col == 0) {
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(0, 7, "Load font");
+    gfxPrint(0, 7, "Key mapping");
   } else if (row == 6 && col == 0) {
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(0, 8, "Edit color theme");
+    gfxPrint(0, 8, "Load font");
   } else if (row == 7 && col == 0) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxPrint(0, 9, "Edit color theme");
+  } else if (row == 8 && col == 0) {
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
     gfxPrint(0, 17, "Quit ChipNomad");
   }
@@ -160,9 +165,16 @@ void settingsDrawField(int col, int row, CellState state) {
 
 int settingsOnEdit(int col, int row, CellEditAction action) {
   if (row == 0 && col == 0) {
-    // Pitch conflict warning (0/1)
-    return edit8noLast(action, (uint8_t*)&appSettings.pitchConflictWarning, 1, 0, 1);
+    uint8_t value = appSettings.keyRepeatDelay;
+    int handled = edit8noLast(action, &value, 4, 4, 30);
+    if (handled) appSettings.keyRepeatDelay = value;
+    return handled;
   } else if (row == 1 && col == 0) {
+    uint8_t value = appSettings.keyRepeatSpeed;
+    int handled = edit8noLast(action, &value, 2, 1, 12);
+    if (handled) appSettings.keyRepeatSpeed = value;
+    return handled;
+  } else if (row == 2 && col == 0) {
     // Mix volume (1-100%)
     int mixVolumePercent = (int)(appSettings.mixVolume * 100.0f + 0.5f);
     uint8_t mixVolumePercentU8 = (uint8_t)mixVolumePercent;
@@ -174,33 +186,33 @@ int settingsOnEdit(int col, int row, CellEditAction action) {
       }
     }
     return handled;
-  } else if (row == 2 && col == 0) {
+  } else if (row == 3 && col == 0) {
     // Quality (0-3)
     int handled = edit8noLast(action, (uint8_t*)&appSettings.quality, 1, 0, 3);
     if (handled) {
       chipnomadSetQuality(chipnomadState, (ChipNomadQuality)appSettings.quality);
     }
     return handled;
-  } else if (row == 3 && col == 0) {
+  } else if (row == 4 && col == 0) {
     // Sample dithering (0/1)
     int handled = edit8noLast(action, (uint8_t*)&appSettings.aySampleDithering, 1, 0, 1);
     if (handled && chipnomadState) {
       chipnomadState->aySampleDithering = appSettings.aySampleDithering;
     }
     return handled;
-  } else if (row == 4 && col == 0 && action == CellEditAction::tap) {
+  } else if (row == 5 && col == 0 && action == CellEditAction::tap) {
     screenSetup(&screenKeyMapping, 0);
     return 0;
-  } else if (row == 5 && col == 0 && action == CellEditAction::tap) {
+  } else if (row == 6 && col == 0 && action == CellEditAction::tap) {
     fileBrowserSetup("LOAD FONT", ".cnfont", appSettings.fontFolderPath,
       (void (*)(const char*))fontLoadCallback,
       (void (*)(void))fontCancelCallback);
     screenSetup(&screenFileBrowser, 0);
     return 0;
-  } else if (row == 6 && col == 0 && action == CellEditAction::tap) {
+  } else if (row == 7 && col == 0 && action == CellEditAction::tap) {
     screenSetup(&screenColorTheme, 0);
     return 0;
-  } else if (row == 7 && col == 0 && action == CellEditAction::tap) {
+  } else if (row == 8 && col == 0 && action == CellEditAction::tap) {
     // Trigger exit event
     mainLoopTriggerQuit();
     return 1;

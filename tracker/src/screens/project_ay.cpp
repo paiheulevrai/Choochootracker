@@ -8,12 +8,6 @@
 
 int chipClockLength = 0;
 
-static char stereoModes[3][5] = {
-  "ABC",
-  "ACB",
-  "BAC",
-};
-
 static int clockPresets[5] = {
   750000,    // 0.75 MHz
   1000000,   // 1 MHz
@@ -47,34 +41,23 @@ static int getColumnCount(int row) {
 static void drawStatic(void) {
   projectCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  gfxPrint(0, 11, "Subtype");
-  gfxPrint(0, 12, "Stereo");
-  gfxPrint(0, 13, "Stereo width");
-  gfxPrint(0, 14, "PWM range");
-  gfxPrint(0, 15, "Chip clock");
-  gfxPrint(0, 16, "Pitch table");
+  gfxPrint(0, 9, "AY subtype");
+  gfxPrint(0, 10, "PWM range");
+  gfxPrint(0, 11, "AY clock");
+  gfxPrint(0, 12, "Pitch table");
 }
 
 static void drawCursor(int col, int row) {
   if (row < SCR_PROJECT_ROWS) return projectCommonDrawCursor(col, row);
   if (row == SCR_PROJECT_ROWS) {
     // Chip type
-    gfxCursor(13, 11, chipnomadState->project.chipSetup.ay.isYM ? 7 : 9);
+    gfxCursor(13, 9, chipnomadState->project.chipSetup.ay.isYM ? 7 : 9);
   } else if (row == SCR_PROJECT_ROWS + 1) {
-    // Panning scheme
-    gfxCursor(13, 12, 3);
+    gfxCursor(13, 10, 3);
   } else if (row == SCR_PROJECT_ROWS + 2) {
-    // Stereo width
-    gfxCursor(13, 13, 4);
+    gfxCursor(13, 11, chipClockLength);
   } else if (row == SCR_PROJECT_ROWS + 3) {
-    // PWM range
-    gfxCursor(13, 14, 3);
-  } else if (row == SCR_PROJECT_ROWS + 4) {
-    // Chip clock
-    gfxCursor(13, 15, chipClockLength);
-  } else if (row == SCR_PROJECT_ROWS + 5) {
-    // Pitch table
-    gfxCursor(13, 16, strlen(chipnomadState->project.pitchTable.name));
+    gfxCursor(13, 12, strlen(chipnomadState->project.pitchTable.name));
   }
 }
 
@@ -84,20 +67,12 @@ static void drawField(int col, int row, CellState state) {
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
 
   if (row == SCR_PROJECT_ROWS) {
-    gfxClearRect(13, 11, 9, 1);
-    gfxPrint(13, 11, chipnomadState->project.chipSetup.ay.isYM ? "YM2149F" : "AY-3-8910");
+    gfxClearRect(13, 9, 9, 1);
+    gfxPrint(13, 9, chipnomadState->project.chipSetup.ay.isYM ? "YM2149F" : "AY-3-8910");
   } else if (row == SCR_PROJECT_ROWS + 1) {
-    // Panning scheme
-    gfxClearRect(13, 12, 5, 1);
-    gfxPrint(13, 12, stereoModes[static_cast<int>(chipnomadState->project.chipSetup.ay.stereoMode)]);
+    gfxClearRect(13, 10, 3, 1);
+    gfxPrint(13, 10, chipnomadState->project.chipSetup.ay.pwmFullRange ? "256" : "16");
   } else if (row == SCR_PROJECT_ROWS + 2) {
-    // Stereo width
-    gfxPrintf(13, 13, "%03d%%", chipnomadState->project.chipSetup.ay.stereoSeparation);
-  } else if (row == SCR_PROJECT_ROWS + 3) {
-    // PWM range
-    gfxClearRect(13, 14, 3, 1);
-    gfxPrint(13, 14, chipnomadState->project.chipSetup.ay.pwmFullRange ? "256" : "16");
-  } else if (row == SCR_PROJECT_ROWS + 4) {
     int presetIndex = getClockPresetIndex(chipnomadState->project.chipSetup.ay.clock);
     char clockText[20];
 
@@ -108,11 +83,11 @@ static void drawField(int col, int row, CellState state) {
     }
 
     chipClockLength = strlen(clockText);
-    gfxClearRect(13, 15, 20, 1);
-    gfxPrint(13, 15, clockText);
-  } else if (row == SCR_PROJECT_ROWS + 5) {
-    gfxClearRect(13, 16, PROJECT_PITCH_TABLE_TITLE_LENGTH, 1);
-    gfxPrint(13, 16, chipnomadState->project.pitchTable.name);
+    gfxClearRect(13, 11, 20, 1);
+    gfxPrint(13, 11, clockText);
+  } else if (row == SCR_PROJECT_ROWS + 3) {
+    gfxClearRect(13, 12, PROJECT_PITCH_TABLE_TITLE_LENGTH, 1);
+    gfxPrint(13, 12, chipnomadState->project.pitchTable.name);
   }
 }
 
@@ -130,25 +105,8 @@ static int onEdit(int col, int row, enum CellEditAction action) {
       }
     }
   } else if (row == SCR_PROJECT_ROWS + 1) {
-    // Stereo mode (ABC, ACB, BAC)
-    handled = edit8noLast(action, (uint8_t*)&chipnomadState->project.chipSetup.ay.stereoMode, 1, 0, 2);
-    if (handled && chipnomadState) {
-      for (int i = 0; i < chipnomadState->project.chipsCount; i++) {
-        static_cast<SoundChipAY*>(chipnomadState->chips[i])->updateStereoMode(chipnomadState->project.chipSetup.ay.stereoMode, chipnomadState->project.chipSetup.ay.stereoSeparation);
-      }
-    }
-  } else if (row == SCR_PROJECT_ROWS + 2) {
-    // Stereo width (0-100%)
-    handled = edit8noLast(action, &chipnomadState->project.chipSetup.ay.stereoSeparation, 10, 0, 100);
-    if (handled && chipnomadState) {
-      for (int i = 0; i < chipnomadState->project.chipsCount; i++) {
-        static_cast<SoundChipAY*>(chipnomadState->chips[i])->updateStereoMode(chipnomadState->project.chipSetup.ay.stereoMode, chipnomadState->project.chipSetup.ay.stereoSeparation);
-      }
-    }
-  } else if (row == SCR_PROJECT_ROWS + 3) {
-    // PWM range (16 / 256)
     handled = edit8noLast(action, &chipnomadState->project.chipSetup.ay.pwmFullRange, 1, 0, 1);
-  } else if (row == SCR_PROJECT_ROWS + 4) {
+  } else if (row == SCR_PROJECT_ROWS + 2) {
     // Chip clock presets
     int presetIndex = getClockPresetIndex(chipnomadState->project.chipSetup.ay.clock);
     if (presetIndex < 0) presetIndex = 0; // Default to first preset if not found
@@ -160,7 +118,7 @@ static int onEdit(int col, int row, enum CellEditAction action) {
         static_cast<SoundChipAY*>(chipnomadState->chips[i])->updateClock(chipnomadState->project.chipSetup.ay.clock);
       }
     }
-  } else if (row == SCR_PROJECT_ROWS + 5) {
+  } else if (row == SCR_PROJECT_ROWS + 3) {
     // Pitch table - enter pitch table screen
     screenSetup(&screenPitchTable, 0);
     handled = 0;
@@ -172,7 +130,7 @@ static int onEdit(int col, int row, enum CellEditAction action) {
 }
 
 ScreenData screenProjectAY = {
-  .rows = 14,
+  .rows = SCR_PROJECT_ROWS + 4,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,

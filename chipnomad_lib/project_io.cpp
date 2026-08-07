@@ -702,6 +702,17 @@ static int projectLoadInternal(FILE* file, Project* project) {
   if (sscanf(line, "- Chips count: %d", &p.chipsCount) != 1) return 1;
   consumeLine(file);
 
+  line = peekLine(file);
+  if (line == NULL || strncmp(line, "- Track volumes: ", 17) != 0) return 1;
+  if (sscanf(line + 17, "%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu",
+      &p.trackVolume[0], &p.trackVolume[1], &p.trackVolume[2], &p.trackVolume[3],
+      &p.trackVolume[4], &p.trackVolume[5], &p.trackVolume[6], &p.trackVolume[7]) != PROJECT_MAX_TRACKS) return 1;
+  for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
+    if (p.trackVolume[i] > 100) p.trackVolume[i] = 100;
+  }
+  p.chipsCount = PROJECT_MAX_TRACKS;
+  consumeLine(file);
+
   // Try to read linear pitch (optional for backwards compatibility)
   line = peekLine(file);
   if (line == NULL) return 1;
@@ -1040,6 +1051,9 @@ static int projectSaveInternal(FILE* file, Project* project) {
 
   fprintf(file, "- Frame rate: %f\n", project->tickRate);
   fprintf(file, "- Chips count: %d\n", project->chipsCount);
+  fprintf(file, "- Track volumes: %hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu\n",
+    project->trackVolume[0], project->trackVolume[1], project->trackVolume[2], project->trackVolume[3],
+    project->trackVolume[4], project->trackVolume[5], project->trackVolume[6], project->trackVolume[7]);
   fprintf(file, "- Linear pitch: %d\n", project->linearPitch);
   fprintf(file, "- Chip type: %s\n", chipNames[static_cast<int>(project->chipType)]);
 

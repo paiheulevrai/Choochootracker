@@ -1,20 +1,3 @@
-# TODO pour P-E (humain)
-- valider la réactivité des inputs (pas de lag)
-- valider le pitch tracking (dans l’écran Project, passe Linear Pitch sur OFF, puis remets-le sur ON. Cela régénère la bonne table. Si le pitch devient correct, on appliquera la correction permanente et un test de fréquence par octave.)
-- passer du temps sur le software et faire une liste de choses qui ne vont pas
-- expliquer comment doit évoluer la structure avec des chips (menu principal, déterminant le nombre de tracks), on n'a plus de chips et on est à 8 tracks tout le temps
-- valider tous les boutons et les combinaisons, notamment Menu + X ;
-- tester sauvegarde, chargement, autosave et redémarrage ;
-- tester le son sur haut-parleurs et casque : saturation, clics, stéréo ;
-- mesurer 3, 6, 8 puis 12 voix Braids à 96 kHz ;
-- vérifier si les inputs ralentissent pendant une lecture chargée ;
-- laisser tourner un morceau 20 à 30 minutes pour tester stabilité et chauffe ;
-- essayer plusieurs modèles Braids, surtout les percussions, FM et modèles physiques ;
-- noter les écrans ou actions difficiles à comprendre sans manuel.
-- Pour la structure, précise aussi ces décisions :
-   - nombre fixe de 8 pistes ou configurable ;
-   - moteur choisi par instrument plutôt que par “chip” ;
-   - possibilité de mélanger AY, Braids et Sample librement ;
 
 # PatchNomad
 
@@ -26,7 +9,7 @@ Ce n'est pas un DAW et cela ne cherche pas à le devenir. C'est un petit instrum
 
 ## État actuel
 
-La base Windows compile et démarre. Le moteur Braids est intégré au tracker avec une voix monophonique par piste, les 47 modèles accessibles, le filtre, l'ADSR, le mélange avec AY, les modulations et la sauvegarde des paramètres. Le binaire ARM64 et le package PortMaster sont également produits sous WSL2. La prochaine étape est le test réel et le benchmark sur RG353V, avant le sampler PCM 16 bits.
+La base Windows compile et démarre. Le moteur Braids est intégré au tracker avec une voix monophonique par piste, les 47 modèles accessibles, le filtre, l'ADSR, le mélange avec AY, les modulations et la sauvegarde des paramètres. Le binaire ARM64 et le package PortMaster sont également produits sous WSL2. PatchNomad utilise désormais huit pistes fixes, avec une instance AY indépendante et un niveau de mixage sauvegardé par piste. La priorité immédiate est la validation des inputs et du repeat sur RG353V.
 
 ## Principes
 
@@ -108,13 +91,13 @@ L'implémentation utilise un filtre state-variable 12 dB. Deux étages en cascad
 
 Braids et ses tables d'origine sont prévus pour fonctionner à 96 kHz. La première version utilisera donc 96 kHz pour éviter de modifier les tables ou d'ajouter un rééchantillonnage interne complexe.
 
-La cible est de tenir huit voix Braids simultanées à 96 kHz sur une Anbernic RG353V. Les tests mesureront également trois, six et douze voix afin de connaître la marge réelle. La cible de huit voix ne sera considérée comme validée qu'après un test sur la console.
+La cible est de tenir huit voix Braids simultanées à 96 kHz sur une Anbernic RG353V. Les tests mesureront également trois et six voix afin de connaître la marge réelle. La cible de huit voix ne sera considérée comme validée qu'après un test sur la console.
 
 Les voix silencieuses ne doivent pas consommer de temps DSP inutilement.
 
 ## Samples modernes
 
-L'instrument `AYSample` actuel reste disponible pour les sons volontairement chiptune et pour la compatibilité avec les anciens projets.
+L'instrument `AYSample` actuel reste disponible pour les sons volontairement chiptune.
 
 Il ne convient pas à la philosophie de PatchNomad : l'import actuel convertit les WAV en mono unsigned 8 bits, limite les données à 16 384 échantillons, puis les joue à travers le DAC 4 bits de l'AY.
 
@@ -210,7 +193,7 @@ Le packaging PortMaster existant dans ChipNomad fournit déjà une bonne base, m
 - Ajouter une voix par piste.
 - Brancher les événements note-on, note-off et retrigger.
 - Mélanger les voix modernes avec les puces AY existantes.
-- Ajouter la sauvegarde et le chargement sans casser les anciens projets.
+- Ajouter la sauvegarde et le chargement du format PatchNomad à huit pistes.
 - Ajouter l'écran instrument Braids avec tous les modèles.
 - Exposer les destinations de modulation utiles : volume, pitch, timbre, color, cutoff et résonance.
 
@@ -219,10 +202,33 @@ Le packaging PortMaster existant dans ChipNomad fournit déjà une bonne base, m
 - [x] Produire le binaire ARM64 sous WSL2.
 - [x] Préparer le package PortMaster.
 - Tester les contrôles, la sortie audio et la stabilité sur la console.
-- Mesurer trois, six, huit et douze voix à 96 kHz.
+- Mesurer trois, six et huit voix à 96 kHz.
 - Optimiser seulement ce que le benchmark identifie comme coûteux.
 
-### 6. Ajouter le sampler moderne
+### 6. Qualité de vie et architecture huit pistes
+
+- [x] Utiliser huit pistes fixes.
+- [x] Donner une instance AY indépendante à chaque piste.
+- [x] Ajouter un mixer avec volume, mute et solo par piste.
+- [x] Sauvegarder le volume de chaque piste dans le projet.
+- [x] Ignorer le repeat SDL et utiliser un repeat interne déterministe.
+- [x] Conserver les directions maintenues pendant les combinaisons de touches.
+- [x] Valider sur RG353V qu'aucun appui rapide n'est perdu.
+- [x] Valider le délai et la vitesse du repeat sur le matériel.
+- Corriger le crash à l'ouverture du mixer.
+
+### 7. Revoir la navigation et les FX
+
+- Sortir le mixer du menu Project.
+- Ajouter le mixer comme écran principal tout à gauche de la carte LSDJ.
+- Permettre un accès rapide au mixer depuis les écrans de composition.
+- Séparer les FX universels des FX propres à AY, Braids et aux futurs moteurs.
+- Ne proposer que les FX compatibles avec l'instrument actif.
+- Ajouter des parameter locks Braids par step : model, timbre, color, cutoff et résonance.
+- Réutiliser d'abord les trois colonnes FX existantes.
+- Décider si un parameter lock s'applique uniquement au trig courant ou reste actif jusqu'à la prochaine valeur.
+
+### 8. Ajouter le sampler moderne
 
 - Lire les WAV PCM 16 bits sans conversion destructive.
 - Conserver le mono ou la stéréo du fichier.
@@ -231,7 +237,7 @@ Le packaging PortMaster existant dans ChipNomad fournit déjà une bonne base, m
 - Ajouter one-shot, boucle, start, end et transposition.
 - Gérer proprement les fichiers absents.
 
-### 7. Stabiliser
+### 9. Stabiliser
 
 - Vérifier l'export WAV 16 bits.
 - Tester les projets hybrides AY, Braids et Sample.
@@ -247,7 +253,9 @@ Le packaging PortMaster existant dans ChipNomad fournit déjà une bonne base, m
 - Huit voix Braids tiennent à 96 kHz sur RG353V.
 - Le projet compile nativement sous Windows.
 - Un package PortMaster peut être installé et lancé sur la console.
-- Les anciens projets ChipNomad restent chargeables.
+- Le format de projet PatchNomad sauvegarde les niveaux des huit pistes.
+- Le mixer est un écran principal accessible sans passer par Project.
+- Les instruments Braids acceptent des parameter locks par step.
 
 Le sampler PCM 16 bits fait partie de l'étape suivante. Son architecture est déjà décidée afin de ne pas enfermer le format projet dans le pipeline 8 bits de `AYSample`.
 

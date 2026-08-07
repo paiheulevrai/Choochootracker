@@ -8,6 +8,7 @@ static void detectAYPitchConflicts(ChipNomadState* state);
 static void updateBraidsVoices(ChipNomadState* state);
 
 static SoundChip* defaultChipFactory(int chipIndex, int sampleRate, ChipSetup setup) {
+  setup.ay.stereoSeparation = 0;
   return new SoundChipAY(sampleRate, setup);
 }
 
@@ -131,19 +132,22 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
         chip->render(state->mixBuffer, samplesToRender);
 
         // Mix into main buffer
+        float trackGain = state->project.trackVolume[chipIdx] / 100.0f;
         for (int i = 0; i < samplesToRender * 2; i++) {
-          buffer[bufferOffset + i] += state->mixBuffer[i];
+          buffer[bufferOffset + i] += state->mixBuffer[i] * trackGain;
         }
       }
     }
 
     // A Braids instrument owns one monophonic voice on its tracker track.
     for (int trackIdx = 0; trackIdx < state->project.tracksCount; trackIdx++) {
+      if (!state->playbackState.trackEnabled[trackIdx]) continue;
       BraidsVoice* voice = state->braidsVoices[trackIdx];
       if (!voice->active()) continue;
       voice->render(state->mixBuffer, samplesToRender);
+      float trackGain = state->project.trackVolume[trackIdx] / 100.0f;
       for (int i = 0; i < samplesToRender; i++) {
-        float sample = state->mixBuffer[i] * 0.25f;
+        float sample = state->mixBuffer[i] * 0.25f * trackGain;
         buffer[bufferOffset + i * 2] += sample;
         buffer[bufferOffset + i * 2 + 1] += sample;
       }
@@ -264,49 +268,8 @@ static void updateBraidsVoices(ChipNomadState* state) {
 }
 
 static void detectAYPitchConflicts(ChipNomadState* state) {
-  if (!state || state->project.chipType != ChipType::AY) return;
-
-  // Decrease existing warning cooldowns
-  for (int i = 0; i < state->project.tracksCount; i++) {
-    if (state->trackWarnings[i] > 0) {
-      state->trackWarnings[i]--;
-    }
-  }
-
-  // Collect tone periods for all tracks (0xFFFF = not using tone)
-  uint16_t trackPeriods[PROJECT_MAX_TRACKS];
-  for (int chipIdx = 0; chipIdx < state->project.chipsCount; chipIdx++) {
-    SoundChipAY* chip = static_cast<SoundChipAY*>(state->chips[chipIdx]);
-    if (!chip) continue;
-    int trackOffset = chipIdx * 3;
-    uint8_t mixer = chip->getRegister(7);
-
-    for (int i = 0; i < 3; i++) {
-      uint16_t period = chip->getRegister(i * 2) | (chip->getRegister(i * 2 + 1) << 8);
-      uint8_t volume = chip->getRegister(8 + i);
-      int toneEnabled = ((mixer >> i) & 1) == 0;
-      int noiseEnabled = ((mixer >> (i + 3)) & 1) == 0;
-      int envelopeMode = (volume & 16) != 0;
-
-      // Check if track uses tone generation
-      int isPureNoise = !toneEnabled && noiseEnabled && !envelopeMode;
-      int isPureEnvelope = !toneEnabled && !noiseEnabled && envelopeMode;
-      int isZeroVolume = (volume & 0xf) == 0 && !envelopeMode;
-      int usesTone = !(isPureNoise || isPureEnvelope || isZeroVolume);
-
-      trackPeriods[trackOffset + i] = (usesTone && period != 0) ? period : 0xFFFF;
-    }
-  }
-
-  // Find conflicts by comparing all track periods
-  for (int i = 0; i < state->project.tracksCount; i++) {
-    for (int j = i + 1; j < state->project.tracksCount; j++) {
-      if (trackPeriods[i] != 0xFFFF && trackPeriods[i] == trackPeriods[j]) {
-        state->trackWarnings[i] = PITCH_CONFLICT_COOLDOWN_FRAMES;
-        state->trackWarnings[j] = PITCH_CONFLICT_COOLDOWN_FRAMES;
-      }
-    }
-  }
+  // Independent AY instances cannot fight over a shared tone generator.
+  for (int i = 0; i < PROJECT_MAX_TRACKS; i++) state->trackWarnings[i] = 0;
 }
 
 void chipnomadSetQuality(ChipNomadState* state, ChipNomadQuality quality) {

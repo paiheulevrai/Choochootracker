@@ -7,7 +7,7 @@ void projectInitAY(Project* project) {
 
   project->tickRate = 50;
   project->chipType = ChipType::AY;
-  project->chipsCount = 1;
+  project->chipsCount = PROJECT_MAX_TRACKS;
   project->chipSetup.ay = (struct ChipSetupAY){
     .clock = 1773400,
     .isYM = 0,

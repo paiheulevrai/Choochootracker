@@ -247,7 +247,7 @@ static void generateMultiFileExportPath(char* outputPath, int maxLen, FileExists
 }
 
 void generateStemsExportPath(char* outputPath, int maxLen) {
-  int trackCount = chipnomadState->project.chipsCount * 3;
+  int trackCount = chipnomadState->project.tracksCount;
   generateMultiFileExportPath(outputPath, maxLen, stemsFilesExist, trackCount);
 }
 
@@ -304,7 +304,7 @@ int exportCommonOnEdit(int col, int row, CellEditAction action) {
 
     currentExporter = new ExporterWAV(basePath, &chipnomadState->project, startRow, sampleRates[currentSampleRateIndex], bitDepths[currentBitDepthIndex], appSettings.mixVolume, true);
     if (currentExporter) {
-      int trackCount = chipnomadState->project.chipsCount * 3;
+      int trackCount = chipnomadState->project.tracksCount;
       screenMessage(MESSAGE_TIME, "Starting stems export (%d files)...", trackCount);
     } else {
       screenMessage(MESSAGE_TIME, "Export failed to start");

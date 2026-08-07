@@ -160,6 +160,8 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
       }
 #endif
       else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+        // SDL/OS keyboard repeat competes with the app's deterministic repeat timer.
+        if (event.type == SDL_KEYDOWN && event.key.repeat) continue;
         if (event.key.keysym.sym == BTN_MENU) {
           menu = event.type == SDL_KEYDOWN;
         } else {

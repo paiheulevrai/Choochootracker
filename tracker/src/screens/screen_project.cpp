@@ -118,7 +118,7 @@ static void drawRowHeader(int row, CellState state);
 static void drawColHeader(int col, CellState state);
 
 static ScreenData screenProjectCommon = {
-  .rows = 8,
+  .rows = SCR_PROJECT_ROWS,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,
@@ -179,15 +179,13 @@ static void drawColHeader(int col, CellState state) {}
 
 int projectCommonColumnCount(int row) {
   if (row == 0) {
-    return 5; // Load, save, new, export, manage
+    return 6; // Load, save, new, export, manage, mixer
   } else if (row >= 1 && row <= 3) {
     return 24; // File, title, author
   } else if (row == 4) {
     return 1; // Linear pitch
   } else if (row == 5) {
     return 2; // Tick rate
-  } else if (row > 5) {
-    return 1; // Chip type, chips count
   }
   return 1; // Default value
 }
@@ -207,8 +205,6 @@ void projectCommonDrawStatic(void) {
 
   gfxPrint(0, 7, "Linear pitch");
   gfxPrint(0, 8, "Tick rate");
-  gfxPrint(0, 9, "Chip type");
-  gfxPrint(0, 10, "Chips count");
 }
 
 void projectCommonDrawCursor(int col, int row) {
@@ -223,6 +219,8 @@ void projectCommonDrawCursor(int col, int row) {
       gfxCursor(21, 2, 6); // Export
     } else if (col == 4) {
       gfxCursor(28, 2, 6); // Manage
+    } else if (col == 5) {
+      gfxCursor(35, 2, 5); // Mixer
     }
   } else if (row >= 1 && row <= 3) {
     // Text fields: file name, title, author
@@ -237,13 +235,6 @@ void projectCommonDrawCursor(int col, int row) {
     } else {
       gfxCursor(17, 8, 3);
     }
-  } else if (row == 6) {
-    // Chip type
-    // TODO: When there will be other chips, change cursor length
-    gfxCursor(13, 9, 5);
-  } else if (row == 7) {
-    // Chips count
-    gfxCursor(13, 10, 1);
   }
 }
 
@@ -261,6 +252,8 @@ void projectCommonDrawField(int col, int row, CellState state) {
       gfxPrint(21, 2, "Export");
     } else if (col == 4) {
       gfxPrint(28, 2, "Manage");
+    } else if (col == 5) {
+      gfxPrint(35, 2, "Mixer");
     }
   } else if (row == 1) {
     // File name
@@ -283,12 +276,6 @@ void projectCommonDrawField(int col, int row, CellState state) {
     float tickRate = (float)tickRateI + (float)tickRateF / 1000.0f;
     float bpm = tickRate * 60.0f / 24.0f;
     gfxPrintf(13, 8, "%03d.%03dHz (%.1f BPM)", tickRateI, tickRateF, bpm);
-  } else if (row == 6) {
-    // Chip type
-    gfxPrint(13, 9, "AY/YM");
-  } else if (row == 7) {
-    // Chips count
-    gfxPrintf(13, 10, "%d", chipnomadState->project.chipsCount);
   }
 }
 
@@ -330,6 +317,9 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
     } else if (col == 4) {
       // Manage - go to manage screen
       screenSetup(&screenManage, 0);
+      handled = 0;
+    } else if (col == 5) {
+      screenSetup(&screenMixer, 0);
       handled = 0;
     }
   } else if (row == 1) {
@@ -388,16 +378,6 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
     if (handled) {
       // Update project tick rate from the two components
       chipnomadState->project.tickRate = (float)tickRateI + (float)tickRateF / 1000.0f;
-      projectModified = 1;
-    }
-  } else if (row == 7) {
-    // Chips count (1-3 for AY)
-    handled = edit8noLast(action, (uint8_t*)&chipnomadState->project.chipsCount, 1, 1, 3);
-    if (handled) {
-      playbackStop(&chipnomadState->playbackState);
-      clearNotePreview();
-      chipnomadState->project.tracksCount = projectGetTotalTracks(&chipnomadState->project);
-      pendingReinitChips = 1;
       projectModified = 1;
     }
   }

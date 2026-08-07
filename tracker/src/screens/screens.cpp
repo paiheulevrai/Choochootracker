@@ -70,6 +70,8 @@ void drawScreenMap() {
     gfxPrint(37, smY, "G");
   } else if (currentScreen == &screenSettings) {
     gfxPrint(35, smY + 2, "S");
+  } else if (currentScreen == &screenMixer) {
+    gfxPrint(35, smY, "M");
   }
 }
 

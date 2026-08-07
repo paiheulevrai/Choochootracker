@@ -204,17 +204,17 @@ TEST_CASE_FIXTURE(ProjectFixture, "noteName valid") {
 // Track count tests
 
 TEST_CASE_FIXTURE(ProjectFixture, "getChipTracks ay") {
-  CHECK(projectGetChipTracks(&p, 0) == 3);
+  CHECK(projectGetChipTracks(&p, 0) == 1);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "getTotalTracks single chip") {
   p.chipsCount = 1;
-  CHECK(projectGetTotalTracks(&p) == 3);
+  CHECK(projectGetTotalTracks(&p) == 1);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "getTotalTracks multiple chips") {
   p.chipsCount = 3;
-  CHECK(projectGetTotalTracks(&p) == 9);
+  CHECK(projectGetTotalTracks(&p) == 3);
 }
 
 // fillFXNames tests

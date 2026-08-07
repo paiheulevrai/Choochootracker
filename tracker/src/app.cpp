@@ -289,12 +289,16 @@ void appOnEvent(MainLoopEventData eventData) {
       inputRawCallback(eventData.data.input, 1);
     }
 
-    if (value == keyEdit || value == keyOpt || value == keyShift) {
-      // Edit/Opt/Shift "override" d-pad buttons
-      pressedButtons = (pressedButtons & (~dPadMask)) | value;
-    } else {
-      pressedButtons |= value;
-    }
+    // PortMaster may expose the same physical control through gptokeyb and
+    // SDL's controller API. Unmapped controller duplicates must not replay
+    // the currently held keyboard combination.
+    if (value == keyUnmapped && currentScreen != &screenKeyMapping) break;
+
+    // Ignore duplicate downs. SDL keyboard repeat is filtered by the platform
+    // loop, but this also protects tap detection from duplicate device events.
+    if (pressedButtons & value) break;
+
+    pressedButtons |= value;
 
     // Multi-tap detection
     if (value & doubleTapMask) {
@@ -331,6 +335,8 @@ void appOnEvent(MainLoopEventData eventData) {
     if (inputRawCallback) {
       inputRawCallback(eventData.data.input, 0);
     }
+
+    if (value == keyUnmapped && currentScreen != &screenKeyMapping) break;
 
     pressedButtons &= ~value;
 

@@ -206,6 +206,7 @@ struct Project {
   uint8_t linearPitch;
 
   int tracksCount;
+  uint8_t trackVolume[PROJECT_MAX_TRACKS];
 
   PitchTable pitchTable;
 

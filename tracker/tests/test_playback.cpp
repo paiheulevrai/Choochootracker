@@ -96,6 +96,27 @@ TEST_CASE_FIXTURE(PlaybackFixture, "single note outputs to registers") {
   CHECK((ayChip->getRegister(8) & 0x0f) != 0);
 }
 
+TEST_CASE_FIXTURE(PlaybackFixture, "each tracker track owns an AY") {
+  state->project.chipsCount = 2;
+  state->project.tracksCount = 2;
+  chipnomadInitChips(state, 44100, mockChipFactory);
+  playbackInit(&state->playbackState, &state->project);
+  setInstrument(0, 0, 0, 15, 0);
+
+  playbackPreviewNote(&state->playbackState, 0, 48, 0);
+  playbackPreviewNote(&state->playbackState, 1, 60, 0);
+  playbackNextFrame(state);
+
+  SoundChipAY* first = static_cast<SoundChipAY*>(state->chips[0]);
+  SoundChipAY* second = static_cast<SoundChipAY*>(state->chips[1]);
+  CHECK((first->getRegister(0) | (first->getRegister(1) << 8)) == state->project.pitchTable.values[48]);
+  CHECK((second->getRegister(0) | (second->getRegister(1) << 8)) == state->project.pitchTable.values[60]);
+  CHECK(first->getRegister(9) == 0);
+  CHECK(second->getRegister(9) == 0);
+  CHECK((first->getRegister(7) & 0x36) == 0x36);
+  CHECK((second->getRegister(7) & 0x36) == 0x36);
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "ADSR volume envelope ranges") {
   // Test with A=15, D=16, S=1, R=10
   // This should produce low initial volume, decay to sustain level 1, then release

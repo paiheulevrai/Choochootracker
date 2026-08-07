@@ -105,6 +105,7 @@ void projectInit(Project* p) {
   strcpy(p->title, "");
   strcpy(p->author, "");
   p->linearPitch = 1;
+  for (int i = 0; i < PROJECT_MAX_TRACKS; i++) p->trackVolume[i] = 100;
 
   // Clean song structure
   for (int c = 0; c < PROJECT_MAX_LENGTH; c++) {
@@ -221,8 +222,7 @@ const char* noteName(Project* project, uint8_t note) {
 
 // Get number of tracks for a chip at index
 int projectGetChipTracks(Project* p, int chipIndex) {
-  // Hardcoded for AY chips (3 channels) for now
-  return 3;
+  return 1;
 }
 
 // Get total number of tracks for the project

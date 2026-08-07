@@ -103,18 +103,17 @@ Si un correctif amont exige plusieurs jours de migration C++, fermer la branche 
 
 ## Protéger le format de projet
 
-Le format `.cnm` est le contrat le plus important. Une refonte interne ne justifie pas de casser les morceaux existants.
+PatchNomad possède désormais son propre contrat de projet : huit pistes fixes, une instance AY par piste et des niveaux de mixage par piste. La rétrocompatibilité avec les projets ChipNomad n'est pas un objectif.
 
 Les règles sont les suivantes :
 
-- les anciens projets ChipNomad doivent continuer à se charger ;
-- un champ absent reçoit une valeur par défaut sûre ;
-- un nouveau champ PatchNomad doit être ignoré proprement par les anciennes versions lorsque le format texte le permet ;
-- une modification incompatible exige une nouvelle version de format et un chemin de migration ;
-- les fichiers de test des anciennes versions restent dans le dépôt ;
-- charger puis sauvegarder un projet ne doit pas supprimer des données inconnues sans avertissement.
+- un projet créé par une version publiée de PatchNomad doit rester chargeable ;
+- un nouveau champ reçoit une valeur par défaut sûre lorsqu'il est absent ;
+- une modification incompatible du format PatchNomad exige une nouvelle version de format ;
+- sauvegarde puis chargement doit conserver toutes les données PatchNomad ;
+- les fichiers ChipNomad servent seulement de références ou de fixtures d'import explicites.
 
-Si ChipNomad change son format, ajouter au moins un exemple amont récent aux tests avant de prétendre à la compatibilité. PatchNomad n'a pas besoin d'écrire exactement le même format que toutes les futures versions de ChipNomad, mais il doit annoncer clairement la limite.
+Les changements de format amont restent à surveiller pour comprendre les correctifs utiles, sans imposer de chemin de migration depuis ChipNomad.
 
 ## Garder Mutable Instruments figé
 

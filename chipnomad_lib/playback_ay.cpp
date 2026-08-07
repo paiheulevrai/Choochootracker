@@ -282,10 +282,10 @@ int timerFunctionAY(SoundChip* chipBase, void* userdata) {
   }
   if (chipIdx < 0) return 0;
 
-  int firstTrack = chipIdx * 3;
+  int firstTrack = chipIdx;
 
-  for (int ch = 0; ch < 3; ch++) {
-    PlaybackTrackState* track = &state->tracks[firstTrack + ch];
+  for (int ch = 0; ch < 1; ch++) {
+    PlaybackTrackState* track = &state->tracks[firstTrack];
     if (track->note.instrument == EMPTY_VALUE_8) continue; // No instrument, skip
 
     Instrument *instrument = &state->p->instruments[track->note.instrument];
@@ -355,7 +355,7 @@ int timerFunctionAY(SoundChip* chipBase, void* userdata) {
     track->note.chip.ay.softPeriodCounter++;
 
     // If track is disabled, force output to 0
-    if (state->trackEnabled[firstTrack + ch] == 0) {
+    if (state->trackEnabled[firstTrack] == 0) {
       chip->setRegister(ch + 8, 0);
     }
   }
@@ -705,8 +705,9 @@ void outputRegistersAY(ChipNomadState* chipNomadState, int trackIdx, int chipIdx
   SoundChip* chip = chipNomadState->chips[chipIdx];
   int ayChannel = 0;
 
-  // Tracking chip-wide reg values
-  uint8_t mixer = 0;
+  // Tracking chip-wide reg values. Channels B and C are unused because every
+  // tracker track owns channel A of its own AY.
+  uint8_t mixer = 0x36;
   uint8_t noise = 0;
   uint8_t envShape = 0;
   int16_t envPeriod = 0;

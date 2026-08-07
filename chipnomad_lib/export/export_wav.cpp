@@ -58,7 +58,7 @@ ExporterWAV::ExporterWAV(const char* path, Project* project, int startRow, int s
   this->basePath[sizeof(this->basePath) - 1] = 0;
 
   if (stems) {
-    fileCount = project->chipsCount * 3;
+    fileCount = project->tracksCount;
   } else {
     fileCount = 1;
   }
