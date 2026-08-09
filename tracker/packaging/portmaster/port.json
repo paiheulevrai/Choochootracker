@@ -1,13 +1,13 @@
 {
   "version": 4,
-  "name": "patchnomad.zip",
+  "name": "choochootracker.zip",
   "items": [
-    "PatchNomad.sh",
-    "patchnomad"
+    "ChooChooTracker.sh",
+    "choochootracker"
   ],
   "items_opt": [],
   "attr": {
-    "title": "PatchNomad",
+    "title": "ChooChooTracker",
     "porter": [
       "surga"
     ],

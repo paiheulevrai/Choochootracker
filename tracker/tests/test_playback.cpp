@@ -69,6 +69,45 @@ TEST_CASE_FIXTURE(PlaybackFixture, "playback init all tracks stopped") {
   CHECK_FALSE(playbackIsPlaying(&state->playbackState));
 }
 
+TEST_CASE_FIXTURE(PlaybackFixture, "instrument FX holds until the next note trigger") {
+  state->project.instruments[0].type = InstrumentType::Braids;
+  state->project.instruments[0].tableSpeed = 1;
+  state->playbackState.tracks[0].mode = PlaybackMode::phraseRow;
+
+  PhraseRow lockedRow;
+  memset(&lockedRow, EMPTY_VALUE_8, sizeof(lockedRow));
+  lockedRow.note = 48;
+  lockedRow.instrument = 0;
+  lockedRow.fx[0][0] = fxBTM;
+  lockedRow.fx[0][1] = 42;
+  readPhraseRowDirect(&state->playbackState, 0, &lockedRow, 0);
+  CHECK(state->playbackState.tracks[0].note.fx[fxBTM].isOn == 1);
+  CHECK(state->playbackState.tracks[0].note.fx[fxBTM].fxValue == 42);
+
+  PhraseRow nextTrig;
+  memset(&nextTrig, EMPTY_VALUE_8, sizeof(nextTrig));
+  nextTrig.note = 49;
+  readPhraseRowDirect(&state->playbackState, 0, &nextTrig, 0);
+  CHECK(state->playbackState.tracks[0].note.fx[fxBTM].isOn == 0);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "instrument table FX applies on the trigger row") {
+  state->project.instruments[0].type = InstrumentType::Braids;
+  state->project.instruments[0].tableSpeed = 1;
+  state->project.tables[0].rows[0].fx[0][0] = fxBCF;
+  state->project.tables[0].rows[0].fx[0][1] = 90;
+  state->playbackState.tracks[0].mode = PlaybackMode::phraseRow;
+
+  PhraseRow row;
+  memset(&row, EMPTY_VALUE_8, sizeof(row));
+  row.note = 48;
+  row.instrument = 0;
+  readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+
+  CHECK(state->playbackState.tracks[0].note.fx[fxBCF].isOn == 1);
+  CHECK(state->playbackState.tracks[0].note.fx[fxBCF].fxValue == 90);
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "single note outputs to registers") {
   setInstrument(0, 15, 0, 15, 0);
 
@@ -183,6 +222,77 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Braids instrument renders through a tracker 
 
   SoundChipAY* ayChip = static_cast<SoundChipAY*>(state->chips[0]);
   CHECK(ayChip->getRegister(8) == 0);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Plaits instrument renders and receives note off") {
+  getInstrumentFunctions(InstrumentType::Plaits).init(&state->project.instruments[0]);
+  playbackPreviewNote(&state->playbackState, 0, 60, 0);
+
+  float buffer[2048];
+  int rendered = chipnomadRender(state, buffer, 1024);
+  REQUIRE(rendered == 1024);
+
+  double energy = 0.0;
+  for (int i = 0; i < rendered; ++i) {
+    CHECK(std::isfinite(buffer[i * 2]));
+    energy += std::fabs(buffer[i * 2]);
+  }
+  CHECK(energy > 0.0);
+
+  handleNoteOff(&state->playbackState, 0);
+  CHECK(state->playbackState.tracks[0].note.noteReleased == 1);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "PRO 00 suppresses a row and PRO 64 always triggers") {
+  setInstrument(0, 0, 0, 15, 0);
+  PhraseRow* row = &state->project.phrases[0].rows[0];
+  row->note = 48;
+  row->instrument = 0;
+  row->fx[0][0] = fxPRO;
+  row->fx[0][1] = 0x00;
+  state->project.chains[0].rows[0].phrase = 0;
+  state->project.song[0][0] = 0;
+  playbackStartSong(&state->playbackState, 0, 0, 0);
+  advanceFrames(1);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
+
+  playbackStop(&state->playbackState);
+  row->fx[0][1] = 0x64;
+  playbackStartSong(&state->playbackState, 0, 0, 0);
+  advanceFrames(1);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "MOD 22 triggers on the second visit") {
+  setInstrument(0, 0, 0, 15, 0);
+  PhraseRow* row = &state->project.phrases[0].rows[0];
+  row->note = 48;
+  row->instrument = 0;
+  row->fx[0][0] = fxMOD;
+  row->fx[0][1] = 0x22;
+  state->project.chains[0].rows[0].phrase = 0;
+  state->project.chains[0].rows[1].phrase = 0;
+  state->project.song[0][0] = 0;
+  playbackStartSong(&state->playbackState, 0, 0, 0);
+  advanceFrames(1);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "SPD 0A doubles one track clock and persists") {
+  state->project.phrases[0].rows[0].fx[0][0] = fxSPD;
+  state->project.phrases[0].rows[0].fx[0][1] = 0x0A;
+  state->project.chains[0].rows[0].phrase = 0;
+  state->project.song[0][0] = 0;
+  playbackStartSong(&state->playbackState, 0, 0, 0);
+  advanceFrames(1);
+  CHECK(state->playbackState.tracks[0].speedRatio == 0x0A);
+  advanceFrames(3);
+  CHECK(state->playbackState.tracks[0].phraseRow == 1);
+  advanceFrames(3);
+  CHECK(state->playbackState.tracks[0].phraseRow == 2);
 }
 
 } // TEST_SUITE("playback")

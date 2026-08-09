@@ -22,13 +22,16 @@ void drawScreenMap() {
   const ColorScheme cs = appSettings.colorScheme;
   gfxSetBgColor(cs.background);
   gfxSetFgColor(cs.textInfo);
-  gfxClearRect(35, smY, 5, 5);
+  gfxClearRect(34, smY, 6, 5);
 
   // Core screens
-  gfxPrint(35, smY + 1, "SCPIT");
+  gfxPrint(34, smY + 1, "MSCPIT");
 
   // Additional screens
-  if (currentScreen == &screenSong || currentScreen == &screenProject) {
+  if (currentScreen == &screenMixer) {
+    gfxPrint(34, smY, "R");
+    gfxPrint(34, smY + 2, "D");
+  } else if (currentScreen == &screenSong || currentScreen == &screenProject) {
     gfxPrint(35, smY, "P");
   } else if (currentScreen == &screenPhrase || currentScreen == &screenGroove) {
     gfxPrint(37, smY, "G");
@@ -48,7 +51,10 @@ void drawScreenMap() {
 
   // Highlight current screen
   gfxSetFgColor(cs.textDefault);
-  if (currentScreen == &screenSong) {
+  if (currentScreen == &screenMixer) {
+    int page = screenMixerGetPage();
+    gfxPrint(34, smY + (page == 1 ? 0 : page == 2 ? 2 : 1), page == 1 ? "R" : page == 2 ? "D" : "M");
+  } else if (currentScreen == &screenSong) {
     gfxPrint(35, smY + 1, "S");
   } else if (currentScreen == &screenChain) {
     gfxPrint(36, smY + 1, "C");
@@ -70,8 +76,6 @@ void drawScreenMap() {
     gfxPrint(37, smY, "G");
   } else if (currentScreen == &screenSettings) {
     gfxPrint(35, smY + 2, "S");
-  } else if (currentScreen == &screenMixer) {
-    gfxPrint(35, smY, "M");
   }
 }
 

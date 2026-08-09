@@ -35,6 +35,9 @@ enum FX {
   fxGGR, // Global groove
   fxHOP, // Hop
   fxSNG, // Song hop
+  fxPRO, // Probability, 00-64 = 0-100%
+  fxMOD, // Modulo, high nibble A on low nibble B
+  fxSPD, // Persistent per-track clock ratio, 00-10
 
   // Modulation FX
   fxM1A, // Modulation 1 amount (relative)
@@ -92,6 +95,30 @@ enum FX {
   fxSWT, // Software oscillator wavetable index (relative)
   // AY Sample instrument (AYSample):
   fxSMS, // Sample start position
+
+  // Braids FX (absolute)
+  fxBMD, // Model
+  fxBTM, // Timbre
+  fxBCL, // Color
+  fxBCF, // Filter cutoff
+  fxBRS, // Filter resonance
+
+  // PCM Sample FX (absolute)
+  fxSPT, // Pitch
+  fxSST, // Start
+  fxSEN, // End
+  fxSVL, // Volume
+  fxSCF, // Filter cutoff
+  fxSRS, // Filter resonance
+
+  // Plaits FX (absolute)
+  fxPMD, // Engine/model
+  fxPHA, // Harmonics
+  fxPTM, // Timbre
+  fxPMO, // Morph
+  fxPAX, // Aux mix
+  fxPCF, // Filter cutoff
+  fxPRS, // Filter resonance
   // TODO: FM FX
 
   // TODO: SID FX
@@ -207,6 +234,16 @@ struct Project {
 
   int tracksCount;
   uint8_t trackVolume[PROJECT_MAX_TRACKS];
+  uint8_t trackReverbSend[PROJECT_MAX_TRACKS];
+  uint8_t trackDelaySend[PROJECT_MAX_TRACKS];
+  uint8_t reverbReturn;
+  uint8_t reverbTime;
+  uint8_t reverbDamping;
+  uint16_t reverbFilterCutoffHz;
+  uint8_t delayReturn;
+  uint8_t delayTicks;
+  uint8_t delayFeedback;
+  uint16_t delayFilterCutoffHz;
 
   PitchTable pitchTable;
 

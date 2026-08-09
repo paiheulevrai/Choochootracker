@@ -648,16 +648,19 @@ static int projectLoadInternal(FILE* file, Project* project) {
   snprintf(projectFileError, 40, "Module header");
   char* line = peekLine(file);
   if (line == NULL) return 1;
-  if (strncmp(line, "# ChipNomad Tracker Module", 26)) {
+  const char* version = NULL;
+  if (!strncmp(line, "# ChooChooTracker Module", 24)) version = line + 24;
+  else if (!strncmp(line, "# ChipNomad Tracker Module", 26)) version = line + 26;
+  if (!version) {
     snprintf(projectFileError, 40, "Incorrect module format");
     return 1;
   }
 
   // Detect version
-  if (strlen(line) > 26) {
-    if (strncmp(line + 26, " 2.0", 4) == 0) {
+  if (strlen(version) > 0) {
+    if (strncmp(version, " 2.0", 4) == 0) {
       projectFileVersion = 2;
-    } else if (strncmp(line + 26, " 1.0", 4) == 0) {
+    } else if (strncmp(version, " 1.0", 4) == 0) {
       projectFileVersion = 1;
     } else {
       snprintf(projectFileError, 40, "Incorrect module version");
@@ -712,6 +715,38 @@ static int projectLoadInternal(FILE* file, Project* project) {
   }
   p.chipsCount = PROJECT_MAX_TRACKS;
   consumeLine(file);
+
+  line = peekLine(file);
+  if (line && strncmp(line, "- Reverb sends: ", 16) == 0) {
+    if (sscanf(line + 16, "%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu",
+        &p.trackReverbSend[0], &p.trackReverbSend[1], &p.trackReverbSend[2], &p.trackReverbSend[3],
+        &p.trackReverbSend[4], &p.trackReverbSend[5], &p.trackReverbSend[6], &p.trackReverbSend[7]) != PROJECT_MAX_TRACKS) return 1;
+    consumeLine(file);
+  }
+  line = peekLine(file);
+  if (line && strncmp(line, "- Delay sends: ", 15) == 0) {
+    if (sscanf(line + 15, "%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu",
+        &p.trackDelaySend[0], &p.trackDelaySend[1], &p.trackDelaySend[2], &p.trackDelaySend[3],
+        &p.trackDelaySend[4], &p.trackDelaySend[5], &p.trackDelaySend[6], &p.trackDelaySend[7]) != PROJECT_MAX_TRACKS) return 1;
+    consumeLine(file);
+  }
+  line = peekLine(file);
+  if (line && sscanf(line, "- Reverb: %hhu,%hhu,%hhu,%hu", &p.reverbReturn, &p.reverbTime,
+                     &p.reverbDamping, &p.reverbFilterCutoffHz) == 4) consumeLine(file);
+  line = peekLine(file);
+  if (line && sscanf(line, "- Delay: %hhu,%hhu,%hhu,%hu", &p.delayReturn, &p.delayTicks,
+                     &p.delayFeedback, &p.delayFilterCutoffHz) == 4) consumeLine(file);
+
+  for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
+    if (p.trackReverbSend[i] > 100) p.trackReverbSend[i] = 100;
+    if (p.trackDelaySend[i] > 100) p.trackDelaySend[i] = 100;
+  }
+  if (p.reverbReturn > 100) p.reverbReturn = 100;
+  if (p.delayReturn > 100) p.delayReturn = 100;
+  if (p.delayFeedback > 95) p.delayFeedback = 95;
+  if (p.delayTicks == 0) p.delayTicks = 1;
+  if (p.reverbFilterCutoffHz < 20) p.reverbFilterCutoffHz = 20;
+  if (p.delayFilterCutoffHz < 20) p.delayFilterCutoffHz = 20;
 
   // Try to read linear pitch (optional for backwards compatibility)
   line = peekLine(file);
@@ -1044,7 +1079,7 @@ static int projectSaveAYWavetables(FILE* file, Project* project) {
 }
 
 static int projectSaveInternal(FILE* file, Project* project) {
-  fprintf(file, "# ChipNomad Tracker Module 2.0\n\n");
+  fprintf(file, "# ChooChooTracker Module 2.0\n\n");
 
   fprintf(file, "- Title: %s\n", project->title);
   fprintf(file, "- Author: %s\n", project->author);
@@ -1054,6 +1089,16 @@ static int projectSaveInternal(FILE* file, Project* project) {
   fprintf(file, "- Track volumes: %hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu\n",
     project->trackVolume[0], project->trackVolume[1], project->trackVolume[2], project->trackVolume[3],
     project->trackVolume[4], project->trackVolume[5], project->trackVolume[6], project->trackVolume[7]);
+  fprintf(file, "- Reverb sends: %hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu\n",
+    project->trackReverbSend[0], project->trackReverbSend[1], project->trackReverbSend[2], project->trackReverbSend[3],
+    project->trackReverbSend[4], project->trackReverbSend[5], project->trackReverbSend[6], project->trackReverbSend[7]);
+  fprintf(file, "- Delay sends: %hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu\n",
+    project->trackDelaySend[0], project->trackDelaySend[1], project->trackDelaySend[2], project->trackDelaySend[3],
+    project->trackDelaySend[4], project->trackDelaySend[5], project->trackDelaySend[6], project->trackDelaySend[7]);
+  fprintf(file, "- Reverb: %hhu,%hhu,%hhu,%hu\n", project->reverbReturn, project->reverbTime,
+    project->reverbDamping, project->reverbFilterCutoffHz);
+  fprintf(file, "- Delay: %hhu,%hhu,%hhu,%hu\n", project->delayReturn, project->delayTicks,
+    project->delayFeedback, project->delayFilterCutoffHz);
   fprintf(file, "- Linear pitch: %d\n", project->linearPitch);
   fprintf(file, "- Chip type: %s\n", chipNames[static_cast<int>(project->chipType)]);
 

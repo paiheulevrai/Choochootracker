@@ -14,7 +14,8 @@ FXName fxNamesSequencer[] = {
   {fxPIT, "PIT"}, {fxFIN, "FIN"}, {fxPRD, "PRD"}, {fxVOL, "VOL"}, {fxVSL, "VSL"},
   {fxRET, "RET"}, {fxDEL, "DEL"}, {fxOFF, "OFF"}, {fxKIL, "KIL"}, {fxTIC, "TIC"},
   {fxTBL, "TBL"}, {fxTBX, "TBX"}, {fxTHO, "THO"}, {fxTXH, "TXH"}, {fxGRV, "GRV"},
-  {fxGGR, "GGR"}, {fxHOP, "HOP"}, {fxSNG, "SNG"}
+  {fxGGR, "GGR"}, {fxHOP, "HOP"}, {fxSNG, "SNG"}, {fxPRO, "PRO"},
+  {fxMOD, "MOD"}, {fxSPD, "SPD"}
 };
 int fxSequencerCount = sizeof(fxNamesSequencer) / sizeof(FXName);
 
@@ -62,6 +63,24 @@ FXName fxNamesAYSample[] = {
 };
 int fxAYSampleCount = sizeof(fxNamesAYSample) / sizeof(FXName);
 
+FXName fxNamesBraids[] = {
+  {fxBMD, "BMD"}, {fxBTM, "BTM"}, {fxBCL, "BCL"},
+  {fxBCF, "BCF"}, {fxBRS, "BRS"},
+};
+int fxBraidsCount = sizeof(fxNamesBraids) / sizeof(FXName);
+
+FXName fxNamesSample[] = {
+  {fxSPT, "SPT"}, {fxSST, "SST"}, {fxSEN, "SEN"},
+  {fxSVL, "SVL"}, {fxSCF, "SCF"}, {fxSRS, "SRS"},
+};
+int fxSampleCount = sizeof(fxNamesSample) / sizeof(FXName);
+
+FXName fxNamesPlaits[] = {
+  {fxPMD, "PMD"}, {fxPHA, "PHA"}, {fxPTM, "PTM"}, {fxPMO, "PMO"},
+  {fxPAX, "PAX"}, {fxPCF, "PCF"}, {fxPRS, "PRS"},
+};
+int fxPlaitsCount = sizeof(fxNamesPlaits) / sizeof(FXName);
+
 // FX Groups array. FX counts are filled in fillFXNames()
 FXGroup fxGroups[] = {
   {"Sequencer FX", fxNamesSequencer, 0, 8, InstrumentType::none},
@@ -69,6 +88,9 @@ FXGroup fxGroups[] = {
   {"AY Classic FX", fxNamesAY1, 0, 8, InstrumentType::AY1},
   {"AY Plus FX", fxNamesAY2, 0, 8, InstrumentType::AY2},
   {"AYSample FX", fxNamesAYSample, 0, 8, InstrumentType::AYSample},
+  {"Braids FX", fxNamesBraids, 0, 5, InstrumentType::Braids},
+  {"Sample FX", fxNamesSample, 0, 6, InstrumentType::Sample},
+  {"Plaits FX", fxNamesPlaits, 0, 7, InstrumentType::Plaits},
 };
 int fxGroupCount = sizeof(fxGroups) / sizeof(FXGroup);
 
@@ -86,6 +108,9 @@ void fillFXNames() {
   fxGroups[2].count = fxAY1Count;
   fxGroups[3].count = fxAY2Count;
   fxGroups[4].count = fxAYSampleCount;
+  fxGroups[5].count = fxBraidsCount;
+  fxGroups[6].count = fxSampleCount;
+  fxGroups[7].count = fxPlaitsCount;
 
   // Fill FX names from all groups
   for (int g = 0; g < fxGroupCount; g++) {
@@ -106,6 +131,14 @@ void projectInit(Project* p) {
   strcpy(p->author, "");
   p->linearPitch = 1;
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) p->trackVolume[i] = 100;
+  p->reverbReturn = 100;
+  p->reverbTime = 180;
+  p->reverbDamping = 160;
+  p->reverbFilterCutoffHz = 16000;
+  p->delayReturn = 100;
+  p->delayTicks = 6;
+  p->delayFeedback = 50;
+  p->delayFilterCutoffHz = 12000;
 
   // Clean song structure
   for (int c = 0; c < PROJECT_MAX_LENGTH; c++) {

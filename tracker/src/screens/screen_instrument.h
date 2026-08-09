@@ -15,5 +15,7 @@ extern ScreenData screenInstrumentAY;
 extern ScreenData screenInstrumentAY2;
 extern ScreenData screenInstrumentAYSample;
 extern ScreenData screenInstrumentBraids;
+extern ScreenData screenInstrumentSample;
+extern ScreenData screenInstrumentPlaits;
 
 #endif

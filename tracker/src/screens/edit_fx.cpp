@@ -9,11 +9,37 @@ int expandedGroup;     // Currently expanded group (-1 = none)
 uint8_t currentInstrumentIdx;  // Current instrument index for context-aware help
 
 // Helper to get instrument type from stored instrument index
-static InstrumentType getCurrentInstrumentType() {
-  if (currentInstrumentIdx != EMPTY_VALUE_8 && currentInstrumentIdx < PROJECT_MAX_INSTRUMENTS) {
-    return chipnomadState->project.instruments[currentInstrumentIdx].type;
+static InstrumentType getInstrumentType(uint8_t instrumentIdx) {
+  if (instrumentIdx != EMPTY_VALUE_8 && instrumentIdx < PROJECT_MAX_INSTRUMENTS) {
+    return chipnomadState->project.instruments[instrumentIdx].type;
   }
   return InstrumentType::none;
+}
+
+static InstrumentType getCurrentInstrumentType() {
+  return getInstrumentType(currentInstrumentIdx);
+}
+
+static bool isFXAvailable(enum FX fx, InstrumentType instrumentType) {
+  for (int groupIdx = 0; groupIdx < fxGroupCount; groupIdx++) {
+    FXGroup* group = &fxGroups[groupIdx];
+    if (group->instType != InstrumentType::none && group->instType != instrumentType) continue;
+    for (int i = 0; i < group->count; i++) {
+      if (group->fxList[i].fx == fx) return true;
+    }
+  }
+  return false;
+}
+
+static void stepFX(uint8_t* fx, int direction, uint8_t instrumentIdx) {
+  InstrumentType instrumentType = getInstrumentType(instrumentIdx);
+  for (int candidate = (int)fx[0] + direction;
+       candidate >= 0 && candidate < fxTotalCount; candidate += direction) {
+    if (isFXAvailable((enum FX)candidate, instrumentType)) {
+      fx[0] = candidate;
+      return;
+    }
+  }
 }
 
 void fxEditFullDraw(uint8_t currentFX, uint8_t instrumentIdx);
@@ -41,13 +67,11 @@ int editFX(CellEditAction action, uint8_t* fx, uint8_t* lastValue, int isTable, 
     lastValue[1] = fx[1];
     result = 2;
   } else if (action == CellEditAction::increase && fx[0] != EMPTY_VALUE_8) {
-    // Next FX
-    if (fx[0] < fxTotalCount - 1) fx[0]++;
+    stepFX(fx, 1, instrumentIdx);
     lastValue[0] = fx[0];
     result = 2;
   } else if (action == CellEditAction::decrease && fx[0] != EMPTY_VALUE_8) {
-    // Previous FX
-    if (fx[0] > 0) fx[0]--;
+    stepFX(fx, -1, instrumentIdx);
     lastValue[0] = fx[0];
     result = 2;
   } else if (action == CellEditAction::increaseBig || action == CellEditAction::decreaseBig) {

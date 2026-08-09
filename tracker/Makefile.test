@@ -3,7 +3,7 @@
 
 # Compiler settings
 CXX = c++
-CFLAGS = -std=c++17 -Wall -g -O0
+CFLAGS = -std=c++17 -Wall -g -O0 -DTEST
 LDFLAGS = -lm
 
 # Build directory
@@ -31,7 +31,16 @@ CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/*.cpp) \
                         $(wildcard ../chipnomad_lib/synth/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/ayumi/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/mutable/braids/*.cc) \
-                        $(wildcard ../chipnomad_lib/external/mutable/stmlib/utils/*.cc)
+                        $(wildcard ../chipnomad_lib/external/mutable/stmlib/utils/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/stmlib/dsp/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/chords/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/engine/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/engine2/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/fm/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/physical_modelling/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/speech/*.cc)
 
 TRACKER_SRC_SOURCES = src/string_utils.cpp \
                       src/project_utils.cpp \

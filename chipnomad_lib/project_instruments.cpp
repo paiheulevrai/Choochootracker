@@ -121,6 +121,55 @@ static int freeBraidsInstrument(Instrument* instrument) {
   return 0;
 }
 
+static const char* modNamePlaits(int modIndex) {
+  static const char *names[] = {
+    "Off", "Volume", "Pitch", "Harmonic", "Timbre", "Morph", "AuxMix", "Cutoff", "Reso"
+  };
+  return names[modIndex];
+}
+
+static int initPlaitsInstrument(Instrument* instrument) {
+  initCommon(instrument);
+  instrument->type = InstrumentType::Plaits;
+  InstrumentPlaits* plaits = &instrument->chip.plaits;
+  plaits->harmonics = 16384;
+  plaits->timbre = 16384;
+  plaits->morph = 16384;
+  plaits->filterEnabled = 1;
+  plaits->filterCutoffHz = 20000;
+  plaits->sustain = 255;
+  plaits->release = 16;
+  return 0;
+}
+
+static int freePlaitsInstrument(Instrument* instrument) {
+  freeCommon(instrument);
+  return 0;
+}
+
+static const char* modNameSample(int modIndex) {
+  static const char *names[] = {"Off", "Volume", "Pitch", "Cutoff", "Reso"};
+  return names[modIndex];
+}
+
+static int initSampleInstrument(Instrument* instrument) {
+  initCommon(instrument);
+  instrument->type = InstrumentType::Sample;
+  instrument->chip.sample.end = 255;
+  instrument->chip.sample.volume = 255;
+  instrument->chip.sample.filterEnabled = 1;
+  instrument->chip.sample.filterCutoffHz = 20000;
+  instrument->chip.sample.sustain = 255;
+  instrument->chip.sample.release = 16;
+  return 0;
+}
+
+static int freeSampleInstrument(Instrument* instrument) {
+  free(instrument->chip.sample.data);
+  freeCommon(instrument);
+  return 0;
+}
+
 // Get function pointers for instrument type
 InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
   switch (type) {
@@ -151,6 +200,20 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
         .modName = modNameBraids,
         .init = initBraidsInstrument,
         .free = freeBraidsInstrument
+      };
+    case InstrumentType::Sample:
+      return (InstrumentFunctions){
+        .modDestinationsCount = 4,
+        .modName = modNameSample,
+        .init = initSampleInstrument,
+        .free = freeSampleInstrument
+      };
+    case InstrumentType::Plaits:
+      return (InstrumentFunctions){
+        .modDestinationsCount = 8,
+        .modName = modNamePlaits,
+        .init = initPlaitsInstrument,
+        .free = freePlaitsInstrument
       };
     default:
       return (InstrumentFunctions){

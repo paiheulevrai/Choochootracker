@@ -17,6 +17,7 @@ struct AudioManager {
   void (*stop)();
   void (*toggleTrackMute)(int trackIdx);
   void (*toggleTrackSolo)(int trackIdx);
+  int (*getCpuLoadPercent)(void);
   uint8_t trackStates[PROJECT_MAX_TRACKS];
 };
 

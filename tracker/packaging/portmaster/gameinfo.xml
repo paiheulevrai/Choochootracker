@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <gameList>
   <game>
-    <path>./PatchNomad.sh</path>
-    <name>PatchNomad</name>
+    <path>./ChooChooTracker.sh</path>
+    <name>ChooChooTracker</name>
     <desc>A mobile tracker combining AY/YM synthesis with Mutable Instruments Braids.</desc>
     <releasedate>BUILD_DATE_PLACEHOLDER</releasedate>
-    <developer>PatchNomad contributors</developer>
-    <publisher>PatchNomad contributors</publisher>
+    <developer>ChooChooTracker contributors</developer>
+    <publisher>ChooChooTracker contributors</publisher>
     <genre>Music</genre>
     <image>./cover.png</image>
   </game>

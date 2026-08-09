@@ -1,4 +1,7 @@
 Copyright 2012 Emilie Gillet.
+Copyright 2014 Emilie Gillet.
+Copyright 2016 Emilie Gillet.
+Copyright 2021 Emilie Gillet.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -175,7 +175,11 @@ static void draw(void) {
 //
 
 static int inputScreenNavigation(int keys, int tapCount) {
-  // Fix all bare returns in this function
+  if (keys == (keyLeft | keyShift)) {
+    screenSetup(&screenMixer, 0);
+    return 1;
+  }
+
   // Go to Chain screen
   if (keys == (keyRight | keyShift)) {
     int chain = chipnomadState->project.song[screen.cursorRow][screen.cursorCol];

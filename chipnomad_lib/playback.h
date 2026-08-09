@@ -77,6 +77,13 @@ struct PlaybackTrackState {
 
   int frameCounter;
 
+  // Persistent sequencer FX state
+  uint8_t speedRatio;
+  uint32_t speedPhase;
+  uint32_t conditionVisits[16];
+  uint32_t conditionRandom;
+  uint16_t conditionPhrase;
+
   // Currently playing note
   PlaybackNoteState note;
   // Cached phrase row data

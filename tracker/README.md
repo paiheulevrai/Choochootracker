@@ -1,99 +1,41 @@
-# ChipNomad Tracker - Build Instructions
+# ChooChooTracker build instructions
 
-This directory contains the main ChipNomad tracker application.
+The English user manual is available at [`../docs/USER_MANUAL.md`](../docs/USER_MANUAL.md).
 
-## Quick Start
+Run commands from this `tracker` directory.
 
-```bash
-# Build for current platform (macOS/Linux)
-make desktop
+## Windows
 
-# Build all platform releases
-./deploy-all.sh
+Requirements: MSYS2 UCRT64, GCC and SDL2.
+
+```bat
+build-windows.bat
 ```
 
-## Platform-Specific Builds
+Output: `build/windows/choochootracker.exe`.
 
-### Desktop Platforms
+## Tests
 
-#### macOS
-```bash
-# Simple build
-make desktop
-
-# macOS app bundle with packaging
-make macOS-deploy
+```sh
+make -f Makefile.test
 ```
 
-**macOS Requirements:**
-- Xcode Command Line Tools: `xcode-select --install`
-- SDL2.framework: Download from https://github.com/libsdl-org/SDL/releases
-  - Place `SDL2.framework` in `platforms/macos/Frameworks/`
-  - See `platforms/macos/Frameworks/README.md` for details
+The suite covers the tracker engine, Braids, the PCM Sample voice and instrument FX behavior.
 
-#### Linux (x86_64 and ARM)
-```bash
-# Native build (should work on x86_64, ARM, Raspberry Pi)
-make linux
+## PortMaster / ArkOS
 
-# Full deployment
-make linux-package-deploy
+The current target is AArch64, including the Anbernic RG353V. From Ubuntu under WSL2:
+
+```sh
+make -f Makefile.portmaster PortMaster-deploy
 ```
 
-**Linux Requirements:**
-- GCC or Clang
-- SDL2 development libraries: `sudo apt install build-essential libsdl2-dev`
+Outputs:
 
-#### Windows
-```bash
-# Cross-compile from macOS/Linux (recommended)
-make windows-deploy
+- `build/portmaster/choochootracker.aarch64`
+- `build/portmaster/package/`
+- `../releases/choochootracker.zip`
 
-# Native Windows build
-build-windows.bat  # On Windows with MinGW
-```
+The ZIP contains `ChooChooTracker.sh`, the gamepad mapping, data files, licenses and the ARM64 executable.
 
-### Handheld Consoles
-
-#### PortMaster (Multiple ARM devices)
-```bash
-make PortMaster-deploy
-```
-
-#### RG35xx Specific
-```bash
-make RG35xx-deploy
-```
-
-## Build Requirements
-
-### Cross-Platform Builds (Docker)
-- Docker installed and running
-- No additional setup required
-
-### Native Builds
-- **macOS**: Xcode Command Line Tools, Homebrew, SDL2
-- **Linux**: GCC, SDL2 development libraries
-- **Windows**: MinGW-w64, SDL2 development libraries
-
-### Native Windows Setup (Optional)
-
-1. Install [MinGW-w64](https://www.mingw-w64.org/) or [MSYS2](https://www.msys2.org/)
-2. Download [SDL2 development libraries](https://github.com/libsdl-org/SDL/releases/tag/release-2.32.6)
-3. Set `SDL_PATH` environment variable (optional)
-4. Run `build-windows.bat`
-
-## Architecture Support
-
-ChipNomad supports multiple architectures:
-- **x86_64**: Intel/AMD 64-bit (Windows, macOS, Linux)
-- **ARM64**: Apple Silicon (macOS), ARM64 Linux
-- **ARM**: Raspberry Pi, handheld consoles
-
-The Linux build automatically detects your architecture and creates appropriately named packages.
-
-## Output
-
-Built binaries and packages are created in:
-- `build/` - Platform-specific build directories
-- `../../releases/` - Final release packages (when using deploy targets)
+See [development notes](../docs/development-notes.md) for toolchain details and [fork maintenance](../docs/fork-maintenance.md) for upstream policy.

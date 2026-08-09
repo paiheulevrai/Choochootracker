@@ -18,7 +18,7 @@ void projectInitAY(Project* project) {
 
   project->tracksCount = projectGetTotalTracks(project);
 
-  calculatePitchTableAY(project);
+  reinitializePitchTable(project);
 }
 
 // Does chain have notes?
@@ -67,6 +67,10 @@ const char* instrumentTypeName(InstrumentType type) {
       return "AY Sample";
     case InstrumentType::Braids:
       return "Braids";
+    case InstrumentType::Sample:
+      return "Sample";
+    case InstrumentType::Plaits:
+      return "Plaits";
     case InstrumentType::none:
       return "None";
     default:

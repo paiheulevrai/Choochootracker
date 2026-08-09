@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "project.h"
+#include "project_utils.h"
 
 #include <cstring>
 
@@ -28,6 +29,14 @@ TEST_CASE_FIXTURE(ProjectFixture, "projectInit default groove") {
   CHECK(p.grooves[0].speed[0] == 6);
   CHECK(p.grooves[0].speed[1] == 6);
   CHECK(p.grooves[0].speed[2] == EMPTY_VALUE_8);
+}
+
+TEST_CASE("new projects initialize the default linear pitch table") {
+  Project project;
+  projectInitAY(&project);
+  CHECK(project.linearPitch == 1);
+  CHECK(project.pitchTable.values[0] == 1200);
+  CHECK(project.pitchTable.values[48] == 6000);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "projectInit other grooves empty") {

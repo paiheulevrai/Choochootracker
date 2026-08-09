@@ -139,13 +139,13 @@ void settingsDrawField(int col, int row, CellState state) {
     gfxPrintf(23, 4, "%03d%%", mixVolumePercent);
   } else if (row == 3 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 5, "Quality");
+    gfxPrint(0, 5, "AY Quality");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
     const char* qualityNames[] = {"LOW   ", "MEDIUM", "HIGH  ", "BEST  "};
     gfxPrint(23, 5, qualityNames[appSettings.quality]);
   } else if (row == 4 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 6, "Sample dithering");
+    gfxPrint(0, 6, "AY Sample dithering");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
     gfxPrint(23, 6, appSettings.aySampleDithering ? "ON " : "OFF");
   } else if (row == 5 && col == 0) {
@@ -159,7 +159,7 @@ void settingsDrawField(int col, int row, CellState state) {
     gfxPrint(0, 9, "Edit color theme");
   } else if (row == 8 && col == 0) {
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(0, 17, "Quit ChipNomad");
+    gfxPrint(0, 17, "Quit ChooChooTracker");
   }
 }
 

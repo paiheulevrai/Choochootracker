@@ -10,6 +10,39 @@
 
 static int moveToNextPhraseRow(PlaybackState* state, int trackIdx);
 
+static const uint8_t speedNumerator[17] = {
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 4, 8, 3, 5, 6, 7
+};
+static const uint8_t speedDenominator[17] = {
+  7, 6, 5, 3, 32, 16, 8, 4, 2, 1, 1, 1, 1, 1, 1, 1, 1
+};
+
+static uint32_t nextConditionRandom(PlaybackTrackState* track) {
+  uint32_t x = track->conditionRandom ? track->conditionRandom : 0x6d2b79f5u;
+  x ^= x << 13;
+  x ^= x >> 17;
+  x ^= x << 5;
+  track->conditionRandom = x;
+  return x;
+}
+
+static int phraseRowConditionsPass(PlaybackTrackState* track, PhraseRow* row, int rowIdx) {
+  uint32_t visit = ++track->conditionVisits[rowIdx & 15];
+  for (int i = 0; i < 3; ++i) {
+    uint8_t type = row->fx[i][0];
+    uint8_t value = row->fx[i][1];
+    if (type == fxPRO) {
+      if (value > 100) value = 100;
+      if (value == 0 || (value < 100 && nextConditionRandom(track) % 100 >= value)) return 0;
+    } else if (type == fxMOD) {
+      uint8_t a = value >> 4;
+      uint8_t b = value & 0x0f;
+      if (a == 0 || b < 2 || a > b || ((visit - 1) % b) + 1 != a) return 0;
+    }
+  }
+  return 1;
+}
+
 static void resetTrackFXAuxState(PlaybackState* state, int trackIdx) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
   memset(track->fxAuxState, 0, sizeof(track->fxAuxState));
@@ -28,6 +61,10 @@ static void resetNoteFX(PlaybackState* state, int trackIdx) {
   }
 }
 
+static void resetInstrumentFX(PlaybackTrackState* track) {
+  for (int i = fxBMD; i <= fxPRS; i++) track->note.fx[i].isOn = 0;
+}
+
 static void resetTrack(PlaybackState* state, int trackIdx) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
 
@@ -39,6 +76,11 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   track->grooveIdx = 0;
   track->grooveRow = 0;
   track->pendingGrooveIdx = 0;
+  track->speedRatio = 9;
+  track->speedPhase = 0;
+  memset(track->conditionVisits, 0, sizeof(track->conditionVisits));
+  track->conditionRandom = 0x6d2b79f5u ^ (uint32_t)(trackIdx + 1) * 0x9e3779b9u;
+  track->conditionPhrase = EMPTY_VALUE_16;
 
   track->note.pitchBase = EMPTY_VALUE_8;
   track->note.pitchFinal = EMPTY_VALUE_8;
@@ -234,7 +276,8 @@ void handleNoteOff(PlaybackState* state, int trackIdx) {
 
   track->note.noteReleased = 1;
 
-  int isBraids = instType == InstrumentType::Braids;
+  int isModernVoice = instType == InstrumentType::Braids ||
+    instType == InstrumentType::Plaits || instType == InstrumentType::Sample;
 
   int hasVolumeADSR = 0;
 
@@ -252,7 +295,7 @@ void handleNoteOff(PlaybackState* state, int trackIdx) {
     playbackModNoteOff(&track->note.modulation[i]);
   }
 
-  if (isBraids) {
+  if (isModernVoice) {
     track->note.pitchBase = EMPTY_VALUE_8;
     return;
   }
@@ -315,7 +358,10 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     uint8_t fxType = phraseRow->fx[i][0];
     uint8_t fxValue = phraseRow->fx[i][1];
 
-    if (!skipDelCheck && (fxType == fxDEL && fxValue != 0)) {
+    if (fxType == fxSPD && fxValue <= 0x10) {
+      track->speedRatio = fxValue;
+      track->speedPhase = 0;
+    } else if (!skipDelCheck && (fxType == fxDEL && fxValue != 0)) {
       initFX(state, trackIdx, phraseRow->fx[i], NULL, -1);
       return;
     } else if (fxType == fxTBL) {
@@ -360,6 +406,9 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
   if (instrument == EMPTY_VALUE_8 && (note != EMPTY_VALUE_8 && note != NOTE_OFF)) {
     restartFX(state, trackIdx);
   }
+
+  // Instrument FX hold until the next trig, which restores instrument values.
+  if (note != EMPTY_VALUE_8 && note != NOTE_OFF) resetInstrumentFX(track);
 
   // Init/hop tables
   if (instrumentTable != EMPTY_VALUE_8) {
@@ -414,6 +463,7 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
 
   // If using phrase row mode, use cached phrase row
   if (track->mode == PlaybackMode::phraseRow) {
+    if (!skipDelCheck && !phraseRowConditionsPass(track, &track->currentPhraseRow, track->phraseRow)) return;
     readPhraseRowDirect(state, trackIdx, &track->currentPhraseRow, skipDelCheck);
     return;
   }
@@ -425,9 +475,15 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
   if (chainIdx != EMPTY_VALUE_16) {
     uint16_t phraseIdx = p->chains[chainIdx].rows[track->chainRow].phrase;
     if (phraseIdx != EMPTY_VALUE_16) {
+      if (track->conditionPhrase != phraseIdx) {
+        track->conditionPhrase = phraseIdx;
+        memset(track->conditionVisits, 0, sizeof(track->conditionVisits));
+      }
       int phraseRow = track->phraseRow;
       Phrase* phrase = &p->phrases[phraseIdx];
       PhraseRow* currentRow = &phrase->rows[phraseRow];
+
+      if (!skipDelCheck && !phraseRowConditionsPass(track, currentRow, phraseRow)) return;
 
       // Check for SNG command in Song mode
       if (track->mode == PlaybackMode::song) {
@@ -580,6 +636,8 @@ static void handleInstrument(PlaybackState* state, int trackIdx) {
     handleInstrumentAYSample(state, trackIdx);
     break;
   case InstrumentType::Braids:
+  case InstrumentType::Plaits:
+  case InstrumentType::Sample:
     break;
   case InstrumentType::none:
     break;
@@ -960,9 +1018,11 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
           // The current groove row doesn't have a value, stop playback
           resetTrack(state, trackIdx);
         } else {
-          track->frameCounter++;
+          uint8_t ratio = track->speedRatio <= 0x10 ? track->speedRatio : 9;
+          track->speedPhase += speedNumerator[ratio];
+          uint32_t threshold = (uint32_t)grooveValue * speedDenominator[ratio];
 
-          if (track->frameCounter >= grooveValue) {
+          if (track->speedPhase >= threshold) {
             // Go to the next groove row
             track->grooveRow++;
             if (track->grooveRow == 16 || p->grooves[track->grooveIdx].speed[track->grooveRow] == EMPTY_VALUE_8) {
@@ -970,6 +1030,7 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
             }
 
             // Go to the next phrase row
+            track->speedPhase -= threshold;
             track->frameCounter = 0;
             moveToNextPhraseRow(state, trackIdx);
             skipZeroGrooveRows(state, trackIdx);

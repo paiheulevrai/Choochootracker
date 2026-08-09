@@ -13,7 +13,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdio.h>
 
-#define AUTOSAVE_FILENAME "autosave.cnm"
+#define AUTOSAVE_FILENAME "autosave.cct"
 #define FILENAME_LENGTH (24)
 #define PATH_LENGTH (4096)
 #define THEME_NAME_LENGTH (16)

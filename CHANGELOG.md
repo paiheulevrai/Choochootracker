@@ -1,6 +1,6 @@
-# ChipNomad changelog
+# ChooChooTracker changelog
 
-## PatchNomad - unreleased
+## ChooChooTracker - unreleased
 
 - Added the 47 accessible Mutable Instruments Braids models as one instrument type.
 - Added one monophonic Braids voice per tracker track with AY/Braids mixing.
@@ -8,6 +8,19 @@
 - Added Braids modulation destinations, instrument editing and project persistence.
 - Added a native MSYS2 Windows build at 96 kHz and automated Braids integration tests.
 - Added a Docker-free WSL2 ARM64 build and PortMaster package for the RG353V.
+- Added the `MSCPIT` mixer navigation, fixed its startup crash and added an audio CPU meter.
+- Renamed the native project format to `.cct` and the application to ChooChooTracker.
+- Added a clean PCM16 mono/stereo Sample instrument with pitch, start/end, volume, ADSR and 12/24 dB LP/BP/HP filtering.
+- Added instrument-aware Braids and Sample FX in the existing FX lanes.
+- Fixed default linear-pitch initialization and Braids' non-linear octave offset.
+- Added PCM8 WAV loading and longer Sample import error messages.
+- Skipped unused AY renderers on empty, Braids and Sample tracks.
+- Added all 24 Mutable Instruments Plaits engines with Main/Aux blend, filtering, ADSR, modulation, project persistence and instrument-aware FX.
+- Added per-track Reverb and Delay sends, a shared Clouds Reverb, and a tick-synchronized filtered ping-pong delay.
+- Added `PRO` probability, `MOD` iteration conditions and persistent per-track `SPD` ratios.
+- Added Reverb and Delay sub-screen indicators around Mixer in the screen map.
+- Added an English ChooChooTracker user manual based on the local ChipNomad and Mutable documentation.
+- Renamed the settings label to AY Sample dithering to make its scope explicit.
 
 ## v1.0.4 (July 12, 2026)
 

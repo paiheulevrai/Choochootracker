@@ -1,5 +1,6 @@
 #include "project.h"
 #include "project_io_common.h"
+#include "synth/sample_voice.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -215,6 +216,57 @@ static int loadInstrumentBraids(FILE* file, Instrument* instrument) {
   }
 }
 
+static int loadInstrumentSample(FILE* file, Instrument* instrument) {
+  InstrumentSample* sample = &instrument->chip.sample;
+  while (1) {
+    char* line = peekLine(file);
+    if (line == NULL || line[0] == '#') break;
+    if (strncmp(line, "- Sample path: ", 15) == 0) sscanf(line, "- Sample path: %255[^\n]", sample->path);
+    else if (strncmp(line, "- Sample pitch: ", 16) == 0) sscanf(line, "- Sample pitch: %hhd", &sample->pitch);
+    else if (strncmp(line, "- Sample start: ", 16) == 0) sscanf(line, "- Sample start: %hhu", &sample->start);
+    else if (strncmp(line, "- Sample end: ", 14) == 0) sscanf(line, "- Sample end: %hhu", &sample->end);
+    else if (strncmp(line, "- Sample volume: ", 17) == 0) sscanf(line, "- Sample volume: %hhu", &sample->volume);
+    else if (strncmp(line, "- Filter enabled: ", 18) == 0) sscanf(line, "- Filter enabled: %hhu", &sample->filterEnabled);
+    else if (strncmp(line, "- Filter mode: ", 15) == 0) sscanf(line, "- Filter mode: %hhu", &sample->filterMode);
+    else if (strncmp(line, "- Filter slope: ", 16) == 0) sscanf(line, "- Filter slope: %hhu", &sample->filterSlope24dB);
+    else if (strncmp(line, "- Filter cutoff: ", 17) == 0) sscanf(line, "- Filter cutoff: %hu", &sample->filterCutoffHz);
+    else if (strncmp(line, "- Filter resonance: ", 20) == 0) sscanf(line, "- Filter resonance: %hhu", &sample->filterResonance);
+    else if (strncmp(line, "- Attack: ", 10) == 0) sscanf(line, "- Attack: %hhu", &sample->attack);
+    else if (strncmp(line, "- Decay: ", 9) == 0) sscanf(line, "- Decay: %hhu", &sample->decay);
+    else if (strncmp(line, "- Sustain: ", 11) == 0) sscanf(line, "- Sustain: %hhu", &sample->sustain);
+    else if (strncmp(line, "- Release: ", 11) == 0) sscanf(line, "- Release: %hhu", &sample->release);
+    consumeLine(file);
+  }
+  if (sample->path[0]) {
+    char error[64];
+    sampleLoadWav16(sample->path, sample, error, sizeof(error));
+  }
+  return 0;
+}
+
+static int loadInstrumentPlaits(FILE* file, Instrument* instrument) {
+  InstrumentPlaits* p = &instrument->chip.plaits;
+  while (1) {
+    char* line = peekLine(file);
+    if (line == NULL || line[0] == '#') return 0;
+    if (strncmp(line, "- Engine: ", 10) == 0) sscanf(line, "- Engine: %hhu", &p->engine);
+    else if (strncmp(line, "- Harmonics: ", 13) == 0) sscanf(line, "- Harmonics: %hu", &p->harmonics);
+    else if (strncmp(line, "- Timbre: ", 10) == 0) sscanf(line, "- Timbre: %hu", &p->timbre);
+    else if (strncmp(line, "- Morph: ", 9) == 0) sscanf(line, "- Morph: %hu", &p->morph);
+    else if (strncmp(line, "- Aux mix: ", 11) == 0) sscanf(line, "- Aux mix: %hhu", &p->auxMix);
+    else if (strncmp(line, "- Filter enabled: ", 18) == 0) sscanf(line, "- Filter enabled: %hhu", &p->filterEnabled);
+    else if (strncmp(line, "- Filter mode: ", 15) == 0) sscanf(line, "- Filter mode: %hhu", &p->filterMode);
+    else if (strncmp(line, "- Filter slope: ", 16) == 0) sscanf(line, "- Filter slope: %hhu", &p->filterSlope24dB);
+    else if (strncmp(line, "- Filter cutoff: ", 17) == 0) sscanf(line, "- Filter cutoff: %hu", &p->filterCutoffHz);
+    else if (strncmp(line, "- Filter resonance: ", 20) == 0) sscanf(line, "- Filter resonance: %hhu", &p->filterResonance);
+    else if (strncmp(line, "- Attack: ", 10) == 0) sscanf(line, "- Attack: %hhu", &p->attack);
+    else if (strncmp(line, "- Decay: ", 9) == 0) sscanf(line, "- Decay: %hhu", &p->decay);
+    else if (strncmp(line, "- Sustain: ", 11) == 0) sscanf(line, "- Sustain: %hhu", &p->sustain);
+    else if (strncmp(line, "- Release: ", 11) == 0) sscanf(line, "- Release: %hhu", &p->release);
+    consumeLine(file);
+  }
+}
+
 // Load modulation data
 static int loadModulation(FILE* file, Instrument* instrument) {
   for (int i = 0; i < 4; i++) {
@@ -301,6 +353,12 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
         break;
       case InstrumentType::Braids:
         if (loadInstrumentBraids(file, instrument)) return 1;
+        break;
+      case InstrumentType::Sample:
+        if (loadInstrumentSample(file, instrument)) return 1;
+        break;
+      case InstrumentType::Plaits:
+        if (loadInstrumentPlaits(file, instrument)) return 1;
         break;
       default:
         break;
@@ -405,6 +463,44 @@ static int saveInstrumentBraids(FILE* file, Instrument* instrument) {
   return 0;
 }
 
+static int saveInstrumentSample(FILE* file, Instrument* instrument) {
+  InstrumentSample* sample = &instrument->chip.sample;
+  fprintf(file, "- Sample path: %s\n", sample->path);
+  fprintf(file, "- Sample pitch: %hhd\n", sample->pitch);
+  fprintf(file, "- Sample start: %hhu\n", sample->start);
+  fprintf(file, "- Sample end: %hhu\n", sample->end);
+  fprintf(file, "- Sample volume: %hhu\n", sample->volume);
+  fprintf(file, "- Filter enabled: %hhu\n", sample->filterEnabled);
+  fprintf(file, "- Filter mode: %hhu\n", sample->filterMode);
+  fprintf(file, "- Filter slope: %hhu\n", sample->filterSlope24dB);
+  fprintf(file, "- Filter cutoff: %hu\n", sample->filterCutoffHz);
+  fprintf(file, "- Filter resonance: %hhu\n", sample->filterResonance);
+  fprintf(file, "- Attack: %hhu\n", sample->attack);
+  fprintf(file, "- Decay: %hhu\n", sample->decay);
+  fprintf(file, "- Sustain: %hhu\n", sample->sustain);
+  fprintf(file, "- Release: %hhu\n", sample->release);
+  return 0;
+}
+
+static int saveInstrumentPlaits(FILE* file, Instrument* instrument) {
+  InstrumentPlaits* p = &instrument->chip.plaits;
+  fprintf(file, "- Engine: %hhu\n", p->engine);
+  fprintf(file, "- Harmonics: %hu\n", p->harmonics);
+  fprintf(file, "- Timbre: %hu\n", p->timbre);
+  fprintf(file, "- Morph: %hu\n", p->morph);
+  fprintf(file, "- Aux mix: %hhu\n", p->auxMix);
+  fprintf(file, "- Filter enabled: %hhu\n", p->filterEnabled);
+  fprintf(file, "- Filter mode: %hhu\n", p->filterMode);
+  fprintf(file, "- Filter slope: %hhu\n", p->filterSlope24dB);
+  fprintf(file, "- Filter cutoff: %hu\n", p->filterCutoffHz);
+  fprintf(file, "- Filter resonance: %hhu\n", p->filterResonance);
+  fprintf(file, "- Attack: %hhu\n", p->attack);
+  fprintf(file, "- Decay: %hhu\n", p->decay);
+  fprintf(file, "- Sustain: %hhu\n", p->sustain);
+  fprintf(file, "- Release: %hhu\n", p->release);
+  return 0;
+}
+
 // Save modulation data
 static int saveModulation(FILE* file, Instrument* instrument) {
   fprintf(file, "- Modulation:\n");
@@ -447,6 +543,12 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
       break;
     case InstrumentType::Braids:
       saveInstrumentBraids(file, instrument);
+      break;
+    case InstrumentType::Sample:
+      saveInstrumentSample(file, instrument);
+      break;
+    case InstrumentType::Plaits:
+      saveInstrumentPlaits(file, instrument);
       break;
     default:
       break;

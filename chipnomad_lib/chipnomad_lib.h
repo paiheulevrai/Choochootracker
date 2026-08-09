@@ -7,6 +7,9 @@
 #include "utils.h"
 
 class BraidsVoice;
+class SampleVoice;
+class PlaitsVoice;
+class MasterEffects;
 
 #define AUDIO_OVERLOAD_COOLDOWN_FRAMES 5
 #define PITCH_CONFLICT_COOLDOWN_FRAMES 5
@@ -30,9 +33,14 @@ struct ChipNomadState {
   int audioOverload;
   int trackWarnings[PROJECT_MAX_TRACKS];
   float* mixBuffer;
+  float* reverbBuffer;
+  float* delayBuffer;
   int mixBufferSize;
   int aySampleDithering;
   BraidsVoice* braidsVoices[PROJECT_MAX_TRACKS];
+  SampleVoice* sampleVoices[PROJECT_MAX_TRACKS];
+  PlaitsVoice* plaitsVoices[PROJECT_MAX_TRACKS];
+  MasterEffects* masterEffects;
 };
 
 /**

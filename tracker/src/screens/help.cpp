@@ -305,6 +305,27 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     case fxSMS: // Sample start position
       snprintf(buffer, bufferSize, "Sample start position %04hX", (uint16_t)fx[1] * 64);
       break;
+    case fxBMD: snprintf(buffer, bufferSize, "Braids model %hhu", fx[1]); break;
+    case fxBTM: snprintf(buffer, bufferSize, "Braids timbre %hhu", fx[1]); break;
+    case fxBCL: snprintf(buffer, bufferSize, "Braids color %hhu", fx[1]); break;
+    case fxBCF: snprintf(buffer, bufferSize, "Braids cutoff %hhu", fx[1]); break;
+    case fxBRS: snprintf(buffer, bufferSize, "Braids resonance %hhu", fx[1]); break;
+    case fxSPT: snprintf(buffer, bufferSize, "Sample pitch %+hhd st", (int8_t)fx[1]); break;
+    case fxSST: snprintf(buffer, bufferSize, "Sample start %hhu", fx[1]); break;
+    case fxSEN: snprintf(buffer, bufferSize, "Sample end %hhu", fx[1]); break;
+    case fxSVL: snprintf(buffer, bufferSize, "Sample volume %hhu", fx[1]); break;
+    case fxSCF: snprintf(buffer, bufferSize, "Sample cutoff %hhu", fx[1]); break;
+    case fxSRS: snprintf(buffer, bufferSize, "Sample resonance %hhu", fx[1]); break;
+    case fxPRO: snprintf(buffer, bufferSize, "Probability %hhu%%", fx[1] > 100 ? 100 : fx[1]); break;
+    case fxMOD: snprintf(buffer, bufferSize, "Modulo %hhu:%hhu", fx[1] >> 4, fx[1] & 15); break;
+    case fxSPD: snprintf(buffer, bufferSize, "Track clock mode %02hX", fx[1]); break;
+    case fxPMD: snprintf(buffer, bufferSize, "Plaits engine %hhu", fx[1]); break;
+    case fxPHA: snprintf(buffer, bufferSize, "Plaits harmonics %hhu", fx[1]); break;
+    case fxPTM: snprintf(buffer, bufferSize, "Plaits timbre %hhu", fx[1]); break;
+    case fxPMO: snprintf(buffer, bufferSize, "Plaits morph %hhu", fx[1]); break;
+    case fxPAX: snprintf(buffer, bufferSize, "Plaits aux mix %hhu", fx[1]); break;
+    case fxPCF: snprintf(buffer, bufferSize, "Plaits cutoff %hhu", fx[1]); break;
+    case fxPRS: snprintf(buffer, bufferSize, "Plaits resonance %hhu", fx[1]); break;
     default:
       break;
   }
@@ -397,6 +418,27 @@ static void initFxHelpText() {
   fxHelpText[fxSWT] = "Wavetable Index (relative)\nOffsets wavetable index\nfor Wavetable oscillator";
   // AYSample-specific FX
   fxHelpText[fxSMS] = "Sample Start\nSets sample playback\nstart position";
+  fxHelpText[fxBMD] = "Braids Model FX\nOverrides model until\nthe next note trigger";
+  fxHelpText[fxBTM] = "Braids Timbre FX\nOverrides timbre until\nthe next note trigger";
+  fxHelpText[fxBCL] = "Braids Color FX\nOverrides color until\nthe next note trigger";
+  fxHelpText[fxBCF] = "Braids Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
+  fxHelpText[fxBRS] = "Braids Resonance FX\nOverrides resonance until\nthe next note trigger";
+  fxHelpText[fxSPT] = "Sample Pitch FX\nSigned semitone pitch until\nthe next note trigger";
+  fxHelpText[fxSST] = "Sample Start FX\nOverrides sample start until\nthe next note trigger";
+  fxHelpText[fxSEN] = "Sample End FX\nOverrides sample end until\nthe next note trigger";
+  fxHelpText[fxSVL] = "Sample Volume FX\nOverrides sample volume until\nthe next note trigger";
+  fxHelpText[fxSCF] = "Sample Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
+  fxHelpText[fxSRS] = "Sample Resonance FX\nOverrides resonance until\nthe next note trigger";
+  fxHelpText[fxPRO] = "Probability\n00-64 = 0-100 percent\nConditions on a row use AND";
+  fxHelpText[fxMOD] = "Modulo condition\nAB triggers pass A of B\nExample 34 = 3:4";
+  fxHelpText[fxSPD] = "Track playback speed\n00-10: /7 ... normal ... x7\nPersists until next SPD";
+  fxHelpText[fxPMD] = "Plaits Engine FX\n00-17 selects 24 engines\nuntil the next note trigger";
+  fxHelpText[fxPHA] = "Plaits Harmonics FX\nOverrides harmonics until\nthe next note trigger";
+  fxHelpText[fxPTM] = "Plaits Timbre FX\nOverrides timbre until\nthe next note trigger";
+  fxHelpText[fxPMO] = "Plaits Morph FX\nOverrides morph until\nthe next note trigger";
+  fxHelpText[fxPAX] = "Plaits Main/Aux FX\n00 main, FF aux\nuntil the next note trigger";
+  fxHelpText[fxPCF] = "Plaits Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
+  fxHelpText[fxPRS] = "Plaits Resonance FX\nOverrides resonance until\nthe next note trigger";
 
   fxHelpTextInitialized = true;
 }

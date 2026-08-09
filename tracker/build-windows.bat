@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo Building PatchNomad for Windows...
+echo Building ChooChooTracker for Windows...
 
 set "MSYS2_ROOT=C:\msys64"
 if not exist "%MSYS2_ROOT%\usr\bin\bash.exe" (
@@ -19,5 +19,5 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo Build complete: build\windows\chipnomad.exe
+echo Build complete: build\windows\choochootracker.exe
 endlocal

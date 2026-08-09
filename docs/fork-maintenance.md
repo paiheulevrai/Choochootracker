@@ -1,8 +1,8 @@
-# Maintenir le fork PatchNomad
+# Maintenir le fork ChooChooTracker
 
-PatchNomad part de ChipNomad, mais les deux projets ne poursuivent plus exactement le même objectif. ChipNomad va migrer une grande partie de son code vers des classes C++ et refaire son moteur d'interface. PatchNomad ajoute de son côté Braids, puis probablement un sampler PCM, avec une cible matérielle précise sous PortMaster.
+ChooChooTracker part de ChipNomad, mais les deux projets ne poursuivent plus exactement le même objectif. ChipNomad va migrer une grande partie de son code vers des classes C++ et refaire son moteur d'interface. ChooChooTracker possède désormais Braids, Plaits, un sampler PCM, des sends Reverb/Delay et des FX propres à chaque type d'instrument, avec une cible matérielle précise sous PortMaster.
 
-Il ne faut donc pas chercher à garder les deux dépôts identiques. Cette stratégie produirait des conflits fréquents et laisserait l'architecture de PatchNomad dépendre des décisions prises pour un autre projet. ChipNomad reste une source utile de correctifs et d'idées. PatchNomad possède désormais son code, son format de projet et son calendrier.
+Il ne faut donc pas chercher à garder les deux dépôts identiques. Cette stratégie produirait des conflits fréquents et laisserait l'architecture de ChooChooTracker dépendre des décisions prises pour un autre projet. ChipNomad reste une source utile de correctifs et d'idées. ChooChooTracker possède désormais son code, son format de projet et son calendrier.
 
 ## Ce que le fork conserve
 
@@ -11,17 +11,18 @@ Les limites suivantes permettent de savoir qui possède quoi.
 | Zone | Politique |
 | --- | --- |
 | `chipnomad_lib/external/mutable/` | Snapshot figé aux commits documentés. Pas de mise à jour périodique. |
-| `chipnomad_lib/synth/BraidsVoice` | Code PatchNomad. C'est la frontière entre Braids et le reste du moteur. |
-| Moteur audio, instruments et format `.cnm` | Code PatchNomad, même si une partie vient historiquement de ChipNomad. |
+| `chipnomad_lib/synth/BraidsVoice` | Code ChooChooTracker. C'est la frontière entre Braids et le reste du moteur. |
+| Moteur audio, instruments et format `.cct` | Code ChooChooTracker, même si une partie vient historiquement de ChipNomad. |
 | Interface et séquenceur | Examiner les changements de ChipNomad, puis reprendre seulement ceux qui sont utiles. |
+| Sampler PCM, sends et FX Braids/Plaits/Sample | Code ChooChooTracker. Conserver les voies FX existantes et la terminologie « FX ». |
 | SDL2, entrées, fichiers et cibles de compilation | Bons candidats aux correctifs venus de ChipNomad, à condition de les tester sur Windows et PortMaster. |
-| Packaging PortMaster | Code PatchNomad. Les changements du standard PortMaster priment sur les habitudes historiques de ChipNomad. |
+| Packaging PortMaster | Code ChooChooTracker. Les changements du standard PortMaster priment sur les habitudes historiques de ChipNomad. |
 
 Cette séparation évite de mélanger le DSP Mutable, qui est stable, avec les parties encore mouvantes du tracker.
 
 ## Relier le dépôt amont
 
-Le dépôt PatchNomad doit avoir deux remotes : `origin` pour le fork public et `upstream` pour ChipNomad.
+Le dépôt ChooChooTracker doit avoir deux remotes : `origin` pour le fork public et `upstream` pour ChipNomad.
 
 ```sh
 git remote add upstream https://github.com/Megus/chipnomad-tracker.git
@@ -37,7 +38,7 @@ Le commit ChipNomad utilisé au départ doit être inscrit dans le registre de s
 git tag chipnomad-base-YYYYMMDD <commit-local>
 ```
 
-Si l'import initial contient déjà des modifications PatchNomad, ne pas fabriquer un faux tag de base. Le SHA amont dans le registre suffit.
+Si l'import initial contient déjà des modifications ChooChooTracker, ne pas fabriquer un faux tag de base. Le SHA amont dans le registre suffit.
 
 ## Examiner les changements de ChipNomad
 
@@ -52,9 +53,9 @@ git diff --stat <dernier-sha-amont>..upstream/main
 Classer les changements avant d'écrire du code :
 
 1. Les corrections de crash, de corruption de projet, d'audio ou de portabilité méritent une revue immédiate.
-2. Les changements du format `.cnm` doivent être étudiés, même s'ils ne sont pas repris, afin de connaître les incompatibilités futures.
-3. Les améliorations d'interface peuvent être réimplémentées si elles conviennent au petit écran et aux contrôles de PatchNomad.
-4. Les refontes C++ ne sont pas reprises uniquement pour rester proche de l'amont. Elles doivent résoudre un problème rencontré dans PatchNomad.
+2. Les changements du format projet doivent être étudiés, même s'ils ne sont pas repris, afin de connaître les incompatibilités futures.
+3. Les améliorations d'interface peuvent être réimplémentées si elles conviennent au petit écran et aux contrôles de ChooChooTracker.
+4. Les refontes C++ ne sont pas reprises uniquement pour rester proche de l'amont. Elles doivent résoudre un problème rencontré dans ChooChooTracker.
 5. Les renommages, déplacements de fichiers et nettoyages sans effet visible sont généralement ignorés.
 
 Un commit ignoré n'est pas une dette. Il répond souvent à une contrainte propre à ChipNomad.
@@ -79,14 +80,14 @@ Exemple :
 fix: preserve empty project titles when loading
 
 Adapted from ChipNomad <sha>. The upstream implementation depends on the new
-Project class, so this keeps the fix in PatchNomad's current parser.
+Project class, so this keeps the fix in ChooChooTracker's current parser.
 ```
 
-Une synchronisation ne doit pas mélanger un correctif amont et une nouvelle fonctionnalité PatchNomad. Deux changements séparés sont plus simples à tester et à annuler.
+Une synchronisation ne doit pas mélanger un correctif amont et une nouvelle fonctionnalité ChooChooTracker. Deux changements séparés sont plus simples à tester et à annuler.
 
 ## Résoudre les conflits
 
-La résolution doit préserver le comportement de PatchNomad, pas reproduire la forme du nouveau code ChipNomad.
+La résolution doit préserver le comportement de ChooChooTracker, pas reproduire la forme du nouveau code ChipNomad.
 
 Quelques zones demandent une revue manuelle :
 
@@ -103,23 +104,23 @@ Si un correctif amont exige plusieurs jours de migration C++, fermer la branche 
 
 ## Protéger le format de projet
 
-PatchNomad possède désormais son propre contrat de projet : huit pistes fixes, une instance AY par piste et des niveaux de mixage par piste. La rétrocompatibilité avec les projets ChipNomad n'est pas un objectif.
+ChooChooTracker possède désormais son propre contrat de projet : huit pistes fixes, une instance AY par piste et des niveaux de mixage par piste. La rétrocompatibilité avec les projets ChipNomad n'est pas un objectif.
 
 Les règles sont les suivantes :
 
-- un projet créé par une version publiée de PatchNomad doit rester chargeable ;
+- un projet créé par une version publiée de ChooChooTracker doit rester chargeable ;
 - un nouveau champ reçoit une valeur par défaut sûre lorsqu'il est absent ;
-- une modification incompatible du format PatchNomad exige une nouvelle version de format ;
-- sauvegarde puis chargement doit conserver toutes les données PatchNomad ;
+- une modification incompatible du format ChooChooTracker exige une nouvelle version de format ;
+- sauvegarde puis chargement doit conserver toutes les données ChooChooTracker ;
 - les fichiers ChipNomad servent seulement de références ou de fixtures d'import explicites.
 
 Les changements de format amont restent à surveiller pour comprendre les correctifs utiles, sans imposer de chemin de migration depuis ChipNomad.
 
 ## Garder Mutable Instruments figé
 
-Braids et les fichiers stmlib utilisés par PatchNomad sont des snapshots, pas des dépendances vivantes. Leurs commits sont déjà épinglés dans le README.
+Braids, Plaits, Clouds et les fichiers stmlib utilisés par ChooChooTracker sont des snapshots, pas des dépendances vivantes. Leurs sources de référence sont documentées dans le README et `inspirations/`.
 
-On ne modifie pas directement `external/mutable` pour adapter le tracker. Les adaptations vivent dans `BraidsVoice` ou dans le mixeur PatchNomad. Cette règle garde le DSP d'origine reconnaissable et simplifie les comparaisons avec la source.
+Les adaptations doivent en priorité vivre dans les wrappers `BraidsVoice`, `PlaitsVoice` ou dans le mixeur ChooChooTracker. Les rares adaptations du snapshot nécessaires au build hôte ou au passage de Clouds à 96 kHz doivent rester minimales, commentées et couvertes par des tests. Cette règle garde le DSP d'origine reconnaissable et simplifie les comparaisons avec la source.
 
 Une modification du snapshot ne se justifie que pour :
 
@@ -142,7 +143,7 @@ Un changement limité au packaging PortMaster ne demande pas de refaire tous les
 
 ```sh
 make -f Makefile.portmaster PortMaster-deploy
-unzip -t ../releases/patchnomad.zip
+unzip -t ../releases/choochootracker.zip
 ```
 
 Sur RG353V, vérifier les contrôles, la lecture, l'arrêt, la sauvegarde et la sortie du programme. Un changement audio doit aussi être testé avec un projet AY, un projet Braids et un projet hybride. Les mesures de charge se font sur la console, pas seulement sur le PC.
@@ -159,7 +160,7 @@ Une fois les tests terminés :
 4. supprimer la branche de synchronisation ;
 5. garder le SHA amont dans les commits adaptés ou cherry-pickés.
 
-Ne jamais rebaser le `main` public de PatchNomad sur ChipNomad. Après plusieurs releases, les deux historiques auront trop divergé et le rebase rendrait les contributions et les rapports de bugs difficiles à suivre.
+Ne jamais rebaser le `main` public de ChooChooTracker sur ChipNomad. Après plusieurs releases, les deux historiques auront trop divergé et le rebase rendrait les contributions et les rapports de bugs difficiles à suivre.
 
 ## Registre de synchronisation
 
@@ -169,7 +170,7 @@ Ajouter une ligne à chaque revue, y compris lorsqu'aucun commit n'est repris. C
 | --- | --- | --- | --- |
 | YYYY-MM-DD | `<sha>` | aucun ou liste des SHA | Base initiale, correctifs repris, ou changements ignorés avec motif court |
 
-Le dernier SHA examiné devient le point de départ de la prochaine revue. Une ligne peut simplement dire que la refonte C++ n'apporte pas encore de correctif nécessaire à PatchNomad.
+Le dernier SHA examiné devient le point de départ de la prochaine revue. Une ligne peut simplement dire que la refonte C++ n'apporte pas encore de correctif nécessaire à ChooChooTracker.
 
 ## Quand cesser de synchroniser
 

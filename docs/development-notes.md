@@ -3,7 +3,7 @@
 ## Braids integration
 
 - Braids exposes 47 production models, indexed from 0 to 46. `QUESTION_MARK` is not part of the accessible set.
-- The original DSP and lookup tables assume a 96 kHz render rate. PatchNomad therefore uses 96 kHz until measurements on the RG353V justify a resampling path.
+- The original DSP and lookup tables assume a 96 kHz render rate. ChooChooTracker therefore uses 96 kHz until measurements on the RG353V justify a resampling path.
 - One `BraidsVoice` belongs to each tracker track. Voices are monophonic, while AY and Braids instruments can coexist in one song.
 - Percussive models from `STRUCK_BELL` through `SNARE` keep Braids' internal `STRIKE` decay. Tonal models use the added audio-rate ADSR.
 - Braids must bypass AY register output. Treating every non-empty instrument as AY caused invalid register work until the AY path was explicitly restricted to AY1, AY2 and AYSample.
@@ -16,6 +16,32 @@
 - The Windows build defaults to 96 kHz. An old generated `settings.txt` can still override that value and must be migrated or removed.
 - The PortMaster source package should target `aarch64` first: the RG353V uses a 64-bit RK3566 CPU, and keeping an untested ARMHF build doubles the work without helping this target.
 - PortMaster officially supports WSL2/chroot, cross-compilation and Docker. This project uses WSL2/cross-compilation; Docker remains optional.
+
+## Instrument FX
+
+- The phrase and table formats keep their existing FX lanes; Braids and Sample do not introduce another automation system.
+- The FX selector shows universal FX plus the group matching the active instrument. Simple FX scrolling applies the same filtering.
+- Braids FX are `BMD` (model), `BTM` (timbre), `BCL` (color), `BCF` (cutoff) and `BRS` (resonance).
+- Sample FX are `SPT` (pitch), `SST` (start), `SEN` (end), `SVL` (volume), `SCF` (cutoff) and `SRS` (resonance).
+- Instrument FX use absolute values. They remain active until the next note trigger; that trigger restores instrument values before applying its own FX.
+- Cutoff FX map `00` to 20 Hz and `FF` to 43.2 kHz on a logarithmic curve.
+
+## PCM Sample instrument
+
+- `Sample` is separate from the legacy `AYSample` instrument and bypasses the AY DAC.
+- It loads PCM8 or PCM16 mono/stereo WAV files into RAM, converts PCM8 to signed PCM16, and renders interpolated stereo audio directly into the floating-point mixer.
+- Instrument controls are pitch, start, end, volume, ADSR and an LP/BP/HP filter with 12/24 dB slopes, cutoff and resonance.
+- Playback is one-shot. Looping and streaming are intentionally not implemented yet.
+- Project save/load preserves the sample path and controls. Paths are not portable yet: copying WAV files into a project `samples/` directory and storing relative paths remains required.
+
+## Plaits and master sends
+
+- Plaits runs its original voice at 48 kHz and is linearly resampled into the 96 kHz master mix. Each tracker track owns one monophonic `PlaitsVoice` and a 16 KiB work allocator.
+- The 24 engine indices and Main/Aux blend are stored in the instrument. Plaits-specific FX are filtered by instrument type in the existing FX lanes.
+- Reverb and Delay are shared master effects. Tracks accumulate post-fader send buses; each effect is processed once per callback, not once per track.
+- The Clouds reverb delay lengths and memory were scaled for 96 kHz. The ping-pong delay derives its sample delay from project tick rate and delay ticks.
+- `PRO` uses `00-64` as 0-100%, `MOD AB` uses a per-track phrase visit count, and conditions on one row are ANDed. `SPD` uses a rational phase accumulator and persists until replaced.
+- The scheduler advances at most one row per audio tick. High `SPD` multipliers therefore need hardware and musical validation with short grooves.
 
 ## PortMaster build
 
@@ -30,16 +56,16 @@ make -f Makefile.portmaster PortMaster
 make -f Makefile.portmaster PortMaster-deploy
 ```
 
-The first command creates `tracker/build/portmaster/patchnomad.aarch64`. The second creates `releases/patchnomad.zip` with the current PortMaster directory layout.
+The first command creates `tracker/build/portmaster/choochootracker.aarch64`. The second creates `releases/choochootracker.zip` with the current PortMaster directory layout.
 
 The release build uses LTO. It takes about two minutes when the repository lives under `/mnt/c`, but produces a stripped binary of roughly 415 KiB. The current binary requires glibc 2.27 and links dynamically to SDL2, libstdc++, libgcc, libm and libc. SDL2 is not bundled because PortMaster and the target firmware provide it.
 
 Useful checks:
 
 ```sh
-file tracker/build/portmaster/patchnomad.aarch64
-aarch64-linux-gnu-readelf -d tracker/build/portmaster/patchnomad.aarch64
-unzip -t releases/patchnomad.zip
+file tracker/build/portmaster/choochootracker.aarch64
+aarch64-linux-gnu-readelf -d tracker/build/portmaster/choochootracker.aarch64
+unzip -t releases/choochootracker.zip
 ```
 
 References: [PortMaster build environments](https://portmaster.games/build-environments.html) and [PortMaster packaging guide](https://portmaster.games/packaging.html).
@@ -48,6 +74,8 @@ References: [PortMaster build environments](https://portmaster.games/build-envir
 
 - All 47 Braids models render finite, non-silent output in the desktop tests.
 - Filter modes and slopes, ADSR release, tracker routing and AY muting are covered by tests.
+- Instrument FX lifetime and Sample playback boundaries/filter stability are covered by tests.
+- The current suite contains 152 passing test cases and 134,843 assertions.
 - The Windows executable compiles and survives an SDL dummy audio/video smoke test.
-- The remaining hardware question is whether eight simultaneous voices hold 96 kHz without underruns on the RG353V.
+- The remaining hardware question is whether eight simultaneous Plaits voices plus Reverb and Delay hold 96 kHz without underruns on the RG353V.
 - The ARM64 binary and PortMaster ZIP build successfully under WSL2. They still need to run on the RG353V.

@@ -16,6 +16,9 @@ enum class InstrumentType : uint8_t {
   AY2 = 2,
   AYSample = 3,
   Braids = 4,
+  Sample = 5,
+  Plaits = 6,
+  totalCount,
 };
 
 enum class ModulationType : uint8_t {
@@ -147,11 +150,53 @@ struct InstrumentBraids {
   uint8_t release;
 };
 
+struct InstrumentPlaits {
+  uint8_t engine;
+  uint16_t harmonics;
+  uint16_t timbre;
+  uint16_t morph;
+  uint8_t auxMix;
+  uint8_t filterEnabled;
+  uint8_t filterMode;
+  uint8_t filterSlope24dB;
+  uint16_t filterCutoffHz;
+  uint8_t filterResonance;
+  uint8_t attack;
+  uint8_t decay;
+  uint8_t sustain;
+  uint8_t release;
+};
+
+#define PROJECT_SAMPLE_PATH_LENGTH 255
+
+struct InstrumentSample {
+  char path[PROJECT_SAMPLE_PATH_LENGTH + 1];
+  uint32_t sampleRate;
+  uint32_t frameCount;
+  uint8_t channels;
+  int16_t* data;
+  int8_t pitch;
+  uint8_t start;
+  uint8_t end;
+  uint8_t volume;
+  uint8_t filterEnabled;
+  uint8_t filterMode;
+  uint8_t filterSlope24dB;
+  uint16_t filterCutoffHz;
+  uint8_t filterResonance;
+  uint8_t attack;
+  uint8_t decay;
+  uint8_t sustain;
+  uint8_t release;
+};
+
 union InstrumentChipData {
   InstrumentAY1 ay;
   InstrumentAY2 ay2;
   InstrumentAYSample aySample;
   InstrumentBraids braids;
+  InstrumentSample sample;
+  InstrumentPlaits plaits;
 };
 
 struct Instrument {

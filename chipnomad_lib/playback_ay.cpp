@@ -524,6 +524,8 @@ void setupInstrument(PlaybackState* state, int trackIdx) {
       setupInstrumentAYSample(state, trackIdx);
       break;
     case InstrumentType::Braids:
+    case InstrumentType::Plaits:
+    case InstrumentType::Sample:
       break;
     case InstrumentType::none:
       // No setup needed

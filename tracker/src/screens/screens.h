@@ -95,6 +95,7 @@ extern const AppScreen screenExport;
 extern const AppScreen screenManage;
 extern const AppScreen screenSettings;
 extern const AppScreen screenMixer;
+int screenMixerGetPage(void);
 extern const AppScreen screenColorTheme;
 extern const AppScreen screenKeyMapping;
 

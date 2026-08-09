@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <atomic>
+#include <chrono>
 #include "audio_manager.h"
 #include "corelib_audio.h"
 
@@ -7,6 +9,7 @@
 
 static int aSampleRate;
 static int aBufferSize;
+static std::atomic<int> cpuLoadPercent{0};
 
 int pendingReinitChips = 0;
 
@@ -32,6 +35,8 @@ static void updatePlaybackMuteFlags(void) {
 }
 
 static void audioCallback(int16_t* buffer, int stereoSamples) {
+  const auto startedAt = std::chrono::steady_clock::now();
+
   if (pendingReinitChips) {
     chipnomadInitChips(chipnomadState, aSampleRate, NULL);
     pendingReinitChips = 0;
@@ -54,11 +59,21 @@ static void audioCallback(int16_t* buffer, int stereoSamples) {
     if (sample < -32768) sample = -32768;
     buffer[i] = sample;
   }
+
+  const auto elapsedNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+    std::chrono::steady_clock::now() - startedAt).count();
+  int load = (stereoSamples > 0 && aSampleRate > 0)
+    ? (int)(elapsedNs * aSampleRate / (stereoSamples * 10000000LL))
+    : 0;
+  if (load > 999) load = 999;
+  int previous = cpuLoadPercent.load(std::memory_order_relaxed);
+  cpuLoadPercent.store((previous * 7 + load) / 8, std::memory_order_relaxed);
 }
 
 static int start(int sampleRate, int bufferSize) {
   aSampleRate = sampleRate;
   aBufferSize = bufferSize;
+  cpuLoadPercent.store(0, std::memory_order_relaxed);
 
   audioSetup(audioCallback, sampleRate, bufferSize);
 
@@ -121,6 +136,10 @@ static void toggleTrackSolo(int trackIdx) {
   updatePlaybackMuteFlags();
 }
 
+static int getCpuLoadPercent(void) {
+  return cpuLoadPercent.load(std::memory_order_relaxed);
+}
+
 
 // Singleton AudioManager struct
 struct AudioManager audioManager = {
@@ -129,5 +148,6 @@ struct AudioManager audioManager = {
   .resume = resume,
   .stop = stop,
   .toggleTrackMute = toggleTrackMute,
-  .toggleTrackSolo = toggleTrackSolo
+  .toggleTrackSolo = toggleTrackSolo,
+  .getCpuLoadPercent = getCpuLoadPercent
 };

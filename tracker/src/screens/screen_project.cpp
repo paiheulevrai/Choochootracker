@@ -47,8 +47,8 @@ static void onProjectLoaded(const char* path) {
     if (strcasecmp(ext, ".vt2") == 0) {
       // Load VT2 file
       loadResult = projectLoadVT2(path);
-    } else if (strcasecmp(ext, ".cnm") == 0) {
-      // Load ChipNomad native format
+    } else if (strcasecmp(ext, ".cct") == 0) {
+      // Load ChooChooTracker native format
       loadResult = projectLoad(&chipnomadState->project, path);
     } else {
       // Try native format by default
@@ -82,7 +82,7 @@ static void onProjectLoaded(const char* path) {
 
 static void onProjectSaved(const char* folderPath) {
   char fullPath[2048];
-  snprintf(fullPath, sizeof(fullPath), "%s%s%s.cnm", folderPath, PATH_SEPARATOR_STR, appSettings.projectFilename);
+  snprintf(fullPath, sizeof(fullPath), "%s%s%s.cct", folderPath, PATH_SEPARATOR_STR, appSettings.projectFilename);
 
   if (projectSave(&chipnomadState->project, fullPath) == 0) {
     // Save the directory path
@@ -106,7 +106,7 @@ static void doNewProject(void) {
 }
 
 static void doLoadProject(void) {
-  fileBrowserSetup("LOAD PROJECT", ".cnm,.vt2", appSettings.projectPath, onProjectLoaded, onProjectCancelled);
+  fileBrowserSetup("LOAD PROJECT", ".cct,.vt2", appSettings.projectPath, onProjectLoaded, onProjectCancelled);
   screenSetup(&screenFileBrowser, 0);
 }
 
@@ -179,7 +179,7 @@ static void drawColHeader(int col, CellState state) {}
 
 int projectCommonColumnCount(int row) {
   if (row == 0) {
-    return 6; // Load, save, new, export, manage, mixer
+    return 5; // Load, save, new, export, manage
   } else if (row >= 1 && row <= 3) {
     return 24; // File, title, author
   } else if (row == 4) {
@@ -219,8 +219,6 @@ void projectCommonDrawCursor(int col, int row) {
       gfxCursor(21, 2, 6); // Export
     } else if (col == 4) {
       gfxCursor(28, 2, 6); // Manage
-    } else if (col == 5) {
-      gfxCursor(35, 2, 5); // Mixer
     }
   } else if (row >= 1 && row <= 3) {
     // Text fields: file name, title, author
@@ -252,8 +250,6 @@ void projectCommonDrawField(int col, int row, CellState state) {
       gfxPrint(21, 2, "Export");
     } else if (col == 4) {
       gfxPrint(28, 2, "Manage");
-    } else if (col == 5) {
-      gfxPrint(35, 2, "Mixer");
     }
   } else if (row == 1) {
     // File name
@@ -298,7 +294,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
         screenMessage(MESSAGE_TIME, "Enter filename");
         handled = 1;
       } else {
-        fileBrowserSetupFolderMode("SAVE PROJECT", appSettings.projectPath, appSettings.projectFilename, ".cnm", onProjectSaved, onProjectCancelled);
+        fileBrowserSetupFolderMode("SAVE PROJECT", appSettings.projectPath, appSettings.projectFilename, ".cct", onProjectSaved, onProjectCancelled);
         screenSetup(&screenFileBrowser, 0);
       }
     } else if (col == 2) {
@@ -317,9 +313,6 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
     } else if (col == 4) {
       // Manage - go to manage screen
       screenSetup(&screenManage, 0);
-      handled = 0;
-    } else if (col == 5) {
-      screenSetup(&screenMixer, 0);
       handled = 0;
     }
   } else if (row == 1) {

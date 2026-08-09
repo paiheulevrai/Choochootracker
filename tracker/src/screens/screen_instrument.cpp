@@ -137,6 +137,8 @@ static ScreenData* instrumentScreen(void) {
     case InstrumentType::AY2:         data = &screenInstrumentAY2; break;
     case InstrumentType::AYSample:    data = &screenInstrumentAYSample; break;
     case InstrumentType::Braids:      data = &screenInstrumentBraids; break;
+    case InstrumentType::Sample:      data = &screenInstrumentSample; break;
+    case InstrumentType::Plaits:      data = &screenInstrumentPlaits; break;
     default: break;
   }
   data->drawRowHeader = drawRowHeader;
@@ -258,7 +260,9 @@ int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
   if (row == 0 && col == 0) {
     // Instrument type
     InstrumentType oldType = chipnomadState->project.instruments[cInstrument].type;
-    handled = edit8noLast(action, reinterpret_cast<uint8_t*>(&chipnomadState->project.instruments[cInstrument].type), 1, 0, 4);
+    handled = edit8noLast(action,
+      reinterpret_cast<uint8_t*>(&chipnomadState->project.instruments[cInstrument].type),
+      1, 0, static_cast<uint8_t>(InstrumentType::totalCount) - 1);
     InstrumentType newType = chipnomadState->project.instruments[cInstrument].type;
 
     if (oldType != newType) {

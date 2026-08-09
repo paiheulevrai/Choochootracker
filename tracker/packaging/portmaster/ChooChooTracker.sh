@@ -16,7 +16,7 @@ source "$controlfolder/control.txt"
 [ -f "${controlfolder}/mod_${CFW_NAME}.txt" ] && source "${controlfolder}/mod_${CFW_NAME}.txt"
 get_controls
 
-GAMEDIR="/$directory/ports/patchnomad"
+GAMEDIR="/$directory/ports/choochootracker"
 CONFDIR="$GAMEDIR/conf"
 mkdir -p "$CONFDIR"
 cd "$GAMEDIR" || exit 1
@@ -27,10 +27,10 @@ export XDG_DATA_HOME="$CONFDIR"
 export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
 export HOTKEY=guide
 
-bind_directories ~/.patchnomad "$CONFDIR/.patchnomad"
+bind_directories ~/.choochootracker "$CONFDIR/.choochootracker"
 
-$GPTOKEYB "patchnomad.${DEVICE_ARCH}" -c "./patchnomad.gptk" &
-pm_platform_helper "$GAMEDIR/patchnomad.${DEVICE_ARCH}"
-"./patchnomad.${DEVICE_ARCH}"
+$GPTOKEYB "choochootracker.${DEVICE_ARCH}" -c "./choochootracker.gptk" &
+pm_platform_helper "$GAMEDIR/choochootracker.${DEVICE_ARCH}"
+"./choochootracker.${DEVICE_ARCH}"
 
 pm_finish

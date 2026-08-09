@@ -12,34 +12,35 @@ PKG_CONFIG_LIBDIR ?= /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
 SDL_CFLAGS = $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --cflags sdl2)
 SDL_LIBS = $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --libs sdl2)
 CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(SDL_CFLAGS) -DPORTMASTER_BUILD -DGAMEPAD_SUPPORT
-OUTPUT = -o $(BUILD)/patchnomad.aarch64
+OUTPUT = -o $(BUILD)/choochootracker.aarch64
 
 PACKAGE_ROOT = $(BUILD)/package
-PORT_DIR = $(PACKAGE_ROOT)/patchnomad
-RELEASE = ../releases/patchnomad.zip
+PORT_DIR = $(PACKAGE_ROOT)/choochootracker
+RELEASE = ../releases/choochootracker.zip
 
 .PHONY: PortMaster
-PortMaster: $(BUILD)/patchnomad.aarch64
+PortMaster: $(BUILD)/choochootracker.aarch64
 
-$(BUILD)/patchnomad.aarch64: $(SRC_FILES) Makefile.portmaster Makefile.common
+$(BUILD)/choochootracker.aarch64: $(SRC_FILES) Makefile.portmaster Makefile.common
 	mkdir -p $(BUILD)
 	$(CXX) $(CFLAGS) $(SDL_LIBS) -lm $(OUTPUT)
-	$(STRIP) $(BUILD)/patchnomad.aarch64
+	$(STRIP) $(BUILD)/choochootracker.aarch64
 
 .PHONY: PortMaster-deploy
 PortMaster-deploy: PortMaster
 	rm -rf $(PACKAGE_ROOT)
 	mkdir -p $(PORT_DIR)/licenses ../releases
-	cp $(BUILD)/patchnomad.aarch64 $(PORT_DIR)/
-	cp packaging/portmaster/patchnomad.gptk $(PORT_DIR)/
+	cp $(BUILD)/choochootracker.aarch64 $(PORT_DIR)/
+	cp packaging/portmaster/choochootracker.gptk $(PORT_DIR)/
 	cp -r packaging/common/. $(PORT_DIR)/
-	cp ../LICENSE $(PORT_DIR)/licenses/LICENSE.patchnomad.md
+	cp ../docs/USER_MANUAL.md $(PORT_DIR)/
+	cp ../LICENSE $(PORT_DIR)/licenses/LICENSE.choochootracker.md
 	cp packaging/portmaster/license/* $(PORT_DIR)/licenses/
-	cp packaging/portmaster/PatchNomad.sh $(PACKAGE_ROOT)/
+	cp packaging/portmaster/ChooChooTracker.sh $(PACKAGE_ROOT)/
 	cp packaging/portmaster/port.json packaging/portmaster/README.md packaging/portmaster/gameinfo.xml packaging/portmaster/cover.png packaging/portmaster/screenshot.png $(PACKAGE_ROOT)/
-	chmod +x $(PACKAGE_ROOT)/PatchNomad.sh $(PORT_DIR)/patchnomad.aarch64
+	chmod +x $(PACKAGE_ROOT)/ChooChooTracker.sh $(PORT_DIR)/choochootracker.aarch64
 	sed -i "s/BUILD_DATE_PLACEHOLDER/$$(date +%Y%m%dT%H%M%S)/" $(PACKAGE_ROOT)/gameinfo.xml
-	rm -f $(BUILD)/patchnomad.zip $(RELEASE)
-	cd $(PACKAGE_ROOT) && zip -qr ../patchnomad.zip .
-	cp $(BUILD)/patchnomad.zip $(RELEASE)
+	rm -f $(BUILD)/choochootracker.zip $(RELEASE)
+	cd $(PACKAGE_ROOT) && zip -qr ../choochootracker.zip .
+	cp $(BUILD)/choochootracker.zip $(RELEASE)
 	@echo "PortMaster package created: $(RELEASE)"
