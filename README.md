@@ -1,5 +1,7 @@
 # ChooChooTracker
 
+> **NOT EVEN ALPHA — testing is not finished. CHOO CHOO.**
+
 ChooChooTracker est un fork de [ChipNomad](https://github.com/Megus/chipnomad-tracker). L'idée est de garder son tracker inspiré de LSDJ et d'élargir sa palette sonore avec des moteurs de synthèse modernes. Son nom rappelle que le premier proof of concept a été réalisé dans le train entre Cahors et Montauban.
 
 > **État du projet :** développement actif. Les builds Windows et PortMaster fonctionnent, mais cette version reste destinée aux tests.
