@@ -5,6 +5,7 @@ releases/
 .vscode
 .DS_Store
 autosave.cnm
+autosave.cct
 devfile.yaml
 settings.txt
 /test_tools

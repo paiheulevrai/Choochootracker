@@ -1,10 +1,8 @@
-#TODO
-
-Ajouter le support single waveform (un sample très court égal à un cycle d'onde, qui loope pour faire un pitch suivant la hauteur de note donnée). Cela peut être un nouveau moteur ou bien un ajout au moteur Sample, suivant ce qui est le plus simple.
-
 # ChooChooTracker
 
 ChooChooTracker est un fork de [ChipNomad](https://github.com/Megus/chipnomad-tracker). L'idée est de garder son tracker inspiré de LSDJ et d'élargir sa palette sonore avec des moteurs de synthèse modernes. Son nom rappelle que le premier proof of concept a été réalisé dans le train entre Cahors et Montauban.
+
+> **État du projet :** développement actif. Les builds Windows et PortMaster fonctionnent, mais cette version reste destinée aux tests.
 
 Le projet vise d'abord l'Anbernic RG353V via PortMaster. Une version Windows doit rester facile à compiler pour le développement et le débogage.
 
@@ -169,6 +167,8 @@ Le packaging PortMaster a été adapté au nom ChooChooTracker, au binaire ARM64
 ## Plan de travail
 
 L'[étude de faisabilité du 9 août 2026](docs/feasibility-2026-08-09.md) reste l'analyse initiale. Plaits, les sends et le premier lot de conditions ont depuis été implémentés ; leur validation musicale et CPU sur RG353V reste à faire.
+
+Prochaine fonction étudiée : lecture en boucle d'un sample mono-cycle avec suivi de hauteur, intégrée au moteur Sample si cela reste la solution la plus simple.
 
 ### 1. Établir la base
 
