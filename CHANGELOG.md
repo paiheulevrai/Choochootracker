@@ -1,6 +1,6 @@
 # ChooChooTracker changelog
 
-## ChooChooTracker - unreleased
+## v0.1.0-prealpha.1 (August 9, 2026)
 
 - Added the 47 accessible Mutable Instruments Braids models as one instrument type.
 - Added one monophonic Braids voice per tracker track with AY/Braids mixing.

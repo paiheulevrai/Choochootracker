@@ -3,7 +3,7 @@
   <game>
     <path>./ChooChooTracker.sh</path>
     <name>ChooChooTracker</name>
-    <desc>A mobile tracker combining AY/YM synthesis with Mutable Instruments Braids.</desc>
+    <desc>A mobile tracker combining AY/YM, Braids, Plaits and PCM samples with per-track sends and FX.</desc>
     <releasedate>BUILD_DATE_PLACEHOLDER</releasedate>
     <developer>ChooChooTracker contributors</developer>
     <publisher>ChooChooTracker contributors</publisher>

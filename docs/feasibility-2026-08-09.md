@@ -1,94 +1,94 @@
-# Étude de faisabilité — 9 août 2026
+# Feasibility study: August 9, 2026
 
-Ce document évalue des idées. Il ne les transforme pas en fonctionnalités promises.
+This document evaluates ideas. It does not promise that they will become features.
 
-> Mise à jour : Plaits, les sends Clouds Reverb/Delay, `PRO`, `MOD` et `SPD` ont été implémentés après cette étude. Les verdicts ci-dessous restent l'analyse initiale ; les benchmarks et tests musicaux sur RG353V restent nécessaires.
+> Update: Plaits, the Clouds Reverb and Delay sends, `PRO`, `MOD`, and `SPD` were implemented after this study. The text below records the initial analysis. Benchmarks and musical testing on RG353V are still required.
 
 ## Plaits
 
-Faisable sous forme d'un nouvel instrument `Plaits`. Le snapshot Mutable présent dans `inspirations/` est sous licence MIT et contient 24 engines, avec les sorties principale et auxiliaire.
+Plaits can be added as a new `Plaits` instrument. The Mutable snapshot in `inspirations/` is under the MIT license and contains 24 engines with Main and Aux outputs.
 
-Le point technique important est la fréquence d'échantillonnage : Plaits travaille nativement à 48 kHz alors que ChooChooTracker mélange à 96 kHz pour Braids. La solution la moins risquée consiste à laisser Plaits à 48 kHz puis à suréchantillonner sa sortie par deux. Modifier les constantes internes de tous les engines serait plus difficile à valider.
+Sample rate is the main technical issue. Plaits runs natively at 48 kHz while ChooChooTracker mixes at 96 kHz for Braids. The safest option is to keep Plaits at 48 kHz and upsample its output by two. Changing the internal constants of every engine would be harder to validate.
 
-Chaque voix demande un bloc de travail d'environ 16 Kio, en plus de l'objet `Voice` et de ses tables. La mémoire n'est pas inquiétante sur RG353V. La charge CPU doit en revanche être mesurée avec un prototype d'une voix, puis avec huit voix et les engines les plus coûteux, avant d'intégrer l'interface ou le format projet.
+Each voice needs a work buffer of about 16 KiB in addition to the `Voice` object and its tables. Memory is not a concern on RG353V. CPU cost should be measured with one voice, then eight voices using the most expensive engines, before committing to interface or project format work.
 
-Verdict : faisable, risque moyen, prototype DSP et benchmark obligatoires.
+Verdict: feasible, medium risk. A DSP prototype and hardware benchmark are required.
 
-## Sends Reverb et Delay
+## Reverb and Delay sends
 
-Le mixer peut recevoir deux niveaux de send par piste. Le moteur doit accumuler deux bus stéréo pendant le mixage, traiter chaque effet une seule fois par callback, puis ajouter les retours au master. Il ne faut surtout pas instancier une reverb ou un delay par piste.
+The mixer can expose two send levels per track. During mixing, the audio engine should accumulate two stereo buses, process each effect once per callback, then add both returns to the master. It must not create a reverb or delay instance for every track.
 
-La classe `clouds::Reverb` est isolable du reste de Clouds et sous licence MIT. Elle est conçue autour de 32 kHz et d'un buffer de 16 384 mots. Deux options sont raisonnables : la faire tourner à 32 kHz avec conversion 96/32 kHz, ou adapter ses délais et tripler sa mémoire pour 96 kHz. La première option est plus petite mais doit être écoutée attentivement.
+The MIT-licensed `clouds::Reverb` class can be separated from the rest of Clouds. It was designed around 32 kHz and a 16,384-word buffer. It can either run at 32 kHz with conversion to and from 96 kHz, or have its delay lengths and memory scaled for 96 kHz. The first option is smaller but requires careful listening tests.
 
-Le delay synchronisé est simple côté DSP, mais le mot « BPM » doit être défini avec les grooves. Le réglage le plus robuste serait une division musicale fondée sur la durée nominale de quatre rows, tandis que le swing resterait dans le séquenceur. Le filtre de chaque retour peut réutiliser le filtre stéréo du moteur moderne.
+A synchronized delay is straightforward DSP, but "BPM" must be defined in relation to grooves. A robust control would use musical divisions based on the nominal duration of four rows, leaving swing in the sequencer. Each return filter can reuse the modern engine's stereo filter.
 
-Deux colonnes `REV` et `DLY` peuvent être ajoutées au mixer. `Select+Up` et `Select+Down` sont disponibles pour ouvrir les écrans de réglage des deux effets. Les sends et paramètres globaux devront être sauvegardés dans `.cct`.
+The mixer can add `REV` and `DLY` columns. `Select+Up` and `Select+Down` are available to open the two effect screens. Send levels and global effect parameters must be saved in `.cct`.
 
-Verdict : faisable, risque moyen. Valider d'abord une reverb globale sans interface, puis mesurer Reverb + Delay + huit voix.
+Verdict: feasible, medium risk. Validate a global reverb without UI first, then measure Reverb, Delay, and eight voices together.
 
-## FX de lecture et conditions
+## Playback FX and conditions
 
-### Tables comme automation
+### Tables as automation
 
-C'est déjà possible : les quatre colonnes FX d'une table acceptent les FX Braids et Sample et les rejouent à la vitesse propre de chaque colonne. Une table peut donc séquencer cutoff, résonance, timbre, color, start, end ou volume. Le reset des FX au trig a été placé avant l'initialisation de la table afin que sa row 0 soit appliquée immédiatement.
+Tables already support this. Their four FX columns accept Braids and Sample FX and replay them at each column's own speed. A table can sequence cutoff, resonance, timbre, color, start, end, or volume. FX reset happens before table initialization so row 0 takes effect immediately on a trigger.
 
-### Déjà présent
+### Existing glide
 
-`PSL` réalise déjà un glide vers la nouvelle note avec une durée en ticks. Ajouter un second FX Glide créerait deux commandes pour le même comportement. Il faut d'abord valider et éventuellement renommer l'aide de `PSL`.
+`PSL` already glides toward a new note over a duration in ticks. A second Glide FX would duplicate the same behavior. The existing command should be tested and its help text renamed if necessary.
 
-### Vitesse de lecture par piste
+### Per-track speed
 
-Un FX `SPD` peut multiplier la vitesse du séquenceur sur sa piste uniquement, sans modifier le BPM global, le pitch ni la vitesse de lecture audio des samples. Une codification simple serait `01=/4`, `02=/2`, `03=x1`, `04=x2`, `05=x4`. La valeur resterait active jusqu'au prochain `SPD` et serait remise à `x1` au démarrage de Play.
+An `SPD` FX can change sequencer speed for one track without changing global BPM, pitch, or sample playback rate. One possible encoding was `01=/4`, `02=/2`, `03=x1`, `04=x2`, `05=x4`. The value would remain active until the next `SPD` and reset to `x1` when playback starts.
 
-Chaque piste possède déjà son compteur de groove et son playhead : les pistes peuvent donc se désynchroniser sans nouvelle architecture. Le multiplicateur doit s'appliquer au temps du groove avec un accumulateur fractionnaire afin de conserver le swing et d'éviter les arrondis. Les changements de vitesse doivent aussi passer par le chemin normal des rows pour que notes, conditions, `HOP` et fins de chaîne restent cohérents.
+Each track already has its own groove counter and playhead, so tracks can drift apart without a new architecture. A fractional accumulator should apply the multiplier to groove time so swing is preserved without rounding drift. Speed changes must follow the normal row path to keep notes, conditions, `HOP`, and chain endings consistent.
 
-La limite est le tick du moteur. Avec le groove standard à 6 ticks, `x2` donne 3 ticks par row et `x4` alterne correctement autour de 1,5 tick. Si une row ne dure déjà qu'un tick, `x2` ou `x4` demanderait plusieurs trigs dans le même tick ; le moteur actuel ne peut pas leur donner une durée audio distincte. La première version devrait donc plafonner à une row par tick. Un fonctionnement exact dans tous les grooves exigerait de segmenter le rendu audio à l'intérieur du tick.
+The engine tick is the limiting factor. With a standard six-tick groove, `x2` gives three ticks per row and `x4` alternates correctly around 1.5 ticks. If a row already lasts one tick, `x2` or `x4` would need several triggers inside one tick. The current engine cannot assign distinct audio duration to those triggers. The first implementation should therefore cap advancement at one row per tick. Exact behavior in every groove would require splitting audio rendering within a tick.
 
-Verdict : faisable et peu coûteux en CPU, risque faible avec le plafond d'une row par tick, risque moyen si `x2/x4` doivent rester exacts sur les grooves très rapides.
+Verdict: feasible with low CPU cost. Risk is low with the one-row-per-tick cap and medium if `x2` or `x4` must remain exact in very fast grooves.
 
-### Conditions simples
+### Simple conditions
 
-Probability, Modulo, `1ST`, `!1ST`, `PRE` et `!PRE` peuvent être évalués juste avant la lecture d'un trig. Lorsqu'une condition est fausse, la note, l'instrument, le volume et les FX de cette row doivent être ignorés ensemble.
+Probability, Modulo, `1ST`, `!1ST`, `PRE`, and `!PRE` can be evaluated just before a trigger. When a condition is false, the row's note, instrument, volume, and FX should all be skipped.
 
-État minimal nécessaire par piste : compteur de passages de phrase, résultat du trig conditionnel précédent et générateur aléatoire reproductible. Ces états doivent être remis à zéro au démarrage de Play. `Every 3rd/4th/5th`, rows paires et rows impaires sont déjà des cas particuliers de Modulo ; il ne faut pas créer de commandes séparées.
+Each track needs a phrase visit counter, the result of its previous conditional trigger, and a reproducible random generator. Playback start must reset this state. `Every 3rd/4th/5th`, even rows, and odd rows are special cases of Modulo and do not need separate commands.
 
-### Dépendance à la piste voisine
+### Neighbor track dependency
 
-`NEI` et `!NEI` sont possibles, mais il faut définir leur sens lorsque les pistes utilisent des grooves différents. Le moteur traite les pistes de gauche à droite, donc la piste N-1 est disponible, mais elle n'est pas forcément sur la même row. La définition recommandée est « dernier trig conditionnel évalué sur N-1 pendant le tick courant » ; Track 1 reçoit toujours faux. Sans cette règle, le résultat dépendrait visuellement du désalignement des pistes.
+`NEI` and `!NEI` are possible, but their meaning must remain clear when neighboring tracks use different grooves. Tracks are processed from left to right, so track N-1 is available but may not be on the same row. A workable definition is "the last conditional trigger evaluated on N-1 during the current tick." Track 1 always receives false. Without this rule, visual track alignment would make the result ambiguous.
 
-### Modes de parcours
+### Traversal modes
 
-Forward, backward, ping-pong et random touchent le déplacement du playhead, les boucles, `HOP`, les chaînes et la fin de morceau. Ils sont nettement plus risqués que les conditions de trig et ne doivent pas être mélangés au premier lot. Random exige aussi une définition de la fin d'un cycle.
+Forward, backward, ping-pong, and random affect playhead movement, loops, `HOP`, chains, and song endings. They are much riskier than trigger conditions and should not be part of the first batch. Random mode also needs a definition of cycle completion.
 
 ### Fill
 
-`FILL` n'a pas encore de source : bouton maintenu, latch global ou état sauvegardé. Il faut choisir son contrôle avant de définir le FX.
+`FILL` has no control source yet. It could use a held button, a global latch, or saved state. The control must be chosen before defining the FX.
 
-Verdict : commencer, si cette famille est retenue, par Probability + Modulo + `1ST` + `PRE`. Garder `NEI`, Fill et les modes de parcours pour une seconde étape.
+Verdict: if this family is pursued, start with Probability, Modulo, `1ST`, and `PRE`. Keep `NEI`, Fill, and traversal modes for a later step.
 
-## Mesures CPU du 9 août
+## CPU measurements from August 9
 
-- Projet vide : 37 %
-- Une voix Braids : 41 %
-- Huit voix Braids : 47 %
+- Empty project: 37%
+- One Braids voice: 41%
+- Eight Braids voices: 47%
 
-Le profil indiquait que les huit émulateurs AY étaient rendus même pour des pistes vides, Braids ou Sample. Ils sont désormais ignorés lorsqu'aucun instrument AY ne les utilise. Il faut refaire les trois mesures sur RG353V avant d'estimer le budget disponible pour Plaits et les sends.
+Profiling showed that all eight AY emulators were rendering even for empty, Braids, and Sample tracks. They are now skipped when no AY instrument uses them. All three measurements must be repeated on RG353V before estimating the remaining budget for Plaits and sends.
 
-## Correctifs issus des tests
+## Fixes prompted by testing
 
-- Nouveau projet : la table linéaire est maintenant réellement initialisée en cents.
-- Braids : correction de l'octave et du fine tuning lorsque Linear Pitch est désactivé.
-- Sample : acceptation des WAV PCM 8 ou 16 bits, mono ou stéréo.
-- Sample : les erreurs de chargement restent affichées trois fois plus longtemps.
-- Mixer : ajout de gardes contre les index de cellule invalides. Le crash signalé n'est pas considéré comme résolu sans reproduction ou log.
+- New projects now initialize the linear pitch table in cents.
+- Braids octave and fine tuning were corrected when Linear Pitch is disabled.
+- Sample accepts 8-bit and 16-bit PCM WAV files in mono or stereo.
+- Sample load errors stay on screen three times longer.
+- Mixer cell indexes are guarded. The reported crash is not considered solved until it can be reproduced or logged.
 
-## Idée ultérieure : hôte de firmwares Versio
+## Later idea: a Versio firmware host
 
-Un fichier `.bin` Versio est une application complète compilée pour le STM32H7/Daisy Seed. Il ne peut pas être chargé comme une bibliothèque ARM64 ou Windows : il attend le démarrage du microcontrôleur, ses interruptions, DMA, codec, ADC, GPIO et mémoire.
+A Versio `.bin` is a complete STM32H7/Daisy Seed application. It cannot be loaded as an ARM64 or Windows library because it expects microcontroller startup, interrupts, DMA, codec, ADC, GPIO, and memory peripherals.
 
-Deux approches sont distinctes :
+There are two different approaches:
 
-- **Couche matérielle hôte** : réimplémenter l'API Versio (audio stéréo, sept potentiomètres, deux switches, bouton, CV/gates et mémoire), puis recompiler chaque firmware open source nativement. C'est le chemin raisonnable, sous réserve d'auditer la licence de chaque firmware.
-- **Lecture directe des `.bin`** : émuler le Cortex-M7 et ses périphériques avec un moteur de type QEMU/Unicorn. C'est une piste de recherche lourde, fragile pour le temps réel à 96 kHz et inadaptée au socle produit actuel.
+- Reimplement the Versio hardware API for stereo audio, seven knobs, two switches, one button, CV/gates, and memory, then recompile each open-source firmware natively. This is the practical route, subject to a license audit for every firmware.
+- Emulate the Cortex-M7 and its peripherals with an engine such as QEMU or Unicorn and run the `.bin` directly. This is a large research project, fragile for 96 kHz real-time audio, and a poor fit for the current product.
 
-Si ChooChooTracker reçoit un système de plugins, préférer un petit ABI DSP (`init`, `setParameter`, `process`) avec plugins natifs ou WebAssembly. Le catalogue Versio mélange sources, binaires et licences différentes ; la licence MIT de l'index ne couvre pas automatiquement les firmwares listés.
+If ChooChooTracker eventually gains plugins, a small DSP ABI with `init`, `setParameter`, and `process` functions would be a better fit for native or WebAssembly plugins. The Versio index mixes source code, binaries, and licenses. The index's MIT license does not automatically cover the listed firmware.

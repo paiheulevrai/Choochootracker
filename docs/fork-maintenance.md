@@ -1,28 +1,26 @@
-# Maintenir le fork ChooChooTracker
+# Maintaining the ChooChooTracker fork
 
-ChooChooTracker part de ChipNomad, mais les deux projets ne poursuivent plus exactement le même objectif. ChipNomad va migrer une grande partie de son code vers des classes C++ et refaire son moteur d'interface. ChooChooTracker possède désormais Braids, Plaits, un sampler PCM, des sends Reverb/Delay et des FX propres à chaque type d'instrument, avec une cible matérielle précise sous PortMaster.
+ChooChooTracker started from ChipNomad, but the projects now have different goals. ChipNomad is moving much of its code into C++ classes and rebuilding its UI engine. ChooChooTracker has Braids, Plaits, a PCM sampler, Reverb and Delay sends, instrument-specific FX, and a defined PortMaster hardware target.
 
-Il ne faut donc pas chercher à garder les deux dépôts identiques. Cette stratégie produirait des conflits fréquents et laisserait l'architecture de ChooChooTracker dépendre des décisions prises pour un autre projet. ChipNomad reste une source utile de correctifs et d'idées. ChooChooTracker possède désormais son code, son format de projet et son calendrier.
+Trying to keep both repositories identical would create frequent conflicts and tie ChooChooTracker's architecture to decisions made for another project. ChipNomad remains a useful source of fixes and ideas. ChooChooTracker owns its code, project format, and release schedule.
 
-## Ce que le fork conserve
+## Ownership boundaries
 
-Les limites suivantes permettent de savoir qui possède quoi.
-
-| Zone | Politique |
+| Area | Policy |
 | --- | --- |
-| `chipnomad_lib/external/mutable/` | Snapshot figé aux commits documentés. Pas de mise à jour périodique. |
-| `chipnomad_lib/synth/BraidsVoice` | Code ChooChooTracker. C'est la frontière entre Braids et le reste du moteur. |
-| Moteur audio, instruments et format `.cct` | Code ChooChooTracker, même si une partie vient historiquement de ChipNomad. |
-| Interface et séquenceur | Examiner les changements de ChipNomad, puis reprendre seulement ceux qui sont utiles. |
-| Sampler PCM, sends et FX Braids/Plaits/Sample | Code ChooChooTracker. Conserver les voies FX existantes et la terminologie « FX ». |
-| SDL2, entrées, fichiers et cibles de compilation | Bons candidats aux correctifs venus de ChipNomad, à condition de les tester sur Windows et PortMaster. |
-| Packaging PortMaster | Code ChooChooTracker. Les changements du standard PortMaster priment sur les habitudes historiques de ChipNomad. |
+| `chipnomad_lib/external/mutable/` | Frozen snapshots at the documented commits. Do not update them on a schedule. |
+| `chipnomad_lib/synth/BraidsVoice` | ChooChooTracker code and the boundary between Braids and the rest of the engine. |
+| Audio engine, instruments, and `.cct` format | ChooChooTracker code, including areas that began in ChipNomad. |
+| UI and sequencer | Review ChipNomad changes and take only the ones that help this project. |
+| PCM sampler, sends, and Braids/Plaits/Sample FX | ChooChooTracker code. Keep the existing FX lanes and the term "FX." |
+| SDL2, input, file handling, and build targets | Good candidates for upstream fixes after Windows and PortMaster testing. |
+| PortMaster packaging | ChooChooTracker code. Current PortMaster rules take priority over historical ChipNomad conventions. |
 
-Cette séparation évite de mélanger le DSP Mutable, qui est stable, avec les parties encore mouvantes du tracker.
+These boundaries keep stable Mutable DSP separate from tracker code that is still changing.
 
-## Relier le dépôt amont
+## Configure the upstream remote
 
-Le dépôt ChooChooTracker doit avoir deux remotes : `origin` pour le fork public et `upstream` pour ChipNomad.
+The repository uses `origin` for the public ChooChooTracker repository and `upstream` for ChipNomad.
 
 ```sh
 git remote add upstream https://github.com/Megus/chipnomad-tracker.git
@@ -30,51 +28,51 @@ git fetch upstream
 git remote -v
 ```
 
-Si `upstream` existe déjà, il suffit de lancer `git fetch upstream`. Ne jamais fusionner `upstream/main` directement dans `main` par habitude.
+If `upstream` already exists, run `git fetch upstream`. Do not merge `upstream/main` into `main` by habit.
 
-Le commit ChipNomad utilisé au départ doit être inscrit dans le registre de synchronisation situé à la fin de ce document. S'il existe un commit local qui correspond exactement à cette base, on peut aussi le marquer avec un tag :
+Record the starting ChipNomad commit in the sync log at the end of this document. If a local commit exactly matches that base, it can also receive a tag:
 
 ```sh
-git tag chipnomad-base-YYYYMMDD <commit-local>
+git tag chipnomad-base-YYYYMMDD <local-commit>
 ```
 
-Si l'import initial contient déjà des modifications ChooChooTracker, ne pas fabriquer un faux tag de base. Le SHA amont dans le registre suffit.
+Do not invent a base tag if the initial import already contains ChooChooTracker changes. The upstream SHA in the log is enough.
 
-## Examiner les changements de ChipNomad
+## Review ChipNomad changes
 
-Une revue mensuelle ou avant une release est suffisante. Suivre chaque commit en temps réel n'apporte rien au projet.
+A monthly review, or one before a release, is enough. Following every upstream commit in real time adds no value here.
 
 ```sh
 git fetch upstream
-git log --oneline --decorate <dernier-sha-amont>..upstream/main
-git diff --stat <dernier-sha-amont>..upstream/main
+git log --oneline --decorate <last-upstream-sha>..upstream/main
+git diff --stat <last-upstream-sha>..upstream/main
 ```
 
-Classer les changements avant d'écrire du code :
+Classify changes before writing code:
 
-1. Les corrections de crash, de corruption de projet, d'audio ou de portabilité méritent une revue immédiate.
-2. Les changements du format projet doivent être étudiés, même s'ils ne sont pas repris, afin de connaître les incompatibilités futures.
-3. Les améliorations d'interface peuvent être réimplémentées si elles conviennent au petit écran et aux contrôles de ChooChooTracker.
-4. Les refontes C++ ne sont pas reprises uniquement pour rester proche de l'amont. Elles doivent résoudre un problème rencontré dans ChooChooTracker.
-5. Les renommages, déplacements de fichiers et nettoyages sans effet visible sont généralement ignorés.
+1. Review crash, project corruption, audio, and portability fixes immediately.
+2. Study project format changes even when they will not be adopted, because they may explain future incompatibilities.
+3. Reimplement UI improvements when they suit ChooChooTracker's small screen and controls.
+4. Do not import C++ rewrites just to resemble upstream. They must solve a problem that exists here.
+5. Ignore renames, file moves, and cleanup with no user-visible effect unless they make a later fix easier to adopt.
 
-Un commit ignoré n'est pas une dette. Il répond souvent à une contrainte propre à ChipNomad.
+Skipping a commit is not technical debt. It often solves a constraint that only exists in ChipNomad.
 
-## Importer un correctif
+## Import a fix
 
-Chaque lot de synchronisation vit dans une branche courte créée depuis un `main` propre et fonctionnel.
+Use a short-lived branch created from a clean, working `main` for each sync batch.
 
 ```sh
 git switch main
 git switch -c sync/chipnomad-YYYYMMDD
-git cherry-pick -x <sha-amont>
+git cherry-pick -x <upstream-sha>
 ```
 
-L'option `-x` conserve l'origine du commit dans le message. Pour un petit correctif qui s'applique proprement, le cherry-pick est préférable.
+The `-x` option records the source commit in the message. Cherry-pick a small fix when it applies cleanly.
 
-Quand le code amont a été réécrit autour de nouvelles classes et que le cherry-pick traîne toute cette architecture avec lui, reprendre seulement le comportement corrigé. Le message du commit local doit alors citer le SHA amont et expliquer en une phrase pourquoi le correctif a été adapté.
+If upstream rewrote the code around new classes and cherry-picking would pull in the whole architecture, reimplement only the corrected behavior. Cite the upstream SHA in the local commit and explain why it was adapted.
 
-Exemple :
+Example:
 
 ```text
 fix: preserve empty project titles when loading
@@ -83,97 +81,97 @@ Adapted from ChipNomad <sha>. The upstream implementation depends on the new
 Project class, so this keeps the fix in ChooChooTracker's current parser.
 ```
 
-Une synchronisation ne doit pas mélanger un correctif amont et une nouvelle fonctionnalité ChooChooTracker. Deux changements séparés sont plus simples à tester et à annuler.
+Do not mix an upstream fix and a new ChooChooTracker feature in one sync. Separate changes are easier to test and revert.
 
-## Résoudre les conflits
+## Resolve conflicts
 
-La résolution doit préserver le comportement de ChooChooTracker, pas reproduire la forme du nouveau code ChipNomad.
+Conflict resolution must preserve ChooChooTracker behavior, not reproduce the current shape of ChipNomad code.
 
-Quelques zones demandent une revue manuelle :
+Review these areas manually:
 
-- allocation et destruction de `ChipNomadState` et des objets `BraidsVoice` ;
-- thread audio SDL et données partagées avec l'interface ;
-- routage entre instruments AY, Braids et futurs samples ;
-- chargement et sauvegarde des projets ;
-- conversion des événements clavier et manette ;
-- chemins de données sous Windows, Linux et PortMaster.
+- allocation and destruction of `ChipNomadState`, `BraidsVoice`, and other C++ voice objects
+- the SDL audio thread and data shared with the UI
+- routing between AY, Braids, Plaits, and Sample instruments
+- project save and load
+- keyboard and controller event conversion
+- data paths on Windows, Linux, and PortMaster
 
-Ne pas accepter automatiquement un côté entier du conflit dans ces fichiers. Lire le flux complet, vérifier les appelants, puis faire le plus petit changement qui conserve les deux comportements nécessaires.
+Do not accept an entire side automatically in these files. Read the full flow and its callers, then make the smallest change that preserves both required behaviors.
 
-Si un correctif amont exige plusieurs jours de migration C++, fermer la branche de synchronisation et ouvrir une tâche distincte. Une urgence de synchronisation ne doit pas décider de l'architecture du fork.
+If an upstream fix would require several days of C++ migration, close the sync branch and create a separate task. A sync should not decide the fork's architecture under time pressure.
 
-## Protéger le format de projet
+## Protect the project format
 
-ChooChooTracker possède désormais son propre contrat de projet : huit pistes fixes, une instance AY par piste et des niveaux de mixage par piste. La rétrocompatibilité avec les projets ChipNomad n'est pas un objectif.
+ChooChooTracker has its own project contract: eight fixed tracks, one AY instance per track, and per-track mixer levels. Compatibility with ChipNomad project files is not a goal.
 
-Les règles sont les suivantes :
+Follow these rules:
 
-- un projet créé par une version publiée de ChooChooTracker doit rester chargeable ;
-- un nouveau champ reçoit une valeur par défaut sûre lorsqu'il est absent ;
-- une modification incompatible du format ChooChooTracker exige une nouvelle version de format ;
-- sauvegarde puis chargement doit conserver toutes les données ChooChooTracker ;
-- les fichiers ChipNomad servent seulement de références ou de fixtures d'import explicites.
+- A project created by a released ChooChooTracker version must remain loadable.
+- A missing new field receives a safe default.
+- An incompatible ChooChooTracker format change requires a new format version.
+- Saving and loading must preserve every ChooChooTracker field.
+- ChipNomad files are references or explicit import fixtures, not implicit compatibility tests.
 
-Les changements de format amont restent à surveiller pour comprendre les correctifs utiles, sans imposer de chemin de migration depuis ChipNomad.
+Continue reviewing upstream format changes for useful fixes, but do not create a ChipNomad migration path unless one is explicitly required.
 
-## Garder Mutable Instruments figé
+## Keep Mutable Instruments frozen
 
-Braids, Plaits, Clouds et les fichiers stmlib utilisés par ChooChooTracker sont des snapshots, pas des dépendances vivantes. Leurs sources de référence sont documentées dans le README et `inspirations/`.
+The Braids, Plaits, Clouds, and stmlib files used by ChooChooTracker are snapshots, not live dependencies. Their source commits are documented in the README and the ignored `inspirations/` directory.
 
-Les adaptations doivent en priorité vivre dans les wrappers `BraidsVoice`, `PlaitsVoice` ou dans le mixeur ChooChooTracker. Les rares adaptations du snapshot nécessaires au build hôte ou au passage de Clouds à 96 kHz doivent rester minimales, commentées et couvertes par des tests. Cette règle garde le DSP d'origine reconnaissable et simplifie les comparaisons avec la source.
+Put adaptations in `BraidsVoice`, `PlaitsVoice`, or the ChooChooTracker mixer whenever possible. Changes needed for host compilation or the 96 kHz Clouds adaptation should remain small, commented, and tested. The original DSP should stay recognizable so comparisons with the source remain useful.
 
-Une modification du snapshot ne se justifie que pour :
+Change a snapshot only to:
 
-- corriger un bug DSP reproduit par un test ;
-- réparer un problème de compilation sur une cible prise en charge ;
-- retirer du code inutilisé après avoir vérifié les licences et les symboles liés.
+- fix a DSP bug reproduced by a test
+- fix compilation on a supported target
+- remove unused code after checking licenses and linked symbols
 
-Dans ce cas, isoler le patch dans un commit dédié, noter le fichier d'origine et ajouter un test. Il n'y a pas de raison de surveiller Mutable Instruments à chaque synchronisation ChipNomad.
+Keep such a patch in its own commit, record the original file, and add a test. Mutable Instruments does not need to be checked during every ChipNomad sync.
 
-## Validation minimale
+## Minimum validation
 
-Avant une synchronisation, les tests doivent passer sur `main`. Après l'import, exécuter au minimum depuis `tracker` :
+Tests must pass on `main` before a sync. After importing changes, run at least these commands from `tracker`:
 
 ```sh
 make test
 make windows
 ```
 
-Un changement limité au packaging PortMaster ne demande pas de refaire tous les tests DSP, mais le ZIP final doit être construit et vérifié :
+A PortMaster packaging-only change does not require every DSP test, but the final ZIP must be rebuilt and checked:
 
 ```sh
 make -f Makefile.portmaster PortMaster-deploy
 unzip -t ../releases/choochootracker.zip
 ```
 
-Sur RG353V, vérifier les contrôles, la lecture, l'arrêt, la sauvegarde et la sortie du programme. Un changement audio doit aussi être testé avec un projet AY, un projet Braids et un projet hybride. Les mesures de charge se font sur la console, pas seulement sur le PC.
+On RG353V, check controls, play, stop, save, and exit. Audio changes need an AY project, a Braids or Plaits project, and a hybrid project. Measure load on the console rather than relying only on desktop results.
 
-Tout bug amont importé doit laisser derrière lui un petit test qui échoue sans le correctif. Les changements triviaux de documentation ou de packaging n'en ont pas besoin.
+Every imported upstream bug fix should leave behind a small test that fails without it. Trivial documentation and packaging changes do not need a new test.
 
-## Publier la synchronisation
+## Publish a sync
 
-Une fois les tests terminés :
+After validation:
 
-1. mettre à jour le registre ci-dessous ;
-2. relire le diff sans tenir compte de l'intention du commit amont ;
-3. fusionner la branche dans `main` sans réécrire l'historique public ;
-4. supprimer la branche de synchronisation ;
-5. garder le SHA amont dans les commits adaptés ou cherry-pickés.
+1. Update the sync log below.
+2. Review the diff without relying on the upstream commit's stated intent.
+3. Merge the branch into `main` without rewriting public history.
+4. Delete the sync branch.
+5. Keep the upstream SHA in adapted or cherry-picked commits.
 
-Ne jamais rebaser le `main` public de ChooChooTracker sur ChipNomad. Après plusieurs releases, les deux historiques auront trop divergé et le rebase rendrait les contributions et les rapports de bugs difficiles à suivre.
+Never rebase ChooChooTracker's public `main` onto ChipNomad. After several releases, the histories will have diverged enough that rebasing would make contributions and bug reports harder to follow.
 
-## Registre de synchronisation
+## Sync log
 
-Ajouter une ligne à chaque revue, y compris lorsqu'aucun commit n'est repris. Cela évite de relire plusieurs fois le même intervalle.
+Add a row for every review, including reviews that import nothing. This prevents the same range from being reviewed twice.
 
-| Date | SHA ChipNomad examiné | Commits repris | Décision |
+| Date | Last ChipNomad SHA reviewed | Commits imported | Decision |
 | --- | --- | --- | --- |
-| YYYY-MM-DD | `<sha>` | aucun ou liste des SHA | Base initiale, correctifs repris, ou changements ignorés avec motif court |
+| YYYY-MM-DD | `<sha>` | none or SHA list | Initial base, imported fixes, or skipped changes with a short reason |
 
-Le dernier SHA examiné devient le point de départ de la prochaine revue. Une ligne peut simplement dire que la refonte C++ n'apporte pas encore de correctif nécessaire à ChooChooTracker.
+The last reviewed SHA becomes the starting point for the next review. A row can simply say that the current C++ rewrite does not contain a fix ChooChooTracker needs.
 
-## Quand cesser de synchroniser
+## When to stop syncing
 
-À mesure que les architectures divergent, la revue commit par commit finira par coûter plus cher qu'elle ne rapporte. À ce stade, consulter les releases et les rapports de bugs de ChipNomad suffit. Une bonne idée peut toujours être réimplémentée localement sans tenter de rapprocher les arborescences.
+As the architectures diverge, commit-by-commit review will eventually cost more than it returns. At that point, reading ChipNomad release notes and bug reports is enough. Useful ideas can still be reimplemented without trying to bring the trees back together.
 
-Le fork reste en bonne santé si ses projets sont lisibles, ses tests passent et ses utilisateurs peuvent migrer depuis la base ChipNomad annoncée. Le nombre de commits partagés avec l'amont n'est pas un indicateur utile.
+The fork is healthy when its projects load, its tests pass, and users can work from the announced ChipNomad base. The number of shared commits is not a useful health metric.

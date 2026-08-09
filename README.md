@@ -1,297 +1,297 @@
 # ChooChooTracker
 
-> **NOT EVEN ALPHA — testing is not finished. CHOO CHOO.**
+> **NOT EVEN ALPHA. Testing is not finished. CHOO CHOO.**
 
-ChooChooTracker est un fork de [ChipNomad](https://github.com/Megus/chipnomad-tracker). L'idée est de garder son tracker inspiré de LSDJ et d'élargir sa palette sonore avec des moteurs de synthèse modernes. Son nom rappelle que le premier proof of concept a été réalisé dans le train entre Cahors et Montauban.
+ChooChooTracker is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker). It keeps ChipNomad's LSDJ-inspired tracker and expands its sound palette with modern synthesis engines. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
 
-> **État du projet :** développement actif. Les builds Windows et PortMaster fonctionnent, mais cette version reste destinée aux tests.
+> **Project status:** active development. The Windows and PortMaster builds work, but this version is for testing.
 
-Le projet vise d'abord l'Anbernic RG353V via PortMaster. Une version Windows doit rester facile à compiler pour le développement et le débogage.
+The main target is the Anbernic RG353V through PortMaster. A native Windows build is kept for development and debugging.
 
-Ce n'est pas un DAW et cela ne cherche pas à le devenir. C'est un petit instrument autonome pour composer en mobilité, avec un côté gadget sonore assumé.
+This is not a DAW. It is a small, self-contained instrument for writing music on the move, with a deliberately playful side.
 
-## État actuel
+## Current status
 
-La base Windows compile et démarre. Braids (47 modèles), Plaits (24 engines) et le sampler PCM cohabitent avec AY sur huit pistes fixes. Le mixer possède volume, mute, solo et sends par piste vers une Clouds Reverb et un delay ping-pong synchronisé en ticks. Les FX `PRO`, `MOD` et `SPD` ajoutent conditions et vitesse par piste. Le binaire ARM64 et le package PortMaster sont produits sous WSL2. Le manuel utilisateur anglais se trouve dans [docs/USER_MANUAL.md](docs/USER_MANUAL.md).
+The Windows build compiles and runs. Braids (47 models), Plaits (24 engines), the PCM sampler, and AY instruments can share eight fixed tracks. The mixer has per-track volume, mute, solo, and sends to a Clouds Reverb and a tick-synchronized ping-pong delay. The `PRO`, `MOD`, and `SPD` FX add trigger conditions and per-track speed. WSL2 produces the ARM64 binary and PortMaster package. See the [English user manual](docs/USER_MANUAL.md) for controls and workflow.
 
-## Principes
+## Design rules
 
-- Conserver le tracker, le séquenceur et le workflow actuels de ChipNomad.
-- Faire cohabiter les instruments AY/YM et les nouveaux instruments dans un même morceau.
-- Enrichir la synthèse sans réécrire ce qui fonctionne déjà.
-- Garder une interface adaptée à une petite console et à peu de boutons.
-- Préférer une architecture simple, prévisible et facile à porter.
+- Keep ChipNomad's tracker, sequencer, and workflow where they still fit.
+- Allow AY/YM and modern instruments in the same song.
+- Add synthesis features without rewriting working code.
+- Keep the interface usable on a small screen with few buttons.
+- Prefer a simple, predictable architecture that is easy to port.
 
-## Sources de référence
+## Reference sources
 
-Les sources étudiées sont placées dans `inspirations/` :
+Reference checkouts live in the ignored `inspirations/` directory:
 
-- `chipnomad-tracker-main/` contient la base ChipNomad.
-- `mutable-eurorack/` contient les sources officielles de Mutable Instruments Braids, Plaits, Clouds et stmlib.
-- `mutable-instruments-documentation-main/` contient les manuels Mutable utilisés comme référence pour le manuel ChooChooTracker.
+- `chipnomad-tracker-main/` contains the ChipNomad base.
+- `mutable-eurorack/` contains the official Mutable Instruments Braids, Plaits, Clouds, and stmlib sources.
+- `mutable-instruments-documentation-main/` contains the Mutable manuals used while writing the ChooChooTracker manual.
 
-Braids est actuellement épinglé au commit `08460a69a7e1f7a81c5a2abcc7189c9a6b7208d4` et `stmlib` au commit `e3bd7c9cc00e4364166f9905c0509b6ffd0535ec`.
+Braids is pinned to commit `08460a69a7e1f7a81c5a2abcc7189c9a6b7208d4`. stmlib is pinned to `e3bd7c9cc00e4364166f9905c0509b6ffd0535ec`.
 
-Les dossiers d'inspiration servent de référence. Le fork de travail devra vivre séparément afin que les modifications du projet ne se mélangent pas aux sources amont.
+These directories are references only. Working code belongs in the fork so local changes do not become mixed with upstream source trees.
 
-## Ce que ChipNomad fournit déjà
+## What comes from ChipNomad
 
-ChipNomad sépare correctement le séquenceur de la génération audio. Le séquenceur avance à chaque tick, puis `chipnomadRender()` demande aux moteurs de produire des blocs audio qui sont mélangés dans un buffer stéréo flottant.
+ChipNomad already separates sequencing from audio generation. The sequencer advances on each tick, then `chipnomadRender()` asks each engine for an audio block and mixes the results into a floating-point stereo buffer.
 
-La version étudiée possède déjà :
+The original base provides:
 
-- des instruments AY1, AY2 et AYSample ;
-- quatre slots de modulation génériques par instrument ;
-- des modulations ADSR, AHD et LFO ;
-- l'import de fichiers WAV ;
-- l'export WAV ;
-- des cibles Windows, Linux et PortMaster basées sur SDL2.
+- AY1, AY2, and AYSample instruments
+- four generic modulation slots per instrument
+- ADSR, AHD, and LFO modulation
+- WAV import and export
+- SDL2 targets for Windows, Linux, and PortMaster
 
-On réutilisera le système de modulation existant. L'amplitude des moteurs modernes devra néanmoins être calculée ou lissée à la fréquence audio pour éviter les clics et les valeurs en escalier.
+ChooChooTracker reuses that modulation system. Modern engine amplitude is calculated or smoothed at audio rate to avoid clicks and stepped values.
 
-## Moteur Braids
+## Braids engine
 
-Braids est ajouté comme un seul type d'instrument. Le paramètre `MODEL` choisit l'un des modèles du `MacroOscillator`. Nous ne créons pas un type d'instrument différent pour chaque modèle.
+Braids is exposed as one instrument type. The `MODEL` parameter selects a `MacroOscillator` model instead of creating a separate instrument type for every model.
 
-Les 47 modèles accessibles de Braids, numérotés de 0 à 46, sont exposés. Ils partagent la même structure de paramètres :
+The 47 accessible models, numbered 0 through 46, share these parameters:
 
 - `MODEL`
 - `TIMBRE`
 - `COLOR`
-- hauteur de note
-- déclenchement `STRIKE` lorsque le modèle l'utilise
+- note pitch
+- `STRIKE` triggering where the model supports it
 
-Une piste est monophonique et possède sa propre instance de Braids, comme une voix matérielle du module original. AY et Braids peuvent être utilisés sur des pistes différentes dans le même projet.
+Each track is monophonic and owns one Braids instance, much like a hardware voice. AY and Braids instruments can run on different tracks in the same project.
 
-### Chaîne sonore
+### Signal path
 
-Pour un modèle tonal :
-
-```text
-Braids -> filtre -> amplificateur ADSR -> mixeur
-```
-
-Pour un modèle percussif :
+Tonal models use:
 
 ```text
-Braids avec son comportement STRIKE d'origine -> filtre -> mixeur
+Braids -> filter -> ADSR amplifier -> mixer
 ```
 
-Les modèles percussifs gardent leur enveloppe et leur décroissance internes. L'interface ne leur impose pas d'ADSR supplémentaire.
+Percussive models use:
 
-### Filtre
+```text
+Braids with its original STRIKE behavior -> filter -> mixer
+```
 
-Chaque voix Braids possède un filtre numérique avec :
+Percussive models keep their internal envelope and decay. ChooChooTracker does not add another ADSR on top.
 
-- pente 12 ou 24 dB/octave ;
-- mode low-pass, band-pass ou high-pass ;
-- cutoff réglable ;
-- résonance réglable.
+### Filter
 
-L'implémentation utilise un filtre state-variable 12 dB. Deux étages en cascade fournissent le mode 24 dB.
+Each Braids voice has a digital filter with:
 
-### Fréquence audio et polyphonie
+- 12 or 24 dB/octave slope
+- low-pass, band-pass, and high-pass modes
+- adjustable cutoff
+- adjustable resonance
 
-Braids et ses tables d'origine sont prévus pour fonctionner à 96 kHz. La première version utilisera donc 96 kHz pour éviter de modifier les tables ou d'ajouter un rééchantillonnage interne complexe.
+The 12 dB mode uses one state-variable filter. The 24 dB mode cascades two stages.
 
-La cible est de tenir huit voix Braids simultanées à 96 kHz sur une Anbernic RG353V. Les tests mesureront également trois et six voix afin de connaître la marge réelle. La cible de huit voix ne sera considérée comme validée qu'après un test sur la console.
+### Audio rate and polyphony
 
-Les voix silencieuses ne doivent pas consommer de temps DSP inutilement.
+The original Braids code and lookup tables expect 96 kHz, so ChooChooTracker currently runs its master audio engine at 96 kHz. This avoids changing the tables or adding a more complex internal resampling path.
 
-## Samples modernes
+The target is eight simultaneous Braids voices at 96 kHz on an Anbernic RG353V. Tests also cover three and six voices to measure headroom. Eight-voice support is not considered proven until it passes on the console.
 
-L'instrument `AYSample` actuel reste disponible pour les sons volontairement chiptune.
+Silent voices skip unnecessary DSP work.
 
-Il ne convient pas à la philosophie de ChooChooTracker : l'import actuel convertit les WAV en mono unsigned 8 bits, limite les données à 16 384 échantillons, puis les joue à travers le DAC 4 bits de l'AY.
+## PCM samples
 
-Un instrument `Sample` séparé assure une lecture propre :
+The original `AYSample` instrument remains available for deliberately crunchy sounds. It converts WAV files to unsigned 8-bit mono, limits them to 16,384 samples, and plays them through AY-style 4-bit volume levels.
 
-- fichiers WAV externes stockés dans le dossier `samples/` du projet ;
-- WAV PCM 8 ou 16 bits, convertis en PCM signé 16 bits en mémoire ;
-- mono ou stéréo, avec conservation de la stéréo d'origine ;
-- fréquence d'échantillonnage source conservée ;
-- lecture directe dans le mixeur flottant, sans passer par l'AY ;
-- one-shot avec points de début et de fin ;
-- transposition utile sur environ une à deux octaves dans chaque direction ;
-- interpolation linéaire simple ;
-- filtre et enveloppe du moteur moderne lorsque cela est pertinent.
+The separate `Sample` instrument provides clean playback:
 
-La première implémentation charge le WAV en RAM et conserve son chemin dans le projet. La copie dans `samples/` avec un chemin relatif reste à faire avant de considérer le format portable. Nous ne prévoyons pas de streaming depuis la carte SD, car le moteur vise les drums et les one-shots courts.
+- external WAV files loaded from the project's `samples/` directory
+- 8-bit or 16-bit PCM converted to signed PCM16 in memory
+- mono or stereo playback, preserving the original channel layout
+- preserved source sample rate
+- direct output to the floating-point mixer without the AY path
+- one-shot playback with start and end points
+- useful transposition over roughly one or two octaves in either direction
+- linear interpolation
+- a modern filter and envelope
 
-Si un fichier manque, le projet reste chargeable. La piste concernée reste silencieuse et l'interface affiche un avertissement.
+The current implementation loads each WAV into RAM and stores its path in the project. It does not yet copy the file into `samples/` or convert the path to a portable relative path. SD card streaming is out of scope because this engine is intended for drums and short one-shots.
 
-Les WAV ne seront pas encodés à l'intérieur du fichier projet. Cela garde les projets lisibles et évite de gonfler le format `.cct` avec de grosses données audio.
+A project still loads when a sample is missing. The affected instrument remains silent and the interface displays a warning.
 
-## Format audio
+WAV data is not embedded in `.cct` project files. This keeps projects readable and avoids inflating them with audio data.
 
-- Moteur audio visé : 96 kHz.
-- Mixage interne : flottant stéréo.
-- Samples importés : PCM 8 ou 16 bits, mono ou stéréo.
-- Export final : WAV stéréo 16 bits.
+## Audio format
 
-L'objectif est un son propre et moderne sur une console portable, pas une chaîne de mastering professionnelle.
+- Master engine: 96 kHz
+- Internal mix: floating-point stereo
+- Imported samples: 8-bit or 16-bit PCM, mono or stereo
+- Export: 16-bit stereo WAV
 
-## Compilation
+The aim is clean sound on a handheld console, not a mastering chain.
 
-### Développement sous Windows
+## Building
 
-Le développement quotidien doit fonctionner nativement sous Windows avec :
+### Windows development
 
-- MSYS2 ;
-- MinGW-w64 ;
-- SDL2 ;
-- les Makefiles existants tant qu'ils suffisent.
+Native Windows development uses:
 
-Cette voie fournit rapidement un exécutable Windows pour tester l'interface, le séquenceur et l'audio. Il n'est pas prévu de remplacer immédiatement les Makefiles par CMake.
+- MSYS2
+- MinGW-w64
+- SDL2
+- the existing Makefiles
+
+This route produces a Windows executable for interface, sequencing, and audio tests. There is no current reason to replace the Makefiles with CMake.
 
 ### PortMaster
 
-La RG353V exécute un binaire Linux ARM64. La compilation PortMaster passera par WSL2 avec Ubuntu, une toolchain AArch64 et les bibliothèques SDL2 adaptées.
-
-Le workflow visé est :
+The RG353V runs a Linux ARM64 binary. PortMaster builds use WSL2 with Ubuntu, an AArch64 toolchain, and ARM64 SDL2 development libraries.
 
 ```text
-édition sous Windows
+edit on Windows
         |
-build et tests Windows natifs
+native Windows build and tests
         |
-cross-compilation ARM64 sous WSL2
+ARM64 cross-build under WSL2
         |
-copie du package par SSH ou carte SD
+copy by SSH or SD card
         |
-test et benchmark sur RG353V
+test and benchmark on RG353V
 ```
 
-Docker n'est pas nécessaire pour travailler au quotidien. Il pourra être ajouté plus tard si nous avons besoin de builds de release reproductibles ou d'une CI identique sur plusieurs machines.
+Docker is not required for daily work. It can wait until reproducible release builds or shared CI make it useful.
 
-Le packaging PortMaster a été adapté au nom ChooChooTracker, au binaire ARM64 et au format `.cct`. Le ZIP final est généré par `make -f Makefile.portmaster PortMaster-deploy` puis vérifié avant les tests ArkOS.
+The PortMaster package uses the ChooChooTracker name, an ARM64 binary, and the `.cct` project format. From `tracker`, run:
 
-## Plan de travail
+```sh
+make -f Makefile.portmaster PortMaster-deploy
+```
 
-L'[étude de faisabilité du 9 août 2026](docs/feasibility-2026-08-09.md) reste l'analyse initiale. Plaits, les sends et le premier lot de conditions ont depuis été implémentés ; leur validation musicale et CPU sur RG353V reste à faire.
+This builds and checks the ZIP before ArkOS testing.
 
-Prochaine fonction étudiée : lecture en boucle d'un sample mono-cycle avec suivi de hauteur, intégrée au moteur Sample si cela reste la solution la plus simple.
+## Roadmap
 
-### 1. Établir la base
+The [August 9, 2026 feasibility study](docs/feasibility-2026-08-09.md) records the initial analysis. Plaits, the sends, and the first trigger conditions have since been implemented. Musical testing and CPU measurements on RG353V are still required.
 
-- Créer le vrai fork de travail de ChipNomad.
-- Compiler et lancer ChipNomad sous Windows sans modification fonctionnelle.
-- Lancer les tests existants.
-- Documenter les versions de SDL2 et de la toolchain utilisées.
+The next engine feature under consideration is pitched single-cycle sample looping. It should remain part of the Sample engine if that is the simplest design.
 
-### 2. Valider Braids seul
+### 1. Establish the base
 
-- Compiler le programme de test desktop fourni avec Braids.
-- Produire un WAV à 96 kHz.
-- Créer une petite classe `BraidsVoice` indépendante du tracker.
-- Vérifier la hauteur, `TIMBRE`, `COLOR`, `MODEL` et `STRIKE`.
-- Parcourir tous les modèles et vérifier qu'ils produisent du son sans plantage.
+- Build and run the unmodified ChipNomad base on Windows.
+- Run its existing tests.
+- Record the SDL2 and compiler versions.
 
-### 3. Ajouter la chaîne moderne
+### 2. Validate Braids in isolation
 
-- Ajouter le filtre 12 et 24 dB.
-- Ajouter l'ADSR à fréquence audio pour les modèles tonals.
-- Ajouter un gain de sécurité et protéger le mixeur contre les dépassements.
-- Tester les changements de paramètres en temps réel sans clics.
+- Build the desktop test program supplied with Braids.
+- Render a 96 kHz WAV.
+- Keep `BraidsVoice` independent from the tracker.
+- Check pitch, `TIMBRE`, `COLOR`, `MODEL`, and `STRIKE`.
+- Confirm that every model produces finite, non-silent output without crashing.
 
-### 4. Intégrer Braids à ChipNomad
+### 3. Build the modern signal path
 
-- Ajouter `InstrumentType::Braids` et ses données.
-- Ajouter une voix par piste.
-- Brancher les événements note-on, note-off et retrigger.
-- Mélanger les voix modernes avec les puces AY existantes.
-- Ajouter la sauvegarde et le chargement du format ChooChooTracker `.cct` à huit pistes.
-- Ajouter l'écran instrument Braids avec tous les modèles.
-- Exposer les destinations de modulation utiles : volume, pitch, timbre, color, cutoff et résonance.
+- Add 12 and 24 dB filtering.
+- Add audio-rate ADSR for tonal models.
+- Add safe gain staging and protect the mixer from overflow.
+- Test live parameter changes for audible clicks.
 
-### 5. Porter et mesurer sur RG353V
+### 4. Integrate Braids
 
-- [x] Produire le binaire ARM64 sous WSL2.
-- [x] Préparer le package PortMaster.
-- Tester les contrôles, la sortie audio et la stabilité sur la console.
-- Mesurer trois, six et huit voix à 96 kHz.
-- Optimiser seulement ce que le benchmark identifie comme coûteux.
+- Add `InstrumentType::Braids` and its data.
+- Give each track its own voice.
+- Route note-on, note-off, and retrigger events.
+- Mix modern voices with AY instruments.
+- Save and load eight-track `.cct` projects.
+- Expose every Braids model in the instrument screen.
+- Expose useful modulation destinations: volume, pitch, timbre, color, cutoff, and resonance.
 
-### 6. Qualité de vie et architecture huit pistes
+### 5. Port and measure on RG353V
 
-- [x] Utiliser huit pistes fixes.
-- [x] Donner une instance AY indépendante à chaque piste.
-- [x] Ajouter un mixer avec volume, mute et solo par piste.
-- [x] Sauvegarder le volume de chaque piste dans le projet.
-- [x] Ignorer le repeat SDL et utiliser un repeat interne déterministe.
-- [x] Conserver les directions maintenues pendant les combinaisons de touches.
-- [x] Valider sur RG353V qu'aucun appui rapide n'est perdu.
-- [x] Valider le délai et la vitesse du repeat sur le matériel.
-- [x] Corriger le crash à l'ouverture du mixer.
-- [x] Ajouter un CPU meter mesurant la charge du callback audio.
+- [x] Build the ARM64 binary under WSL2.
+- [x] Create the PortMaster package.
+- Test controls, audio output, and stability on the console.
+- Measure three, six, and eight voices at 96 kHz.
+- Optimize only what hardware measurements identify as expensive.
 
-### 7. Revoir la navigation et les FX
+### 6. Eight-track architecture and usability
 
-- [x] Sortir le mixer du menu Project.
-- [x] Ajouter le mixer comme écran principal tout à gauche : `MSCPIT`.
-- [x] Permettre le passage direct entre Mixer et Song.
-- [x] Séparer les FX universels des FX propres à AY, Braids et Sample.
-- [x] Ne proposer que les FX compatibles avec l'instrument actif.
-- [x] Ajouter des FX Braids par step pour model, timbre, color, cutoff et résonance.
-- [x] Ajouter des FX Sample par step pour pitch, start, end, volume, cutoff et résonance.
-- [x] Réutiliser les trois colonnes FX existantes.
-- [x] Recharger les valeurs de base de l'instrument au trig suivant ; un FX instrument reste actif jusqu'au prochain trig.
+- [x] Use eight fixed tracks.
+- [x] Give each track an independent AY instance.
+- [x] Add per-track volume, mute, and solo.
+- [x] Save track volume in the project.
+- [x] Ignore SDL repeat and use deterministic internal repeat.
+- [x] Preserve held directions during button combinations.
+- [x] Confirm that short presses are not lost on RG353V.
+- [x] Validate repeat delay and speed on hardware.
+- [x] Fix the mixer startup crash.
+- [x] Add a CPU meter based on audio callback load.
 
-### 8. Ajouter le sampler moderne
+### 7. Navigation and FX
 
-- [x] Lire les WAV PCM 8 ou 16 bits ; convertir le 8 bits en PCM16 en mémoire.
-- [x] Conserver le mono ou la stéréo du fichier.
-- Copier les fichiers dans `samples/` et stocker un chemin relatif.
-- [x] Précharger les samples courts en RAM.
-- [x] Ajouter one-shot, start, end, volume et transposition.
-- [x] Ajouter ADSR et filtre LP/BP/HP 12/24 dB.
-- Ajouter le bouclage dans une étape ultérieure si les tests musicaux le justifient.
-- [x] Laisser le projet chargeable lorsqu'un fichier est absent.
+- [x] Move the mixer out of the Project menu.
+- [x] Add it as the leftmost main screen: `MSCPIT`.
+- [x] Allow direct Mixer and Song navigation.
+- [x] Separate universal FX from AY, Braids, Plaits, and Sample FX.
+- [x] Show only FX supported by the active instrument.
+- [x] Add per-step Braids FX for model, timbre, color, cutoff, and resonance.
+- [x] Add per-step Sample FX for pitch, start, end, volume, cutoff, and resonance.
+- [x] Reuse the existing three FX columns.
+- [x] Restore instrument defaults at the next trigger. Instrument FX remain active until then.
 
-### 9. Stabiliser
+### 8. PCM sampler
 
-- Vérifier l'export WAV 16 bits.
-- Tester les projets hybrides AY, Braids et Sample.
-- Ajouter les licences des sources et bibliothèques compilées au package PortMaster.
-- Produire un premier package installable sur RG353V.
+- [x] Load 8-bit and 16-bit PCM WAV files and convert 8-bit data to PCM16.
+- [x] Preserve mono and stereo files.
+- [ ] Copy source files into `samples/` and save a relative path.
+- [x] Preload short samples into RAM.
+- [x] Add one-shot playback, start, end, volume, and pitch.
+- [x] Add ADSR and LP/BP/HP filtering with 12/24 dB slopes.
+- [ ] Add looping only if musical tests justify it.
+- [x] Keep projects loadable when a sample file is missing.
 
-### 10. Plaits, sends et conditions
+### 9. Stabilization
 
-- [x] Intégrer les 24 engines Plaits avec sortie Main/Aux, filtre, ADSR et sauvegarde.
-- [x] Ajouter les FX Plaits `PMD`, `PHA`, `PTM`, `PMO`, `PAX`, `PCF` et `PRS`.
-- [x] Ajouter les sends Reverb et Delay par piste au mixer.
-- [x] Intégrer la reverb de Clouds comme effet send global.
-- [x] Ajouter un delay ping-pong global synchronisé en ticks avec feedback et filtre.
-- [x] Ajouter `PRO 00-64`, `MOD AB` et `SPD 00-10`.
-- [x] Rendre `SPD` persistant jusqu'au prochain `SPD`.
-- [x] Afficher les sous-écrans Reverb et Delay autour du `M` dans la carte.
-- [x] Rédiger le manuel utilisateur anglais.
-- [ ] Mesurer huit Plaits, Reverb et Delay sur RG353V.
-- [ ] Valider à l'oreille les 24 engines, les sends et tous les ratios `SPD` sur ArkOS.
+- [ ] Verify 16-bit WAV export.
+- [ ] Test hybrid AY, Braids, Plaits, and Sample projects.
+- [x] Package the licenses for compiled source and libraries.
+- [x] Produce an installable RG353V package.
 
-## Critères de réussite de la première version
+### 10. Plaits, sends, and conditions
 
-- Le tracker ChooChooTracker reste utilisable sans régression majeure.
-- AY et Braids jouent ensemble dans le même morceau.
-- Tous les modèles Braids sont accessibles.
-- Le filtre et l'ADSR fonctionnent sans clics audibles.
-- Huit voix Braids tiennent à 96 kHz sur RG353V.
-- Le projet compile nativement sous Windows.
-- Un package PortMaster peut être installé et lancé sur la console.
-- Le format de projet ChooChooTracker `.cct` sauvegarde les niveaux des huit pistes.
-- Le mixer est un écran principal accessible sans passer par Project.
-- Les instruments Braids et Sample acceptent des FX spécifiques par step.
+- [x] Integrate all 24 Plaits engines with Main/Aux blend, filtering, ADSR, save/load, and modulation.
+- [x] Add the Plaits `PMD`, `PHA`, `PTM`, `PMO`, `PAX`, `PCF`, and `PRS` FX.
+- [x] Add per-track Reverb and Delay sends.
+- [x] Integrate the Clouds reverb algorithm as a shared send effect.
+- [x] Add a tick-synchronized ping-pong delay with feedback and filtering.
+- [x] Add `PRO 00-64`, `MOD AB`, and `SPD 00-10`.
+- [x] Keep `SPD` active until another `SPD` changes it.
+- [x] Display the Reverb and Delay sub-screens around `M` in the screen map.
+- [x] Write the English user manual.
+- [ ] Measure eight Plaits voices with Reverb and Delay on RG353V.
+- [ ] Listen to all 24 engines, both sends, and every `SPD` ratio on ArkOS.
 
-Le sampler PCM 8/16 bits est intégré. Il reste à rendre ses chemins portables en copiant les WAV dans le dossier `samples/` du projet, puis à le valider sur la console.
+## First-version acceptance criteria
 
-## Hors périmètre
+- ChooChooTracker remains usable without major tracker regressions.
+- AY, Braids, Plaits, and Sample instruments can share a song.
+- Every accessible Braids model and Plaits engine is selectable.
+- Filters and envelopes do not introduce obvious clicks.
+- Eight Braids voices hold 96 kHz on RG353V.
+- The project builds natively on Windows.
+- The PortMaster package installs and runs on the console.
+- `.cct` projects preserve the levels of all eight tracks.
+- Mixer is a main screen instead of a Project submenu.
+- Braids, Plaits, and Sample instruments accept their own per-step FX.
 
-- pistes audio longues ;
-- streaming depuis la carte SD ;
-- enregistrement multipiste ;
-- effets de mastering ;
-- plugins ;
-- automation de type DAW ;
-- compatibilité avec des microcontrôleurs, DSP dédiés ou modules Eurorack.
+The PCM8/PCM16 sampler is integrated. Portable sample paths and final console validation remain open.
 
-ChooChooTracker reste un tracker portable. La synthèse est plus riche et les samples sont propres, mais l'application doit rester immédiate et amusante. L'écran titre et l'identité visuelle seront intégrés après la stabilisation fonctionnelle.
+## Out of scope
+
+- long audio tracks
+- streaming from the SD card
+- multitrack recording
+- mastering effects
+- plugins
+- DAW-style automation
+- compatibility with microcontrollers, dedicated DSP hardware, or Eurorack modules
+
+ChooChooTracker remains a handheld tracker. It adds richer synthesis and clean sample playback, but it should stay immediate and fun. Title screen and visual identity work can wait until the functional core is stable.
