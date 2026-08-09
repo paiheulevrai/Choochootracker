@@ -116,7 +116,7 @@ Continue reviewing upstream format changes for useful fixes, but do not create a
 
 ## Keep Mutable Instruments frozen
 
-The Braids, Plaits, Clouds, and stmlib files used by ChooChooTracker are snapshots, not live dependencies. Their source commits are documented in the README and the ignored `inspirations/` directory.
+The Braids, Plaits, Clouds, and stmlib files used by ChooChooTracker are snapshots, not live dependencies. Their source commits are documented in `dev_readme.md` and the ignored `inspirations/` directory.
 
 Put adaptations in `BraidsVoice`, `PlaitsVoice`, or the ChooChooTracker mixer whenever possible. Changes needed for host compilation or the 96 kHz Clouds adaptation should remain small, commented, and tested. The original DSP should stay recognizable so comparisons with the source remain useful.
 
