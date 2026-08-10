@@ -19,7 +19,7 @@
 
 ## Instrument FX
 
-- The phrase and table formats keep their existing FX lanes; Braids and Sample do not introduce another automation system.
+- The phrase and table formats keep their existing FX lanes; Braids, Plaits and Sample do not introduce another automation system.
 - The FX selector shows universal FX plus the group matching the active instrument. Simple FX scrolling applies the same filtering.
 - Braids FX are `BMD` (model), `BTM` (timbre), `BCL` (color), `BCF` (cutoff) and `BRS` (resonance).
 - Sample FX are `SPT` (pitch), `SST` (start), `SEN` (end), `SVL` (volume), `SCF` (cutoff) and `SRS` (resonance).

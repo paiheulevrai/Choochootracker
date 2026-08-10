@@ -46,25 +46,8 @@ The engine tick is the limiting factor. With a standard six-tick groove, `x2` gi
 
 Verdict: feasible with low CPU cost. Risk is low with the one-row-per-tick cap and medium if `x2` or `x4` must remain exact in very fast grooves.
 
-### Simple conditions
 
-Probability, Modulo, `1ST`, `!1ST`, `PRE`, and `!PRE` can be evaluated just before a trigger. When a condition is false, the row's note, instrument, volume, and FX should all be skipped.
 
-Each track needs a phrase visit counter, the result of its previous conditional trigger, and a reproducible random generator. Playback start must reset this state. `Every 3rd/4th/5th`, even rows, and odd rows are special cases of Modulo and do not need separate commands.
-
-### Neighbor track dependency
-
-`NEI` and `!NEI` are possible, but their meaning must remain clear when neighboring tracks use different grooves. Tracks are processed from left to right, so track N-1 is available but may not be on the same row. A workable definition is "the last conditional trigger evaluated on N-1 during the current tick." Track 1 always receives false. Without this rule, visual track alignment would make the result ambiguous.
-
-### Traversal modes
-
-Forward, backward, ping-pong, and random affect playhead movement, loops, `HOP`, chains, and song endings. They are much riskier than trigger conditions and should not be part of the first batch. Random mode also needs a definition of cycle completion.
-
-### Fill
-
-`FILL` has no control source yet. It could use a held button, a global latch, or saved state. The control must be chosen before defining the FX.
-
-Verdict: if this family is pursued, start with Probability, Modulo, `1ST`, and `PRE`. Keep `NEI`, Fill, and traversal modes for a later step.
 
 ## CPU measurements from August 9
 
@@ -74,6 +57,9 @@ Verdict: if this family is pursued, start with Probability, Modulo, `1ST`, and `
 
 Profiling showed that all eight AY emulators were rendering even for empty, Braids, and Sample tracks. They are now skipped when no AY instrument uses them. All three measurements must be repeated on RG353V before estimating the remaining budget for Plaits and sends.
 
+
+-> Update from August 10: Skipping unused AY voices rendering dropped the empty project CPU load to 2%. Huge improvement.
+
 ## Fixes prompted by testing
 
 - New projects now initialize the linear pitch table in cents.
@@ -81,14 +67,3 @@ Profiling showed that all eight AY emulators were rendering even for empty, Brai
 - Sample accepts 8-bit and 16-bit PCM WAV files in mono or stereo.
 - Sample load errors stay on screen three times longer.
 - Mixer cell indexes are guarded. The reported crash is not considered solved until it can be reproduced or logged.
-
-## Later idea: a Versio firmware host
-
-A Versio `.bin` is a complete STM32H7/Daisy Seed application. It cannot be loaded as an ARM64 or Windows library because it expects microcontroller startup, interrupts, DMA, codec, ADC, GPIO, and memory peripherals.
-
-There are two different approaches:
-
-- Reimplement the Versio hardware API for stereo audio, seven knobs, two switches, one button, CV/gates, and memory, then recompile each open-source firmware natively. This is the practical route, subject to a license audit for every firmware.
-- Emulate the Cortex-M7 and its peripherals with an engine such as QEMU or Unicorn and run the `.bin` directly. This is a large research project, fragile for 96 kHz real-time audio, and a poor fit for the current product.
-
-If ChooChooTracker eventually gains plugins, a small DSP ABI with `init`, `setParameter`, and `process` functions would be a better fit for native or WebAssembly plugins. The Versio index mixes source code, binaries, and licenses. The index's MIT license does not automatically cover the listed firmware.

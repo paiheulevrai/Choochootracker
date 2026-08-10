@@ -1,18 +1,23 @@
 # ChooChooTracker
 
-> **NOT EVEN ALPHA. Testing is not finished. CHOO CHOO.**
+Developer readme so human and AI have a common understanding.
 
 ChooChooTracker is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker). It keeps ChipNomad's LSDJ-inspired tracker and expands its sound palette with modern synthesis engines. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
 
-> **Project status:** active development. The Windows and PortMaster builds work, but this version is for testing.
+> **Project status:** active development. The Windows and PortMaster builds work, but this version is for testing. Other targets from Chipnomad should also work albeit untested.
 
-The main target is the Anbernic RG353V through PortMaster. A native Windows build is kept for development and debugging.
+The main target is the Anbernic RG353V through PortMaster. A native Windows build is kept for development and debugging. Any Portmaster capable system should work.
 
-This is not a DAW. It is a small, self-contained instrument for writing music on the move, with a deliberately playful side.
+This is not a DAW. It is a small, self-contained instrument for writing music on the move, with a deliberately playful side. You could call this a portable groovebox.
 
 ## Current status
 
-The Windows build compiles and runs. Braids (47 models), Plaits (24 engines), the PCM sampler, and AY instruments can share eight fixed tracks. The mixer has per-track volume, mute, solo, and sends to a Clouds Reverb and a tick-synchronized ping-pong delay. The `PRO`, `MOD`, and `SPD` FX add trigger conditions and per-track speed. WSL2 produces the ARM64 binary and PortMaster package. See the [English user manual](USER_MANUAL.md) for controls and workflow.
+Compiles and runs on my system. Debugging is not completed. Screen layout and ergonomics aren't final.
+Braids (47 models), Plaits (24 engines), the PCM sampler, and AY instruments can share eight fixed tracks.
+The mixer has per-track volume, mute, solo, and sends to the reverb & delay.
+Clouds Reverb and tick-synchronized ping-pong delay are implemented.
+All sound engines have minimal track FX.
+I added some additional FX's inspired by Nerdseq and Elektron, in order to bring the sequencer on par with what's expected in 2026. No microtiming though.
 
 ## Design rules
 
@@ -21,10 +26,11 @@ The Windows build compiles and runs. Braids (47 models), Plaits (24 engines), th
 - Add synthesis features without rewriting working code.
 - Keep the interface usable on a small screen with few buttons.
 - Prefer a simple, predictable architecture that is easy to port.
+- All added engines share a multimode filter if that's not already part of the engine.
 
 ## Reference sources
 
-Reference checkouts live in the ignored `inspirations/` directory:
+Github-ignored `inspirations/` directory (on my local dev machine) contain:
 
 - `chipnomad-tracker-main/` contains the ChipNomad base.
 - `mutable-eurorack/` contains the official Mutable Instruments Braids, Plaits, Clouds, and stmlib sources.
@@ -46,6 +52,8 @@ The original base provides:
 - WAV import and export
 - SDL2 targets for Windows, Linux, and PortMaster
 
+Some chiptune features don't need to be kept (for exemple export to chiptune file formats)
+
 ChooChooTracker reuses that modulation system. Modern engine amplitude is calculated or smoothed at audio rate to avoid clicks and stepped values.
 
 ## Braids engine
@@ -61,6 +69,16 @@ The 47 accessible models, numbered 0 through 46, share these parameters:
 - `STRIKE` triggering where the model supports it
 
 Each track is monophonic and owns one Braids instance, much like a hardware voice. AY and Braids instruments can run on different tracks in the same project.
+
+
+## Plaits engine
+
+Same as Braids, but with Plaits parameters.
+
+
+## Send effects
+
+The reveb from the
 
 ### Signal path
 
@@ -78,9 +96,11 @@ Braids with its original STRIKE behavior -> filter -> mixer
 
 Percussive models keep their internal envelope and decay. ChooChooTracker does not add another ADSR on top.
 
+Same for Plaits, same for samples
+
 ### Filter
 
-Each Braids voice has a digital filter with:
+Each synth engine voice has a digital filter with:
 
 - 12 or 24 dB/octave slope
 - low-pass, band-pass, and high-pass modes
@@ -89,11 +109,13 @@ Each Braids voice has a digital filter with:
 
 The 12 dB mode uses one state-variable filter. The 24 dB mode cascades two stages.
 
+Future implementations may add emulations of acid (303), classic japanese (Korg), or american (Moog) filters, why not.
+
 ### Audio rate and polyphony
 
 The original Braids code and lookup tables expect 96 kHz, so ChooChooTracker currently runs its master audio engine at 96 kHz. This avoids changing the tables or adding a more complex internal resampling path.
 
-The target is eight simultaneous Braids voices at 96 kHz on an Anbernic RG353V. Tests also cover three and six voices to measure headroom. Eight-voice support is not considered proven until it passes on the console.
+The target is eight simultaneous Braids/Plaits voices at 96 kHz on an Anbernic RG353V. Tested, it works.
 
 Silent voices skip unnecessary DSP work.
 
@@ -101,7 +123,9 @@ Silent voices skip unnecessary DSP work.
 
 The original `AYSample` instrument remains available for deliberately crunchy sounds. It converts WAV files to unsigned 8-bit mono, limits them to 16,384 samples, and plays them through AY-style 4-bit volume levels.
 
-The separate `Sample` instrument provides clean playback:
+We added a new Sample instrument, inspired by Piggy tracker and simple trackers such as the Digitakt. It's not mean't to be an Octatrack / MPC / slicer.
+
+The `Sample` instrument provides clean playback:
 
 - external WAV files loaded from the project's `samples/` directory
 - 8-bit or 16-bit PCM converted to signed PCM16 in memory
@@ -111,13 +135,13 @@ The separate `Sample` instrument provides clean playback:
 - one-shot playback with start and end points
 - useful transposition over roughly one or two octaves in either direction
 - linear interpolation
-- a modern filter and envelope
+- multimode filter and envelope
 
 The current implementation loads each WAV into RAM and stores its path in the project. It does not yet copy the file into `samples/` or convert the path to a portable relative path. SD card streaming is out of scope because this engine is intended for drums and short one-shots.
 
 A project still loads when a sample is missing. The affected instrument remains silent and the interface displays a warning.
 
-WAV data is not embedded in `.cct` project files. This keeps projects readable and avoids inflating them with audio data.
+WAV data is not embedded in `.cct` project files. This keeps projects readable and avoids inflating them with audio data. Good luck with portability ahah.
 
 ## Audio format
 
@@ -156,7 +180,6 @@ copy by SSH or SD card
         |
 test and benchmark on RG353V
 ```
-
 Docker is not required for daily work. It can wait until reproducible release builds or shared CI make it useful.
 
 The PortMaster package uses the ChooChooTracker name, an ARM64 binary, and the `.cct` project format. From `tracker`, run:
@@ -169,47 +192,47 @@ This builds and checks the ZIP before ArkOS testing.
 
 ## Roadmap
 
-The [August 9, 2026 feasibility study](feasibility-2026-08-09.md) records the initial analysis. Plaits, the sends, and the first trigger conditions have since been implemented. Musical testing and CPU measurements on RG353V are still required.
+The [August 9, 2026 feasibility study](feasibility-2026-08-09.md) records the initial analysis. Plaits, the sends, and the first trigger conditions have since been implemented. Musical testing on RG353V are still required. CPU load is OK.
 
-The next engine feature under consideration is pitched single-cycle sample looping. It should remain part of the Sample engine if that is the simplest design.
+The next engine feature under consideration is pitched single-cycle sample looping. It should remain part of the Sample engine if that is the simplest design. I don't find it very useful, but it's a neat trick and people on the Internet seem to like it.
 
 ### 1. Establish the base
 
-- Build and run the unmodified ChipNomad base on Windows.
-- Run its existing tests.
-- Record the SDL2 and compiler versions.
+- [x] Build and run the unmodified ChipNomad base on Windows.
+- [x] Run its existing tests.
+- [x] Record the SDL2 and compiler versions.
 
 ### 2. Validate Braids in isolation
 
-- Build the desktop test program supplied with Braids.
-- Render a 96 kHz WAV.
-- Keep `BraidsVoice` independent from the tracker.
-- Check pitch, `TIMBRE`, `COLOR`, `MODEL`, and `STRIKE`.
-- Confirm that every model produces finite, non-silent output without crashing.
+- [x] Build the desktop test program supplied with Braids
+- [x] Render a 96 kHz WAV.
+- [x] Keep `BraidsVoice` independent from the tracker.
+- [x] Check pitch, `TIMBRE`, `COLOR`, `MODEL`, and `STRIKE`.
+- [x] Confirm that every model produces finite, non-silent output without crashing.
 
 ### 3. Build the modern signal path
 
-- Add 12 and 24 dB filtering.
-- Add audio-rate ADSR for tonal models.
-- Add safe gain staging and protect the mixer from overflow.
-- Test live parameter changes for audible clicks.
+- [x] Add 12 and 24 dB filtering.
+- [x] Add audio-rate ADSR for tonal models.
+- [x] Add safe gain staging and protect the mixer from overflow.
+- [x] Test live parameter changes for audible clicks.
 
 ### 4. Integrate Braids
 
-- Add `InstrumentType::Braids` and its data.
-- Give each track its own voice.
-- Route note-on, note-off, and retrigger events.
-- Mix modern voices with AY instruments.
-- Save and load eight-track `.cct` projects.
-- Expose every Braids model in the instrument screen.
-- Expose useful modulation destinations: volume, pitch, timbre, color, cutoff, and resonance.
+- [x] Add `InstrumentType::Braids` and its data.
+- [x] Give each track its own voice.
+- [x] Route note-on, note-off, and retrigger events.
+- [x] Mix modern voices with AY instruments.
+- [x] Save and load eight-track `.cct` projects.
+- [x] Expose every Braids model in the instrument screen.
+- [x] Expose useful modulation destinations: volume, pitch, timbre, color, cutoff, and resonance.
 
 ### 5. Port and measure on RG353V
 
 - [x] Build the ARM64 binary under WSL2.
 - [x] Create the PortMaster package.
-- Test controls, audio output, and stability on the console.
-- Measure three, six, and eight voices at 96 kHz.
+- [x] Test controls, audio output, and stability on the console.
+- [x] Measure three, six, and eight voices at 96 kHz.
 - Optimize only what hardware measurements identify as expensive.
 
 ### 6. Eight-track architecture and usability
@@ -251,7 +274,7 @@ The next engine feature under consideration is pitched single-cycle sample loopi
 ### 9. Stabilization
 
 - [ ] Verify 16-bit WAV export.
-- [ ] Test hybrid AY, Braids, Plaits, and Sample projects.
+- [x] Test hybrid AY, Braids, Plaits, and Sample projects.
 - [x] Package the licenses for compiled source and libraries.
 - [x] Produce an installable RG353V package.
 
