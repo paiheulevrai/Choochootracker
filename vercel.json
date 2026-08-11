@@ -1,5 +1,4 @@
 {
-  "buildCommand": "make -C tracker -f Makefile.web web-deploy",
   "outputDirectory": "web/dist",
   "cleanUrls": true
 }

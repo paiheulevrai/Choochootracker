@@ -20,9 +20,9 @@ audio, then use the normal keyboard mapping.
 ## Vercel
 
 Import the repository as a normal Vercel project (leave the **Root Directory**
-at the repository root). The root `vercel.json` runs the WebAssembly build and
-publishes `web/dist`.
+at the repository root). The root `vercel.json` publishes the checked-in
+`web/dist` bundle as a static site; Vercel does not need Emscripten installed.
 
-The Vercel build environment must provide `emcc`/`em++` (or run the build in a
-CI step and deploy the generated `web/dist` directory). The native Windows and
-PortMaster builds remain available through their existing makefiles.
+After changing the tracker, regenerate `web/dist` with `make -C tracker -f
+Makefile.web web-deploy` and commit the generated bundle. The native Windows
+and PortMaster builds remain available through their existing makefiles.

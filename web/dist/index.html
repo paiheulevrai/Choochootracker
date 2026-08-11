@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChooChooTracker — Web</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+      background: #000f1a; color: #a0d0f0; font: 16px system-ui, sans-serif; }
+    main { width: min(100%, 980px); padding: 1rem; text-align: center; }
+    h1 { color: #bfdf50; font-size: 1.15rem; letter-spacing: .12em; }
+    p { color: #7098b8; }
+    #tracker { width: 100%; min-height: 480px; border: 1px solid #284866;
+      background: #000f1a; image-rendering: pixelated; }
+    #status { color: #7ddcff; min-height: 1.5em; }
+    button { color: #000f1a; background: #7ddcff; border: 0; padding: .55rem 1rem;
+      font-weight: 700; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>CHOOCHOO TRACKER / WEB</h1>
+    <p>Click inside the tracker, then use the keyboard. Audio starts on first interaction.</p>
+    <button id="start">Start tracker</button>
+    <div id="status">Ready</div>
+    <canvas id="tracker" tabindex="0" aria-label="ChooChooTracker"></canvas>
+  </main>
+  <script>
+    const status = document.querySelector('#status');
+    const start = document.querySelector('#start');
+    start.addEventListener('click', () => {
+      start.hidden = true;
+      document.querySelector('#tracker').focus();
+      status.textContent = 'Loading tracker…';
+      window.Module = window.Module || {};
+      window.Module.canvas = document.querySelector('#tracker');
+      window.Module.onRuntimeInitialized = () => { status.textContent = 'Ready — enjoy the ride.'; };
+      const script = document.createElement('script');
+      script.src = 'choochootracker.js';
+      script.onerror = () => { status.textContent = 'WebAssembly bundle not found.'; };
+      document.body.appendChild(script);
+    });
+  </script>
+</body>
+</html>

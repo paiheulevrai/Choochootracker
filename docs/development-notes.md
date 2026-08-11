@@ -98,4 +98,4 @@ References: [PortMaster build environments](https://portmaster.games/build-envir
 
 - The browser build is an additional SDL2/Emscripten target in `tracker/Makefile.web`; it does not replace Windows or PortMaster.
 - `make -C tracker -f Makefile.web web-deploy` produces a self-contained `web/dist` bundle with the common demo projects, instruments, fonts, themes, pitch tables, samples and wavetables preloaded into the browser filesystem.
-- Vercel uses the root `vercel.json` to build and publish `web/dist`. The build environment must provide `emcc` and `em++`; native builds remain independent.
+- Vercel uses the root `vercel.json` to publish the checked-in `web/dist` bundle as a static site, so Vercel itself does not need Emscripten. Regenerate that directory locally after WebAssembly source changes; native builds remain independent.
