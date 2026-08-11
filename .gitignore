@@ -15,6 +15,7 @@ settings.txt
 /output/
 /website/hugo/public/
 /website/hugo/resources/_gen/
+/web/dist/
 libchipnomad.so
 tracker/platforms/android/app/src/main/assets/chipnomad_data
 rg_log.txt

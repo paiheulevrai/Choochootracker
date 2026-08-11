@@ -26,9 +26,11 @@ int main(int argv, char** args) {
 
   appSetup();
   mainLoopRun(appDraw, appOnEvent);
+#ifndef WEB_BUILD
   appCleanup();
   gfxCleanup();
   mainLoopQuit();
+#endif
 
   return 0;
 }

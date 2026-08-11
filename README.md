@@ -35,6 +35,11 @@ Write a beat on the train, automate a weird little synth line, send it through r
 The main target is the Anbernic RG353V through PortMaster and ArkOS. A native Windows build is available for development and desktop testing.
 It should also work on any Portmaster capable system, and should also compile on Android though I haven't tested that yet.
 
+An additional browser build is available under [`web/`](web/). It compiles the
+same tracker to WebAssembly with SDL2; see [`web/README.md`](web/README.md) for
+the Emscripten and Vercel setup. This target is independent from Windows and
+PortMaster.
+
 ## What it can do
 
 - Eight fixed monophonic tracks (with independent instruments)

@@ -1,0 +1,29 @@
+# Emscripten/WebAssembly build for the browser and Vercel.
+PLATFORM = web
+
+include Makefile.common
+
+LIBS = $(COMMON_LIBS) platforms/sdl2
+OUTPUT_EXT = .html
+WEB_BUILD = build/web
+WEB_CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) -DWEB_BUILD -DDESKTOP_BUILD -DGAMEPAD_SUPPORT
+WEB_LDFLAGS = -sUSE_SDL=2 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=256MB \
+	-sASYNCIFY=1 \
+	-sFORCE_FILESYSTEM=1 -sNO_EXIT_RUNTIME=1 -sEXPORTED_RUNTIME_METHODS=ccall \
+	--preload-file packaging/common@/
+
+SOURCES := $(filter-out platforms/sdl2/corelib_mainloop.cpp,$(SOURCES)) \
+	platforms/web/corelib_mainloop.cpp
+
+.PHONY: web web-deploy
+
+web:
+	@mkdir -p $(WEB_BUILD)
+	em++ $(WEB_CFLAGS) $(SOURCES) $(WEB_LDFLAGS) -o $(WEB_BUILD)/choochootracker.html \
+		-sASSERTIONS=1 -sSTACK_SIZE=1048576 -sGL_ASSERTIONS=1
+	@cp ../web/index.html $(WEB_BUILD)/index.html
+
+web-deploy: web
+	@mkdir -p ../web/dist
+	@cp $(WEB_BUILD)/choochootracker.* ../web/dist/
+	@cp $(WEB_BUILD)/index.html ../web/dist/

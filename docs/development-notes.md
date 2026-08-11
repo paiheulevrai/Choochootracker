@@ -93,3 +93,9 @@ References: [PortMaster build environments](https://portmaster.games/build-envir
 - The Windows executable compiles and survives an SDL dummy audio/video smoke test.
 - The remaining hardware question is whether eight simultaneous Plaits voices plus Reverb and Delay hold 96 kHz without underruns on the RG353V.
 - The ARM64 binary and PortMaster ZIP build successfully under WSL2. They still need to run on the RG353V.
+
+## WebAssembly target
+
+- The browser build is an additional SDL2/Emscripten target in `tracker/Makefile.web`; it does not replace Windows or PortMaster.
+- `make -C tracker -f Makefile.web web-deploy` produces a self-contained `web/dist` bundle with the common demo projects, instruments, fonts, themes, pitch tables, samples and wavetables preloaded into the browser filesystem.
+- Vercel uses the root `vercel.json` to build and publish `web/dist`. The build environment must provide `emcc` and `em++`; native builds remain independent.
