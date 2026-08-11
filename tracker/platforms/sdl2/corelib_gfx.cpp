@@ -92,7 +92,7 @@ static void createFontTexture(void) {
 
 // FIXME: On RG35XX+, the SDL2 seems to be built without haptic
 // support enabled, so SDL_INIT_EVERYTHING will fail.
-#ifdef PORTMASTER_BUILD
+#if defined(PORTMASTER_BUILD) || defined(WEB_BUILD)
 #define SDL_INIT_FLAGS (SDL_INIT_EVERYTHING & ~SDL_INIT_HAPTIC)
 #else
 #define SDL_INIT_FLAGS (SDL_INIT_EVERYTHING)
