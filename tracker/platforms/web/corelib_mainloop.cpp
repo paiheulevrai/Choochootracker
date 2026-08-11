@@ -7,6 +7,20 @@
 #include "corelib_gfx.h"
 #include "../../src/app.h"
 
+extern "C" EMSCRIPTEN_KEEPALIVE void webQueueButton(int button, int isDown) {
+  static const int keyCodes[] = {
+    BTN_UP, BTN_DOWN, BTN_LEFT, BTN_RIGHT,
+    BTN_A, BTN_B, BTN_START, BTN_SELECT
+  };
+  if (button < 0 || button >= (int)(sizeof(keyCodes) / sizeof(keyCodes[0]))) return;
+
+  SDL_Event event = {};
+  event.type = isDown ? SDL_KEYDOWN : SDL_KEYUP;
+  event.key.keysym.sym = keyCodes[button];
+  event.key.repeat = 0;
+  SDL_PushEvent(&event);
+}
+
 struct WebLoopContext {
   void (*draw)(void);
   void (*onEvent)(MainLoopEventData eventData);

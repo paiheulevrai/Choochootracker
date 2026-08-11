@@ -18,6 +18,13 @@
     #status { color: #7ddcff; min-height: 1.5em; }
     button { color: #000f1a; background: #7ddcff; border: 0; padding: .55rem 1rem;
       font-weight: 700; cursor: pointer; }
+    #touch-controls { display: none; grid-template-columns: repeat(4, 1fr);
+      gap: .45rem; width: min(100%, 640px); margin: .75rem auto 0; }
+    #touch-controls button { min-height: 3rem; padding: .25rem; touch-action: none;
+      user-select: none; -webkit-user-select: none; }
+    @media (pointer: coarse) {
+      #touch-controls { display: grid; }
+    }
   </style>
 </head>
 <body>
@@ -27,6 +34,12 @@
     <button id="start">Start tracker</button>
     <div id="status">Ready</div>
     <canvas id="tracker" tabindex="0" aria-label="ChooChooTracker"></canvas>
+    <div id="touch-controls" aria-label="Touch controls">
+      <button data-button="0">▲</button><button data-button="1">▼</button>
+      <button data-button="2">◀</button><button data-button="3">▶</button>
+      <button data-button="4">EDIT</button><button data-button="5">OPT</button>
+      <button data-button="6">PLAY</button><button data-button="7">SHIFT</button>
+    </div>
   </main>
   <script>
     const status = document.querySelector('#status');
@@ -42,6 +55,25 @@
       script.src = 'choochootracker.js';
       script.onerror = () => { status.textContent = 'WebAssembly bundle not found.'; };
       document.body.appendChild(script);
+    });
+
+    document.querySelectorAll('#touch-controls button').forEach((button) => {
+      const send = (down) => {
+        if (window.Module && window.Module.ccall) {
+          window.Module.ccall('webQueueButton', null, ['number', 'number'],
+            [Number(button.dataset.button), down ? 1 : 0]);
+        }
+      };
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        button.setPointerCapture(event.pointerId);
+        send(true);
+      });
+      button.addEventListener('pointerup', (event) => {
+        event.preventDefault();
+        send(false);
+      });
+      button.addEventListener('pointercancel', () => send(false));
     });
   </script>
 </body>
