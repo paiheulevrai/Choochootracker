@@ -200,7 +200,7 @@ void instrumentCommonDrawStatic(void) {
   gfxPrint(0, 3, "Name");
   gfxPrint(0, 4, "Transp.");
   gfxPrint(17, 4, "Tbl. Tic");
-  gfxPrint(30, 4, "Vol");
+  gfxPrint(29, 4, "Vol");
 }
 
 void instrumentCommonDrawCursor(int col, int row) {
@@ -223,7 +223,7 @@ void instrumentCommonDrawCursor(int col, int row) {
     // Table tic speed
     gfxCursor(26, 4, 2);
   } else if (row == 2 && col == 2) {
-    gfxCursor(34, 4, 2);
+    gfxCursor(32, 4, 2);
   }
 }
 
@@ -256,7 +256,7 @@ void instrumentCommonDrawField(int col, int row, CellState state) {
     // Table tic speed
     gfxPrint(26, 4, byteToHex(chipnomadState->project.instruments[cInstrument].tableSpeed));
   } else if (row == 2 && col == 2) {
-    gfxPrint(34, 4, byteToHex(chipnomadState->project.instruments[cInstrument].volume));
+    gfxPrint(32, 4, byteToHex(chipnomadState->project.instruments[cInstrument].volume));
   }
 }
 

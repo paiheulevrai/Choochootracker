@@ -3,6 +3,8 @@
 #include "utils.h"
 #include "model_catalog.h"
 
+static int modelButtonDown;
+
 static void selectModel(int value) {
   chipnomadState->project.instruments[cInstrument].chip.braids.model = (uint8_t)value;
   projectModified = 1;
@@ -10,6 +12,13 @@ static void selectModel(int value) {
 }
 
 static void cancelModelSelection() { screenSetup(&screenInstrument, cInstrument); }
+
+static void openModelSelection() {
+  InstrumentBraids* b = &chipnomadState->project.instruments[cInstrument].chip.braids;
+  selectionPopupSetup("BRAIDS MODEL", braidsCategories, braidsCategoryCount,
+    b->model, selectModel, cancelModelSelection);
+  screenSetup(&screenSelectionPopup, 0);
+}
 
 static const char* modelNames[] = {
   "CSAW", "MORPH", "SAW-SQUARE", "SINE-TRI", "BUZZ", "SQUARE-SUB",
@@ -75,12 +84,6 @@ static int onEdit(int col, int row, CellEditAction action) {
   int handled = 0;
   switch (row) {
     case 3:
-      if (action == CellEditAction::tap) {
-        selectionPopupSetup("BRAIDS MODEL", braidsCategories, braidsCategoryCount,
-          b->model, selectModel, cancelModelSelection);
-        screenSetup(&screenSelectionPopup, 0);
-        return 0;
-      }
       handled = edit8noLast(action, &b->model, 1, 0, 46);
       break;
     case 4: handled = editOscillatorParameter(action, &b->timbre); break;
@@ -98,6 +101,28 @@ static int onEdit(int col, int row, CellEditAction action) {
   }
   if (handled) projectModified = 1;
   return handled;
+}
+
+static int onInput(int isKeyDown, int keys, int tapCount) {
+  if (screenInstrumentBraids.cursorRow != 3) {
+    modelButtonDown = 0;
+    return 0;
+  }
+  if (isKeyDown && keys == keyEdit) {
+    modelButtonDown = 1;
+    return 1;
+  }
+  if (isKeyDown && (keys == (keyEdit | keyLeft) ||
+                    keys == (keyEdit | keyRight))) {
+    modelButtonDown = 0;
+    return 0;
+  }
+  if (!isKeyDown && keys == 0 && modelButtonDown) {
+    modelButtonDown = 0;
+    openModelSelection();
+    return 1;
+  }
+  return 0;
 }
 
 ScreenData screenInstrumentBraids = {
@@ -119,7 +144,7 @@ ScreenData screenInstrumentBraids = {
   .drawColHeader = NULL,
   .drawField = drawField,
   .onEdit = onEdit,
-  .onInput = NULL,
+  .onInput = onInput,
   .onRawInput = NULL,
   .isCellValid = NULL,
   .getLoopRange = NULL,

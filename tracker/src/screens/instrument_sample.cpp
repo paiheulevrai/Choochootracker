@@ -8,6 +8,8 @@
 
 #include <string.h>
 
+static int sampleButtonDown;
+
 static void onSampleCancelled(void) {
   audioManager.stopSamplePreview();
   screenSetup(&screenInstrument, cInstrument);
@@ -105,11 +107,6 @@ static int onEdit(int col, int row, CellEditAction action) {
   int handled = 0;
   switch (row) {
     case 3:
-      if (action == CellEditAction::tap) {
-        fileBrowserSetupWithPreview("LOAD PCM SAMPLE", ".wav", appSettings.samplePath,
-          onSampleLoaded, onSampleCancelled, onSamplePreview);
-        screenSetup(&screenFileBrowser, 0);
-      }
       return 0;
     case 4: handled = editSigned8(action, &sample->pitch, 12, -48, 48); break;
     case 5: handled = edit8noLast(action, &sample->start, 16, 0, sample->end); break;
@@ -169,9 +166,29 @@ static int loadAdjacentSample(int direction) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
-  if (!isKeyDown) return 0;
-  if (keys == (keyPlay | keyLeft)) return loadAdjacentSample(-1);
-  if (keys == (keyPlay | keyRight)) return loadAdjacentSample(1);
+  if (screenInstrumentSample.cursorRow != 3) {
+    sampleButtonDown = 0;
+    return 0;
+  }
+  if (isKeyDown && keys == keyEdit) {
+    sampleButtonDown = 1;
+    return 1;
+  }
+  if (isKeyDown && keys == (keyEdit | keyLeft)) {
+    sampleButtonDown = 0;
+    return loadAdjacentSample(-1);
+  }
+  if (isKeyDown && keys == (keyEdit | keyRight)) {
+    sampleButtonDown = 0;
+    return loadAdjacentSample(1);
+  }
+  if (!isKeyDown && keys == 0 && sampleButtonDown) {
+    sampleButtonDown = 0;
+    fileBrowserSetupWithPreview("LOAD PCM SAMPLE", ".wav", appSettings.samplePath,
+      onSampleLoaded, onSampleCancelled, onSamplePreview);
+    screenSetup(&screenFileBrowser, 0);
+    return 1;
+  }
   return 0;
 }
 

@@ -41,6 +41,23 @@ TEST_CASE("Plaits envelope routings produce finite audio") {
   }
 }
 
+TEST_CASE("Plaits legacy LEVEL mode uses the click-free VCA envelope") {
+  PlaitsVoice voice;
+  std::vector<float> output(512);
+  voice.init(96000.0f);
+  voice.configure(8, 16384, 16384, 16384, 0, 1, 128, 128, 60.0f, 1.0f);
+  voice.setEnvelope(0.0f, 0.0f, 1.0f, 0.001f);
+  voice.noteOn();
+  voice.render(output.data(), 128);
+  voice.noteOff();
+  voice.render(output.data(), output.size());
+
+  CHECK_FALSE(voice.active());
+  for (size_t i = 128; i < output.size(); ++i) {
+    CHECK(output[i] == doctest::Approx(0.0f));
+  }
+}
+
 static double crossingFrequency(const std::vector<float>& output,
                                 size_t start, double sampleRate) {
   double mean = 0.0;

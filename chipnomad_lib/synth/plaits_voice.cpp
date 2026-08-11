@@ -45,10 +45,11 @@ void PlaitsVoice::configure(uint8_t engine, uint16_t harmonics,
   patch_.harmonics = harmonics / 32767.0f;
   patch_.timbre = timbre / 32767.0f;
   patch_.morph = morph / 32767.0f;
-  envelopeMode_ = envelopeMode > 2 ? 0 : envelopeMode;
+  // LEVEL is retained as a file-format value but behaves as click-free VCA.
+  envelopeMode_ = envelopeMode == 0 ? 0 : 2;
   patch_.decay = envelopeMode_ == 0 ? decay / 255.0f : 0.5f;
   patch_.lpg_colour = envelopeMode_ == 0 ? sustain / 255.0f : 0.5f;
-  modulations_.level_patched = envelopeMode_ != 0;
+  modulations_.level_patched = false;
   patch_.note = note;
   auxMix_ = auxMix;
   gain_ = gain < 0.0f ? 0.0f : (gain > 1.0f ? 1.0f : gain);
@@ -129,7 +130,7 @@ void PlaitsVoice::renderBlock() {
   // not repeat the base note, or Plaits adds it twice.
   modulations_.note = 0.0f;
   modulations_.trigger = gate_ ? 1.0f : 0.0f;
-  modulations_.level = envelopeMode_ == 1 ? envelopeLevel_ : 1.0f;
+  modulations_.level = 1.0f;
   voice_.Render(patch_, modulations_, frames_, kBlockSize);
   blockPosition_ = 0;
 }

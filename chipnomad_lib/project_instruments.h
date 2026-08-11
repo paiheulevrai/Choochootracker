@@ -156,7 +156,7 @@ struct InstrumentPlaits {
   uint16_t timbre;
   uint16_t morph;
   uint8_t auxMix;
-  uint8_t envelopeMode; // 0: TRIG/LPG, 1: ADSR to LEVEL, 2: post-VCA ADSR
+  uint8_t envelopeMode; // 0: TRIG/LPG, 2: post-VCA ADSR (1 loads as legacy VCA)
   uint8_t filterEnabled;
   uint8_t filterMode;
   uint8_t filterSlope24dB;

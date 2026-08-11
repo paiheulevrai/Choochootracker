@@ -27,7 +27,7 @@ The suite covers the tracker engine, Braids, the PCM Sample voice and instrument
 The current target is AArch64, including the Anbernic RG353V. From Ubuntu under WSL2:
 
 ```sh
-make -f Makefile.portmaster PortMaster-deploy
+make -j4 -f Makefile.portmaster PortMaster-deploy
 ```
 
 Outputs:

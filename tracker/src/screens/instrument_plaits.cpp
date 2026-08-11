@@ -3,6 +3,8 @@
 #include "utils.h"
 #include "model_catalog.h"
 
+static int engineButtonDown;
+
 static void selectEngine(int value) {
   chipnomadState->project.instruments[cInstrument].chip.plaits.engine = (uint8_t)value;
   projectModified = 1;
@@ -10,6 +12,13 @@ static void selectEngine(int value) {
 }
 
 static void cancelEngineSelection() { screenSetup(&screenInstrument, cInstrument); }
+
+static void openEngineSelection() {
+  InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
+  selectionPopupSetup("PLAITS ENGINE", plaitsCategories, plaitsCategoryCount,
+    p->engine, selectEngine, cancelEngineSelection);
+  screenSetup(&screenSelectionPopup, 0);
+}
 
 static const char* engineNames[] = {
   "VA VCF", "PHASE DIST", "6-OP FM 1", "6-OP FM 2", "6-OP FM 3", "WAVE TERRAIN",
@@ -68,7 +77,7 @@ static void drawField(int col, int row, CellState state) {
     case 5: gfxPrintf(12, 8, "%04u", (unsigned)((uint32_t)p->timbre * 1023 / 32767)); break;
     case 6: gfxPrintf(12, 9, "%04u", (unsigned)((uint32_t)p->morph * 1023 / 32767)); break;
     case 7: gfxPrint(12, 10, byteToHex(p->auxMix)); break;
-    case 8: { static const char* modes[] = {"TRIG", "LEVEL", "VCA"}; gfxPrint(12, 11, modes[p->envelopeMode <= 2 ? p->envelopeMode : 0]); break; }
+    case 8: gfxPrint(12, 11, p->envelopeMode == 0 ? "TRIG" : "VCA"); break;
     case 9: gfxPrint(12, 12, p->filterEnabled ? "On" : "Off"); break;
     case 10: { static const char* modes[] = {"LP", "BP", "HP"}; gfxPrint(12, 13, modes[p->filterMode <= 2 ? p->filterMode : 0]); break; }
     case 11: gfxPrint(12, 14, p->filterSlope24dB ? "24 dB" : "12 dB"); break;
@@ -83,12 +92,6 @@ static int onEdit(int col, int row, CellEditAction action) {
   int handled = 0;
   switch (row) {
     case 3:
-      if (action == CellEditAction::tap) {
-        selectionPopupSetup("PLAITS ENGINE", plaitsCategories, plaitsCategoryCount,
-          p->engine, selectEngine, cancelEngineSelection);
-        screenSetup(&screenSelectionPopup, 0);
-        return 0;
-      }
       handled = edit8noLast(action, &p->engine, 1, 0, 23);
       break;
     case 4: handled = editOscillatorParameter(action, &p->harmonics); break;
@@ -96,8 +99,14 @@ static int onEdit(int col, int row, CellEditAction action) {
     case 6: handled = editOscillatorParameter(action, &p->morph); break;
     case 7: handled = edit8noLast(action, &p->auxMix, 16, 0, 255); break;
     case 8:
-      handled = edit8noLast(action, &p->envelopeMode, 1, 0, 2);
-      if (handled) screenSetup(&screenInstrument, cInstrument);
+      {
+        uint8_t mode = p->envelopeMode == 0 ? 0 : 1;
+        handled = edit8noLast(action, &mode, 1, 0, 1);
+        if (handled) {
+          p->envelopeMode = mode == 0 ? 0 : 2;
+          screenSetup(&screenInstrument, cInstrument);
+        }
+      }
       break;
     case 9: handled = edit8noLast(action, &p->filterEnabled, 1, 0, 1); break;
     case 10: handled = edit8noLast(action, &p->filterMode, 1, 0, 2); break;
@@ -114,11 +123,33 @@ static int onEdit(int col, int row, CellEditAction action) {
   return handled;
 }
 
+static int onInput(int isKeyDown, int keys, int tapCount) {
+  if (screenInstrumentPlaits.cursorRow != 3) {
+    engineButtonDown = 0;
+    return 0;
+  }
+  if (isKeyDown && keys == keyEdit) {
+    engineButtonDown = 1;
+    return 1;
+  }
+  if (isKeyDown && (keys == (keyEdit | keyLeft) ||
+                    keys == (keyEdit | keyRight))) {
+    engineButtonDown = 0;
+    return 0;
+  }
+  if (!isKeyDown && keys == 0 && engineButtonDown) {
+    engineButtonDown = 0;
+    openEngineSelection();
+    return 1;
+  }
+  return 0;
+}
+
 ScreenData screenInstrumentPlaits = {
   .rows = 15, .cursorRow = 0, .cursorCol = 0, .topRow = 0, .selectMode = -1,
   .selectStartRow = 0, .selectStartCol = 0, .selectAnchorRow = 0, .selectAnchorCol = 0,
   .playbackLevel = ScreenPlaybackLevel::none, .getColumnCount = getColumnCount,
   .drawStatic = drawStatic, .drawCursor = drawCursor, .drawSelection = NULL,
   .drawRowHeader = NULL, .drawColHeader = NULL, .drawField = drawField, .onEdit = onEdit,
-  .onInput = NULL, .onRawInput = NULL, .isCellValid = NULL, .getLoopRange = NULL,
+  .onInput = onInput, .onRawInput = NULL, .isCellValid = NULL, .getLoopRange = NULL,
 };

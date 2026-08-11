@@ -9,10 +9,28 @@ STRIP = aarch64-linux-gnu-strip
 PKG_CONFIG ?= pkg-config
 PKG_CONFIG_LIBDIR ?= /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
 
-SDL_CFLAGS = $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --cflags sdl2)
-SDL_LIBS = $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --libs sdl2)
-CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(SDL_CFLAGS) -DPORTMASTER_BUILD -DGAMEPAD_SUPPORT
-OUTPUT = -o $(BUILD)/choochootracker.aarch64
+SDL_CFLAGS := $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --cflags sdl2)
+SDL_LIBS := $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --libs sdl2)
+CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SDL_CFLAGS) -DPORTMASTER_BUILD -DGAMEPAD_SUPPORT
+TARGET = $(BUILD)/choochootracker.aarch64
+OUTPUT = -o $(TARGET)
+
+object_for = $(BUILD)/obj/$(subst ../,up/,$(basename $(1))).o
+OBJECTS := $(foreach source,$(SOURCES),$(call object_for,$(source)))
+HEADERS := $(sort $(shell find $(LIBS) -name '*.h' -print 2>/dev/null))
+HEADER_STAMP = $(BUILD)/obj/.headers
+
+$(HEADER_STAMP): $(HEADERS)
+	@mkdir -p $(dir $@)
+	@touch $@
+
+define compile_source
+$(call object_for,$(1)): $(1) $(HEADER_STAMP) Makefile.portmaster Makefile.common
+	@mkdir -p $$(dir $$@)
+	@$(CXX) $(CFLAGS) -c $$< -o $$@
+endef
+
+$(foreach source,$(SOURCES),$(eval $(call compile_source,$(source))))
 
 PACKAGE_ROOT = $(BUILD)/package
 PORT_DIR = $(PACKAGE_ROOT)/choochootracker
@@ -21,9 +39,9 @@ RELEASE = ../releases/choochootracker.zip
 .PHONY: PortMaster
 PortMaster: $(BUILD)/choochootracker.aarch64
 
-$(BUILD)/choochootracker.aarch64: $(SRC_FILES) Makefile.portmaster Makefile.common
+$(BUILD)/choochootracker.aarch64: $(OBJECTS)
 	mkdir -p $(BUILD)
-	$(CXX) $(CFLAGS) $(SDL_LIBS) -lm $(OUTPUT)
+	$(CXX) $(COMMON_CFLAGS) $(OBJECTS) $(SDL_LIBS) -lm $(OUTPUT)
 	$(STRIP) $(BUILD)/choochootracker.aarch64
 
 .PHONY: PortMaster-deploy

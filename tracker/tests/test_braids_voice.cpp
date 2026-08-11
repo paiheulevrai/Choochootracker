@@ -54,6 +54,30 @@ TEST_CASE("BraidsVoice audio-rate envelope reaches silence after release") {
   CHECK_FALSE(voice.active());
 }
 
+TEST_CASE("BraidsVoice percussion models obey the ADSR release") {
+  const uint8_t models[] = {
+    braids::MACRO_OSC_SHAPE_STRUCK_DRUM,
+    braids::MACRO_OSC_SHAPE_KICK,
+    braids::MACRO_OSC_SHAPE_CYMBAL,
+    braids::MACRO_OSC_SHAPE_SNARE,
+  };
+  float buffer[512];
+  for (uint8_t model : models) {
+    BraidsVoice voice;
+    voice.init();
+    REQUIRE(voice.setModel(model));
+    voice.setEnvelope(true, 0.0f, 0.0f, 1.0f, 0.001f);
+    voice.noteOn();
+    voice.render(buffer, 128);
+    voice.noteOff();
+    voice.render(buffer, 512);
+    CHECK_FALSE(voice.active());
+    for (size_t i = 128; i < 512; ++i) {
+      CHECK(buffer[i] == doctest::Approx(0.0f));
+    }
+  }
+}
+
 TEST_CASE("BraidsVoice filter modes and slopes remain stable") {
   for (int mode = 0; mode < 3; ++mode) {
     for (int slope24dB = 0; slope24dB < 2; ++slope24dB) {

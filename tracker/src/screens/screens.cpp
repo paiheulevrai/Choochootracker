@@ -98,6 +98,7 @@ void screenDraw() {
   }
 
   currentScreen->draw();
+  drawScreenMap();
 
   // Draw cached message
   if (strlen(messageBuffer) > 0) {

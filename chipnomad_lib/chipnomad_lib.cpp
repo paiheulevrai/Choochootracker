@@ -304,11 +304,6 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
   return samples - samplesLeft;
 }
 
-static bool braidsUsesInternalDecay(uint8_t model) {
-  return model >= braids::MACRO_OSC_SHAPE_STRUCK_BELL &&
-    model <= braids::MACRO_OSC_SHAPE_SNARE;
-}
-
 static float envelopeTime(uint8_t value) {
   float normalized = value / 255.0f;
   return normalized * normalized * 5.0f;
@@ -437,8 +432,7 @@ static void updateBraidsVoices(ChipNomadState* state) {
       cutoff,
       resonance / 255.0f);
 
-    bool useEnvelope = !braidsUsesInternalDecay(model);
-    voice->setEnvelope(useEnvelope,
+    voice->setEnvelope(true,
       envelopeTime(instrument->attack), envelopeTime(instrument->decay),
       instrument->sustain / 255.0f, envelopeTime(instrument->release));
 
