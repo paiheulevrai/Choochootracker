@@ -18,10 +18,22 @@
     #status { color: #7ddcff; min-height: 1.5em; }
     button { color: #000f1a; background: #7ddcff; border: 0; padding: .55rem 1rem;
       font-weight: 700; cursor: pointer; }
-    #touch-controls { display: none; grid-template-columns: repeat(4, 1fr);
-      gap: .45rem; width: min(100%, 640px); margin: .75rem auto 0; }
-    #touch-controls button { min-height: 3rem; padding: .25rem; touch-action: none;
-      user-select: none; -webkit-user-select: none; }
+    #touch-controls { display: none; width: min(100%, 640px); margin: .75rem auto 0;
+      padding: .8rem 1rem .65rem; border: 1px solid #3b4350; border-radius: 1.2rem;
+      background: linear-gradient(#343b47, #1c222c); box-shadow: inset 0 1px #596170;
+      grid-template-columns: 1fr 1fr 1fr; grid-template-areas: "dpad . face" "system system system";
+      gap: .65rem; touch-action: none; }
+    #touch-controls button { border: 1px solid #111722; color: #eef4f8; font: 700 .72rem system-ui;
+      touch-action: none; user-select: none; -webkit-user-select: none; box-shadow: inset 0 1px #7d8795, 0 2px 2px #080b10; }
+    .dpad { grid-area: dpad; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); aspect-ratio: 1; max-width: 8rem; }
+    .dpad button { background: #2a313c; border-radius: .25rem; font-size: 1rem; }
+    .dpad .up { grid-column: 2; } .dpad .left { grid-row: 2; grid-column: 1; }
+    .dpad .right { grid-row: 2; grid-column: 3; } .dpad .down { grid-row: 3; grid-column: 2; }
+    .face { grid-area: face; display: flex; align-items: center; justify-content: center; gap: .55rem; }
+    .face button { width: 3.6rem; height: 3.6rem; border-radius: 50%; background: #ab334b; }
+    .face button:first-child { background: #2e7899; }
+    .system { grid-area: system; display: flex; justify-content: center; gap: .75rem; }
+    .system button { min-width: 5.8rem; min-height: 2rem; border-radius: 1rem; background: #252c37; }
     @media (pointer: coarse), (max-width: 700px) {
       main { width: min(100%, 640px); padding: .5rem; }
       #tracker { width: 100%; }
@@ -35,12 +47,20 @@
     <p>Click inside the tracker, then use the keyboard. Audio starts on first interaction.</p>
     <button id="start">Start tracker</button>
     <div id="status">Ready</div>
-    <canvas id="tracker" tabindex="0" aria-label="ChooChooTracker"></canvas>
+    <canvas id="tracker" width="640" height="480" tabindex="0" aria-label="ChooChooTracker"></canvas>
     <div id="touch-controls" aria-label="Touch controls">
-      <button data-button="0">▲</button><button data-button="1">▼</button>
-      <button data-button="2">◀</button><button data-button="3">▶</button>
-      <button data-button="4">EDIT</button><button data-button="5">OPT</button>
-      <button data-button="6">PLAY</button><button data-button="7">SHIFT</button>
+      <div class="dpad" aria-label="Direction pad">
+        <button class="up" data-button="0" aria-label="Up">&uarr;</button>
+        <button class="left" data-button="2" aria-label="Left">&larr;</button>
+        <button class="right" data-button="3" aria-label="Right">&rarr;</button>
+        <button class="down" data-button="1" aria-label="Down">&darr;</button>
+      </div>
+      <div class="face" aria-label="Action buttons">
+        <button data-button="5">B<br>OPT</button><button data-button="4">A<br>EDIT</button>
+      </div>
+      <div class="system">
+        <button data-button="7">SELECT<br>SHIFT</button><button data-button="6">START<br>PLAY</button>
+      </div>
     </div>
   </main>
   <script>
@@ -55,7 +75,7 @@
       status.textContent = 'Loading tracker…';
       window.Module = window.Module || {};
       window.Module.canvas = document.querySelector('#tracker');
-      window.Module.printErr = (message) => { status.textContent = message; };
+      window.Module.onAbort = () => { status.textContent = 'Tracker startup failed.'; };
       window.Module.onRuntimeInitialized = () => { status.textContent = 'Ready — enjoy the ride.'; };
       const script = document.createElement('script');
       script.src = 'choochootracker.js';

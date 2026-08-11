@@ -164,7 +164,13 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
     screenH = drawableH;
   }
 
+#ifdef WEB_BUILD
+  // SDL's browser backend can report the physical screen size while the canvas
+  // remains 640x480. Select the font against the canvas's fixed tracker grid.
+  currentResolution = fontSelectResolution(fontGetCurrent(), 640, 480);
+#else
   currentResolution = fontSelectResolution(fontGetCurrent(), screenW, screenH);
+#endif
   if (currentResolution) {
     charW = currentResolution->charWidth;
     charH = currentResolution->charHeight;
