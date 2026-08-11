@@ -4,6 +4,8 @@ ChooChooTracker started from ChipNomad, but the projects now have different goal
 
 Trying to keep both repositories identical would create frequent conflicts and tie ChooChooTracker's architecture to decisions made for another project. ChipNomad remains a useful source of fixes and ideas. ChooChooTracker owns its code, project format, and release schedule.
 
+Practical compatibility is still useful. Shared code should remain recognizable when there is no product reason to diverge, which makes it easier for fixes and ideas to move in either direction. This does not require matching every future ChipNomad refactor or restoring project format compatibility.
+
 ## Ownership boundaries
 
 | Area | Policy |
@@ -54,7 +56,8 @@ Classify changes before writing code:
 2. Study project format changes even when they will not be adopted, because they may explain future incompatibilities.
 3. Reimplement UI improvements when they suit ChooChooTracker's small screen and controls.
 4. Do not import C++ rewrites just to resemble upstream. They must solve a problem that exists here.
-5. Ignore renames, file moves, and cleanup with no user-visible effect unless they make a later fix easier to adopt.
+5. Review consistency work, such as unified error handling and return-value conventions, when it reduces ambiguity in shared code. Adapt it to the current architecture and cover behavior changes with tests.
+6. Ignore renames, file moves, and cleanup with no user-visible effect unless they make a later fix easier to adopt.
 
 Skipping a commit is not technical debt. It often solves a constraint that only exists in ChipNomad.
 

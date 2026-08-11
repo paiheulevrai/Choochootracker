@@ -85,12 +85,12 @@ static int onEdit(int col, int row, CellEditAction action) {
       if (row == 0) handled = edit8noLast(action, &p->reverbReturn, 10, 0, 100);
       else if (row == 1) handled = edit8noLast(action, &p->reverbTime, 16, 0, 255);
       else if (row == 2) handled = edit8noLast(action, &p->reverbDamping, 16, 0, 255);
-      else handled = edit16withMinMax(action, &p->reverbFilterCutoffHz, 1000, 20, 20000);
+      else handled = editFilterCutoff(action, &p->reverbFilterCutoffHz);
     } else {
       if (row == 0) handled = edit8noLast(action, &p->delayReturn, 10, 0, 100);
       else if (row == 1) handled = edit8noLast(action, &p->delayTicks, 4, 1, 255);
       else if (row == 2) handled = edit8noLast(action, &p->delayFeedback, 10, 0, 95);
-      else handled = edit16withMinMax(action, &p->delayFilterCutoffHz, 1000, 20, 20000);
+      else handled = editFilterCutoff(action, &p->delayFilterCutoffHz);
     }
   }
   if (handled) {
@@ -131,11 +131,11 @@ static void setPage(int page) {
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
   if (isKeyDown && keys == (keyUp | keyShift)) {
-    setPage(mixerPage == 1 ? 0 : 1);
+    setPage(mixerPage == 2 ? 0 : 1);
     return 1;
   }
   if (isKeyDown && keys == (keyDown | keyShift)) {
-    setPage(mixerPage == 2 ? 0 : 2);
+    setPage(mixerPage == 1 ? 0 : 2);
     return 1;
   }
   if (isKeyDown && keys == (keyRight | keyShift)) {

@@ -78,5 +78,8 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples);
 * @param quality Quality level
 */
 void chipnomadSetQuality(ChipNomadState* state, ChipNomadQuality quality);
+void chipnomadSetBraidsSettings(ChipNomadState* state, uint8_t bits,
+                               uint8_t drift, uint8_t signature,
+                               uint32_t signatureSeed);
 
 #endif

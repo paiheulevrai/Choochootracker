@@ -5,6 +5,9 @@
 #include <stdint.h>
 
 #include "braids/macro_oscillator.h"
+#include "braids/signature_waveshaper.h"
+#include "braids/vco_jitter_source.h"
+#include "multimode_filter.h"
 
 enum class BraidsFilterMode : uint8_t {
   lowPass,
@@ -22,6 +25,8 @@ class BraidsVoice {
   void setPitch(int16_t pitch);
   void setParameters(uint16_t timbre, uint16_t color);
   void setGain(float gain);
+  void setGlobalSettings(uint8_t bits, uint8_t drift, uint8_t signature,
+                         uint32_t signatureSeed);
   void setFilter(bool enabled, BraidsFilterMode mode, bool slope24dB,
                  float cutoffHz, float resonance);
   void setEnvelope(bool enabled, float attackSeconds, float decaySeconds,
@@ -39,8 +44,6 @@ class BraidsVoice {
   enum class EnvelopeStage : uint8_t { idle, attack, decay, sustain, release };
 
   void renderBlock();
-  void updateFilterCoefficients();
-  float processFilterStage(float input, int stage);
   float processEnvelope();
   void enterEnvelopeStage(EnvelopeStage stage);
 
@@ -51,19 +54,13 @@ class BraidsVoice {
   uint8_t model_;
   bool active_;
   float gain_;
+  int16_t basePitch_;
+  uint8_t bits_, drift_, signature_;
+  uint32_t signatureSeed_;
+  braids::SignatureWaveshaper signatureWaveshaper_;
+  braids::VcoJitterSource jitterSource_;
 
-  bool filterEnabled_;
-  BraidsFilterMode filterMode_;
-  bool filterSlope24dB_;
-  float filterCutoffHz_;
-  float filterResonance_;
-  float filterG_;
-  float filterK_;
-  float filterA1_;
-  float filterA2_;
-  float filterA3_;
-  float filterIc1eq_[2];
-  float filterIc2eq_[2];
+  MultimodeFilter filter_;
 
   bool envelopeEnabled_;
   EnvelopeStage envelopeStage_;

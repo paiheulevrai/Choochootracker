@@ -156,6 +156,7 @@ struct InstrumentPlaits {
   uint16_t timbre;
   uint16_t morph;
   uint8_t auxMix;
+  uint8_t envelopeMode; // 0: TRIG/LPG, 1: ADSR to LEVEL, 2: post-VCA ADSR
   uint8_t filterEnabled;
   uint8_t filterMode;
   uint8_t filterSlope24dB;
@@ -178,7 +179,6 @@ struct InstrumentSample {
   int8_t pitch;
   uint8_t start;
   uint8_t end;
-  uint8_t volume;
   uint8_t filterEnabled;
   uint8_t filterMode;
   uint8_t filterSlope24dB;
@@ -204,6 +204,7 @@ struct Instrument {
   char name[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
   uint8_t tableSpeed;
   uint8_t transposeEnabled;
+  uint8_t volume;
   Modulation modulation[4];
   InstrumentChipData chip;
 };
@@ -216,5 +217,15 @@ struct InstrumentFunctions {
 };
 
 InstrumentFunctions getInstrumentFunctions(InstrumentType type);
+const char* instrumentModDestinationName(InstrumentType type, int destination);
+int instrumentModDestinationMax(InstrumentType type);
+int instrumentGenericModDestination(InstrumentType type, int destination);
+
+enum GenericModDestination {
+  genericModReverbSend = 0,
+  genericModDelaySend,
+  genericModFirstParameter,
+  genericModDestinationCount = genericModFirstParameter + 16,
+};
 
 #endif // __CHIPNOMAD_LIB__PROJECT_INSTRUMENTS_H__

@@ -61,39 +61,4 @@ class ExporterWAV : public Exporter {
 };
 
 
-// PSG Exporter
-class ExporterPSG : public Exporter {
-  private:
-    FILE* files[3];
-    int numChips;
-    char baseFilename[1024];
-
-  public:
-    ExporterPSG(const char* filename, Project* project, int startRow);
-    ~ExporterPSG() override { cancel(); }
-    int next() override;
-    int finish() override;
-    void cancel() override;
-};
-
-
-// VGM Exporter
-class ExporterVGM : public Exporter {
-  private:
-    FILE* file;
-    int waitSamples;
-    int totalSamples;
-    char baseFilename[1024];
-
-    void writeWait();
-
-  public:
-    ExporterVGM(const char* filename, Project* project, int startRow);
-    ~ExporterVGM() override { cancel(); }
-    int next() override;
-    int finish() override;
-    void cancel() override;
-};
-
-
 #endif // __CHIPNOMAD_LIB__EXPORT_H__

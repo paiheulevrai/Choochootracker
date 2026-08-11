@@ -22,6 +22,8 @@ I added some additional FX's inspired by Nerdseq and Elektron, in order to bring
 ## Design rules
 
 - Keep ChipNomad's tracker, sequencer, and workflow where they still fit.
+- Reuse ChipNomad architecture, functions, and conventions whenever they fit instead of building parallel systems.
+- Keep shared code recognizable and practically compatible so fixes and ideas can move in either direction. Diverge when ChooChooTracker's product goals require it, not for style alone.
 - Allow AY/YM and modern instruments in the same song.
 - Add synthesis features without rewriting working code.
 - Keep the interface usable on a small screen with few buttons.
@@ -78,7 +80,8 @@ Same as Braids, but with Plaits parameters.
 
 ## Send effects
 
-The reveb from the
+Reverb and delay are shared effects. Each track has independent sends, while
+the effects are processed once per audio callback.
 
 ### Signal path
 
@@ -96,7 +99,9 @@ Braids with its original STRIKE behavior -> filter -> mixer
 
 Percussive models keep their internal envelope and decay. ChooChooTracker does not add another ADSR on top.
 
-Same for Plaits, same for samples
+Plaits keeps each engine's internal behavior, then passes through the shared
+filter and ChooChooTracker ADSR. Samples use the shared filter and ADSR after
+one-shot playback.
 
 ### Filter
 
@@ -194,7 +199,7 @@ This builds and checks the ZIP before ArkOS testing.
 
 The [August 9, 2026 feasibility study](feasibility-2026-08-09.md) records the initial analysis. Plaits, the sends, and the first trigger conditions have since been implemented. Musical testing on RG353V are still required. CPU load is OK.
 
-The next engine feature under consideration is pitched single-cycle sample looping. It should remain part of the Sample engine if that is the simplest design. I don't find it very useful, but it's a neat trick and people on the Internet seem to like it.
+The next low-priority engine is `SCWF`, a dedicated dual-oscillator single-cycle waveform engine. Each oscillator reads a one-cycle WAV, with detune and mix controls. It remains separate from the monophonic one-shot Sample engine.
 
 ### 1. Establish the base
 
@@ -291,6 +296,22 @@ The next engine feature under consideration is pitched single-cycle sample loopi
 - [x] Write the English user manual.
 - [ ] Measure eight Plaits voices with Reverb and Delay on RG353V.
 - [ ] Listen to all 24 engines, both sends, and every `SPD` ratio on ArkOS.
+
+### 11. August 11 usability and synthesis pass
+
+- [x] Correct Plaits pitch integration and add tuning and audible-output tests.
+- [x] Display Plaits and Braids ADSR controls on one line.
+- [x] Keep every Plaits and Braids model in exactly one popup category; `MISC` is only a fallback.
+- [x] Add a reusable hierarchical selection popup for models and modulation destinations.
+- [x] Add one common `00-FF` instrument volume, independent from track volume.
+- [x] Share one multimode filter implementation across Braids, Plaits, and Sample.
+- [x] Limit filter cutoff to 20 Hz through 20 kHz and use an exponential control curve.
+- [x] Add app-wide Braids `BITS`, `DRFT`, and `SIGN` settings beside AY quality settings.
+- [x] Add modulation destinations for effect sends and safe modulation-parameter targets.
+- [x] Add sample audition in the file browser and fast previous/next sample selection.
+- [x] Make Mixer, Reverb, and Delay navigation directional instead of toggled.
+- [x] Remove PSG and VGM export while preserving WAV and stems.
+- [ ] Add the dual-oscillator `SCWF` engine after the stabilization work above.
 
 ## First-version acceptance criteria
 

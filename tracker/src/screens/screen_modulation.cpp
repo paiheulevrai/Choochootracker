@@ -5,6 +5,7 @@
 #include "chipnomad_lib.h"
 #include "project_utils.h"
 #include "screen_instrument.h"
+#include "selection_popup.h"
 #include <string.h>
 
 // Screen layout (20 rows):
@@ -41,6 +42,43 @@
 
 #define ROW_TOTAL 14
 #define ROWS_PER_MOD 7
+
+static SelectionItem destinationCategories[3];
+static SelectionItem engineDestinations[32];
+static SelectionItem sendDestinations[2];
+static SelectionItem parameterDestinations[16];
+static int editedModIndex;
+
+static void destinationSelected(int value) {
+  chipnomadState->project.instruments[cInstrument].modulation[editedModIndex].destination = value;
+  projectModified = 1;
+  screenSetup(&screenModulation, cInstrument);
+}
+
+static void destinationCancelled() { screenSetup(&screenModulation, cInstrument); }
+
+static void openDestinationPopup(int modIndex) {
+  Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
+  InstrumentFunctions functions = getInstrumentFunctions(instrument->type);
+  editedModIndex = modIndex;
+  for (int i = 0; i <= functions.modDestinationsCount; ++i) {
+    engineDestinations[i] = {instrumentModDestinationName(instrument->type, i), i, NULL, 0};
+  }
+  int firstGeneric = functions.modDestinationsCount + 1;
+  sendDestinations[0] = {"REVERB SEND", firstGeneric + genericModReverbSend, NULL, 0};
+  sendDestinations[1] = {"DELAY SEND", firstGeneric + genericModDelaySend, NULL, 0};
+  for (int i = 0; i < 16; ++i) {
+    int destination = firstGeneric + genericModFirstParameter + i;
+    parameterDestinations[i] = {instrumentModDestinationName(instrument->type, destination), destination, NULL, 0};
+  }
+  destinationCategories[0] = {"ENGINE", -1, engineDestinations, functions.modDestinationsCount + 1};
+  destinationCategories[1] = {"FX SENDS", -1, sendDestinations, 2};
+  destinationCategories[2] = {"MODULATORS", -1, parameterDestinations, 16};
+  selectionPopupSetup("DESTINATION", destinationCategories, 3,
+    instrument->modulation[modIndex].destination, destinationSelected,
+    destinationCancelled);
+  screenSetup(&screenSelectionPopup, 0);
+}
 
 // Forward declarations for screenData
 static int getColumnCount(int row);
@@ -245,10 +283,7 @@ static void drawField(int col, int row, CellState state) {
       gfxClearRect(valX, y, 8, 1);
       {
         Instrument* inst = &chipnomadState->project.instruments[cInstrument];
-        InstrumentFunctions funcs = getInstrumentFunctions(inst->type);
-        if (funcs.modName) {
-          gfxPrint(valX, y, funcs.modName(mod->destination));
-        }
+        gfxPrint(valX, y, instrumentModDestinationName(inst->type, mod->destination));
       }
       break;
     case 2: // Amount
@@ -311,8 +346,12 @@ static int onEdit(int col, int row, enum CellEditAction action) {
     }
     case 1: { // Destination
       Instrument* inst = &chipnomadState->project.instruments[cInstrument];
-      InstrumentFunctions funcs = getInstrumentFunctions(inst->type);
-      handled = edit8noLast(action, &mod->destination, 1, 0, funcs.modDestinationsCount);
+      if (action == CellEditAction::tap) {
+        openDestinationPopup(modIdx);
+        return 0;
+      }
+      handled = edit8noLast(action, &mod->destination, 1, 0,
+        instrumentModDestinationMax(inst->type));
       break;
     }
     case 2: // Amount

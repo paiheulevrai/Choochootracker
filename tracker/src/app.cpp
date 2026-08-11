@@ -205,6 +205,9 @@ void appSetup(void) {
   // Initialize audio system
   chipnomadInitChips(chipnomadState, appSettings.audioSampleRate, NULL);
   chipnomadSetQuality(chipnomadState, (ChipNomadQuality)appSettings.quality);
+  chipnomadSetBraidsSettings(chipnomadState, appSettings.braidsBits,
+    appSettings.braidsDrift, appSettings.braidsSignature,
+    appSettings.braidsSignatureSeed);
   audioManager.start(appSettings.audioSampleRate, appSettings.audioBufferSize);
   audioManager.resume();
 

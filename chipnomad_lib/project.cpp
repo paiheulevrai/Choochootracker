@@ -129,7 +129,8 @@ void projectInit(Project* p) {
   // Title
   strcpy(p->title, "");
   strcpy(p->author, "");
-  p->linearPitch = 1;
+  // Period pitch is the hardware-validated default for AY and modern engines.
+  p->linearPitch = 0;
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) p->trackVolume[i] = 100;
   p->reverbReturn = 100;
   p->reverbTime = 180;

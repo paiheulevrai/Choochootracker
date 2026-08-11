@@ -46,11 +46,7 @@ static ScreenData screenExportCommon = {
 };
 
 static ScreenData* exportScreen(void) {
-  ScreenData* data = &screenExportCommon;
-  if (chipnomadState->project.chipType == ChipType::AY) {
-    data = &screenExportAY;
-  }
-  return data;
+  return &screenExportCommon;
 }
 
 static void setup(int input) {
@@ -124,8 +120,6 @@ int exportCommonColumnCount(int row) {
     return 1;
   } else if (row == 3) {
     return 1;
-  } else if (row == 4) {
-    return 1;
   }
   return 0;
 }
@@ -145,8 +139,6 @@ void exportCommonDrawStatic(void) {
   gfxPrint(0, 5, "Sample rate");
   gfxPrint(0, 6, "Bit depth");
 
-  gfxSetFgColor(cs.textValue);
-  gfxPrint(0, 8, "VGM");
 }
 
 void exportCommonDrawCursor(int col, int row) {
@@ -162,8 +154,6 @@ void exportCommonDrawCursor(int col, int row) {
     gfxCursor(13, 5, 5);
   } else if (row == 3) {
     gfxCursor(13, 6, 2);
-  } else if (row == 4) {
-    gfxCursor(13, 8, 6);
   }
 }
 
@@ -185,8 +175,6 @@ void exportCommonDrawField(int col, int row, CellState state) {
   } else if (row == 3) {
     gfxClearRect(13, 6, 2, 1);
     gfxPrintf(13, 6, "%d", bitDepths[currentBitDepthIndex]);
-  } else if (row == 4) {
-    gfxPrint(13, 8, "Export");
   }
 }
 
@@ -208,15 +196,6 @@ static int multiFileExists(const char* basePath, int count, const char* format) 
     if (fileExists(filename)) return 1;
   }
   return 0;
-}
-
-static int psgFilesExist(const char* basePath, int numChips) {
-  if (numChips == 1) {
-    char filename[1024];
-    snprintf(filename, sizeof(filename), "%s.psg", basePath);
-    return fileExists(filename);
-  }
-  return multiFileExists(basePath, numChips, "%s-%d.psg");
 }
 
 static int stemsFilesExist(const char* basePath, int trackCount) {
@@ -249,10 +228,6 @@ static void generateMultiFileExportPath(char* outputPath, int maxLen, FileExists
 void generateStemsExportPath(char* outputPath, int maxLen) {
   int trackCount = chipnomadState->project.tracksCount;
   generateMultiFileExportPath(outputPath, maxLen, stemsFilesExist, trackCount);
-}
-
-void generatePSGExportPath(char* outputPath, int maxLen) {
-  generateMultiFileExportPath(outputPath, maxLen, psgFilesExist, chipnomadState->project.chipsCount);
 }
 
 void generateExportPath(char* outputPath, int maxLen, const char* extension) {
@@ -326,19 +301,6 @@ int exportCommonOnEdit(int col, int row, CellEditAction action) {
       currentBitDepthIndex = (currentBitDepthIndex + 2) % 3;
       handled = 1;
     }
-  } else if (row == 4) {
-    if (currentExporter) return 1;
-
-    char exportPath[1024];
-    generateExportPath(exportPath, sizeof(exportPath), "vgm");
-
-    currentExporter = new ExporterVGM(exportPath, &chipnomadState->project, startRow);
-    if (currentExporter) {
-      screenMessage(MESSAGE_TIME, "Starting VGM export...");
-    } else {
-      screenMessage(MESSAGE_TIME, "Export failed to start");
-    }
-    handled = 1;
   }
 
   return handled;

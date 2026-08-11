@@ -21,15 +21,11 @@ void SampleVoice::init(float outputSampleRate) {
   endFrame_ = 0;
   active_ = false;
   gain_ = 1.0f;
-  cutoffHz_ = 20000;
-  resonance_ = 0;
   envelopeStage_ = EnvelopeStage::idle;
   envelopeLevel_ = 0.0f;
   envelopeIncrement_ = 0.0f;
   envelopeSamplesLeft_ = 0;
-  memset(filterIc1eq_, 0, sizeof(filterIc1eq_));
-  memset(filterIc2eq_, 0, sizeof(filterIc2eq_));
-  updateFilter();
+  filter_.init(outputSampleRate_);
 }
 
 void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
@@ -39,8 +35,6 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
   gain_ = gain < 0.0f ? 0.0f : (gain > 1.0f ? 1.0f : gain);
   if (!sample_ || !sample_->data || sample_->frameCount == 0) return;
 
-  cutoffHz_ = cutoffHz;
-  resonance_ = resonance;
   startFrame_ = (uint32_t)((uint64_t)start * (sample_->frameCount - 1) / 255);
   endFrame_ = end == 255
     ? sample_->frameCount
@@ -48,32 +42,9 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
   if (endFrame_ <= startFrame_) endFrame_ = startFrame_ + 1;
   if (endFrame_ > sample_->frameCount) endFrame_ = sample_->frameCount;
   step_ = (sample_->sampleRate / outputSampleRate_) * pow(2.0, pitchCents / 1200.0);
-  updateFilter();
-}
-
-void SampleVoice::updateFilter() {
-  float cutoff = cutoffHz_;
-  float resonance = resonance_ / 255.0f;
-  if (cutoff < 20.0f) cutoff = 20.0f;
-  if (cutoff > outputSampleRate_ * 0.45f) cutoff = outputSampleRate_ * 0.45f;
-  float q = 0.5f + resonance * 19.5f;
-  filterG_ = tanf(3.14159265358979323846f * cutoff / outputSampleRate_);
-  filterK_ = 1.0f / q;
-  filterA1_ = 1.0f / (1.0f + filterG_ * (filterG_ + filterK_));
-  filterA2_ = filterG_ * filterA1_;
-  filterA3_ = filterG_ * filterA2_;
-}
-
-float SampleVoice::processFilter(float input, int channel, int stage) {
-  float v3 = input - filterIc2eq_[channel][stage];
-  float band = filterA1_ * filterIc1eq_[channel][stage] + filterA2_ * v3;
-  float low = filterIc2eq_[channel][stage] + filterA2_ * filterIc1eq_[channel][stage] + filterA3_ * v3;
-  float high = input - filterK_ * band - low;
-  filterIc1eq_[channel][stage] = 2.0f * band - filterIc1eq_[channel][stage];
-  filterIc2eq_[channel][stage] = 2.0f * low - filterIc2eq_[channel][stage];
-  if (sample_->filterMode == 1) return band;
-  if (sample_->filterMode == 2) return high;
-  return low;
+  filter_.configure(sample_->filterEnabled != 0, sample_->filterMode,
+                    sample_->filterSlope24dB != 0, cutoffHz,
+                    resonance / 255.0f);
 }
 
 void SampleVoice::enterEnvelopeStage(EnvelopeStage stage) {
@@ -128,8 +99,7 @@ void SampleVoice::noteOn() {
   position_ = startFrame_;
   active_ = true;
   envelopeLevel_ = 0.0f;
-  memset(filterIc1eq_, 0, sizeof(filterIc1eq_));
-  memset(filterIc2eq_, 0, sizeof(filterIc2eq_));
+  filter_.reset();
   enterEnvelopeStage(EnvelopeStage::attack);
 }
 
@@ -161,10 +131,7 @@ void SampleVoice::render(float* output, size_t frames) {
       float a = sample_->data[frame * sample_->channels + sourceChannel] / 32768.0f;
       float b = sample_->data[next * sample_->channels + sourceChannel] / 32768.0f;
       float value = (a + (b - a) * fraction) * envelope;
-      if (sample_->filterEnabled) {
-        value = processFilter(value, channel, 0);
-        if (sample_->filterSlope24dB) value = processFilter(value, channel, 1);
-      }
+      value = filter_.process(value, channel);
       output[i * 2 + channel] = value;
     }
     position_ += step_;

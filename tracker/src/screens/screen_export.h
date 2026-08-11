@@ -5,7 +5,7 @@
 #include "export/export.h"
 
 // Common rows on the export screen
-#define SCR_EXPORT_ROWS (5)
+#define SCR_EXPORT_ROWS (4)
 
 // Export state
 extern Exporter* currentExporter;
@@ -17,8 +17,5 @@ void exportCommonDrawCursor(int col, int row);
 void exportCommonDrawField(int col, int row, CellState state);
 int exportCommonOnEdit(int col, int row, CellEditAction action);
 void generateExportPath(char* outputPath, int maxLen, const char* extension);
-void generatePSGExportPath(char* outputPath, int maxLen);
-
-extern ScreenData screenExportAY;
 
 #endif

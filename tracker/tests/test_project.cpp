@@ -31,12 +31,12 @@ TEST_CASE_FIXTURE(ProjectFixture, "projectInit default groove") {
   CHECK(p.grooves[0].speed[2] == EMPTY_VALUE_8);
 }
 
-TEST_CASE("new projects initialize the default linear pitch table") {
+TEST_CASE("new projects initialize the validated period pitch table") {
   Project project;
   projectInitAY(&project);
-  CHECK(project.linearPitch == 1);
-  CHECK(project.pitchTable.values[0] == 1200);
-  CHECK(project.pitchTable.values[48] == 6000);
+  CHECK(project.linearPitch == 0);
+  CHECK(project.pitchTable.values[0] > project.pitchTable.values[12]);
+  CHECK(project.pitchTable.values[12] > project.pitchTable.values[24]);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "projectInit other grooves empty") {
@@ -179,6 +179,7 @@ TEST_CASE_FIXTURE(ProjectFixture, "instrumentClear") {
   instrumentClear(&p.instruments[0]);
   CHECK(instrumentIsEmpty(&p, 0));
   CHECK(std::strcmp(p.instruments[0].name, "") == 0);
+  CHECK(p.instruments[0].volume == 255);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "tableClear") {

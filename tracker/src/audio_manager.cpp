@@ -1,15 +1,21 @@
 #include <stdio.h>
 #include <atomic>
 #include <chrono>
+#include <string.h>
 #include "audio_manager.h"
 #include "corelib_audio.h"
 
 #include "chipnomad_lib.h"
 #include "corelib_file.h"
+#include "synth/sample_voice.h"
 
 static int aSampleRate;
 static int aBufferSize;
 static std::atomic<int> cpuLoadPercent{0};
+static SampleVoice samplePreviewVoice;
+static InstrumentSample samplePreview;
+static float* samplePreviewBuffer;
+static int samplePreviewBufferSize;
 
 int pendingReinitChips = 0;
 
@@ -51,6 +57,13 @@ static void audioCallback(int16_t* buffer, int stereoSamples) {
   }
 
   chipnomadRender(chipnomadState, floatBuffer, stereoSamples);
+  if (samplePreviewBufferSize < stereoSamples * 2) {
+    samplePreviewBuffer = (float*)realloc(samplePreviewBuffer,
+      stereoSamples * 2 * sizeof(float));
+    samplePreviewBufferSize = stereoSamples * 2;
+  }
+  samplePreviewVoice.render(samplePreviewBuffer, stereoSamples);
+  for (int i = 0; i < stereoSamples * 2; ++i) floatBuffer[i] += samplePreviewBuffer[i];
 
   // Convert float to int16_t
   for (int i = 0; i < stereoSamples * 2; i++) {
@@ -74,6 +87,8 @@ static int start(int sampleRate, int bufferSize) {
   aSampleRate = sampleRate;
   aBufferSize = bufferSize;
   cpuLoadPercent.store(0, std::memory_order_relaxed);
+  memset(&samplePreview, 0, sizeof(samplePreview));
+  samplePreviewVoice.init((float)sampleRate);
 
   audioSetup(audioCallback, sampleRate, bufferSize);
 
@@ -96,6 +111,9 @@ static void resume(void) {
 
 static void stop() {
   audioCleanup();
+  samplePreviewVoice.kill();
+  free(samplePreview.data);
+  samplePreview.data = NULL;
 }
 
 static void toggleTrackMute(int trackIdx) {
@@ -140,6 +158,30 @@ static int getCpuLoadPercent(void) {
   return cpuLoadPercent.load(std::memory_order_relaxed);
 }
 
+static void stopSamplePreview(void) {
+  pause();
+  samplePreviewVoice.kill();
+  free(samplePreview.data);
+  memset(&samplePreview, 0, sizeof(samplePreview));
+  resume();
+}
+
+static int previewSample(const char* path) {
+  pause();
+  samplePreviewVoice.kill();
+  char error[64];
+  int result = sampleLoadWav16(path, &samplePreview, error, sizeof(error));
+  if (!result) {
+    samplePreview.end = 255;
+    samplePreview.sustain = 255;
+    samplePreview.filterCutoffHz = 20000;
+    samplePreviewVoice.configure(&samplePreview, 0.0f, 1.0f, 0, 255, 20000, 0);
+    samplePreviewVoice.noteOn();
+  }
+  resume();
+  return result;
+}
+
 
 // Singleton AudioManager struct
 struct AudioManager audioManager = {
@@ -149,5 +191,7 @@ struct AudioManager audioManager = {
   .stop = stop,
   .toggleTrackMute = toggleTrackMute,
   .toggleTrackSolo = toggleTrackSolo,
-  .getCpuLoadPercent = getCpuLoadPercent
+  .getCpuLoadPercent = getCpuLoadPercent,
+  .previewSample = previewSample,
+  .stopSamplePreview = stopSamplePreview,
 };

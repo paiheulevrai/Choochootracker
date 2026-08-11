@@ -15,7 +15,7 @@ void PlaitsVoice::init(float outputSampleRate) {
   patch_.decay = 0.5f;
   patch_.lpg_colour = 0.5f;
   modulations_.trigger_patched = true;
-  modulations_.level_patched = true;
+  modulations_.level_patched = false;
   modulations_.level = 1.0f;
   blockPosition_ = kBlockSize;
   outputSampleRate_ = outputSampleRate > 0.0f ? outputSampleRate : 96000.0f;
@@ -23,16 +23,11 @@ void PlaitsVoice::init(float outputSampleRate) {
   previousSource_ = currentSource_ = 0.0f;
   auxMix_ = 0;
   active_ = gate_ = false;
+  envelopeMode_ = 0;
   gain_ = 1.0f;
+  quietSamples_ = 0;
 
-  filterEnabled_ = false;
-  filterMode_ = 0;
-  filterSlope24dB_ = false;
-  filterCutoffHz_ = 20000.0f;
-  filterResonance_ = 0.0f;
-  memset(filterIc1eq_, 0, sizeof(filterIc1eq_));
-  memset(filterIc2eq_, 0, sizeof(filterIc2eq_));
-  updateFilterCoefficients();
+  filter_.init(outputSampleRate_);
 
   envelopeStage_ = EnvelopeStage::idle;
   envelopeLevel_ = 0.0f;
@@ -44,11 +39,16 @@ void PlaitsVoice::init(float outputSampleRate) {
 
 void PlaitsVoice::configure(uint8_t engine, uint16_t harmonics,
                             uint16_t timbre, uint16_t morph, uint8_t auxMix,
-                            float note, float gain) {
+                            uint8_t envelopeMode, uint8_t decay,
+                            uint8_t sustain, float note, float gain) {
   patch_.engine = engine > 23 ? 23 : engine;
   patch_.harmonics = harmonics / 32767.0f;
   patch_.timbre = timbre / 32767.0f;
   patch_.morph = morph / 32767.0f;
+  envelopeMode_ = envelopeMode > 2 ? 0 : envelopeMode;
+  patch_.decay = envelopeMode_ == 0 ? decay / 255.0f : 0.5f;
+  patch_.lpg_colour = envelopeMode_ == 0 ? sustain / 255.0f : 0.5f;
+  modulations_.level_patched = envelopeMode_ != 0;
   patch_.note = note;
   auxMix_ = auxMix;
   gain_ = gain < 0.0f ? 0.0f : (gain > 1.0f ? 1.0f : gain);
@@ -56,12 +56,7 @@ void PlaitsVoice::configure(uint8_t engine, uint16_t harmonics,
 
 void PlaitsVoice::setFilter(bool enabled, uint8_t mode, bool slope24dB,
                             float cutoffHz, float resonance) {
-  filterEnabled_ = enabled;
-  filterMode_ = mode > 2 ? 0 : mode;
-  filterSlope24dB_ = slope24dB;
-  filterCutoffHz_ = cutoffHz;
-  filterResonance_ = resonance;
-  updateFilterCoefficients();
+  filter_.configure(enabled, mode, slope24dB, cutoffHz, resonance);
 }
 
 void PlaitsVoice::setEnvelope(float attackSeconds, float decaySeconds,
@@ -102,7 +97,14 @@ void PlaitsVoice::enterEnvelopeStage(EnvelopeStage stage) {
 
 void PlaitsVoice::noteOn() {
   active_ = gate_ = true;
+  quietSamples_ = 0;
   modulations_.trigger = 1.0f;
+  if (envelopeMode_ == 0) {
+    envelopeLevel_ = 1.0f;
+    envelopeStage_ = EnvelopeStage::sustain;
+    envelopeSamplesLeft_ = 0;
+    return;
+  }
   envelopeLevel_ = 0.0f;
   enterEnvelopeStage(EnvelopeStage::attack);
 }
@@ -110,6 +112,7 @@ void PlaitsVoice::noteOn() {
 void PlaitsVoice::noteOff() {
   gate_ = false;
   modulations_.trigger = 0.0f;
+  if (envelopeMode_ == 0) return;
   enterEnvelopeStage(EnvelopeStage::release);
 }
 
@@ -118,11 +121,15 @@ void PlaitsVoice::kill() {
   modulations_.trigger = 0.0f;
   envelopeStage_ = EnvelopeStage::idle;
   envelopeLevel_ = 0.0f;
+  quietSamples_ = 0;
 }
 
 void PlaitsVoice::renderBlock() {
-  modulations_.note = patch_.note;
+  // patch.note is the base MIDI note. modulations.note is an offset and must
+  // not repeat the base note, or Plaits adds it twice.
+  modulations_.note = 0.0f;
   modulations_.trigger = gate_ ? 1.0f : 0.0f;
+  modulations_.level = envelopeMode_ == 1 ? envelopeLevel_ : 1.0f;
   voice_.Render(patch_, modulations_, frames_, kBlockSize);
   blockPosition_ = 0;
 }
@@ -148,28 +155,6 @@ float PlaitsVoice::processEnvelope() {
   return envelopeLevel_;
 }
 
-void PlaitsVoice::updateFilterCoefficients() {
-  if (filterCutoffHz_ < 20.0f) filterCutoffHz_ = 20.0f;
-  if (filterCutoffHz_ > outputSampleRate_ * 0.45f) filterCutoffHz_ = outputSampleRate_ * 0.45f;
-  if (filterResonance_ < 0.0f) filterResonance_ = 0.0f;
-  if (filterResonance_ > 1.0f) filterResonance_ = 1.0f;
-  filterG_ = tanf(3.14159265358979323846f * filterCutoffHz_ / outputSampleRate_);
-  filterK_ = 1.0f / (0.5f + filterResonance_ * 19.5f);
-  filterA1_ = 1.0f / (1.0f + filterG_ * (filterG_ + filterK_));
-  filterA2_ = filterG_ * filterA1_;
-  filterA3_ = filterG_ * filterA2_;
-}
-
-float PlaitsVoice::processFilterStage(float input, int stage) {
-  float v3 = input - filterIc2eq_[stage];
-  float band = filterA1_ * filterIc1eq_[stage] + filterA2_ * v3;
-  float low = filterIc2eq_[stage] + filterA2_ * filterIc1eq_[stage] + filterA3_ * v3;
-  float high = input - filterK_ * band - low;
-  filterIc1eq_[stage] = 2.0f * band - filterIc1eq_[stage];
-  filterIc2eq_[stage] = 2.0f * low - filterIc2eq_[stage];
-  return filterMode_ == 1 ? band : (filterMode_ == 2 ? high : low);
-}
-
 void PlaitsVoice::render(float* output, size_t samples) {
   if (!output) return;
   if (!active_) { memset(output, 0, samples * sizeof(float)); return; }
@@ -182,10 +167,16 @@ void PlaitsVoice::render(float* output, size_t samples) {
       currentSource_ = nextSourceSample();
     }
     float sample = previousSource_ + (currentSource_ - previousSource_) * sourcePhase_;
-    if (filterEnabled_) {
-      sample = processFilterStage(sample, 0);
-      if (filterSlope24dB_) sample = processFilterStage(sample, 1);
+    sample = filter_.process(sample);
+    float envelope = envelopeMode_ == 0 ? 1.0f : processEnvelope();
+    output[i] = sample * (envelopeMode_ == 2 ? envelope : 1.0f) * gain_;
+    if (envelopeMode_ == 0 && !gate_) {
+      quietSamples_ = fabsf(output[i]) < 0.00001f ? quietSamples_ + 1 : 0;
+      if (quietSamples_ > (uint32_t)(outputSampleRate_ * 0.25f)) {
+        active_ = false;
+        memset(output + i + 1, 0, (samples - i - 1) * sizeof(float));
+        break;
+      }
     }
-    output[i] = sample * processEnvelope() * gain_;
   }
 }

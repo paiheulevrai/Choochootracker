@@ -32,6 +32,7 @@ static char saveExtension[8];
 static int isFolderMode = 0;
 static void (*onFileSelected)(const char* path);
 static void (*onCancelled)(void);
+static void (*onPreview)(const char* path);
 static char pendingSavePath[2048];
 static ScrollState scrollState = {-1, 0, 0, 1};
 
@@ -125,6 +126,13 @@ static void fileBrowserRefresh(void) {
 }
 
 void fileBrowserSetup(const char* title, const char* extension, const char* startPath, void (*fileCallback)(const char*), void (*cancelCallback)(void)) {
+  fileBrowserSetupWithPreview(title, extension, startPath, fileCallback,
+    cancelCallback, NULL);
+}
+
+void fileBrowserSetupWithPreview(const char* title, const char* extension,
+    const char* startPath, void (*fileCallback)(const char*),
+    void (*cancelCallback)(void), void (*previewCallback)(const char*)) {
   strncpy(browserTitle, title, 31);
   browserTitle[31] = 0;
   strncpy(fileExtension, extension, 31);
@@ -132,6 +140,7 @@ void fileBrowserSetup(const char* title, const char* extension, const char* star
   isFolderMode = 0;
   onFileSelected = fileCallback;
   onCancelled = cancelCallback;
+  onPreview = previewCallback;
 
   if (startPath && strlen(startPath) > 0 && fileDirectoryExists(startPath)) {
     strncpy(currentPath, startPath, sizeof(currentPath) - 1);
@@ -157,6 +166,7 @@ void fileBrowserSetupFolderMode(const char* title, const char* startPath, const 
   isFolderMode = 1;
   onFileSelected = folderCallback;
   onCancelled = cancelCallback;
+  onPreview = NULL;
 
   if (startPath && strlen(startPath) > 0 && fileDirectoryExists(startPath)) {
     strncpy(currentPath, startPath, sizeof(currentPath) - 1);
@@ -482,6 +492,15 @@ static int fileBrowserInput(int keys, int tapCount) {
         onFileSelected(fullPath);
         return 0;
       }
+    }
+    return 1;
+  } else if (keys == keyPlay && onPreview) {
+    int entryIdx = getEntryIndex();
+    if (entryIdx >= 0 && entryIdx < entryCount && !entries[entryIdx].isDirectory) {
+      char fullPath[2048];
+      snprintf(fullPath, sizeof(fullPath), "%s%s%s", currentPath,
+        PATH_SEPARATOR_STR, entries[entryIdx].name);
+      onPreview(fullPath);
     }
     return 1;
   } else if (keys == keyOpt) {

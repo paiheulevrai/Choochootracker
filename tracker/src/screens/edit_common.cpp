@@ -1,5 +1,6 @@
 #include "screens.h"
 #include "chipnomad_lib.h"
+#include "synth/multimode_filter.h"
 
 CellEditAction convertMultiAction(CellEditAction action) {
   if (action == CellEditAction::multiIncrease) return CellEditAction::increase;
@@ -221,6 +222,20 @@ int edit16withMinMax(CellEditAction action, uint16_t* value, uint16_t bigStep, u
       break;
   }
   return 0;
+}
+
+int editOscillatorParameter(CellEditAction action, uint16_t* value) {
+  uint16_t displayValue = (uint16_t)(((uint32_t)*value * 1023 + 16383) / 32767);
+  int handled = edit16withMinMax(action, &displayValue, 64, 0, 1023);
+  if (handled) *value = (uint16_t)(((uint32_t)displayValue * 32767 + 511) / 1023);
+  return handled;
+}
+
+int editFilterCutoff(CellEditAction action, uint16_t* cutoffHz) {
+  uint8_t control = filterControlFromCutoff(*cutoffHz);
+  int handled = edit8noLast(action, &control, 16, 0, 255);
+  if (handled) *cutoffHz = (uint16_t)(filterCutoffFromControl(control) + 0.5f);
+  return handled;
 }
 
 int edit16withOverflow(CellEditAction action, uint16_t* value, uint16_t bigStep, uint16_t min, uint16_t max) {

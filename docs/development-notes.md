@@ -9,6 +9,7 @@
 - Braids must bypass AY register output. Treating every non-empty instrument as AY caused invalid register work until the AY path was explicitly restricted to AY1, AY2 and AYSample.
 - `ChipNomadState` is allocated with `malloc`, so C++ voice objects cannot safely be embedded in it without changing its construction. The current minimal solution stores pointers and owns their lifetime explicitly.
 - Only the required Mutable Instruments Braids and stmlib files are vendored under `chipnomad_lib/external/mutable`; the large reference checkout in `inspirations/` is intentionally ignored by Git.
+- App-wide `BITS`, `DRFT`, and `SIGN` reuse the original Braids algorithms. `SIGN` receives an installation seed generated on first launch and persisted in `settings.txt`; copying that file intentionally copies the voice's character.
 
 ## Build and validation
 
@@ -24,24 +25,37 @@
 - Braids FX are `BMD` (model), `BTM` (timbre), `BCL` (color), `BCF` (cutoff) and `BRS` (resonance).
 - Sample FX are `SPT` (pitch), `SST` (start), `SEN` (end), `SVL` (volume), `SCF` (cutoff) and `SRS` (resonance).
 - Instrument FX use absolute values. They remain active until the next note trigger; that trigger restores instrument values before applying its own FX.
-- Cutoff FX map `00` to 20 Hz and `FF` to 43.2 kHz on a logarithmic curve.
+- `M1A`…`M4A` and `M11`…`M44` are the existing relative tracker FX for modulation Amount and P1…P4. Their signed offsets accumulate in the FX state and are reapplied after per-frame offset reset.
+- Cutoff FX map `00` to 20 Hz and `FF` to 20 kHz on an exponential curve.
+- Generic modulation destinations can control Reverb/Delay sends or another modulation slot's four parameters. Cross-modulation reads the source's previous tick and ignores self-targeting, avoiding recursive evaluation.
 
 ## PCM Sample instrument
 
 - `Sample` is separate from the legacy `AYSample` instrument and bypasses the AY DAC.
 - It loads PCM8 or PCM16 mono/stereo WAV files into RAM, converts PCM8 to signed PCM16, and renders interpolated stereo audio directly into the floating-point mixer.
-- Instrument controls are pitch, start, end, volume, ADSR and an LP/BP/HP filter with 12/24 dB slopes, cutoff and resonance.
+- Instrument controls are pitch, start, end, common instrument volume, ADSR and an LP/BP/HP filter with 12/24 dB slopes, cutoff and resonance.
 - Playback is one-shot. Looping and streaming are intentionally not implemented yet.
 - Project save/load preserves the sample path and controls. Paths are not portable yet: copying WAV files into a project `samples/` directory and storing relative paths remains required.
+- The file browser previews the selected WAV with Play. Play + Left/Right on the Sample screen selects the previous or next WAV in the same folder.
 
 ## Plaits and master sends
 
 - Plaits runs its original voice at 48 kHz and is linearly resampled into the 96 kHz master mix. Each tracker track owns one monophonic `PlaitsVoice` and a 16 KiB work allocator.
 - The 24 engine indices and Main/Aux blend are stored in the instrument. Plaits-specific FX are filtered by instrument type in the existing FX lanes.
+- Plaits has three envelope routings. `TRIG` matches TRIG patched/LEVEL unpatched and reuses the envelope row's D/S storage as LPG decay/color. `LEVEL` sends the tracker ADSR into Plaits' LEVEL input. `VCA` holds LEVEL open and applies the ADSR after the Mutable voice.
+- The Plaits wrapper passes pitch once to the Mutable voice; the previous integration also repeated it through the modulation input. A one-octave frequency-ratio test guards this path.
 - Reverb and Delay are shared master effects. Tracks accumulate post-fader send buses; each effect is processed once per callback, not once per track.
 - The Clouds reverb delay lengths and memory were scaled for 96 kHz. The ping-pong delay derives its sample delay from project tick rate and delay ticks.
 - `PRO` uses `00-64` as 0-100%, `MOD AB` uses a per-track phrase visit count, and conditions on one row are ANDed. `SPD` uses a rational phase accumulator and persists until replaced.
 - The scheduler advances at most one row per audio tick. High `SPD` multipliers therefore need hardware and musical validation with short grooves.
+
+## Shared instrument controls
+
+- Every instrument has one `00-FF` volume before the track fader. The old Sample-only volume field is accepted while loading older projects but is no longer saved separately.
+- Braids, Plaits and Sample use one `MultimodeFilter` implementation. Cutoff is limited to 20 Hz through 20 kHz and edited on an exponential curve.
+- Braids and Plaits model selection and modulation destinations use the same two-level popup. Catalog validation ensures every Braids model and Plaits engine appears exactly once.
+- New projects default to period pitch (`Linear pitch: Off`), the mode validated on hardware for correct AY, Braids and Plaits octave tracking.
+- PSG and VGM export paths were removed. WAV mix and stem export remain.
 
 ## PortMaster build
 
@@ -75,7 +89,7 @@ References: [PortMaster build environments](https://portmaster.games/build-envir
 - All 47 Braids models render finite, non-silent output in the desktop tests.
 - Filter modes and slopes, ADSR release, tracker routing and AY muting are covered by tests.
 - Instrument FX lifetime and Sample playback boundaries/filter stability are covered by tests.
-- The current suite contains 152 passing test cases and 134,843 assertions.
+- The current suite contains 156 passing test cases and 147,396 assertions.
 - The Windows executable compiles and survives an SDL dummy audio/video smoke test.
 - The remaining hardware question is whether eight simultaneous Plaits voices plus Reverb and Delay hold 96 kHz without underruns on the RG353V.
 - The ARM64 binary and PortMaster ZIP build successfully under WSL2. They still need to run on the RG353V.

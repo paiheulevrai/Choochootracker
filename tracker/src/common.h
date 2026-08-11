@@ -54,6 +54,10 @@ struct AppSettings {
   int keyRepeatSpeed;
   float mixVolume;
   int quality;
+  int braidsBits;
+  int braidsDrift;
+  int braidsSignature;
+  uint32_t braidsSignatureSeed;
   int pitchConflictWarning;
   KeyMapping keyMapping;
   ColorScheme colorScheme;

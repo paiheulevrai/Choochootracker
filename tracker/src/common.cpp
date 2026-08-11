@@ -3,6 +3,7 @@
 #include "corelib/corelib_gfx.h"
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <chipnomad_lib.h>
 
 static char settingsPath[PATH_LENGTH + 32];
@@ -22,6 +23,12 @@ void initDefaultAppSettings(void) {
   appSettings.keyRepeatSpeed = 2;
   appSettings.mixVolume = 1.0f;
   appSettings.quality = (int)ChipNomadQuality::medium;
+  appSettings.braidsBits = 6;
+  appSettings.braidsDrift = 0;
+  appSettings.braidsSignature = 0;
+  appSettings.braidsSignatureSeed = (uint32_t)time(NULL) ^
+    (uint32_t)(uintptr_t)&appSettings;
+  if (!appSettings.braidsSignatureSeed) appSettings.braidsSignatureSeed = 1;
   appSettings.pitchConflictWarning = 0;
 
   // Zero out key mapping (platform-specific defaults applied later)
@@ -77,6 +84,10 @@ int settingsSave(void) {
   fprintf(file, "keyRepeatSpeed: %d\n", appSettings.keyRepeatSpeed);
   fprintf(file, "mixVolume: %f\n", appSettings.mixVolume);
   fprintf(file, "quality: %d\n", appSettings.quality);
+  fprintf(file, "braidsBits: %d\n", appSettings.braidsBits);
+  fprintf(file, "braidsDrift: %d\n", appSettings.braidsDrift);
+  fprintf(file, "braidsSignature: %d\n", appSettings.braidsSignature);
+  fprintf(file, "braidsSignatureSeed: %u\n", appSettings.braidsSignatureSeed);
   fprintf(file, "pitchConflictWarning: %d\n", appSettings.pitchConflictWarning);
 
   // Save key mapping codes
@@ -164,6 +175,14 @@ int settingsLoad(void) {
       sscanf(line + 11, "%f", &appSettings.mixVolume);
     } else if (strncmp(line, "quality: ", 9) == 0) {
       sscanf(line + 9, "%d", &appSettings.quality);
+    } else if (strncmp(line, "braidsBits: ", 12) == 0) {
+      sscanf(line + 12, "%d", &appSettings.braidsBits);
+    } else if (strncmp(line, "braidsDrift: ", 13) == 0) {
+      sscanf(line + 13, "%d", &appSettings.braidsDrift);
+    } else if (strncmp(line, "braidsSignature: ", 17) == 0) {
+      sscanf(line + 17, "%d", &appSettings.braidsSignature);
+    } else if (strncmp(line, "braidsSignatureSeed: ", 21) == 0) {
+      sscanf(line + 21, "%u", &appSettings.braidsSignatureSeed);
     } else if (strncmp(line, "pitchConflictWarning: ", 22) == 0) {
       sscanf(line + 22, "%d", &appSettings.pitchConflictWarning);
     } else if (strncmp(line, "keyUp: ", 7) == 0) {
@@ -252,6 +271,9 @@ int settingsLoad(void) {
   }
 
   fclose(file);
+  if (appSettings.braidsBits < 0 || appSettings.braidsBits > 6) appSettings.braidsBits = 6;
+  if (appSettings.braidsDrift < 0 || appSettings.braidsDrift > 4) appSettings.braidsDrift = 0;
+  if (appSettings.braidsSignature < 0 || appSettings.braidsSignature > 4) appSettings.braidsSignature = 0;
   return 0;
 }
 

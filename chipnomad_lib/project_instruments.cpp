@@ -8,6 +8,7 @@ static void initCommon(Instrument* instrument) {
   memset(instrument, 0, sizeof(Instrument));
   instrument->tableSpeed = 1;
   instrument->transposeEnabled = 1;
+  instrument->volume = 255;
   instrument->modulation[0].type = ModulationType::ADSR;
   instrument->modulation[1].type = ModulationType::AHD;
   instrument->modulation[2].type = ModulationType::LFO;
@@ -156,7 +157,6 @@ static int initSampleInstrument(Instrument* instrument) {
   initCommon(instrument);
   instrument->type = InstrumentType::Sample;
   instrument->chip.sample.end = 255;
-  instrument->chip.sample.volume = 255;
   instrument->chip.sample.filterEnabled = 1;
   instrument->chip.sample.filterCutoffHz = 20000;
   instrument->chip.sample.sustain = 255;
@@ -182,7 +182,7 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
       };
     case InstrumentType::AY2:
       return (InstrumentFunctions){
-        .modDestinationsCount = 10,
+        .modDestinationsCount = 8,
         .modName = modNameAY2,
         .init = initAY2Instrument,
         .free = freeAY2Instrument
@@ -210,7 +210,7 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
       };
     case InstrumentType::Plaits:
       return (InstrumentFunctions){
-        .modDestinationsCount = 8,
+        .modDestinationsCount = 10,
         .modName = modNamePlaits,
         .init = initPlaitsInstrument,
         .free = freePlaitsInstrument
@@ -223,4 +223,32 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
         .free = freeNoneInstrument
       };
   }
+}
+
+static const char* genericModName(int index) {
+  static const char* names[] = {
+    "RevSend", "DlySend",
+    "M1 P1", "M1 P2", "M1 P3", "M1 P4",
+    "M2 P1", "M2 P2", "M2 P3", "M2 P4",
+    "M3 P1", "M3 P2", "M3 P3", "M3 P4",
+    "M4 P1", "M4 P2", "M4 P3", "M4 P4"
+  };
+  return index >= 0 && index < genericModDestinationCount ? names[index] : "Misc";
+}
+
+int instrumentGenericModDestination(InstrumentType type, int destination) {
+  int index = destination - getInstrumentFunctions(type).modDestinationsCount - 1;
+  return index >= 0 && index < genericModDestinationCount ? index : -1;
+}
+
+int instrumentModDestinationMax(InstrumentType type) {
+  return getInstrumentFunctions(type).modDestinationsCount + genericModDestinationCount;
+}
+
+const char* instrumentModDestinationName(InstrumentType type, int destination) {
+  InstrumentFunctions functions = getInstrumentFunctions(type);
+  if (destination >= 0 && destination <= functions.modDestinationsCount) {
+    return functions.modName(destination);
+  }
+  return genericModName(instrumentGenericModDestination(type, destination));
 }

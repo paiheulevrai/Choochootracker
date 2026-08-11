@@ -609,6 +609,26 @@ static void processModulations(PlaybackState* state, int trackIdx) {
 
   if (track->note.instrument == EMPTY_VALUE_8) return;
 
+  InstrumentType type = state->p->instruments[track->note.instrument].type;
+  // Parameter destinations use the source's previous value. This makes
+  // cross-modulation deterministic and avoids recursive evaluation.
+  for (int source = 0; source < 4; ++source) {
+    PlaybackModState* mod = &track->note.modulation[source];
+    if (!mod->modulation) continue;
+    int generic = instrumentGenericModDestination(type, mod->modulation->destination);
+    if (generic < genericModFirstParameter) continue;
+    int parameter = generic - genericModFirstParameter;
+    int target = parameter / 4;
+    int targetParameter = parameter % 4;
+    if (target == source || !track->note.modulation[target].modulation) continue;
+    int16_t offset = playbackModScaleToRange(mod->outValue, 255);
+    PlaybackModState* targetMod = &track->note.modulation[target];
+    if (targetParameter == 0) targetMod->p1Offset += offset;
+    else if (targetParameter == 1) targetMod->p2Offset += offset;
+    else if (targetParameter == 2) targetMod->p3Offset += offset;
+    else targetMod->p4Offset += offset;
+  }
+
   for (int i = 0; i < 4; i++) {
     PlaybackModState* mod = &track->note.modulation[i];
     // Skip if modulation not initialized or destination == 0 (no destination)

@@ -29,7 +29,6 @@ TEST_CASE("SampleVoice renders PCM16 with envelope and every filter mode") {
   sample.channels = 1;
   sample.data = pcm;
   sample.end = 255;
-  sample.volume = 255;
   sample.filterEnabled = 1;
   sample.filterCutoffHz = 6000;
   sample.filterResonance = 64;
@@ -69,7 +68,6 @@ TEST_CASE("SampleVoice start and end delimit playback") {
   sample.data = pcm;
   sample.start = 64;
   sample.end = 128;
-  sample.volume = 255;
   sample.sustain = 255;
 
   SampleVoice voice;

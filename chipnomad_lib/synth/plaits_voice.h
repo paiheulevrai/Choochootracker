@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "plaits/dsp/voice.h"
+#include "multimode_filter.h"
 
 class PlaitsVoice {
  public:
@@ -13,7 +14,8 @@ class PlaitsVoice {
 
   void init(float outputSampleRate = 96000.0f);
   void configure(uint8_t engine, uint16_t harmonics, uint16_t timbre,
-                 uint16_t morph, uint8_t auxMix, float note, float gain);
+                 uint16_t morph, uint8_t auxMix, uint8_t envelopeMode,
+                 uint8_t decay, uint8_t sustain, float note, float gain);
   void setFilter(bool enabled, uint8_t mode, bool slope24dB,
                  float cutoffHz, float resonance);
   void setEnvelope(float attackSeconds, float decaySeconds, float sustain,
@@ -32,8 +34,6 @@ class PlaitsVoice {
   float nextSourceSample();
   float processEnvelope();
   void enterEnvelopeStage(EnvelopeStage stage);
-  void updateFilterCoefficients();
-  float processFilterStage(float input, int stage);
 
   plaits::Voice voice_;
   char allocatorMemory_[16384];
@@ -48,15 +48,11 @@ class PlaitsVoice {
   uint8_t auxMix_;
   bool active_;
   bool gate_;
+  uint8_t envelopeMode_;
   float gain_;
+  uint32_t quietSamples_;
 
-  bool filterEnabled_;
-  uint8_t filterMode_;
-  bool filterSlope24dB_;
-  float filterCutoffHz_;
-  float filterResonance_;
-  float filterG_, filterK_, filterA1_, filterA2_, filterA3_;
-  float filterIc1eq_[2], filterIc2eq_[2];
+  MultimodeFilter filter_;
 
   EnvelopeStage envelopeStage_;
   float envelopeLevel_;

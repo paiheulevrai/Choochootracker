@@ -225,7 +225,7 @@ static int loadInstrumentSample(FILE* file, Instrument* instrument) {
     else if (strncmp(line, "- Sample pitch: ", 16) == 0) sscanf(line, "- Sample pitch: %hhd", &sample->pitch);
     else if (strncmp(line, "- Sample start: ", 16) == 0) sscanf(line, "- Sample start: %hhu", &sample->start);
     else if (strncmp(line, "- Sample end: ", 14) == 0) sscanf(line, "- Sample end: %hhu", &sample->end);
-    else if (strncmp(line, "- Sample volume: ", 17) == 0) sscanf(line, "- Sample volume: %hhu", &sample->volume);
+    else if (strncmp(line, "- Sample volume: ", 17) == 0) sscanf(line, "- Sample volume: %hhu", &instrument->volume);
     else if (strncmp(line, "- Filter enabled: ", 18) == 0) sscanf(line, "- Filter enabled: %hhu", &sample->filterEnabled);
     else if (strncmp(line, "- Filter mode: ", 15) == 0) sscanf(line, "- Filter mode: %hhu", &sample->filterMode);
     else if (strncmp(line, "- Filter slope: ", 16) == 0) sscanf(line, "- Filter slope: %hhu", &sample->filterSlope24dB);
@@ -254,6 +254,7 @@ static int loadInstrumentPlaits(FILE* file, Instrument* instrument) {
     else if (strncmp(line, "- Timbre: ", 10) == 0) sscanf(line, "- Timbre: %hu", &p->timbre);
     else if (strncmp(line, "- Morph: ", 9) == 0) sscanf(line, "- Morph: %hu", &p->morph);
     else if (strncmp(line, "- Aux mix: ", 11) == 0) sscanf(line, "- Aux mix: %hhu", &p->auxMix);
+    else if (strncmp(line, "- Envelope mode: ", 17) == 0) sscanf(line, "- Envelope mode: %hhu", &p->envelopeMode);
     else if (strncmp(line, "- Filter enabled: ", 18) == 0) sscanf(line, "- Filter enabled: %hhu", &p->filterEnabled);
     else if (strncmp(line, "- Filter mode: ", 15) == 0) sscanf(line, "- Filter mode: %hhu", &p->filterMode);
     else if (strncmp(line, "- Filter slope: ", 16) == 0) sscanf(line, "- Filter slope: %hhu", &p->filterSlope24dB);
@@ -308,6 +309,8 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
       sscanf(line, "- Type: %hhd", reinterpret_cast<uint8_t*>(&instrument->type));
     } else if (strncmp(line, "- Table speed: ", 15) == 0) {
       sscanf(line, "- Table speed: %hhu", &instrument->tableSpeed);
+    } else if (strncmp(line, "- Volume: ", 10) == 0) {
+      sscanf(line, "- Volume: %hhu", &instrument->volume);
     } else if (strncmp(line, "- Transpose: ", 13) == 0) {
       sscanf(line, "- Transpose: %hhu", &instrument->transposeEnabled);
       consumeLine(file);
@@ -363,6 +366,17 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
       default:
         break;
     }
+  }
+
+  if (instrument->type == InstrumentType::Braids &&
+      instrument->chip.braids.filterCutoffHz > 20000) {
+    instrument->chip.braids.filterCutoffHz = 20000;
+  } else if (instrument->type == InstrumentType::Plaits &&
+             instrument->chip.plaits.filterCutoffHz > 20000) {
+    instrument->chip.plaits.filterCutoffHz = 20000;
+  } else if (instrument->type == InstrumentType::Sample &&
+             instrument->chip.sample.filterCutoffHz > 20000) {
+    instrument->chip.sample.filterCutoffHz = 20000;
   }
 
   return 0;
@@ -469,7 +483,6 @@ static int saveInstrumentSample(FILE* file, Instrument* instrument) {
   fprintf(file, "- Sample pitch: %hhd\n", sample->pitch);
   fprintf(file, "- Sample start: %hhu\n", sample->start);
   fprintf(file, "- Sample end: %hhu\n", sample->end);
-  fprintf(file, "- Sample volume: %hhu\n", sample->volume);
   fprintf(file, "- Filter enabled: %hhu\n", sample->filterEnabled);
   fprintf(file, "- Filter mode: %hhu\n", sample->filterMode);
   fprintf(file, "- Filter slope: %hhu\n", sample->filterSlope24dB);
@@ -489,6 +502,7 @@ static int saveInstrumentPlaits(FILE* file, Instrument* instrument) {
   fprintf(file, "- Timbre: %hu\n", p->timbre);
   fprintf(file, "- Morph: %hu\n", p->morph);
   fprintf(file, "- Aux mix: %hhu\n", p->auxMix);
+  fprintf(file, "- Envelope mode: %hhu\n", p->envelopeMode);
   fprintf(file, "- Filter enabled: %hhu\n", p->filterEnabled);
   fprintf(file, "- Filter mode: %hhu\n", p->filterMode);
   fprintf(file, "- Filter slope: %hhu\n", p->filterSlope24dB);
@@ -524,6 +538,7 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
   fprintf(file, "- Name: %s\n", instrument->name);
   fprintf(file, "- Type: %hhd\n", static_cast<uint8_t>(instrument->type));
   fprintf(file, "- Table speed: %hhu\n", instrument->tableSpeed);
+  fprintf(file, "- Volume: %hhu\n", instrument->volume);
   fprintf(file, "- Transpose: %hhu\n", instrument->transposeEnabled);
 
   // Save modulation data

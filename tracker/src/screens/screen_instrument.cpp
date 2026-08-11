@@ -181,7 +181,7 @@ int instrumentCommonColumnCount(int row) {
   } else if (row == 1) {
     return 15; // Instrument name
   } else if (row == 2) {
-    return 2; // Transpose on/off, Table tic speed
+    return 3; // Transpose, table speed, volume
   }
   return 1; // Default value
 }
@@ -200,6 +200,7 @@ void instrumentCommonDrawStatic(void) {
   gfxPrint(0, 3, "Name");
   gfxPrint(0, 4, "Transp.");
   gfxPrint(17, 4, "Tbl. Tic");
+  gfxPrint(30, 4, "Vol");
 }
 
 void instrumentCommonDrawCursor(int col, int row) {
@@ -221,6 +222,8 @@ void instrumentCommonDrawCursor(int col, int row) {
   } else if (row == 2 && col == 1) {
     // Table tic speed
     gfxCursor(26, 4, 2);
+  } else if (row == 2 && col == 2) {
+    gfxCursor(34, 4, 2);
   }
 }
 
@@ -252,6 +255,8 @@ void instrumentCommonDrawField(int col, int row, CellState state) {
   } else if (row == 2 && col == 1) {
     // Table tic speed
     gfxPrint(26, 4, byteToHex(chipnomadState->project.instruments[cInstrument].tableSpeed));
+  } else if (row == 2 && col == 2) {
+    gfxPrint(34, 4, byteToHex(chipnomadState->project.instruments[cInstrument].volume));
   }
 }
 
@@ -306,6 +311,8 @@ int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
   } else if (row == 2 && col == 1) {
     // Table tic speed
     handled = edit8noLast(action, &chipnomadState->project.instruments[cInstrument].tableSpeed, 16, 1, 255);
+  } else if (row == 2 && col == 2) {
+    handled = edit8noLast(action, &chipnomadState->project.instruments[cInstrument].volume, 16, 0, 255);
   }
 
   if (handled) projectModified = 1;

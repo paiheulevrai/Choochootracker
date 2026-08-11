@@ -95,6 +95,7 @@ extern const AppScreen screenExport;
 extern const AppScreen screenManage;
 extern const AppScreen screenSettings;
 extern const AppScreen screenMixer;
+extern const AppScreen screenSelectionPopup;
 int screenMixerGetPage(void);
 extern const AppScreen screenColorTheme;
 extern const AppScreen screenKeyMapping;
@@ -131,6 +132,8 @@ int editSigned16(CellEditAction action, int16_t* value, int16_t bigStep, int16_t
 int editSigned8(CellEditAction action, int8_t* value, int8_t bigStep, int8_t min, int8_t max);
 int edit16withMinMax(CellEditAction action, uint16_t* value, uint16_t bigStep, uint16_t min, uint16_t max);
 int edit16withOverflow(CellEditAction action, uint16_t* value, uint16_t bigStep, uint16_t min, uint16_t max);
+int editOscillatorParameter(CellEditAction action, uint16_t* value);
+int editFilterCutoff(CellEditAction action, uint16_t* cutoffHz);
 int applyMultiEdit(int startCol, int startRow, int endCol, int endRow, CellEditAction action, int (*editFunc)(int col, int row, CellEditAction action));
 int applyPhraseRotation(int phraseIdx, int startRow, int endRow, int direction);
 int applyTableRotation(int tableIdx, int startRow, int endRow, int direction);
