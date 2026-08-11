@@ -1,6 +1,6 @@
 {
   "buildCommand": "echo Using prebuilt WebAssembly bundle",
-  "outputDirectory": "web/dist",
+  "outputDirectory": "dist",
   "framework": null,
   "cleanUrls": true
 }

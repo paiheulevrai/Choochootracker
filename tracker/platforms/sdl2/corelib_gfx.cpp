@@ -145,9 +145,17 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
 
   renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
 
-  // Check for high-DPI display and get actual drawable size
+  // Check for high-DPI display and get actual drawable size. HTML5 uses a
+  // software canvas, so SDL_GL_GetDrawableSize is not meaningful there.
   int drawableW, drawableH;
+#ifdef WEB_BUILD
+  SDL_GetRendererOutputSize(renderer, &drawableW, &drawableH);
+#else
   SDL_GL_GetDrawableSize(window, &drawableW, &drawableH);
+#endif
+  if (drawableW <= 0 || drawableH <= 0) {
+    SDL_GetWindowSize(window, &drawableW, &drawableH);
+  }
   if (drawableW != screenW || drawableH != screenH) {
     screenW = drawableW;
     screenH = drawableH;
