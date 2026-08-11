@@ -2,7 +2,7 @@
 
 > **NOT EVEN ALPHA. Testing is not finished. CHOO CHOO.**
 
->        .         *               .            *
+```*        .         *               .            *
    ______ __ __  ____   ____   ______ __ __  ____   ____
   / ____// // / / __ \ / __ \ / ____// // / / __ \ / __ \
  / /___ /  __  // /_/ // /_/ // /___ /  __  // /_/ // /_/ /
@@ -27,6 +27,7 @@
           >>>  8 TRACKS / 96 kHz / CHIPNOMAD-BASED  >>>
 
      .oO[ AY / BRAIDS / PLAITS / PCM SAMPLES / FX SENDS ]Oo.
+````
 
 ChooChooTracker is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with 70+ extra synth engines, high quality PCM samples playback, global reverb/delay, and some other small changes. It keeps ChipNomad's supafast LSDJ-inspired tracker workflow but departs from the chiptune-only vision of Megus to offer a metric ton of modern sound design options. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
 
