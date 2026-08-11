@@ -22,8 +22,10 @@
       gap: .45rem; width: min(100%, 640px); margin: .75rem auto 0; }
     #touch-controls button { min-height: 3rem; padding: .25rem; touch-action: none;
       user-select: none; -webkit-user-select: none; }
-    @media (pointer: coarse) {
-      #touch-controls { display: grid; }
+    @media (pointer: coarse), (max-width: 700px) {
+      main { width: min(100%, 640px); padding: .5rem; }
+      #tracker { width: 100%; }
+      #touch-controls { display: grid; width: 100%; }
     }
   </style>
 </head>
