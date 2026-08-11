@@ -36,13 +36,13 @@
 - Instrument controls are pitch, start, end, common instrument volume, ADSR and an LP/BP/HP filter with 12/24 dB slopes, cutoff and resonance.
 - Playback is one-shot. Looping and streaming are intentionally not implemented yet.
 - Project save/load preserves the sample path and controls. Paths are not portable yet: copying WAV files into a project `samples/` directory and storing relative paths remains required.
-- The file browser previews the selected WAV with Play. Play + Left/Right on the Sample screen selects the previous or next WAV in the same folder.
+- The file browser previews the selected WAV with Play. Edit + Left/Right on the Sample screen selects the previous or next WAV in the same folder.
 
 ## Plaits and master sends
 
 - Plaits runs its original voice at 48 kHz and is linearly resampled into the 96 kHz master mix. Each tracker track owns one monophonic `PlaitsVoice` and a 16 KiB work allocator.
 - The 24 engine indices and Main/Aux blend are stored in the instrument. Plaits-specific FX are filtered by instrument type in the existing FX lanes.
-- Plaits has three envelope routings. `TRIG` matches TRIG patched/LEVEL unpatched and reuses the envelope row's D/S storage as LPG decay/color. `LEVEL` sends the tracker ADSR into Plaits' LEVEL input. `VCA` holds LEVEL open and applies the ADSR after the Mutable voice.
+- Plaits has two envelope routings. `TRIG` matches TRIG patched/LEVEL unpatched and reuses the envelope row's D/S storage as LPG decay/color. `VCA` holds LEVEL open and applies the ADSR after the Mutable voice. Each note produces a one-block trigger pulse so adjacent tracker notes retrigger the Mutable envelope. VCA retriggers attack from the current level instead of resetting to zero, avoiding an amplitude discontinuity. Legacy `LEVEL` values load as `VCA`.
 - The Plaits wrapper passes pitch once to the Mutable voice; the previous integration also repeated it through the modulation input. A one-octave frequency-ratio test guards this path.
 - Reverb and Delay are shared master effects. Tracks accumulate post-fader send buses; each effect is processed once per callback, not once per track.
 - The Clouds reverb delay lengths and memory were scaled for 96 kHz. The ping-pong delay derives its sample delay from project tick rate and delay ticks.
@@ -89,7 +89,7 @@ References: [PortMaster build environments](https://portmaster.games/build-envir
 - All 47 Braids models render finite, non-silent output in the desktop tests.
 - Filter modes and slopes, ADSR release, tracker routing and AY muting are covered by tests.
 - Instrument FX lifetime and Sample playback boundaries/filter stability are covered by tests.
-- The current suite contains 156 passing test cases and 147,396 assertions.
+- The current suite contains 161 passing test cases and 149,328 assertions.
 - The Windows executable compiles and survives an SDL dummy audio/video smoke test.
 - The remaining hardware question is whether eight simultaneous Plaits voices plus Reverb and Delay hold 96 kHz without underruns on the RG353V.
 - The ARM64 binary and PortMaster ZIP build successfully under WSL2. They still need to run on the RG353V.

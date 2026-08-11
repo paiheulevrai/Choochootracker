@@ -48,6 +48,7 @@ class PlaitsVoice {
   uint8_t auxMix_;
   bool active_;
   bool gate_;
+  bool triggerPending_;
   uint8_t envelopeMode_;
   float gain_;
   uint32_t quietSamples_;

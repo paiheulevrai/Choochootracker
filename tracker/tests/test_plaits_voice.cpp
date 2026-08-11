@@ -58,6 +58,57 @@ TEST_CASE("Plaits legacy LEVEL mode uses the click-free VCA envelope") {
   }
 }
 
+TEST_CASE("Plaits retriggers after the previous internal envelope decays") {
+  PlaitsVoice voice;
+  std::vector<float> output(96000);
+  voice.init(96000.0f);
+  voice.configure(21, 16384, 16384, 16384, 0, 2, 0, 255, 60.0f, 1.0f);
+  voice.setEnvelope(0.0f, 0.0f, 1.0f, 0.0f);
+
+  voice.noteOn();
+  voice.render(output.data(), output.size());
+  voice.noteOn();
+  voice.render(output.data(), 4096);
+
+  double energy = 0.0;
+  for (size_t i = 0; i < 4096; ++i) energy += std::fabs(output[i]);
+  CHECK(energy > 1.0);
+}
+
+TEST_CASE("Plaits VCA keeps the internal level open") {
+  PlaitsVoice voice;
+  std::vector<float> output(96000);
+  voice.init(96000.0f);
+  voice.configure(17, 16384, 16384, 16384, 0, 2, 128, 255, 60.0f, 1.0f);
+  voice.setEnvelope(0.0f, 0.0f, 1.0f, 0.0f);
+  voice.noteOn();
+  voice.render(output.data(), output.size());
+
+  double tailEnergy = 0.0;
+  for (size_t i = output.size() - 4096; i < output.size(); ++i) {
+    tailEnergy += std::fabs(output[i]);
+  }
+  CHECK(tailEnergy > 1.0);
+}
+
+TEST_CASE("Plaits VCA retrigger continues from the current envelope level") {
+  PlaitsVoice voice;
+  std::vector<float> output(4096);
+  voice.init(96000.0f);
+  voice.configure(17, 16384, 16384, 16384, 0, 2, 128, 255, 60.0f, 1.0f);
+  voice.setEnvelope(0.0f, 0.0f, 1.0f, 0.0f);
+  voice.noteOn();
+  voice.render(output.data(), output.size());
+
+  voice.setEnvelope(1.0f, 0.0f, 1.0f, 0.0f);
+  voice.noteOn();
+  voice.render(output.data(), 128);
+
+  double energy = 0.0;
+  for (size_t i = 0; i < 128; ++i) energy += std::fabs(output[i]);
+  CHECK(energy > 1.0);
+}
+
 static double crossingFrequency(const std::vector<float>& output,
                                 size_t start, double sampleRate) {
   double mean = 0.0;

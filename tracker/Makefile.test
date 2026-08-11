@@ -8,6 +8,7 @@ LDFLAGS = -lm
 
 # Build directory
 BUILD_DIR = build/tests
+.DEFAULT_GOAL := all
 
 # Include paths
 INCLUDES = -I. -Isrc -Isrc/corelib -Isrc/screens -Isrc/import -Itests/mocks -Iexternal \

@@ -216,14 +216,14 @@ The common Plaits macros follow Mutable's design:
 
 Their precise meaning is engine-dependent. For example, chord engines use them for chord type/inversion/waveform, physical models use them for material/excitation/decay, and drum engines use them for tone, character and decay. Refer to the Plaits user manual for details.
 
-Tap **Engine** to choose from categorized engine lists. **Env Mode** has three routings: `TRIG` reproduces the module with TRIG connected and LEVEL unpatched; `LEVEL` sends the tracker ADSR to Plaits' LEVEL input; `VCA` holds LEVEL open and applies the ADSR after the voice. In TRIG mode, the envelope row becomes `D` for LPG decay and `C` for LPG color.
+Tap **Engine** to choose from categorized engine lists. **Env Mode** has two routings: `TRIG` reproduces the module with TRIG connected and LEVEL unpatched; `VCA` holds LEVEL open and applies the tracker ADSR after the voice. Every tracker note sends a new trigger pulse, including consecutive notes without an empty row. In VCA mode, a retrigger starts the attack from the current envelope level to avoid abrupt jumps and clicks. In TRIG mode, the envelope row becomes `D` for LPG decay and `C` for LPG color. Projects saved with the former `LEVEL` mode load as `VCA`.
 
 ### PCM Sample
 
 The clean Sample engine plays mono or stereo PCM independently of AY emulation.
 
 - Tap **Sample** to load an uncompressed 8-bit or 16-bit PCM WAV. Press **Play** in the browser to audition the highlighted file.
-- On the Sample instrument screen, use **Play + Left/Right** to load the previous or next WAV in the same folder.
+- On the Sample instrument screen, use **Edit + Left/Right** to load the previous or next WAV in the same folder.
 - **Pitch** transposes by semitones (`-48` to `+48`).
 - **Start** and **End** set normalized playback boundaries (`00–FF`).
 - **Volume** is `00–FF`.

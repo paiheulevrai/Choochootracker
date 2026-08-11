@@ -21,6 +21,7 @@
 - Added Reverb and Delay sub-screen indicators around Mixer in the screen map.
 - Added an English ChooChooTracker user manual based on the local ChipNomad and Mutable documentation.
 - Renamed the settings label to AY Sample dithering to make its scope explicit.
+- Fixed Plaits retriggering on consecutive notes and made VCA envelope retriggers continue from the current level to prevent clicks.
 
 ## v1.0.4 (July 12, 2026)
 

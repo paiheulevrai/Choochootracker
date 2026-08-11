@@ -22,7 +22,7 @@ void PlaitsVoice::init(float outputSampleRate) {
   sourcePhase_ = 1.0f;
   previousSource_ = currentSource_ = 0.0f;
   auxMix_ = 0;
-  active_ = gate_ = false;
+  active_ = gate_ = triggerPending_ = false;
   envelopeMode_ = 0;
   gain_ = 1.0f;
   quietSamples_ = 0;
@@ -49,7 +49,9 @@ void PlaitsVoice::configure(uint8_t engine, uint16_t harmonics,
   envelopeMode_ = envelopeMode == 0 ? 0 : 2;
   patch_.decay = envelopeMode_ == 0 ? decay / 255.0f : 0.5f;
   patch_.lpg_colour = envelopeMode_ == 0 ? sustain / 255.0f : 0.5f;
-  modulations_.level_patched = false;
+  // VCA uses a constant patched level to bypass Plaits' internal LPG. Our
+  // sample-rate envelope below then controls amplitude without block clicks.
+  modulations_.level_patched = envelopeMode_ == 2;
   patch_.note = note;
   auxMix_ = auxMix;
   gain_ = gain < 0.0f ? 0.0f : (gain > 1.0f ? 1.0f : gain);
@@ -98,15 +100,15 @@ void PlaitsVoice::enterEnvelopeStage(EnvelopeStage stage) {
 
 void PlaitsVoice::noteOn() {
   active_ = gate_ = true;
+  triggerPending_ = true;
   quietSamples_ = 0;
-  modulations_.trigger = 1.0f;
   if (envelopeMode_ == 0) {
     envelopeLevel_ = 1.0f;
     envelopeStage_ = EnvelopeStage::sustain;
     envelopeSamplesLeft_ = 0;
     return;
   }
-  envelopeLevel_ = 0.0f;
+  // Retrigger from the current level to avoid an abrupt amplitude drop/click.
   enterEnvelopeStage(EnvelopeStage::attack);
 }
 
@@ -119,6 +121,7 @@ void PlaitsVoice::noteOff() {
 
 void PlaitsVoice::kill() {
   active_ = gate_ = false;
+  triggerPending_ = false;
   modulations_.trigger = 0.0f;
   envelopeStage_ = EnvelopeStage::idle;
   envelopeLevel_ = 0.0f;
@@ -129,7 +132,8 @@ void PlaitsVoice::renderBlock() {
   // patch.note is the base MIDI note. modulations.note is an offset and must
   // not repeat the base note, or Plaits adds it twice.
   modulations_.note = 0.0f;
-  modulations_.trigger = gate_ ? 1.0f : 0.0f;
+  modulations_.trigger = triggerPending_ ? 1.0f : 0.0f;
+  triggerPending_ = false;
   modulations_.level = 1.0f;
   voice_.Render(patch_, modulations_, frames_, kBlockSize);
   blockPosition_ = 0;
