@@ -149,7 +149,10 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
   // software canvas, so SDL_GL_GetDrawableSize is not meaningful there.
   int drawableW, drawableH;
 #ifdef WEB_BUILD
-  SDL_GetRendererOutputSize(renderer, &drawableW, &drawableH);
+  // Keep the tracker grid at its native 40x20 character layout. CSS scales
+  // the 640x480 canvas for portrait phones without changing the font size.
+  drawableW = screenW;
+  drawableH = screenH;
 #else
   SDL_GL_GetDrawableSize(window, &drawableW, &drawableH);
 #endif

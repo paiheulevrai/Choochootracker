@@ -72,7 +72,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
   assetsInit();
   static WebLoopContext context;
   context = {draw, onEvent, 0, false};
-  emscripten_set_main_loop_arg(webLoopFrame, &context, 60, 1);
+  emscripten_set_main_loop_arg(webLoopFrame, &context, 0, 1);
 }
 
 void mainLoopDelay(int ms) {

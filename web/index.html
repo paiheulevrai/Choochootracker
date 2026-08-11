@@ -46,18 +46,24 @@
   <script>
     const status = document.querySelector('#status');
     const start = document.querySelector('#start');
-    start.addEventListener('click', () => {
+    let trackerStarted = false;
+    const loadTracker = () => {
+      if (trackerStarted) return;
+      trackerStarted = true;
       start.hidden = true;
       document.querySelector('#tracker').focus();
       status.textContent = 'Loading tracker…';
       window.Module = window.Module || {};
       window.Module.canvas = document.querySelector('#tracker');
+      window.Module.printErr = (message) => { status.textContent = message; };
       window.Module.onRuntimeInitialized = () => { status.textContent = 'Ready — enjoy the ride.'; };
       const script = document.createElement('script');
       script.src = 'choochootracker.js';
       script.onerror = () => { status.textContent = 'WebAssembly bundle not found.'; };
       document.body.appendChild(script);
-    });
+    };
+    start.addEventListener('click', loadTracker);
+    window.addEventListener('load', loadTracker);
 
     document.querySelectorAll('#touch-controls button').forEach((button) => {
       const send = (down) => {
