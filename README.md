@@ -1,5 +1,3 @@
-# ChooChooTracker
-
 > **NOT EVEN ALPHA. Testing is not finished. CHOO CHOO.**
 
 ```*        .         *               .            *
