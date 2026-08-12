@@ -27,26 +27,23 @@
      .oO[ AY / BRAIDS / PLAITS / PCM SAMPLES / FX SENDS ]Oo.
 ````
 
-ChooChooTracker is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with 70+ extra synth engines, high quality PCM samples playback, global reverb/delay, and some other small changes. It keeps ChipNomad's supafast LSDJ-inspired tracker workflow but departs from the chiptune-only vision of Megus to offer a metric ton of modern sound design options. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
-
 ChooChooTracker is a music tracker for handheld consoles.
+
 Write a beat on the train, automate a weird little synth line, send it through reverb, then keep going until you miss your stop.
 
-The main target is the Anbernic RG353V through PortMaster and ArkOS. 
-A native Windows build is available for development and desktop testing.
-You can also test it in your browser on https://choochootracker.vercel.app/ (use the keyboard on a computer, use the on-screen gamepad on a mobile device)
-It should also work on any Portmaster capable system, and should also compile on Android though I haven't tested that yet.
+This is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with A LOT of extra synth engines, high quality PCM samples playback, global reverb/delay, and some other small changes. It keeps ChipNomad's supafast LSDJ-inspired tracker workflow but departs from the chiptune-only vision of Megus to offer a metric ton of modern sound design options. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
 
-An additional browser build is available under [`web/`](web/). It compiles the
-same tracker to WebAssembly with SDL2; see [`web/README.md`](web/README.md) for
-the Emscripten and Vercel setup. This target is independent from Windows and
-PortMaster.
+The main target is the Anbernic RG353V through PortMaster. 
+A native Windows build is available for development and desktop testing.
+You can also test it in your browser on https://choochootracker.vercel.app/ (use the keyboard on a computer, use the on-screen gamepad on a mobile device).
+
+It should work on any Portmaster capable system, and should also compile on Android and other platforms though I haven't tested that yet.
 
 ## What it can do
 
 - Eight fixed monophonic tracks (with independent instruments)
 - AY Classic, AY Plus, and crunchy AY Sample playback (from Chipnomad)
-- All 47 Braids engines, 24 stock Plaits engines, and 24 non-duplicated Plaits-Alt engines
+- All 47 Braids engines, 24 stock Plaits engines, and 24 additional Plaits-Alt engines
 - Clean mono or stereo PCM8/PCM16 sample playback (one-shot samples, like your Digitakt)
 - Multimode LP/HP/BP 12/24dB filter for all new synth/sample engines
 - Per-track volume, mute, solo, Reverb send, and Delay send
@@ -55,7 +52,7 @@ PortMaster.
 - Three tracker FX columns per row
 - Added tracker FX inspired by Elektron and Nerdseq: Probability, modulo conditions, and per-track invididual playback speed
 - Synth engines parameters can be set by FX, kinda like P-locks.
-- Modulation sources per track: ADSR, AHD, 2x LFO. Modulations can modulate modulations. 
+- Modulation per track: ADSR, AHD, 2x LFO. Modulations can target modulations.
 - Tracker tables, grooves, chains, and songs
 
 ## One tracker, very different voices
@@ -72,9 +69,11 @@ There is no project-wide chip selection and no forced group of three AY channels
 The main screens follow the `MSCPIT` layout:
 
 ```text
+Rvrb    Proj           Groov    Modulations
 Mixer - Song - Chain - Phrase - Instrument - Table
+Dlay    Sett                    Pool         Wvtbl
 ```
-Just like LSDJ, but with a Mixer on the left.
+So its kind of like LSDJ, but with a Mixer on the left.
 
 ## Try the pre-alpha
 
@@ -95,8 +94,8 @@ This is an early test build. Save often and don't get too attached to your proje
 
 ## Current limits
 
-- Braids, Samples, track FX, mixer and sends: working or it seems.
-- Plaits isn't fully tested.
+- Braids, Plaits, Plaits-alt, Samples, track FX, mixer and sends: working or it seems.
+- there may still be some crashes and bugs
 - Visual identity will be finalized later, after functional stabilization.
 
 ## Why the train name?
@@ -111,8 +110,11 @@ The project is released under the [MIT License](LICENSE).
 
 Mad respects to the people I stole code from:
 - Megus, the insanely smart creator of Chipnomad.
-- Emilie Gillet, the genius behind Mutable Instruments.
+- Pichenettes, the genius behind Mutable Instruments
+- Lylepmills for the additional Plaits engines
 
 Mad respects to the people I stole ideas from:
 - Thomas, the absolute beast behind Nedseq
-- all the people at Elektron
+- The people at Elektron who boldly put user workflow and speed first, and also whoever invented P-locks and trig conditions.
+- Whoever invented the menu navigation style of vintage RPGs
+- All musicians who I saw playing live sets on gameboys and other constrained hardware rigs.
