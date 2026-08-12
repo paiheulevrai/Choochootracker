@@ -57,20 +57,15 @@
 - New projects default to period pitch (`Linear pitch: Off`), the mode validated on hardware for correct AY, Braids and Plaits octave tracking.
 - PSG and VGM export paths were removed. WAV mix and stem export remain.
 
-## PortMaster build
+## PortMaster toolchain notes
 
 The ARM64 build uses Ubuntu 20.04 under WSL2. Install `make`, `g++-aarch64-linux-gnu`, `pkg-config`, `libsdl2-dev:arm64`, `zip`, `unzip` and `file`.
 
 Ubuntu multiarch needs separate package mirrors. Keep the x86 repositories on `archive.ubuntu.com` and `security.ubuntu.com` with `[arch=amd64]`. Add the Focal ARM64 repositories from `http://ports.ubuntu.com/ubuntu-ports` with `[arch=arm64]`. Without those qualifiers, APT requests ARM64 indexes from the x86 mirror and returns 404 errors.
 
-From the `tracker` directory inside WSL:
-
-```sh
-make -f Makefile.portmaster PortMaster
-make -f Makefile.portmaster PortMaster-deploy
-```
-
-The first command creates `tracker/build/portmaster/choochootracker.aarch64`. The second creates `releases/choochootracker.zip` with the current PortMaster directory layout.
+The build commands and output paths are maintained in
+[`tracker/README.md`](../tracker/README.md). The release target creates the
+ARM64 binary and `releases/choochootracker.zip`.
 
 The release build uses LTO. It takes about two minutes when the repository lives under `/mnt/c`, but produces a stripped binary of roughly 415 KiB. The current binary requires glibc 2.27 and links dynamically to SDL2, libstdc++, libgcc, libm and libc. SDL2 is not bundled because PortMaster and the target firmware provide it.
 
@@ -94,17 +89,11 @@ References: [PortMaster build environments](https://portmaster.games/build-envir
 - The remaining hardware question is whether eight simultaneous Plaits voices plus Reverb and Delay hold 96 kHz without underruns on the RG353V.
 - The ARM64 binary and PortMaster ZIP build successfully under WSL2. They still need to run on the RG353V.
 
-## WebAssembly target
+## WebAssembly notes
 
 - The browser build is an additional SDL2/Emscripten target in `tracker/Makefile.web`; it does not replace Windows or PortMaster.
-- `make -C tracker -f Makefile.web web-deploy` produces a self-contained `web/dist` bundle with the common demo projects, instruments, fonts, themes, pitch tables, samples and wavetables preloaded into the browser filesystem.
+- The Web target produces a self-contained `web/dist` bundle with the common demo projects, instruments, fonts, themes, pitch tables, samples and wavetables preloaded into the browser filesystem.
 - Vercel uses the root `vercel.json` to publish the checked-in `web/dist` bundle as a static site, so Vercel itself does not need Emscripten. Regenerate that directory locally after WebAssembly source changes; native builds remain independent.
-- On this Windows workstation the SDK lives in `.tmp/emsdk`. From the repository root in MSYS2 Bash, set its bundled Python before activation, because the activation script starts the Emscripten launcher:
-
-```sh
-export EMSDK_PYTHON="$(pwd)/.tmp/emsdk/python/3.13.3_64bit/python.exe"
-source .tmp/emsdk/emsdk_env.sh
-make -C tracker -f Makefile.web web-deploy
-```
-
-  Confirm `em++ --version` first. Run this from MSYS2/WSL Bash rather than native Windows `make`; the web Makefile uses Unix `mkdir` and `cp`.
+- On this Windows workstation the SDK lives in `.tmp/emsdk`. The activation
+  needs `EMSDK_PYTHON` set before sourcing `emsdk_env.sh`; the exact command is
+  maintained with the other targets in [`tracker/README.md`](../tracker/README.md).

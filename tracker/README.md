@@ -27,7 +27,7 @@ The suite covers the tracker engine, Braids, the PCM Sample voice and instrument
 The current target is AArch64, including the Anbernic RG353V. From Ubuntu under WSL2:
 
 ```sh
-make -j4 -f Makefile.portmaster PortMaster-deploy
+make -j1 -f Makefile.portmaster PortMaster-deploy
 ```
 
 Outputs:
@@ -38,7 +38,9 @@ Outputs:
 
 The ZIP contains `ChooChooTracker.sh`, the gamepad mapping, data files, licenses and the ARM64 executable.
 
-See [development notes](../docs/development-notes.md) for toolchain details and [fork maintenance](../docs/fork-maintenance.md) for upstream policy.
+Use `-j1` for the release build on the shared Windows/WSL workspace. See
+[development notes](../docs/development-notes.md) for toolchain details and
+[fork maintenance](../docs/fork-maintenance.md) for upstream policy.
 
 ## Web / Vercel
 
