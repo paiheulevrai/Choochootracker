@@ -32,7 +32,9 @@ ChooChooTracker is a fork of [ChipNomad](https://github.com/Megus/chipnomad-trac
 ChooChooTracker is a music tracker for handheld consoles.
 Write a beat on the train, automate a weird little synth line, send it through reverb, then keep going until you miss your stop.
 
-The main target is the Anbernic RG353V through PortMaster and ArkOS. A native Windows build is available for development and desktop testing.
+The main target is the Anbernic RG353V through PortMaster and ArkOS. 
+A native Windows build is available for development and desktop testing.
+You can also test it in your browser on https://choochootracker.vercel.app/ (use the keyboard on a computer, use the on-screen gamepad on a mobile device)
 It should also work on any Portmaster capable system, and should also compile on Android though I haven't tested that yet.
 
 An additional browser build is available under [`web/`](web/). It compiles the
