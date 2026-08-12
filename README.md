@@ -53,7 +53,7 @@ PortMaster.
 - Three tracker FX columns per row
 - Added tracker FX inspired by Elektron and Nerdseq: Probability, modulo conditions, and per-track invididual playback speed
 - Synth engines parameters can be set by FX, kinda like P-locks.
-- Modulation sources per track: ADSR, AHD, 2x LFO.
+- Modulation sources per track: ADSR, AHD, 2x LFO. Modulations can modulate modulations. 
 - Tracker tables, grooves, chains, and songs
 
 ## One tracker, very different voices
