@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <atomic>
 #include <chrono>
+#include <limits.h>
 #include <string.h>
 #include "audio_manager.h"
 #include "corelib_audio.h"
@@ -14,8 +15,8 @@ static int aBufferSize;
 static std::atomic<int> cpuLoadPercent{0};
 static SampleVoice samplePreviewVoice;
 static InstrumentSample samplePreview;
+static float* floatBuffer;
 static float* samplePreviewBuffer;
-static int samplePreviewBufferSize;
 
 int pendingReinitChips = 0;
 
@@ -43,24 +44,19 @@ static void updatePlaybackMuteFlags(void) {
 static void audioCallback(int16_t* buffer, int stereoSamples) {
   const auto startedAt = std::chrono::steady_clock::now();
 
+  if (stereoSamples <= 0 || stereoSamples > aBufferSize ||
+      !floatBuffer || !samplePreviewBuffer) {
+    memset(buffer, 0, stereoSamples > 0 ? stereoSamples * 2 * sizeof(*buffer) : 0);
+    return;
+  }
+
   if (pendingReinitChips) {
     chipnomadInitChips(chipnomadState, aSampleRate, NULL);
     pendingReinitChips = 0;
   }
 
-  static float* floatBuffer = NULL;
-  static int floatBufferSize = 0;
-
-  if (floatBufferSize < stereoSamples * 2) {
-    floatBuffer = (float*)realloc(floatBuffer, stereoSamples * 2 * sizeof(float));
-    floatBufferSize = stereoSamples * 2;
-  }
-
-  chipnomadRender(chipnomadState, floatBuffer, stereoSamples);
-  if (samplePreviewBufferSize < stereoSamples * 2) {
-    samplePreviewBuffer = (float*)realloc(samplePreviewBuffer,
-      stereoSamples * 2 * sizeof(float));
-    samplePreviewBufferSize = stereoSamples * 2;
+  if (chipnomadRender(chipnomadState, floatBuffer, stereoSamples) != stereoSamples) {
+    memset(floatBuffer, 0, stereoSamples * 2 * sizeof(*floatBuffer));
   }
   samplePreviewVoice.render(samplePreviewBuffer, stereoSamples);
   for (int i = 0; i < stereoSamples * 2; ++i) floatBuffer[i] += samplePreviewBuffer[i];
@@ -84,13 +80,33 @@ static void audioCallback(int16_t* buffer, int stereoSamples) {
 }
 
 static int start(int sampleRate, int bufferSize) {
+  if (sampleRate <= 0 || bufferSize <= 0 || bufferSize > INT_MAX / 2) return 1;
+
   aSampleRate = sampleRate;
   aBufferSize = bufferSize;
   cpuLoadPercent.store(0, std::memory_order_relaxed);
   memset(&samplePreview, 0, sizeof(samplePreview));
   samplePreviewVoice.init((float)sampleRate);
 
-  audioSetup(audioCallback, sampleRate, bufferSize);
+  free(floatBuffer);
+  free(samplePreviewBuffer);
+  floatBuffer = (float*)malloc(bufferSize * 2 * sizeof(float));
+  samplePreviewBuffer = (float*)malloc(bufferSize * 2 * sizeof(float));
+  if (!floatBuffer || !samplePreviewBuffer) {
+    free(floatBuffer);
+    free(samplePreviewBuffer);
+    floatBuffer = NULL;
+    samplePreviewBuffer = NULL;
+    return 1;
+  }
+
+  if (audioSetup(audioCallback, sampleRate, bufferSize)) {
+    free(floatBuffer);
+    free(samplePreviewBuffer);
+    floatBuffer = NULL;
+    samplePreviewBuffer = NULL;
+    return 1;
+  }
 
   // Initialize track states
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
@@ -111,6 +127,10 @@ static void resume(void) {
 
 static void stop() {
   audioCleanup();
+  free(floatBuffer);
+  free(samplePreviewBuffer);
+  floatBuffer = NULL;
+  samplePreviewBuffer = NULL;
   samplePreviewVoice.kill();
   free(samplePreview.data);
   samplePreview.data = NULL;

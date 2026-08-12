@@ -7,6 +7,7 @@
 #include "synth/plaits_voice.h"
 #include "synth/master_effects.h"
 #include <math.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -14,6 +15,27 @@ static void detectAYPitchConflicts(ChipNomadState* state);
 static void updateBraidsVoices(ChipNomadState* state);
 static void updateSampleVoices(ChipNomadState* state);
 static void updatePlaitsVoices(ChipNomadState* state);
+
+static int resizeMixBuffers(ChipNomadState* state, int requiredSize) {
+  float* mixBuffer = (float*)malloc(requiredSize * sizeof(float));
+  float* reverbBuffer = (float*)malloc(requiredSize * sizeof(float));
+  float* delayBuffer = (float*)malloc(requiredSize * sizeof(float));
+  if (!mixBuffer || !reverbBuffer || !delayBuffer) {
+    free(mixBuffer);
+    free(reverbBuffer);
+    free(delayBuffer);
+    return 0;
+  }
+
+  free(state->mixBuffer);
+  free(state->reverbBuffer);
+  free(state->delayBuffer);
+  state->mixBuffer = mixBuffer;
+  state->reverbBuffer = reverbBuffer;
+  state->delayBuffer = delayBuffer;
+  state->mixBufferSize = requiredSize;
+  return 1;
+}
 
 static int instrumentFXCutoff(uint8_t value) {
   return (int)filterCutoffFromControl(value);
@@ -142,7 +164,7 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
 }
 
 int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
-  if (!state) return 0;
+  if (!state || !buffer || samples <= 0 || samples > INT_MAX / 2) return 0;
 
   int samplesLeft = samples;
   int allTracksStopped = 0;
@@ -176,11 +198,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
     // Ensure mix buffer is large enough
     int requiredSize = samplesToRender * 2;
     if (requiredSize > state->mixBufferSize) {
-      state->mixBufferSize = requiredSize;
-      state->mixBuffer = (float*)realloc(state->mixBuffer, state->mixBufferSize * sizeof(float));
-      state->reverbBuffer = (float*)realloc(state->reverbBuffer, state->mixBufferSize * sizeof(float));
-      state->delayBuffer = (float*)realloc(state->delayBuffer, state->mixBufferSize * sizeof(float));
-      if (!state->mixBuffer || !state->reverbBuffer || !state->delayBuffer) return 0;
+      if (!resizeMixBuffers(state, requiredSize)) return 0;
     }
     memset(state->reverbBuffer, 0, requiredSize * sizeof(float));
     memset(state->delayBuffer, 0, requiredSize * sizeof(float));

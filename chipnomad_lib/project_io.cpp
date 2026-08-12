@@ -261,7 +261,7 @@ static int projectLoadPitchTable(FILE* file, Project* p) {
 
   line = peekLine(file);
   if (line == NULL) return 1;
-  if (sscanf(line, "- Title: %[^\n]", p->pitchTable.name) != 1) return 1;
+  if (sscanf(line, "- Title: %18[^\n]", p->pitchTable.name) != 1) return 1;
   consumeLine(file);
 
   line = peekLine(file);
@@ -273,11 +273,12 @@ static int projectLoadPitchTable(FILE* file, Project* p) {
   while (1) {
     line = peekLine(file);
     if (line == NULL) return 1;
-    if (sscanf(line, "%s %d", buf, &period) != 2) {
+    if (sscanf(line, "%127s %d", buf, &period) != 2) {
       // Couldn't parse - must be closing ``` or next section
       break;
     }
     if (strlen(buf) != 3) return 1;
+    if (idx >= PROJECT_MAX_PITCHES) return 1;
     strcpy(p->pitchTable.noteNames[idx], buf);
     p->pitchTable.values[idx] = period;
     idx++;
@@ -675,7 +676,7 @@ static int projectLoadInternal(FILE* file, Project* project) {
   line = peekLine(file);
   if (line == NULL) return 1;
   if (!strncmp(line, "- Title:", 8)) {
-    if (sscanf(line, "- Title: %[^\n]", p.title) != 1) {
+    if (sscanf(line, "- Title: %24[^\n]", p.title) != 1) {
       // Empty title is valid, just set it to empty string
       p.title[0] = 0;
     }
@@ -688,7 +689,7 @@ static int projectLoadInternal(FILE* file, Project* project) {
   line = peekLine(file);
   if (line == NULL) return 1;
   if (!strncmp(line, "- Author:", 9)) {
-    if (sscanf(line, "- Author: %[^\n]", p.author) != 1) {
+    if (sscanf(line, "- Author: %24[^\n]", p.author) != 1) {
       p.author[0] = 0;
     }
   }
