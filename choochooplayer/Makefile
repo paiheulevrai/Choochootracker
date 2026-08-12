@@ -1,5 +1,5 @@
 CXX = c++
-CFLAGS = -std=c++17 -O2 -I/opt/homebrew/include -I/opt/homebrew/include/freetype2
+CFLAGS = -std=c++17 -O2 -DTEST -I/opt/homebrew/include -I/opt/homebrew/include/freetype2
 LDFLAGS = -L/opt/homebrew/lib -lSDL2 -lfreetype -lm
 
 # Directories
@@ -12,26 +12,29 @@ INCLUDES = -Isrc -I../chipnomad_lib -I../chipnomad_lib/chips -I../chipnomad_lib/
 SOURCES = $(wildcard src/*.cpp) \
           $(wildcard ../chipnomad_lib/*.cpp) \
           $(wildcard ../chipnomad_lib/chips/*.cpp) \
-          $(wildcard ../chipnomad_lib/external/ayumi/*.cpp)
-
-# Generate object files (flattened to build directory)
-OBJECTS = $(addprefix $(BUILD_DIR)/, $(notdir $(SOURCES:.cpp=.o)))
+          $(wildcard ../chipnomad_lib/synth/*.cpp) \
+          $(wildcard ../chipnomad_lib/external/ayumi/*.cpp) \
+          $(wildcard ../chipnomad_lib/external/mutable/braids/*.cc) \
+          $(wildcard ../chipnomad_lib/external/mutable/stmlib/utils/*.cc) \
+          $(wildcard ../chipnomad_lib/external/mutable/stmlib/dsp/*.cc) \
+          $(wildcard ../chipnomad_lib/external/mutable/plaits/*.cc) \
+          $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/*.cc) \
+          $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/chords/*.cc) \
+          $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/engine/*.cc) \
+          $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/engine2/*.cc) \
+          $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/fm/*.cc) \
+          $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/physical_modelling/*.cc) \
+          $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/speech/*.cc)
 
 # Target
-TARGET = chipnomad_player
+TARGET = choochooplayer
 
 .PHONY: all clean
 
 all: $(TARGET)
 
-$(TARGET): $(OBJECTS)
-	$(CXX) $(OBJECTS) -o $@ $(LDFLAGS)
-
-# Generic build rule
-$(BUILD_DIR)/%.o:
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CFLAGS) $(INCLUDES) -c $(filter %/$(basename $(notdir $@)).cpp, $(SOURCES)) -o $@
+$(TARGET): $(SOURCES)
+	$(CXX) $(CFLAGS) $(INCLUDES) $(SOURCES) -o $@ $(LDFLAGS)
 
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET)
-

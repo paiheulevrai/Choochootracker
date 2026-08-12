@@ -42,6 +42,7 @@ $(foreach source,$(SOURCES),$(eval $(call compile_source,$(source))))
 windows: $(TARGET)
 	cp "$$(dirname "$$(command -v sdl2-config)")/SDL2.dll" $(BUILD)/
 	cp "$$(dirname "$$(command -v sdl2-config)")/libwinpthread-1.dll" $(BUILD)/
+	cp -r packaging/common/* $(BUILD)/
 
 $(TARGET): $(OBJECTS)
 	mkdir -p $(BUILD)

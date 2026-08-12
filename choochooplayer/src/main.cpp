@@ -11,7 +11,7 @@
 #include "visuals.h"
 #include "config.h"
 
-#define SAMPLE_RATE 44100
+#define SAMPLE_RATE 96000
 
 struct PlayerState {
   SDL_Window* window;
@@ -30,7 +30,7 @@ int loadTrack(const char* filename) {
   // Create ChipNomad state
   player.chipnomadState = chipnomadCreate();
   if (!player.chipnomadState) {
-    fprintf(stderr, "Failed to create ChipNomad state\n");
+    fprintf(stderr, "Failed to create ChooChooTracker state\n");
     return -1;
   }
 
@@ -83,7 +83,7 @@ void handleEvents() {
 
 int main(int argc, char* argv[]) {
   if (argc != 2) {
-    fprintf(stderr, "Usage: %s <track.cnm>\n", argv[0]);
+    fprintf(stderr, "Usage: %s <track.cct>\n", argv[0]);
     return 1;
   }
 
@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  player.window = SDL_CreateWindow("ChipNomad Player",
+  player.window = SDL_CreateWindow("ChooChooPlayer",
     SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
     windowWidth, windowHeight,
     SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);

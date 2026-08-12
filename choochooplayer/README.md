@@ -1,6 +1,6 @@
-# ChipNomad Player
+# ChooChooPlayer
 
-A desktop video player for ChipNomad projects (.cnm files) designed for creating social media content.
+A desktop video player for ChooChooTracker projects (`.cct`) designed for creating social media content.
 
 - Configurable window resolution
 - Two display modes: Phrase view or continuous scrolling
@@ -15,7 +15,7 @@ make clean && make
 ## Usage
 
 ```bash
-./chipnomad_player <track.cnm>
+./choochooplayer <track.cct>
 ```
 
 ## Configuration
@@ -61,4 +61,4 @@ The player is built using:
 
 - **SDL2** - Graphics and audio
 - **FreeType** - Font rendering
-- **ChipNomad Library** - Project loading and playback
+- **ChooChooTracker core** - Project loading and playback

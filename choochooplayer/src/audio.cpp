@@ -2,7 +2,7 @@
 #include <SDL2/SDL.h>
 #include <stdio.h>
 
-#define SAMPLE_RATE 44100
+#define SAMPLE_RATE 96000
 #define BUFFER_SIZE 1024
 #define MAX_AUDIO_BUFFER_SIZE (BUFFER_SIZE * 2)
 

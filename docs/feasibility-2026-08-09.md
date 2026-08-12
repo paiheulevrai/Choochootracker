@@ -14,6 +14,68 @@ Each voice needs a work buffer of about 16 KiB in addition to the `Voice` object
 
 Verdict: feasible, medium risk. A DSP prototype and hardware benchmark are required.
 
+## Alternative Plaits model banks
+
+Lyle Mills' `eurorack` repo includes an alternative Plaits firmware path that expands the stock engine set with a second catalog of modules. The upstream catalog lists 87 total modules: 62 stock Mutable Instruments engines and 25 additional models from Rubato/Community packs. The most notable examples are `Glisson`, `GENDY`, `Scanned`, `Pulsar`, `Loopback`, `Lockstep`, `Tapfield`, `Phase Weave`, `Sideband Bank`, `Attractor`, `Undertow`, `Reed Pipe`, `Brass`, `Shakers`, `Helix`, and `Bytebeat`.
+
+These additions are a larger palette: granular, chaotic, physical, additive,
+semi-acoustic, and “wild digital” models beside the stock Plaits bank.
+ChooChooTracker should expose all 87 through a separate `Plaits-Alt` instrument
+type, never by replacing the 24 stock `Plaits` IDs. Existing projects must keep
+their current engine numbers and sound unchanged.
+
+The hardware firmware's 24/32-slot palette limit does not apply directly to the
+desktop/console tracker. `Plaits-Alt` needs its own registry and voice wrapper,
+with stable catalog IDs, while stock `plaits::Voice` remains untouched. The
+catalog's families should drive the hierarchical popup, and validation must
+ensure every available model appears in exactly one category.
+
+All models require their own short control description, license/provenance
+check, offline render test, and CPU/retrigger/filter validation. Expensive
+models may remain selectable but should surface a clear performance warning
+when the eight-voice target cannot be met with Reverb and Delay enabled.
+
+License conclusion: the Plaits-Alt DSP sources reviewed in the Lyle Mills fork
+are MIT-licensed. Importing them does not change this project's license, but
+must retain the original notices and a `NOTICE` mapping each model to its source
+files and copyright holders (Mutable Instruments, Lyle/Dylan, and STK credits
+for Brass and Shakers).
+
+Verdict: feasible, medium-to-high integration risk. The catalog and sources are
+available, but the project must isolate the alternate DSP registry, preserve
+project compatibility, and validate all 87 models before calling the bank
+stable.
+
+## Filter characters and open-source references
+
+The current multimode filter remains the `Clean` option: predictable, low-cost,
+and available in every mode. Three later characters are enough to cover the
+useful contrast without turning the tracker into a filter museum: `Classic`
+(a smooth 24 dB low-pass inspired by ladder/OTA designs), `Aggressive` (an
+MS-20-inspired high-pass into low-pass path with drive), and `Acid` (a
+low-pass diode-ladder character where filter envelope and accent matter as
+much as the core).
+
+These are sound-design targets, not claims of circuit-perfect emulation. Each
+character should retain LP, HP, and BP modes: the mode is a musical choice,
+while the character controls the resonance, drive, feedback, and response.
+
+Published circuit analyses and open-source projects are useful references for
+topology, parameter ranges, listening tests, and stress cases. The preferred
+implementation is a small in-tree implementation derived from those ideas.
+Only permissively licensed code (MIT/BSD/ISC/Apache) may be vendored after a
+file-level license review, pinned source revision, and attribution. GPL code is
+reference material only unless the project licensing decision changes.
+
+Validation must cover fast cutoff/resonance automation, extreme settings,
+retrigger and note-off behavior, finite output, CPU use, and musical A/B tests
+on RG353V. Start with `Clean`; add one character at a time only after it passes
+the same checks.
+
+Verdict: feasible, low risk for the Clean/Classic path and medium risk for
+Aggressive/Acid because their non-linear feedback needs more stability and
+aliasing tests.
+
 ## Reverb and Delay sends
 
 The mixer can expose two send levels per track. During mixing, the audio engine should accumulate two stereo buses, process each effect once per callback, then add both returns to the master. It must not create a reverb or delay instance for every track.
