@@ -99,3 +99,12 @@ References: [PortMaster build environments](https://portmaster.games/build-envir
 - The browser build is an additional SDL2/Emscripten target in `tracker/Makefile.web`; it does not replace Windows or PortMaster.
 - `make -C tracker -f Makefile.web web-deploy` produces a self-contained `web/dist` bundle with the common demo projects, instruments, fonts, themes, pitch tables, samples and wavetables preloaded into the browser filesystem.
 - Vercel uses the root `vercel.json` to publish the checked-in `web/dist` bundle as a static site, so Vercel itself does not need Emscripten. Regenerate that directory locally after WebAssembly source changes; native builds remain independent.
+- On this Windows workstation the SDK lives in `.tmp/emsdk`. From the repository root in MSYS2 Bash, set its bundled Python before activation, because the activation script starts the Emscripten launcher:
+
+```sh
+export EMSDK_PYTHON="$(pwd)/.tmp/emsdk/python/3.13.3_64bit/python.exe"
+source .tmp/emsdk/emsdk_env.sh
+make -C tracker -f Makefile.web web-deploy
+```
+
+  Confirm `em++ --version` first. Run this from MSYS2/WSL Bash rather than native Windows `make`; the web Makefile uses Unix `mkdir` and `cp`.

@@ -39,3 +39,17 @@ Outputs:
 The ZIP contains `ChooChooTracker.sh`, the gamepad mapping, data files, licenses and the ARM64 executable.
 
 See [development notes](../docs/development-notes.md) for toolchain details and [fork maintenance](../docs/fork-maintenance.md) for upstream policy.
+
+## Web / Vercel
+
+From the repository root in MSYS2 Bash, activate the repository SDK with its
+bundled Python, then build the checked-in Vercel bundle:
+
+```sh
+export EMSDK_PYTHON="$(pwd)/.tmp/emsdk/python/3.13.3_64bit/python.exe"
+source .tmp/emsdk/emsdk_env.sh
+make -C tracker -f Makefile.web web-deploy
+```
+
+Check `em++ --version` before the build. Native Windows `make` is not suitable
+for this target because the Makefile uses Unix commands.
