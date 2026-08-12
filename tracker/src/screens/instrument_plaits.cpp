@@ -5,6 +5,10 @@
 
 static int engineButtonDown;
 
+static bool isAlt(void) {
+  return chipnomadState->project.instruments[cInstrument].type == InstrumentType::PlaitsAlt;
+}
+
 static void selectEngine(int value) {
   chipnomadState->project.instruments[cInstrument].chip.plaits.engine = (uint8_t)value;
   projectModified = 1;
@@ -15,7 +19,9 @@ static void cancelEngineSelection() { screenSetup(&screenInstrument, cInstrument
 
 static void openEngineSelection() {
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
-  selectionPopupSetup("PLAITS ENGINE", plaitsCategories, plaitsCategoryCount,
+  selectionPopupSetup(isAlt() ? "PLAITS-ALT ENGINE" : "PLAITS ENGINE",
+    isAlt() ? plaitsAltCategories : plaitsCategories,
+    isAlt() ? plaitsAltCategoryCount : plaitsCategoryCount,
     p->engine, selectEngine, cancelEngineSelection);
   screenSetup(&screenSelectionPopup, 0);
 }
@@ -26,63 +32,70 @@ static const char* engineNames[] = {
   "HARMONIC", "WAVETABLE", "CHORD", "SPEECH", "SWARM", "NOISE", "PARTICLE",
   "STRING", "MODAL", "BASS DRUM", "SNARE DRUM", "HI-HAT"
 };
+static const char* altEngineNames[] = {
+  "GLISSON", "PULSAR", "GENDY", "SCANNED", "LOOPBACK", "PHASE WEAVE",
+  "SIDEBAND BANK", "UNDERTOW", "ATTRACTOR", "LOCKSTEP", "REED PIPE", "BRASS",
+  "SHAKERS", "CLAPS", "FRESHETS FORMANT", "DIATONIC CHORD", "SCALE STACK",
+  "WT DIATONIC CHORD", "WT SCALE STACK", "HELIX", "BYTEBEAT", "RULEFIELD",
+  "SPECTRAL SPIRAL", "PHASE FLOCK"
+};
 
 static int getColumnCount(int row) {
   if (row < 3) return instrumentCommonColumnCount(row);
-  if (row == 14) {
+  if (row == 3) return 1;
+  if (row == 9) {
     InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
     return p->envelopeMode == 0 ? 2 : 4;
   }
-  return 1;
+  return 2;
 }
 
 static void drawStatic(void) {
   instrumentCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  static const char* labels[] = {
-    "Engine", "Harmonic", "Timbre", "Morph", "Main/Aux", "Env Mode",
-    "Filter", "Mode", "Slope", "Cutoff", "Reso"
-  };
-  for (int i = 0; i < 11; ++i) gfxPrint(0, 6 + i, labels[i]);
+  gfxPrint(0, 6, "Engine");
+  gfxPrint(0, 7, "Harmonic"); gfxPrint(21, 7, "Env Mode");
+  gfxPrint(0, 8, "Timbre");   gfxPrint(21, 8, "Filter");
+  gfxPrint(0, 9, "Morph");    gfxPrint(21, 9, "Mode");
+  gfxPrint(0, 10, "Main/Aux");gfxPrint(21, 10, "Slope");
+  gfxPrint(0, 11, "Cutoff");  gfxPrint(21, 11, "Reso");
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
   if (p->envelopeMode == 0) {
-    gfxPrint(0, 17, "LPG"); gfxPrint(6, 17, "D"); gfxPrint(11, 17, "C");
+    gfxPrint(0, 13, "LPG"); gfxPrint(6, 13, "D"); gfxPrint(11, 13, "C");
   } else {
-    gfxPrint(0, 17, "ADSR");
-    gfxPrint(6, 17, "A"); gfxPrint(11, 17, "D");
-    gfxPrint(16, 17, "S"); gfxPrint(21, 17, "R");
+    gfxPrint(0, 13, "ADSR");
+    gfxPrint(6, 13, "A"); gfxPrint(11, 13, "D");
+    gfxPrint(16, 13, "S"); gfxPrint(21, 13, "R");
   }
 }
 
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
-  if (row == 14) gfxCursor(7 + col * 5, 17, 2);
-  else gfxCursor(12, row + 3, row == 3 ? 24 : 5);
+  if (row == 9) gfxCursor(7 + col * 5, 13, 2);
+  else if (row == 3) gfxCursor(11, 6, 28);
+  else gfxCursor(col ? 31 : 11, row + 3, col ? 8 : 9);
 }
 
 static void drawField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  if (row == 14) {
+  if (row == 9) {
     uint8_t values[] = {p->attack, p->decay, p->sustain, p->release};
     uint8_t value = p->envelopeMode == 0 ? values[col + 1] : values[col];
-    gfxPrint(7 + col * 5, 17, byteToHex(value));
+    gfxPrint(7 + col * 5, 13, byteToHex(value));
     return;
   }
-  gfxClearRect(12, row + 3, 27, 1);
+  if (row == 3) gfxClearRect(11, 6, 29, 1);
+  else gfxClearRect(col ? 31 : 11, row + 3, col ? 9 : 10, 1);
   switch (row) {
-    case 3: gfxPrintf(12, 6, "%02d %s", p->engine, engineNames[p->engine < 24 ? p->engine : 0]); break;
-    case 4: gfxPrintf(12, 7, "%04u", (unsigned)((uint32_t)p->harmonics * 1023 / 32767)); break;
-    case 5: gfxPrintf(12, 8, "%04u", (unsigned)((uint32_t)p->timbre * 1023 / 32767)); break;
-    case 6: gfxPrintf(12, 9, "%04u", (unsigned)((uint32_t)p->morph * 1023 / 32767)); break;
-    case 7: gfxPrint(12, 10, byteToHex(p->auxMix)); break;
-    case 8: gfxPrint(12, 11, p->envelopeMode == 0 ? "TRIG" : "VCA"); break;
-    case 9: gfxPrint(12, 12, p->filterEnabled ? "On" : "Off"); break;
-    case 10: { static const char* modes[] = {"LP", "BP", "HP"}; gfxPrint(12, 13, modes[p->filterMode <= 2 ? p->filterMode : 0]); break; }
-    case 11: gfxPrint(12, 14, p->filterSlope24dB ? "24 dB" : "12 dB"); break;
-    case 12: gfxPrintf(12, 15, "%u Hz", p->filterCutoffHz); break;
-    case 13: gfxPrint(12, 16, byteToHex(p->filterResonance)); break;
+    case 3: gfxPrintf(12, 6, "%02d %s", p->engine,
+      (isAlt() ? altEngineNames : engineNames)[p->engine < 24 ? p->engine : 0]); break;
+    case 4: if (!col) gfxPrintf(11, 7, "%04u", (unsigned)((uint32_t)p->harmonics * 1023 / 32767)); else gfxPrint(31, 7, p->envelopeMode == 0 ? "TRIG" : "VCA"); break;
+    case 5: if (!col) gfxPrintf(11, 8, "%04u", (unsigned)((uint32_t)p->timbre * 1023 / 32767)); else gfxPrint(31, 8, p->filterEnabled ? "On" : "Off"); break;
+    case 6: if (!col) gfxPrintf(11, 9, "%04u", (unsigned)((uint32_t)p->morph * 1023 / 32767)); else { static const char* modes[] = {"LP", "BP", "HP"}; gfxPrint(31, 9, modes[p->filterMode <= 2 ? p->filterMode : 0]); } break;
+    case 7: if (!col) gfxPrint(11, 10, byteToHex(p->auxMix)); else gfxPrint(31, 10, p->filterSlope24dB ? "24 dB" : "12 dB"); break;
+    case 8: if (!col) gfxPrintf(11, 11, "%u Hz", p->filterCutoffHz); else gfxPrint(31, 11, byteToHex(p->filterResonance)); break;
   }
 }
 
@@ -94,11 +107,7 @@ static int onEdit(int col, int row, CellEditAction action) {
     case 3:
       handled = edit8noLast(action, &p->engine, 1, 0, 23);
       break;
-    case 4: handled = editOscillatorParameter(action, &p->harmonics); break;
-    case 5: handled = editOscillatorParameter(action, &p->timbre); break;
-    case 6: handled = editOscillatorParameter(action, &p->morph); break;
-    case 7: handled = edit8noLast(action, &p->auxMix, 16, 0, 255); break;
-    case 8:
+    case 4: if (!col) handled = editOscillatorParameter(action, &p->harmonics); else {
       {
         uint8_t mode = p->envelopeMode == 0 ? 0 : 1;
         handled = edit8noLast(action, &mode, 1, 0, 1);
@@ -107,13 +116,12 @@ static int onEdit(int col, int row, CellEditAction action) {
           screenSetup(&screenInstrument, cInstrument);
         }
       }
-      break;
-    case 9: handled = edit8noLast(action, &p->filterEnabled, 1, 0, 1); break;
-    case 10: handled = edit8noLast(action, &p->filterMode, 1, 0, 2); break;
-    case 11: handled = edit8noLast(action, &p->filterSlope24dB, 1, 0, 1); break;
-    case 12: handled = editFilterCutoff(action, &p->filterCutoffHz); break;
-    case 13: handled = edit8noLast(action, &p->filterResonance, 16, 0, 255); break;
-    case 14: {
+    } break;
+    case 5: handled = !col ? editOscillatorParameter(action, &p->timbre) : edit8noLast(action, &p->filterEnabled, 1, 0, 1); break;
+    case 6: handled = !col ? editOscillatorParameter(action, &p->morph) : edit8noLast(action, &p->filterMode, 1, 0, 2); break;
+    case 7: handled = !col ? edit8noLast(action, &p->auxMix, 16, 0, 255) : edit8noLast(action, &p->filterSlope24dB, 1, 0, 1); break;
+    case 8: handled = !col ? editFilterCutoff(action, &p->filterCutoffHz) : edit8noLast(action, &p->filterResonance, 16, 0, 255); break;
+    case 9: {
       uint8_t* values[] = {&p->attack, &p->decay, &p->sustain, &p->release};
       handled = edit8noLast(action, values[p->envelopeMode == 0 ? col + 1 : col], 16, 0, 255);
       break;
@@ -146,7 +154,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
 }
 
 ScreenData screenInstrumentPlaits = {
-  .rows = 15, .cursorRow = 0, .cursorCol = 0, .topRow = 0, .selectMode = -1,
+  .rows = 10, .cursorRow = 0, .cursorCol = 0, .topRow = 0, .selectMode = -1,
   .selectStartRow = 0, .selectStartCol = 0, .selectAnchorRow = 0, .selectAnchorCol = 0,
   .playbackLevel = ScreenPlaybackLevel::none, .getColumnCount = getColumnCount,
   .drawStatic = drawStatic, .drawCursor = drawCursor, .drawSelection = NULL,

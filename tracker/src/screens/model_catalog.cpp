@@ -23,6 +23,35 @@ const SelectionItem plaitsCategories[] = {
 };
 const int plaitsCategoryCount = sizeof(plaitsCategories) / sizeof(plaitsCategories[0]);
 
+static const SelectionItem plaitsAltGranular[] = {
+  LEAF("GLISSON", 0), LEAF("PULSAR", 1), LEAF("GENDY", 2),
+  LEAF("SCANNED", 3), LEAF("LOOPBACK", 4)
+};
+static const SelectionItem plaitsAltPhase[] = {
+  LEAF("PHASE WEAVE", 5), LEAF("SIDEBAND BANK", 6), LEAF("UNDERTOW", 7),
+  LEAF("ATTRACTOR", 8), LEAF("LOCKSTEP", 9)
+};
+static const SelectionItem plaitsAltAcoustic[] = {
+  LEAF("REED PIPE", 10), LEAF("BRASS", 11), LEAF("SHAKERS", 12),
+  LEAF("CLAPS", 13), LEAF("FRESHETS FORMANT", 14)
+};
+static const SelectionItem plaitsAltHarmony[] = {
+  LEAF("DIATONIC CHORD", 15), LEAF("SCALE STACK", 16),
+  LEAF("WT DIATONIC CHORD", 17), LEAF("WT SCALE STACK", 18), LEAF("HELIX", 19)
+};
+static const SelectionItem plaitsAltDigital[] = {
+  LEAF("BYTEBEAT", 20), LEAF("RULEFIELD", 21), LEAF("SPECTRAL SPIRAL", 22),
+  LEAF("PHASE FLOCK", 23)
+};
+const SelectionItem plaitsAltCategories[] = {
+  CATEGORY("GRANULAR / MICRO", plaitsAltGranular),
+  CATEGORY("PHASE / HARMONIC", plaitsAltPhase),
+  CATEGORY("ACOUSTIC / PHYSICAL", plaitsAltAcoustic),
+  CATEGORY("POLYPHONY / HARMONY", plaitsAltHarmony),
+  CATEGORY("DIGITAL / WEIRD", plaitsAltDigital)
+};
+const int plaitsAltCategoryCount = sizeof(plaitsAltCategories) / sizeof(plaitsAltCategories[0]);
+
 static const SelectionItem braidsAnalog[] = {
   LEAF("CSAW", 0), LEAF("MORPH", 1), LEAF("SAW-SQUARE", 2), LEAF("SINE-TRI", 3),
   LEAF("BUZZ", 4), LEAF("SQUARE-SUB", 5), LEAF("SAW-SUB", 6),
@@ -73,5 +102,6 @@ static bool catalogValid(const SelectionItem* categories, int count, int models)
 
 bool modelCatalogsValid() {
   return catalogValid(plaitsCategories, plaitsCategoryCount, 24) &&
+         catalogValid(plaitsAltCategories, plaitsAltCategoryCount, 24) &&
          catalogValid(braidsCategories, braidsCategoryCount, 47);
 }

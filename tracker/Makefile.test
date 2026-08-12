@@ -41,7 +41,15 @@ CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/engine2/*.cc) \
                         $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/fm/*.cc) \
                         $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/physical_modelling/*.cc) \
-                        $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/speech/*.cc)
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits/dsp/speech/*.cc) \
+                        ../chipnomad_lib/external/mutable/plaits_alt/resources.cc \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/chords/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/engine/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/engine2/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/fm/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/physical_modelling/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/speech/*.cc)
 
 TRACKER_SRC_SOURCES = src/string_utils.cpp \
                       src/project_utils.cpp \

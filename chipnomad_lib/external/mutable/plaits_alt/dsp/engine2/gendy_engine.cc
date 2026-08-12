@@ -1,0 +1,183 @@
+// Copyright 2026 Lyle Mills.
+// SPDX-License-Identifier: MIT
+//
+// Dynamic stochastic (GENDY-inspired) synthesis engine.
+
+#include "plaits_alt/dsp/engine2/gendy_engine.h"
+
+#include "plaits_alt/build_config.h"
+
+#include <algorithm>
+
+#include "stmlib/utils/random.h"
+
+namespace plaits_alt {
+
+using namespace std;
+using namespace stmlib;
+
+void GendyEngine::Init(BufferAllocator* allocator) {
+  Reset();
+}
+
+void GendyEngine::Reset() {
+  phase_ = 0.0f;
+  segment_ = 0;
+  num_breakpoints_ = 0;
+}
+
+float GendyEngine::Walk(
+    float value,
+    float amount,
+    float minimum,
+    float maximum) {
+  value += (2.0f * Random::GetFloat() - 1.0f) * amount;
+  if (value > maximum) {
+    value = maximum - (value - maximum);
+  } else if (value < minimum) {
+    value = minimum + (minimum - value);
+  }
+  CONSTRAIN(value, minimum, maximum);
+  return value;
+}
+
+void GendyEngine::Randomize(int num_breakpoints) {
+  num_breakpoints_ = num_breakpoints;
+  for (int i = 0; i < num_breakpoints_; ++i) {
+    amplitude_[i] = 2.0f * Random::GetFloat() - 1.0f;
+    duration_[i] = 0.5f + Random::GetFloat();
+  }
+  UpdateBoundaries();
+  phase_ = 0.0f;
+  segment_ = 0;
+}
+
+void GendyEngine::UpdateBoundaries() {
+  float total = 0.0f;
+  for (int i = 0; i < num_breakpoints_; ++i) {
+    total += duration_[i];
+  }
+  float cumulative = 0.0f;
+  for (int i = 0; i < num_breakpoints_; ++i) {
+    cumulative += duration_[i] / total;
+    boundary_[i] = cumulative;
+  }
+  boundary_[num_breakpoints_ - 1] = 1.0f;
+}
+
+void GendyEngine::Mutate(float amplitude_step, float duration_step) {
+  float mean = 0.0f;
+  for (int i = 0; i < num_breakpoints_; ++i) {
+    amplitude_[i] = Walk(amplitude_[i], amplitude_step, -1.0f, 1.0f);
+    duration_[i] = Walk(duration_[i], duration_step, 0.2f, 2.5f);
+    mean += amplitude_[i];
+  }
+  mean /= static_cast<float>(num_breakpoints_);
+  for (int i = 0; i < num_breakpoints_; ++i) {
+    amplitude_[i] -= mean;
+    CONSTRAIN(amplitude_[i], -1.0f, 1.0f);
+  }
+  UpdateBoundaries();
+}
+
+void GendyEngine::Render(
+    const EngineParameters& parameters,
+    float* out,
+    float* aux,
+    size_t size,
+    bool* already_enveloped) {
+  // Nine breakpoints retain a broad range of stochastic shapes without the
+  // noise-like upper extreme of the original twelve-breakpoint mapping.
+  const int num_breakpoints = 3 + static_cast<int>(
+      parameters.harmonics * 6.999f);
+  if (num_breakpoints != num_breakpoints_ ||
+      (parameters.trigger & TRIGGER_RISING_EDGE)) {
+    Randomize(num_breakpoints);
+  }
+
+  const float frequency = min(0.24f, NoteToFrequency(parameters.note));
+  const float complexity_compensation = 1.0f - 0.035f * \
+      static_cast<float>(num_breakpoints - 3);
+  const float amplitude_step = (0.005f + \
+      0.3f * parameters.timbre * parameters.timbre) * \
+      complexity_compensation;
+  const float duration_step = (0.005f + \
+      0.75f * parameters.morph * parameters.morph) * \
+      complexity_compensation;
+
+  for (size_t i = 0; i < size; ++i) {
+    float f = frequency;
+#if PLAITS_BUILD_FREQUENCY_OFFSET_FM
+    if (parameters.frequency_offset) {
+      f += parameters.frequency_offset[i];
+      CONSTRAIN(f, 0.0f, 0.24f);
+    }
+#endif
+    phase_ += f;
+    if (phase_ >= 1.0f) {
+      phase_ -= 1.0f;
+      Mutate(amplitude_step, duration_step);
+      segment_ = 0;
+    }
+    while (segment_ < num_breakpoints_ - 1 &&
+        phase_ >= boundary_[segment_]) {
+      ++segment_;
+    }
+
+    const int next = segment_ + 1 == num_breakpoints_ ? 0 : segment_ + 1;
+    const float start = segment_ == 0 ? 0.0f : boundary_[segment_ - 1];
+    const float width = boundary_[segment_] - start;
+    float t = (phase_ - start) / width;
+    CONSTRAIN(t, 0.0f, 1.0f);
+
+    const float stepped = amplitude_[segment_];
+    const float linear = stepped + (amplitude_[next] - stepped) * t;
+    const float smooth_t = t * t * (3.0f - 2.0f * t);
+    const float smooth = stepped + (amplitude_[next] - stepped) * smooth_t;
+    float sample;
+    if (parameters.macro < 0.5f) {
+      sample = stepped + (linear - stepped) * parameters.macro * 2.0f;
+    } else {
+      sample = linear + (smooth - linear) * (parameters.macro * 2.0f - 1.0f);
+    }
+    out[i] = sample * 0.8f;
+    if ((PLAITS_STEREO_GENDY && parameters.stereo)) {
+      // OUT/AUX become L/R: the breakpoints mutate and phase_/segment_ advance
+      // once (shared), and the R channel reads the same breakpoint set at the
+      // antipodal phase with an independent segment lookup (not disturbing the
+      // real segment_ state). The stepped AUX is dropped.
+      float antipodal_phase = phase_ + 0.5f;
+      if (antipodal_phase >= 1.0f) {
+        antipodal_phase -= 1.0f;
+      }
+      int segment_r = 0;
+      while (segment_r < num_breakpoints_ - 1 &&
+          antipodal_phase >= boundary_[segment_r]) {
+        ++segment_r;
+      }
+      const int next_r = segment_r + 1 == num_breakpoints_ ? 0 : segment_r + 1;
+      const float start_r = segment_r == 0 ? 0.0f : boundary_[segment_r - 1];
+      const float width_r = boundary_[segment_r] - start_r;
+      float t_r = (antipodal_phase - start_r) / width_r;
+      CONSTRAIN(t_r, 0.0f, 1.0f);
+
+      const float stepped_r = amplitude_[segment_r];
+      const float linear_r = stepped_r + (amplitude_[next_r] - stepped_r) * t_r;
+      const float smooth_t_r = t_r * t_r * (3.0f - 2.0f * t_r);
+      const float smooth_r = stepped_r + \
+          (amplitude_[next_r] - stepped_r) * smooth_t_r;
+      float sample_r;
+      if (parameters.macro < 0.5f) {
+        sample_r = stepped_r + (linear_r - stepped_r) * parameters.macro * 2.0f;
+      } else {
+        sample_r = linear_r + \
+            (smooth_r - linear_r) * (parameters.macro * 2.0f - 1.0f);
+      }
+      aux[i] = sample_r * 0.8f;
+    } else {
+      aux[i] = stepped * 0.65f;
+    }
+  }
+}
+
+}  // namespace plaits_alt

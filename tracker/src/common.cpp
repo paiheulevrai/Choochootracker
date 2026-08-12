@@ -35,19 +35,19 @@ void initDefaultAppSettings(void) {
   memset(&appSettings.keyMapping, 0, sizeof(KeyMapping));
 
   // Color scheme defaults
-  appSettings.colorScheme.background = 0x000f1a;
-  appSettings.colorScheme.textEmpty = 0x002638;
-  appSettings.colorScheme.textInfo = 0x4878b0;
-  appSettings.colorScheme.textDefault = 0xa0d0f0;
-  appSettings.colorScheme.textValue = 0xe2ebf8;
-  appSettings.colorScheme.textTitles = 0xbfdf50;
+  appSettings.colorScheme.background = 0x001f00;
+  appSettings.colorScheme.textEmpty = 0x006620;
+  appSettings.colorScheme.textInfo = 0x4e3e00;
+  appSettings.colorScheme.textDefault = 0xa06000;
+  appSettings.colorScheme.textValue = 0xefcf7f;
+  appSettings.colorScheme.textTitles = 0x9f9f50;
   appSettings.colorScheme.playMarkers = 0xefe000;
-  appSettings.colorScheme.cursor = 0x7ddcff;
+  appSettings.colorScheme.cursor = 0x6f8cff;
   appSettings.colorScheme.selection = 0x00d090;
   appSettings.colorScheme.warning = 0xff4040;
 
   // String defaults
-  strncpy(appSettings.themeName, "Default", THEME_NAME_LENGTH);
+  strncpy(appSettings.themeName, "Wood", THEME_NAME_LENGTH);
   appSettings.themeName[THEME_NAME_LENGTH] = '\0';
   appSettings.projectFilename[0] = '\0';
   appSettings.projectPath[0] = '\0';

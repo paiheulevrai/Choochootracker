@@ -1,0 +1,150 @@
+// Copyright 2016 Emilie Gillet.
+//
+// Author: Emilie Gillet (emilie.o.gillet@gmail.com)
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+// 
+// See http://creativecommons.org/licenses/MIT/ for more information.
+//
+// -----------------------------------------------------------------------------
+//
+// One voice of modal synthesis.
+//
+// OUT: modal resonator excited by a mallet or by dust noise. AUX: raw
+// exciter signal.
+// alt firmware, stereo mode: even-numbered modes lean left and odd-numbered
+// modes lean right - equal-power, every mode audible on both sides - and the
+// raw exciter is not sent to AUX.
+
+#include "plaits_alt/dsp/engine/modal_engine.h"
+
+#include <algorithm>
+
+#include "plaits_alt/build_config.h"
+
+namespace plaits_alt {
+
+using namespace std;
+using namespace stmlib;
+
+void ModalEngine::Init(BufferAllocator* allocator) {
+  temp_buffer_ = allocator->Allocate<float>(kMaxBlockSize);
+  harmonics_lp_ = 0.0f;
+  Reset();
+}
+
+void ModalEngine::Reset() {
+  voice_.Init();
+}
+
+void ModalEngine::Render(
+    const EngineParameters& parameters,
+    float* out,
+    float* aux,
+    size_t size,
+    bool* already_enveloped) {
+  fill(&out[0], &out[size], 0.0f);
+  fill(&aux[0], &aux[size], 0.0f);
+
+  ONE_POLE(harmonics_lp_, parameters.harmonics, 0.01f);
+  
+  const bool contour_excitation = parameters.articulation_envelope_active;
+  const bool sustain =
+      (parameters.trigger & TRIGGER_UNPATCHED) || contour_excitation;
+  const float accent = contour_excitation
+      ? parameters.accent * parameters.articulation_envelope
+      : parameters.accent;
+  const float stock_exciter_q = sustain ? 0.7f : 1.5f;
+  const float exciter_q = ApplyMacro(
+      stock_exciter_q, 0.5f, 6.0f, parameters.macro);
+  const float f0 = NoteToFrequency(parameters.note);
+
+#if PLAITS_BUILD_FREQUENCY_OFFSET_FM
+  if (parameters.frequency_offset) {
+    const bool trigger = parameters.trigger & TRIGGER_RISING_EDGE;
+    for (size_t i = 0; i < size; ++i) {
+      const float instantaneous_f0 = max(
+          1e-7f, f0 + parameters.frequency_offset[i]);
+      if ((PLAITS_STEREO_MODAL_RESONATOR && parameters.stereo)) {
+        voice_.RenderStereo(
+            sustain,
+            trigger && i == 0,
+            accent,
+            instantaneous_f0,
+            harmonics_lp_,
+            parameters.timbre,
+            parameters.morph,
+            exciter_q,
+            temp_buffer_ + i,
+            out + i,
+            aux + i,
+            1);
+      } else {
+        voice_.Render(
+            sustain,
+            trigger && i == 0,
+            accent,
+            instantaneous_f0,
+            harmonics_lp_,
+            parameters.timbre,
+            parameters.morph,
+            exciter_q,
+            temp_buffer_ + i,
+            out + i,
+            aux + i,
+            1);
+      }
+    }
+    return;
+  }
+#endif
+
+  if ((PLAITS_STEREO_MODAL_RESONATOR && parameters.stereo)) {
+    voice_.RenderStereo(
+        sustain,
+        parameters.trigger & TRIGGER_RISING_EDGE,
+        accent,
+        f0,
+        harmonics_lp_,
+        parameters.timbre,
+        parameters.morph,
+        exciter_q,
+        temp_buffer_,
+        out,
+        aux,
+        size);
+    return;
+  }
+
+  voice_.Render(
+      sustain,
+      parameters.trigger & TRIGGER_RISING_EDGE,
+      accent,
+      f0,
+      harmonics_lp_,
+      parameters.timbre,
+      parameters.morph,
+      exciter_q,
+      temp_buffer_,
+      out,
+      aux,
+      size);
+}
+
+}  // namespace plaits_alt

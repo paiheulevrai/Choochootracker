@@ -1,0 +1,321 @@
+// Copyright 2016 Emilie Gillet.
+//
+// Author: Emilie Gillet (emilie.o.gillet@gmail.com)
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+// 
+// See http://creativecommons.org/licenses/MIT/ for more information.
+//
+// -----------------------------------------------------------------------------
+//
+// Main synthesis voice.
+
+#ifndef PLAITS_ALT_GUARD_PLAITS_ALT_DSP_VOICE_H_
+#define PLAITS_ALT_GUARD_PLAITS_ALT_DSP_VOICE_H_
+
+#include "stmlib/stmlib.h"
+
+#include "stmlib/dsp/filter.h"
+#include "stmlib/dsp/hysteresis_quantizer.h"
+#include "stmlib/dsp/limiter.h"
+#include "stmlib/utils/buffer_allocator.h"
+
+#include "plaits_alt/dsp/engine/engine.h"
+#if defined(PLAITS_STOCK_ENGINE_LAYOUT)
+#include "plaits_alt/dsp/stock_engine_config.h"
+#else
+#include "plaits_alt/dsp/engine_config.h"
+#endif
+// After the engine config: a generated config may define PLAITS_ENGINE_COUNT,
+// and build_config.h defaults it to 24 otherwise.
+#include "plaits_alt/build_config.h"
+#include "plaits_alt/dsp/oscillator/sine_oscillator.h"
+#include "plaits_alt/dsp/oscillator/square_oscillator.h"
+#include "plaits_alt/dsp/parameter_randomizer.h"
+
+#include "plaits_alt/dsp/envelope.h"
+
+#include "plaits_alt/dsp/fx/low_pass_gate.h"
+
+#include "plaits_alt/dsp/physical_modelling/delay_line.h"
+
+namespace plaits_alt {
+
+const int kMaxEngines = PLAITS_ENGINE_COUNT;
+const int kMaxTriggerDelay = 8;
+const int kTriggerDelay = 5;
+
+class ChannelPostProcessor {
+ public:
+  ChannelPostProcessor() { }
+  ~ChannelPostProcessor() { }
+  
+  void Init() {
+    lpg_.Init();
+    Reset();
+  }
+  
+  void Reset() {
+    limiter_.Init();
+  }
+  
+  void Process(
+      float gain,
+      bool bypass_lpg,
+      float low_pass_gate_gain,
+      float low_pass_gate_frequency,
+      float low_pass_gate_hf_bleed,
+      float* in,
+      short* out,
+      size_t size,
+      size_t stride) {
+    if (gain < 0.0f) {
+      limiter_.Process(-gain, in, size);
+    }
+    const float post_gain = (gain < 0.0f ? 1.0f : gain) * -32767.0f;
+    if (!bypass_lpg) {
+      lpg_.Process(
+          post_gain * low_pass_gate_gain,
+          low_pass_gate_frequency,
+          low_pass_gate_hf_bleed,
+          in,
+          out,
+          size,
+          stride);
+    } else {
+      while (size--) {
+        *out = stmlib::Clip16(1 + static_cast<int32_t>(*in++ * post_gain));
+        out += stride;
+      }
+    }
+  }
+  
+ private:
+  stmlib::Limiter limiter_;
+  LowPassGate lpg_;
+  
+  DISALLOW_COPY_AND_ASSIGN(ChannelPostProcessor);
+};
+
+struct Patch {
+  float note;
+  float harmonics;
+  float timbre;
+  float morph;
+  float frequency_modulation_amount;
+  float timbre_modulation_amount;
+  float morph_modulation_amount;
+
+  int engine;
+  float decay;
+  float lpg_colour;
+
+  float freqlock_param;
+  // Option VALUES are ordered most-reached-for first, so the common settings
+  // land on the solid LED colors (0 green, 1 red, 2 yellow) and the rare ones
+  // fall through to the blinking tier. A module keeps its saved options across
+  // an audio reflash, so any change to the meaning of a value here must be
+  // paired with an OPTIONS_LAYOUT_VERSION bump in the builder's profile-id
+  // encoding (generate_engine_config.py) - that is what forces a one-time
+  // ApplyBuildOptionDefaults instead of silently re-reading old numbers under
+  // new meanings.
+  // 0 - manual octave switching
+  // 1 - fourth synthesis macro
+  // 2 - manual aux crossfade
+  // 3 - manual control of decay (without button press)
+  // 4 - triggered one-shot envelope
+  // 5 - gated attack/sustain/release envelope
+  uint8_t locked_frequency_pot_option;
+  // 0 - cv control of model (original)
+  // 1 - cv control of the fourth synthesis macro
+  // 2 - cv control of aux crossfade
+  // 3 - cv control of lpg colour
+  // 4 - audio-rate Sync In (native phase reset or bounded engine fallback)
+  uint8_t model_cv_option;
+  // 0 - cv control of level (original)
+  // 1 - cv control of decay
+  // 2 - auto: decay on outer-LPG engines, level/accent on self-enveloped ones
+  uint8_t level_cv_option;
+  // 0 - regular aux model
+  // 1 - stereo: OUT/AUX become a true L/R pair on stereo-capable engines
+  //     (the other engines keep their regular aux output)
+  // 2 - suboscillator, shaped and tuned by aux_subosc_option
+  uint8_t aux_output_option;
+  // Shape and octave in one value, so the suboscillator is one setting on one
+  // light rather than two. Shape is the slower-moving choice, so it takes the
+  // blink tier and the octave takes the hue: the three squares are the three
+  // solid colors, the three sines the same three blinking.
+  // 0 - square             3 - sine
+  // 1 - square, -1 octave  4 - sine, -1 octave
+  // 2 - square, -2 octaves 5 - sine, -2 octaves
+  // Only has an effect while aux_is_subosc(); the UI darkens its menu light
+  // otherwise.
+  uint8_t aux_subosc_option;
+  // Index into the chord tables this firmware was built with (up to nine).
+  uint8_t chord_set_option;
+  // 0 - don't hold params on trigger (original)
+  // 1 - hold timbre, morph, harmo, level, v/oct cv modulations on trigger (not fm)
+  //     (note model is already held on trigger by default)
+  uint8_t hold_on_trigger_option;
+  // 0 - stock internal-envelope behavior
+  // 1 - continuous chaotic drift on unpatched TIMBRE and MORPH
+  // 2 - new held random offsets on each trigger rising edge
+  uint8_t attenuverter_mode;
+
+  // The readings of the two aux options that the DSP and the UI need. Keeping
+  // them here means a future renumber touches one place.
+  inline bool aux_is_stereo() const { return aux_output_option == 1; }
+  inline bool aux_is_subosc() const { return aux_output_option == 2; }
+  inline bool aux_subosc_is_sine() const { return aux_subosc_option >= 3; }
+  inline int aux_subosc_octaves_down() const { return aux_subosc_option % 3; }
+};
+
+struct Modulations {
+  float engine;
+  float note;
+  float frequency;
+  float harmonics;
+  float timbre;
+  float morph;
+  float trigger;
+  float level;
+
+  // Sample-position bit mask filled by the MODEL-input sync detector.
+  uint32_t hard_sync;
+
+  // FM readings transformed with the regular calibration. Fast mode supplies
+  // independently sampled values; slow mode and safe fallbacks repeat the
+  // current control-rate value across the block.
+  float frequency_audio[kMaxBlockSize];
+  bool frequency_audio_rate;
+  bool frequency_patched;
+  bool timbre_patched;
+  bool morph_patched;
+  bool trigger_patched;
+  bool level_patched;
+};
+
+// char (*__foo)[sizeof(HiHatEngine)] = 1;
+
+
+class Voice {
+ public:
+  Voice() { }
+  ~Voice() { }
+  
+  struct Frame {
+    short out;
+    short aux;
+  };
+  
+  void Init(stmlib::BufferAllocator* allocator);
+  void ReloadUserData() {
+    reload_user_data_ = true;
+  }
+  void Render(
+      const Patch& patch,
+      const Modulations& modulations,
+      Frame* frames,
+      size_t size);
+  inline int active_engine() const { return previous_engine_index_; }
+#if PLAITS_BUILD_FREQUENCY_OFFSET_FM
+  inline bool active_engine_supports_linear_tzfm() {
+    return previous_engine_index_ >= 0 &&
+        engines_.get(previous_engine_index_)->linear_tzfm_capable();
+  }
+  inline bool active_engine_supports_fast_fm() {
+    return previous_engine_index_ >= 0 &&
+        engines_.get(previous_engine_index_)->fast_fm_capable();
+  }
+#endif
+    
+ private:
+  void ComputeDecayParameters(const Patch& settings);
+  
+  inline float ApplyModulations(
+      float base_value,
+      float modulation_amount,
+      bool use_external_modulation,
+      float external_modulation,
+      bool use_internal_envelope,
+      float envelope,
+      float default_internal_modulation,
+      float minimum_value,
+      float maximum_value) {
+    float value = base_value;
+    modulation_amount *= std::max(fabsf(modulation_amount) - 0.05f, 0.05f);
+    modulation_amount *= 1.05f;
+    
+    float modulation = use_external_modulation
+        ? external_modulation
+        : (use_internal_envelope ? envelope : default_internal_modulation);
+    value += modulation_amount * modulation;
+    CONSTRAIN(value, minimum_value, maximum_value);
+    return value;
+  }
+
+  PLAITS_ENGINE_MEMBERS
+
+  FastSineOscillator sine_oscillator_;
+  SquareOscillator square_oscillator_;
+
+  stmlib::HysteresisQuantizer2 engine_quantizer_;
+  
+  bool reload_user_data_;
+  int previous_panel_engine_;
+  int previous_engine_index_;
+  float engine_cv_;
+  
+  float previous_note_;
+  bool trigger_state_;
+
+  float held_timbre_;
+  float held_morph_;
+  float held_harmo_;
+  float held_level_;
+  float held_note_;
+
+  ParameterRandomizer parameter_randomizer_;
+  uint8_t previous_attenuverter_mode_;
+  
+  DecayEnvelope decay_envelope_;
+  LPGEnvelope lpg_envelope_;
+#if PLAITS_BUILD_ENABLE_ONE_KNOB_ENVELOPE
+  OneKnobEnvelope one_knob_envelope_;
+  bool one_knob_envelope_active_;
+  OneKnobEnvelope::Mode one_knob_envelope_mode_;
+#endif
+  
+  float trigger_delay_line_[kMaxTriggerDelay];
+  DelayLine<float, kMaxTriggerDelay> trigger_delay_;
+  
+  ChannelPostProcessor out_post_processor_;
+  ChannelPostProcessor aux_post_processor_;
+  
+  EngineRegistry<kMaxEngines> engines_;
+  
+  float out_buffer_[kMaxBlockSize];
+  float aux_buffer_[kMaxBlockSize];
+  
+  DISALLOW_COPY_AND_ASSIGN(Voice);
+};
+
+}  // namespace plaits_alt
+
+#endif  // PLAITS_ALT_DSP_VOICE_H_

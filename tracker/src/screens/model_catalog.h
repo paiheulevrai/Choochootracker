@@ -5,6 +5,8 @@
 
 extern const SelectionItem plaitsCategories[];
 extern const int plaitsCategoryCount;
+extern const SelectionItem plaitsAltCategories[];
+extern const int plaitsAltCategoryCount;
 extern const SelectionItem braidsCategories[];
 extern const int braidsCategoryCount;
 

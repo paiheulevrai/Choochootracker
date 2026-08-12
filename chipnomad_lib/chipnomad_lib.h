@@ -9,6 +9,7 @@
 class BraidsVoice;
 class SampleVoice;
 class PlaitsVoice;
+class PlaitsAltVoice;
 class MasterEffects;
 
 #define AUDIO_OVERLOAD_COOLDOWN_FRAMES 5
@@ -31,6 +32,7 @@ struct ChipNomadState {
   float frameSampleCounter;
   float mixVolume;
   int audioOverload;
+  int trackClipping[PROJECT_MAX_TRACKS];
   int trackWarnings[PROJECT_MAX_TRACKS];
   float* mixBuffer;
   float* reverbBuffer;
@@ -40,6 +42,7 @@ struct ChipNomadState {
   BraidsVoice* braidsVoices[PROJECT_MAX_TRACKS];
   SampleVoice* sampleVoices[PROJECT_MAX_TRACKS];
   PlaitsVoice* plaitsVoices[PROJECT_MAX_TRACKS];
+  PlaitsAltVoice* plaitsAltVoices[PROJECT_MAX_TRACKS];
   MasterEffects* masterEffects;
 };
 

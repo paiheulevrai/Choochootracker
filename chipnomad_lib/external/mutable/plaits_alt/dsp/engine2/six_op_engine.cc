@@ -1,0 +1,375 @@
+// Copyright 2021 Emilie Gillet.
+//
+// Author: Emilie Gillet (emilie.o.gillet@gmail.com)
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+// 
+// See http://creativecommons.org/licenses/MIT/ for more information.
+//
+// -----------------------------------------------------------------------------
+//
+// 6-operator FM synth.
+
+#include "plaits_alt/dsp/engine2/six_op_engine.h"
+
+#include <algorithm>
+
+#include "plaits_alt/build_config.h"
+#include "plaits_alt/resources.h"
+
+namespace plaits_alt {
+
+using namespace fm;
+using namespace std;
+using namespace stmlib;
+
+void FMVoice::Init(fm::Algorithms<6>* algorithms, float sample_rate) {
+  voice_.Init(algorithms, sample_rate);
+  lfo_.Init(sample_rate);
+  
+  parameters_.sustain = false;
+  parameters_.gate = false;
+  parameters_.note = 48.0f;
+  parameters_.velocity = 0.5f;
+  parameters_.brightness = 0.5f;
+  parameters_.envelope_control = 0.5f;
+  parameters_.pitch_mod = 0.0f;
+  parameters_.amp_mod = 0.0f;
+  parameters_.modulator_detune = 0.0f;
+  
+  patch_ = NULL;
+}
+
+void FMVoice::Render(float* buffer, size_t size) {
+  if (!patch_) {
+    return;
+  }
+  voice_.Render(parameters_, buffer, size);
+}
+
+void FMVoice::LoadPatch(const fm::Patch* patch) {
+  if (patch == patch_) {
+    return;
+  }
+  patch_ = patch;
+  voice_.SetPatch(patch_);
+  lfo_.Set(patch_->modulations);
+}
+
+const int kNumPatchesPerBank = 32;
+
+// All Six-Op pan positions are fixed. Keeping their equal-power gains as
+// float constants removes four VSQRTs from every audio block without changing
+// the panning law or its rounded float results.
+const float kSixOpCenterPan = 0.707106781f;  // sqrt(0.5)
+const float kSixOpPanLeft[kNumSixOpVoices] = {
+  0.894427191f,  // sqrt(0.8)
+  0.447213595f,  // sqrt(0.2)
+};
+const float kSixOpPanRight[kNumSixOpVoices] = {
+  0.447213595f,  // sqrt(0.2)
+  0.894427191f,  // sqrt(0.8)
+};
+const float kSixOpTailThreshold = 0.00001f;  // -100 dB carrier amplitude
+
+// GCC 4.8 expands SoftClip's rational limiter at every call site under -O2.
+// Six-op keeps separate dark/neutral/drive loops so it can avoid expensive work
+// in each hot path, but inlining the same transfer function into all three mono
+// loops costs several kilobytes of flash. Keep one shared copy;
+// the call overhead is tiny beside the floating-point divide inside SoftClip.
+static float __attribute__((noinline)) SixOpSoftClip(float sample) {
+  return SoftClip(sample);
+}
+
+void SixOpEngine::RenderMonoOutput(
+    float gain,
+    float macro,
+    float* out,
+    float* aux,
+    size_t size) {
+  const float darkness = (0.5f - macro) * 2.0f;
+  const float coefficient = 1.0f - darkness * 0.92f;
+  const float saturation = (macro - 0.5f) * 2.0f;
+  if (macro < 0.5f) {
+    for (size_t i = 0; i < size; ++i) {
+      float sample = SixOpSoftClip(temp_buffer_[i] * gain);
+      ONE_POLE(post_filter_, sample, coefficient);
+      sample = post_filter_;
+      aux[i] = out[i] = sample;
+    }
+  } else if (macro > 0.5f) {
+    for (size_t i = 0; i < size; ++i) {
+      float sample = SixOpSoftClip(temp_buffer_[i] * gain);
+      post_filter_ = sample;
+      sample += (SoftLimit(sample * 3.0f) - sample) * saturation;
+      aux[i] = out[i] = sample;
+    }
+  } else {
+    for (size_t i = 0; i < size; ++i) {
+      const float sample = SixOpSoftClip(temp_buffer_[i] * gain);
+      post_filter_ = sample;
+      aux[i] = out[i] = sample;
+    }
+  }
+}
+
+void SixOpEngine::Init(BufferAllocator* allocator) {
+  patch_index_quantizer_.Init(32, 0.005f, false);
+
+  algorithms_.Init();
+  for (int i = 0; i < kNumSixOpVoices; ++i) {
+    voice_[i].Init(&algorithms_, kCorrectedSampleRate);
+  }
+  temp_buffer_ = allocator->Allocate<float>(kMaxBlockSize * 4);
+  acc_buffer_ = allocator->Allocate<float>(kMaxBlockSize * kNumSixOpVoices);
+  patches_ = allocator->Allocate<fm::Patch>(kNumPatchesPerBank);
+  num_patches_ = kNumPatchesPerBank;
+
+  post_filter_ = 0.0f;
+  post_filter_right_ = 0.0f;
+  active_voice_ = kNumSixOpVoices - 1;
+  rendered_voice_ = 0;
+}
+
+void SixOpEngine::Reset() {
+  post_filter_ = 0.0f;
+  post_filter_right_ = 0.0f;
+}
+
+void SixOpEngine::LoadUserData(const uint8_t* user_data) {
+  // A bare load (no explicit length) is a full 32-patch bank — the shape of a
+  // stock DX7 .syx and of the runtime TIMBRE-loaded user bank. Behaviour is
+  // byte-identical to the original fixed-32 path.
+  LoadUserData(user_data, kNumPatchesPerBank * fm::Patch::SYX_SIZE);
+}
+
+void SixOpEngine::LoadUserData(const uint8_t* user_data, size_t length) {
+  // The shipped firmware always supplies a real patch bank, but the SDK preview
+  // and the reference-render path call LoadUserData(NULL) for engines with no
+  // bank; unpacking a null pointer dereferences it. Guard the unpack and still
+  // reset the voices so a null load leaves a well-defined (default) patch set.
+  //
+  // `length` is the count of valid packed bytes; length / SYX_SIZE patches are
+  // actually present (a recipe may bake fewer than 32). Re-size the Harmonics
+  // patch-index quantizer to that count so the dial addresses only the real
+  // patches — the block-fill zone-spreading the web builder used to do to reach
+  // 32 becomes unnecessary. A null load keeps the full 32-step quantizer.
+  int n = user_data
+      ? static_cast<int>(length / fm::Patch::SYX_SIZE)
+      : kNumPatchesPerBank;
+  if (n < 1) {
+    n = 1;
+  } else if (n > kNumPatchesPerBank) {
+    n = kNumPatchesPerBank;
+  }
+  num_patches_ = n;
+  patch_index_quantizer_.Init(n, 0.005f, false);
+
+  if (user_data) {
+    for (int i = 0; i < n; ++i) {
+      patches_[i].Unpack(user_data + i * fm::Patch::SYX_SIZE);
+    }
+  }
+  for (int i = 0; i < kNumSixOpVoices; ++i) {
+    voice_[i].UnloadPatch();
+  }
+}
+
+void SixOpEngine::Render(
+    const EngineParameters& parameters,
+    float* out,
+    float* aux,
+    size_t size,
+    bool* already_enveloped) {
+#if PLAITS_BUILD_FREQUENCY_OFFSET_FM
+  if (parameters.frequency_offset) {
+    EngineParameters sample_parameters = parameters;
+    sample_parameters.frequency_offset = NULL;
+    const float base_frequency = NoteToFrequency(parameters.note);
+    for (size_t i = 0; i < size; ++i) {
+      sample_parameters.note = NoteWithFrequencyOffset(
+          parameters.note, base_frequency, parameters.frequency_offset[i]);
+      sample_parameters.trigger = i == 0
+          ? parameters.trigger
+          : parameters.trigger & ~TRIGGER_RISING_EDGE;
+      Render(
+          sample_parameters, out + i, aux + i, 1, already_enveloped);
+    }
+    return;
+  }
+#endif
+  int patch_index = patch_index_quantizer_.Process(
+      parameters.harmonics * 1.02f);
+  const float modulator_detune = 24.0f * (parameters.macro - 0.5f);
+  
+  if (parameters.trigger & TRIGGER_UNPATCHED) {
+    const float t = parameters.morph;
+    voice_[0].mutable_lfo()->Scrub(2.0f * kCorrectedSampleRate * t);
+
+    // A free-running drone has exactly one sustained voice. Keeping the second
+    // voice loaded and advancing its silent envelopes wasted half of the FM
+    // render budget, which is enough to overrun on expensive DX7 algorithms.
+    voice_[0].LoadPatch(&patches_[patch_index]);
+    Voice<6>::Parameters* p = voice_[0].mutable_parameters();
+    p->sustain = true;
+    p->gate = false;
+    p->note = parameters.note;
+    p->velocity = parameters.accent;
+    p->brightness = parameters.timbre;
+    p->envelope_control = t;
+    p->modulator_detune = modulator_detune;
+    voice_[0].set_modulations(voice_[0].lfo());
+    voice_[1].UnloadPatch();
+  } else {
+    if (parameters.trigger & TRIGGER_RISING_EDGE) {
+      active_voice_ = (active_voice_ + 1) % kNumSixOpVoices;
+      voice_[active_voice_].LoadPatch(&patches_[patch_index]);
+      voice_[active_voice_].mutable_lfo()->Reset();
+    }
+    Voice<6>::Parameters* p = voice_[active_voice_].mutable_parameters();
+    p->note = parameters.note;
+    p->velocity = parameters.accent;
+    p->envelope_control = parameters.morph;
+    voice_[active_voice_].mutable_lfo()->Step(float(size));
+    
+    for (int i = 0; i < kNumSixOpVoices; ++i) {
+      Voice<6>::Parameters* p = voice_[i].mutable_parameters();
+      p->brightness = parameters.timbre;
+      p->modulator_detune = modulator_detune;
+      p->sustain = false;
+      p->gate = (parameters.trigger & TRIGGER_HIGH) && (i == active_voice_);
+      if (voice_[i].patch() != voice_[active_voice_].patch()) {
+        voice_[i].mutable_lfo()->Step(float(size));
+        voice_[i].set_modulations(voice_[i].lfo());
+      } else {
+        voice_[i].set_modulations(voice_[active_voice_].lfo());
+      }
+    }
+  }
+
+  if (parameters.trigger & TRIGGER_UNPATCHED) {
+    // Render the single sustained voice at the native block size. The old
+    // staggered path rendered 2 * size samples every other block while also
+    // spending the intervening block rendering a silent voice. This produces
+    // the same continuous oscillator stream without the silent work.
+    fill(&temp_buffer_[0], &temp_buffer_[size], 0.0f);
+    voice_[0].Render(temp_buffer_, size);
+    fill(&acc_buffer_[0], &acc_buffer_[(kNumSixOpVoices - 1) * size], 0.0f);
+    rendered_voice_ = 0;
+
+    const float output_gain = 0.25f *
+        ((PLAITS_STEREO_SIX_OP && parameters.stereo)
+            ? kSixOpCenterPan
+            : 1.0f);
+    RenderMonoOutput(output_gain, parameters.macro, out, aux, size);
+    post_filter_right_ = post_filter_;
+  } else if ((PLAITS_STEREO_SIX_OP && parameters.stereo)) {
+    // Staggered rendering, split by voice: the accumulation buffer always
+    // holds the tail of the single voice rendered on the previous block, so
+    // per-voice pan gains can be applied when the two halves are combined.
+    const int previous_voice = rendered_voice_;
+    fill(&temp_buffer_[0], &temp_buffer_[kNumSixOpVoices * size], 0.0f);
+    rendered_voice_ = (rendered_voice_ + 1) % kNumSixOpVoices;
+    voice_[rendered_voice_].Render(temp_buffer_, size * kNumSixOpVoices);
+
+    // The unpatched drone returned through the dedicated centred path above.
+    // Triggered notes use round-robin allocation and alternate sides.
+    const float previous_left_gain =
+        kSixOpPanLeft[previous_voice] * 0.25f;
+    const float previous_right_gain =
+        kSixOpPanRight[previous_voice] * 0.25f;
+    const float current_left_gain =
+        kSixOpPanLeft[rendered_voice_] * 0.25f;
+    const float current_right_gain =
+        kSixOpPanRight[rendered_voice_] * 0.25f;
+    const float macro = parameters.macro;
+    const float darkness = (0.5f - macro) * 2.0f;
+    const float coefficient = 1.0f - darkness * 0.92f;
+    if (macro < 0.5f) {
+      for (size_t i = 0; i < size; ++i) {
+        const float previous = acc_buffer_[i];
+        const float current = temp_buffer_[i];
+        float left = SoftClip(
+            previous * previous_left_gain + current * current_left_gain);
+        float right = SoftClip(
+            previous * previous_right_gain + current * current_right_gain);
+        ONE_POLE(post_filter_, left, coefficient);
+        left = post_filter_;
+        ONE_POLE(post_filter_right_, right, coefficient);
+        right = post_filter_right_;
+        out[i] = left;
+        aux[i] = right;
+      }
+    } else {
+      // The extra high-MACRO drive costs two rational divides per sample. That
+      // is safe for one free-running voice, but pushes expensive two-voice FM
+      // algorithms over the deadline in triggered stereo mode. Keep MACRO's
+      // network detune here and reserve the added drive for mono and the
+      // dedicated single-voice drone path.
+      float last_left = post_filter_;
+      float last_right = post_filter_right_;
+      for (size_t i = 0; i < size; ++i) {
+        const float previous = acc_buffer_[i];
+        const float current = temp_buffer_[i];
+        const float left = SoftClip(
+            previous * previous_left_gain + current * current_left_gain);
+        const float right = SoftClip(
+            previous * previous_right_gain + current * current_right_gain);
+        last_left = left;
+        last_right = right;
+        out[i] = left;
+        aux[i] = right;
+      }
+      post_filter_ = last_left;
+      post_filter_right_ = last_right;
+    }
+    // std::copy lowers to a generic memmove in GCC 4.8.3. This fixed, small
+    // transfer is cheaper as a plain loop and has identical copy semantics
+    // because these buffers never overlap.
+    for (size_t i = 0; i < (kNumSixOpVoices - 1) * size; ++i) {
+      acc_buffer_[i] = temp_buffer_[size + i];
+    }
+    // Once a released voice's carriers are below -100 dB, its continued FM
+    // render is inaudible but can consume nearly half the callback budget.
+    // Unload only the older voice; the active note and real release overlap are
+    // preserved until that threshold is actually crossed.
+    if (rendered_voice_ != active_voice_ &&
+        !voice_[rendered_voice_].audible(kSixOpTailThreshold)) {
+      voice_[rendered_voice_].UnloadPatch();
+    }
+  } else {
+    // Staggered rendering.
+    for (size_t i = 0; i < (kNumSixOpVoices - 1) * size; ++i) {
+      temp_buffer_[i] = acc_buffer_[i];
+    }
+    fill(
+        &temp_buffer_[(kNumSixOpVoices - 1) * size],
+        &temp_buffer_[kNumSixOpVoices * size],
+        0.0f);
+    rendered_voice_ = (rendered_voice_ + 1) % kNumSixOpVoices;
+    voice_[rendered_voice_].Render(temp_buffer_, size * kNumSixOpVoices);
+
+    RenderMonoOutput(0.25f, parameters.macro, out, aux, size);
+    for (size_t i = 0; i < (kNumSixOpVoices - 1) * size; ++i) {
+      acc_buffer_[i] = temp_buffer_[size + i];
+    }
+  }
+}
+
+}  // namespace plaits_alt

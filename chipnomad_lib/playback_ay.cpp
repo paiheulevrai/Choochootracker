@@ -525,6 +525,7 @@ void setupInstrument(PlaybackState* state, int trackIdx) {
       break;
     case InstrumentType::Braids:
     case InstrumentType::Plaits:
+    case InstrumentType::PlaitsAlt:
     case InstrumentType::Sample:
       break;
     case InstrumentType::none:

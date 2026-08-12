@@ -1,0 +1,54 @@
+// Copyright 2026 Lyle Mills.
+// SPDX-License-Identifier: MIT
+//
+// Mean-field coupled phase-oscillator synthesis engine.
+//
+// OUT: first circular moment of the flock (mean of sines). AUX: second
+// circular moment, an octave-flavoured projection that survives two-cluster
+// cancellation. In stereo mode, OUT/AUX become L/R: each oscillator holds a
+// fixed equal-power pan position spread across the field in detune order,
+// with the near-zero-detune oscillator centred, and both channels reuse the
+// mono moment's normalization so loudness matches. Synchronization audibly
+// collapses the stereo width toward mono — that emergent behaviour is the
+// point of this mode.
+
+#ifndef PLAITS_ALT_GUARD_PLAITS_DSP_ENGINE2_PHASE_FLOCK_ENGINE_H_
+#define PLAITS_ALT_GUARD_PLAITS_DSP_ENGINE2_PHASE_FLOCK_ENGINE_H_
+
+#include "plaits_alt/dsp/engine/engine.h"
+
+namespace plaits_alt {
+
+const int kNumPhaseFlockOscillators = 7;
+
+class PhaseFlockEngine : public Engine {
+ public:
+  PhaseFlockEngine() { }
+  ~PhaseFlockEngine() { }
+
+  virtual void Init(stmlib::BufferAllocator* allocator);
+  virtual void Reset();
+  virtual void LoadUserData(const uint8_t* user_data) { }
+  virtual void Render(const EngineParameters& parameters,
+      float* out,
+      float* aux,
+      size_t size,
+      bool* already_enveloped);
+  virtual bool linear_tzfm_capable() const { return true; }
+  virtual bool fast_fm_capable() const { return true; }
+  virtual bool stereo_capable() const { return PLAITS_STEREO_PHASE_FLOCK; }
+
+ private:
+  void Scatter();
+
+  float sine_[kNumPhaseFlockOscillators];
+  float cosine_[kNumPhaseFlockOscillators];
+  int scatter_count_;
+  bool reset_pending_;
+
+  DISALLOW_COPY_AND_ASSIGN(PhaseFlockEngine);
+};
+
+}  // namespace plaits_alt
+
+#endif  // PLAITS_DSP_ENGINE2_PHASE_FLOCK_ENGINE_H_

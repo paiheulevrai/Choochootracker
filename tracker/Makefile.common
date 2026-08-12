@@ -13,7 +13,15 @@ PLAITS_LIBS = ../chipnomad_lib/external/mutable/plaits \
 	../chipnomad_lib/external/mutable/plaits/dsp/physical_modelling \
 	../chipnomad_lib/external/mutable/plaits/dsp/speech \
 	../chipnomad_lib/external/mutable/stmlib/dsp
-COMMON_LIBS = src ../chipnomad_lib ../chipnomad_lib/chips ../chipnomad_lib/synth ../chipnomad_lib/external/ayumi ../chipnomad_lib/external/mutable/braids ../chipnomad_lib/external/mutable/stmlib/utils $(PLAITS_LIBS) ../chipnomad_lib/export src/corelib src/import src/screens platforms/shared
+PLAITS_ALT_LIBS = ../chipnomad_lib/external/mutable/plaits_alt \
+	../chipnomad_lib/external/mutable/plaits_alt/dsp \
+	../chipnomad_lib/external/mutable/plaits_alt/dsp/chords \
+	../chipnomad_lib/external/mutable/plaits_alt/dsp/engine \
+	../chipnomad_lib/external/mutable/plaits_alt/dsp/engine2 \
+	../chipnomad_lib/external/mutable/plaits_alt/dsp/fm \
+	../chipnomad_lib/external/mutable/plaits_alt/dsp/physical_modelling \
+	../chipnomad_lib/external/mutable/plaits_alt/dsp/speech
+COMMON_LIBS = src ../chipnomad_lib ../chipnomad_lib/chips ../chipnomad_lib/synth ../chipnomad_lib/external/ayumi ../chipnomad_lib/external/mutable/braids ../chipnomad_lib/external/mutable/stmlib/utils $(PLAITS_LIBS) $(PLAITS_ALT_LIBS) ../chipnomad_lib/export src/corelib src/import src/screens platforms/shared
 
 # Base build directory
 BUILD_BASE = build
@@ -24,10 +32,17 @@ BUILD = $(BUILD_BASE)/$(PLATFORM)
 # Common includes and sources
 # Do not expose Plaits' physical_modelling directory directly: its string.h
 # would shadow the C standard header. Plaits includes it from the mutable root.
-INCLUDE_LIBS = $(filter-out ../chipnomad_lib/external/mutable/plaits/dsp/physical_modelling,$(LIBS))
+INCLUDE_LIBS = $(filter-out ../chipnomad_lib/external/mutable/plaits/dsp/physical_modelling ../chipnomad_lib/external/mutable/plaits_alt/dsp/physical_modelling,$(LIBS))
 INCLUDES = $(addprefix -I, $(INCLUDE_LIBS)) -I../chipnomad_lib -I../chipnomad_lib/external/mutable
 C_SOURCES = $(foreach dir, $(LIBS), $(wildcard $(dir)/*.c))
-CPP_SOURCES = $(foreach dir, $(LIBS), $(wildcard $(dir)/*.cpp)) $(foreach dir, $(LIBS), $(wildcard $(dir)/*.cc))
+# The Plaits-Alt checkout also contains the STM32 module application. Tracker
+# needs its DSP/resources only; compiling its firmware UI would pull hardware
+# dependencies into every desktop target.
+PLAITS_ALT_FIRMWARE_SOURCES = ../chipnomad_lib/external/mutable/plaits_alt/plaits.cc \
+	../chipnomad_lib/external/mutable/plaits_alt/settings.cc \
+	../chipnomad_lib/external/mutable/plaits_alt/ui.cc \
+	../chipnomad_lib/external/mutable/plaits_alt/user_data_receiver.cc
+CPP_SOURCES = $(filter-out $(PLAITS_ALT_FIRMWARE_SOURCES),$(foreach dir, $(LIBS), $(wildcard $(dir)/*.cpp)) $(foreach dir, $(LIBS), $(wildcard $(dir)/*.cc)))
 SOURCES = $(C_SOURCES) $(CPP_SOURCES)
 SRC_FILES = $(foreach dir, $(LIBS), $(wildcard $(dir)/*.c)) $(foreach dir, $(LIBS), $(wildcard $(dir)/*.cpp)) $(foreach dir, $(LIBS), $(wildcard $(dir)/*.h))
 

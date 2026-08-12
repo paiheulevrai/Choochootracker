@@ -246,8 +246,8 @@ void appDraw(void) {
       gfxPrint(34, 3 + c, " "); // Clear indicator
     }
 
-    // Use warning color for track numbers if audio overload is active
-    int useOverloadColor = (chipnomadState->audioOverload > 0);
+    // Keep the clipping source visible on every screen, not only in the mixer.
+    int useOverloadColor = (chipnomadState->trackClipping[c] > 0);
     gfxSetFgColor(useOverloadColor ? cs.warning :
       (*pSongTrack == c ? cs.textDefault : cs.textInfo));
     digit[0] = c + 49;

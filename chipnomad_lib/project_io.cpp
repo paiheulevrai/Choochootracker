@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include "project.h"
 #include "project_io_common.h"
+#include "synth/sample_voice.h"
 #include "utils.h"
 
 // Shared state
@@ -874,6 +875,35 @@ static int projectLoadInternal(FILE* file, Project* project) {
   return 0;
 }
 
+static int pathIsAbsolute(const char* path) {
+  if (path[0] == '/' || path[0] == '\\') return 1;
+#ifdef _WIN32
+  return isalpha((unsigned char)path[0]) && path[1] == ':';
+#else
+  return 0;
+#endif
+}
+
+static void projectLoadRelativeSamples(Project* project, const char* projectPath) {
+  const char* slash = strrchr(projectPath, '/');
+  const char* backslash = strrchr(projectPath, '\\');
+  if (!slash || (backslash && backslash > slash)) slash = backslash;
+  if (!slash) return;
+
+  size_t directoryLength = (size_t)(slash - projectPath + 1);
+  for (int i = 0; i < PROJECT_MAX_INSTRUMENTS; ++i) {
+    InstrumentSample* sample = &project->instruments[i].chip.sample;
+    if (project->instruments[i].type != InstrumentType::Sample || sample->data ||
+        !sample->path[0] || pathIsAbsolute(sample->path)) continue;
+    char fullPath[1024];
+    if (directoryLength + strlen(sample->path) >= sizeof(fullPath)) continue;
+    memcpy(fullPath, projectPath, directoryLength);
+    strcpy(fullPath + directoryLength, sample->path);
+    char error[64];
+    sampleLoadWav16(fullPath, sample, error, sizeof(error));
+  }
+}
+
 int projectLoad(Project* p, const char* path) {
   projectFileError[0] = 0;
   resetPeekConsume();  // Ensure clean state
@@ -886,6 +916,7 @@ int projectLoad(Project* p, const char* path) {
 
   int result = projectLoadInternal(file, p);
   fclose(file);
+  if (!result) projectLoadRelativeSamples(p, path);
   return result;
 }
 

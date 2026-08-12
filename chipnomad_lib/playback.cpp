@@ -277,7 +277,7 @@ void handleNoteOff(PlaybackState* state, int trackIdx) {
   track->note.noteReleased = 1;
 
   int isModernVoice = instType == InstrumentType::Braids ||
-    instType == InstrumentType::Plaits || instType == InstrumentType::Sample;
+    instType == InstrumentType::Plaits || instType == InstrumentType::PlaitsAlt || instType == InstrumentType::Sample;
 
   int hasVolumeADSR = 0;
 
@@ -657,6 +657,7 @@ static void handleInstrument(PlaybackState* state, int trackIdx) {
     break;
   case InstrumentType::Braids:
   case InstrumentType::Plaits:
+  case InstrumentType::PlaitsAlt:
   case InstrumentType::Sample:
     break;
   case InstrumentType::none:

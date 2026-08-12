@@ -102,7 +102,7 @@ There are always eight independent tracks. An AY instrument used on one track do
 
 ## 5. Mixer, Reverb and Delay
 
-The Mixer is the leftmost main screen. Its CPU display reports audio callback load.
+The Mixer is the leftmost main screen. Its CPU display reports audio callback load. A red `!` in the **CLIP** column marks the track whose dry contribution pushed the mix beyond the safe range; lower that track's level or its instrument volume first. Clipping introduced only by the global reverb/delay return remains a master-bus condition and cannot be assigned to one track.
 
 Each track has:
 
@@ -217,6 +217,22 @@ The common Plaits macros follow Mutable's design:
 Their precise meaning is engine-dependent. For example, chord engines use them for chord type/inversion/waveform, physical models use them for material/excitation/decay, and drum engines use them for tone, character and decay. Refer to the Plaits user manual for details.
 
 Tap **Engine** to choose from categorized engine lists. **Env Mode** has two routings: `TRIG` reproduces the module with TRIG connected and LEVEL unpatched; `VCA` holds LEVEL open and applies the tracker ADSR after the voice. Every tracker note sends a new trigger pulse, including consecutive notes without an empty row. In VCA mode, a retrigger starts the attack from the current envelope level to avoid abrupt jumps and clicks. In TRIG mode, the envelope row becomes `D` for LPG decay and `C` for LPG color. Projects saved with the former `LEVEL` mode load as `VCA`.
+
+### Plaits-Alt
+
+**Plaits-Alt** is a separate instrument type: it keeps the Plaits controls and FX, but exposes the 24 supplemental engines from the Plaits Lab catalogue. None of the stock Plaits engines is duplicated. Tap **Engine** to open the same two-panel picker used by Braids and Plaits.
+
+| Category | Engines |
+|---|---|
+| Granular / Micro | `GLISSON`, `PULSAR`, `GENDY`, `SCANNED`, `LOOPBACK` |
+| Phase / Harmonic | `PHASE WEAVE`, `SIDEBAND BANK`, `UNDERTOW`, `ATTRACTOR`, `LOCKSTEP` |
+| Acoustic / Physical | `REED PIPE`, `BRASS`, `SHAKERS`, `CLAPS`, `FRESHETS FORMANT` |
+| Polyphony / Harmony | `DIATONIC CHORD`, `SCALE STACK`, `WT DIATONIC CHORD`, `WT SCALE STACK`, `HELIX` |
+| Digital / Weird | `BYTEBEAT`, `RULEFIELD`, `SPECTRAL SPIRAL`, `PHASE FLOCK` |
+
+### Selection popups
+
+Tap and release **Edit** on Instrument Type, Braids Model or a Plaits engine to open a two-panel picker. Left/right selects the category or entry panel; up/down moves; Edit confirms; Opt closes it. Edit + left/right still scrolls the current value directly.
 
 ### PCM Sample
 
@@ -457,6 +473,6 @@ Adjust Repeat delay and Repeat speed in Settings. If a single press moves twice,
 
 ## 13. Credits and licensing
 
-ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Clouds DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. See the packaged license files for exact attribution.
+ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. See the packaged license files for exact attribution.
 
 The descriptions of Mutable synthesis behavior in this manual are adapted to ChooChooTracker's controls from the original Mutable Instruments Braids, Plaits and Clouds documentation included in the repository's `inspirations` directory.

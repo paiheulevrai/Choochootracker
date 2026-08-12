@@ -1,0 +1,348 @@
+// Copyright 2016 Emilie Gillet.
+//
+// Author: Emilie Gillet (emilie.o.gillet@gmail.com)
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+// 
+// See http://creativecommons.org/licenses/MIT/ for more information.
+//
+// -----------------------------------------------------------------------------
+//
+// Single waveform oscillator. Can optionally do audio-rate linear FM, with
+// through-zero capabilities (negative frequencies).
+
+#ifndef PLAITS_ALT_GUARD_PLAITS_DSP_OSCILLATOR_OSCILLATOR_H_
+#define PLAITS_ALT_GUARD_PLAITS_DSP_OSCILLATOR_OSCILLATOR_H_
+
+#include "stmlib/dsp/dsp.h"
+#include "stmlib/dsp/parameter_interpolator.h"
+#include "stmlib/dsp/polyblep.h"
+
+namespace plaits_alt {
+
+enum OscillatorShape {
+  OSCILLATOR_SHAPE_IMPULSE_TRAIN,
+  OSCILLATOR_SHAPE_SAW,
+  OSCILLATOR_SHAPE_TRIANGLE,
+  OSCILLATOR_SHAPE_SLOPE,
+  OSCILLATOR_SHAPE_SQUARE,
+  OSCILLATOR_SHAPE_SQUARE_BRIGHT,
+  OSCILLATOR_SHAPE_SQUARE_DARK,
+  OSCILLATOR_SHAPE_SQUARE_TRIANGLE
+};
+
+const float kMaxFrequency = 0.25f;
+const float kMinFrequency = 0.000001f;
+
+class Oscillator {
+ public:
+  Oscillator() { }
+  ~Oscillator() { }
+  
+  void Init() {
+    phase_ = 0.5f;
+    next_sample_ = 0.0f;
+    lp_state_ = 1.0f;
+    hp_state_ = 0.0f;
+    high_ = true;
+
+    frequency_ = 0.001f;
+    pw_ = 0.5f;
+  }
+
+  template<OscillatorShape shape>
+  void Render(float frequency, float pw, float* out, size_t size) {
+    RenderInternal<shape, false, false, false, false>(
+        frequency, pw, NULL, out, size, 0);
+  }
+
+  template<OscillatorShape shape>
+  void Render(
+      float frequency,
+      float pw,
+      float* out,
+      size_t size,
+      uint32_t hard_sync) {
+    if (hard_sync) {
+      RenderInternal<shape, false, false, false, true>(
+          frequency, pw, NULL, out, size, hard_sync);
+    } else {
+      RenderInternal<shape, false, false, false, false>(
+          frequency, pw, NULL, out, size, 0);
+    }
+  }
+  
+  template<OscillatorShape shape>
+  void Render(
+      float frequency,
+      float pw,
+      const float* fm,
+      float* out,
+      size_t size) {
+    if (!fm) {
+      RenderInternal<shape, false, false, false, false>(
+          frequency, pw, NULL, out, size, 0);
+    } else {
+      RenderInternal<shape, true, true, false, false>(
+          frequency, pw, fm, out, size, 0);
+    }
+  }
+
+  // Like the existing FM overload, but each sample is an absolute signed
+  // frequency offset (cycles/sample) rather than a ratio of the carrier.
+  template<OscillatorShape shape>
+  void RenderLinearFm(
+      float frequency,
+      float pw,
+      const float* fm,
+      float* out,
+      size_t size,
+      uint32_t hard_sync = 0) {
+    if (!fm) {
+      Render<shape>(frequency, pw, out, size, hard_sync);
+    } else if (hard_sync) {
+      RenderInternal<shape, true, true, true, true>(
+          frequency, pw, fm, out, size, hard_sync);
+    } else {
+      RenderInternal<shape, true, true, true, false>(
+          frequency, pw, fm, out, size, 0);
+    }
+  }
+
+ private:
+  template<
+      OscillatorShape shape,
+      bool has_external_fm,
+      bool through_zero_fm,
+      bool absolute_fm,
+      bool process_hard_sync>
+  void RenderInternal(
+      float frequency,
+      float pw,
+      const float* external_fm,
+      float* out,
+      size_t size,
+      uint32_t hard_sync) {
+    
+    if (!has_external_fm) {
+      if (!through_zero_fm) {
+        CONSTRAIN(frequency, kMinFrequency, kMaxFrequency);
+      } else {
+        CONSTRAIN(frequency, -kMaxFrequency, kMaxFrequency);
+      }
+      CONSTRAIN(pw, fabsf(frequency) * 2.0f, 1.0f - 2.0f * fabsf(frequency))
+    }
+    
+    stmlib::ParameterInterpolator fm(&frequency_, frequency, size);
+    stmlib::ParameterInterpolator pwm(&pw_, pw, size);
+  
+    float next_sample = next_sample_;
+  
+    while (size--) {
+      float this_sample = next_sample;
+      next_sample = 0.0f;
+
+      float frequency = fm.Next();
+      if (has_external_fm) {
+        if (absolute_fm) {
+          frequency += *external_fm++;
+        } else {
+          frequency *= (1.0f + *external_fm++);
+        }
+        if (!through_zero_fm) {
+          CONSTRAIN(frequency, kMinFrequency, kMaxFrequency);
+        } else {
+          CONSTRAIN(frequency, -kMaxFrequency, kMaxFrequency);
+        }
+      }
+      float pw = (shape == OSCILLATOR_SHAPE_SQUARE_TRIANGLE ||
+                  shape == OSCILLATOR_SHAPE_TRIANGLE) ? 0.5f : pwm.Next();
+      if (has_external_fm) {
+        CONSTRAIN(pw, fabsf(frequency) * 2.0f, 1.0f - 2.0f * fabsf(frequency))
+      }
+
+      if (process_hard_sync) {
+        if (hard_sync & 1) {
+          float value = phase_;
+          if (shape > OSCILLATOR_SHAPE_SAW &&
+              shape <= OSCILLATOR_SHAPE_SLOPE) {
+            const float slope_up = 1.0f / pw;
+            const float slope_down = 1.0f / (1.0f - pw);
+            value = phase_ < pw
+                ? phase_ * slope_up
+                : 1.0f - (phase_ - pw) * slope_down;
+          } else if (shape > OSCILLATOR_SHAPE_SLOPE) {
+            value = phase_ < pw ? 0.0f : 1.0f;
+          }
+          // Reset at this sample boundary. The two-sample polyBLEP removes
+          // the arbitrary value discontinuity without clearing the oscillator
+          // filters or parameter interpolators.
+          this_sample -= value * stmlib::ThisBlepSample(1.0f);
+          next_sample -= value * stmlib::NextBlepSample(1.0f);
+          phase_ = 0.0f;
+          high_ = shape <= OSCILLATOR_SHAPE_SLOPE;
+        }
+        hard_sync >>= 1;
+      }
+      phase_ += frequency;
+      
+      if (shape <= OSCILLATOR_SHAPE_SAW) {
+        if (phase_ >= 1.0f) {
+          phase_ -= 1.0f;
+          float t = phase_ / frequency;
+          this_sample -= stmlib::ThisBlepSample(t);
+          next_sample -= stmlib::NextBlepSample(t);
+        } else if (through_zero_fm && phase_ < 0.0f) {
+          float t = phase_ / frequency;
+          phase_ += 1.0f;
+          this_sample += stmlib::ThisBlepSample(t);
+          next_sample += stmlib::NextBlepSample(t);
+        }
+        next_sample += phase_;
+
+        if (shape == OSCILLATOR_SHAPE_SAW) {
+          *out++ = 2.0f * this_sample - 1.0f;
+        } else {
+          lp_state_ += 0.25f * ((hp_state_ - this_sample) - lp_state_);
+          *out++ = 4.0f * lp_state_;
+          hp_state_ = this_sample;
+        }
+      } else if (shape <= OSCILLATOR_SHAPE_SLOPE) {
+        float slope_up = 2.0f;
+        float slope_down = 2.0f;
+        if (shape == OSCILLATOR_SHAPE_SLOPE) {
+          slope_up = 1.0f / (pw);
+          slope_down = 1.0f / (1.0f - pw);
+        }
+        if (high_ ^ (phase_ < pw)) {
+          float discontinuity = (slope_up + slope_down) * frequency;
+          if (through_zero_fm && frequency < 0.0f) {
+            discontinuity = -discontinuity;
+          }
+          if (through_zero_fm) {
+            // At a through-zero stall the interpolated pulse width can cross
+            // the stationary phase. Dividing by a zero (or nearly zero)
+            // oscillator velocity makes t infinite and 0 * poly(infinity)
+            // becomes a latched NaN. A phase-driven crossing always produces
+            // t in [0, 1]; skip only the degenerate parameter-driven case,
+            // whose true bandlimited correction tends to zero with velocity.
+            if (fabsf(frequency) > 1.0e-7f) {
+              const float t = (phase_ - pw) / frequency;
+              if (t >= 0.0f && t <= 1.0f) {
+                this_sample -=
+                    stmlib::ThisIntegratedBlepSample(t) * discontinuity;
+                next_sample -=
+                    stmlib::NextIntegratedBlepSample(t) * discontinuity;
+              }
+            }
+          } else {
+            const float t = (phase_ - pw) / frequency;
+            this_sample -=
+                stmlib::ThisIntegratedBlepSample(t) * discontinuity;
+            next_sample -=
+                stmlib::NextIntegratedBlepSample(t) * discontinuity;
+          }
+          high_ = phase_ < pw;
+        }
+        if (phase_ >= 1.0f) {
+          phase_ -= 1.0f;
+          float t = phase_ / frequency;
+          float discontinuity = (slope_up + slope_down) * frequency;
+          this_sample += stmlib::ThisIntegratedBlepSample(t) * discontinuity;
+          next_sample += stmlib::NextIntegratedBlepSample(t) * discontinuity;
+          high_ = true;
+        } else if (through_zero_fm && phase_ < 0.0f) {
+          float t = phase_ / frequency;
+          phase_ += 1.0f;
+          float discontinuity = (slope_up + slope_down) * frequency;
+          this_sample -= stmlib::ThisIntegratedBlepSample(t) * discontinuity;
+          next_sample -= stmlib::NextIntegratedBlepSample(t) * discontinuity;
+          high_ = false;
+        }
+        next_sample += high_
+          ? phase_ * slope_up
+          : 1.0f - (phase_ - pw) * slope_down;
+        *out++ = 2.0f * this_sample - 1.0f;
+      } else {
+        if (high_ ^ (phase_ >= pw)) {
+          float t = (phase_ - pw) / frequency;
+          float discontinuity = 1.0f;
+          if (through_zero_fm && frequency < 0.0f) {
+            discontinuity = -discontinuity;
+          }
+          this_sample += stmlib::ThisBlepSample(t) * discontinuity;
+          next_sample += stmlib::NextBlepSample(t) * discontinuity;
+          high_ = phase_ >= pw;
+        }
+        if (phase_ >= 1.0f) {
+          phase_ -= 1.0f;
+          float t = phase_ / frequency;
+          this_sample -= stmlib::ThisBlepSample(t);
+          next_sample -= stmlib::NextBlepSample(t);
+          high_ = false;
+        } else if (through_zero_fm && phase_ < 0.0f) {
+          float t = phase_ / frequency;
+          phase_ += 1.0f;
+          this_sample += stmlib::ThisBlepSample(t);
+          next_sample += stmlib::NextBlepSample(t);
+          high_ = true;
+        }
+        next_sample += phase_ < pw ? 0.0f : 1.0f;
+        
+        if (shape == OSCILLATOR_SHAPE_SQUARE_TRIANGLE) {
+          const float integrator_coefficient = frequency * 0.0625f;
+          this_sample = 128.0f * (this_sample - 0.5f);
+          lp_state_ += integrator_coefficient * (this_sample - lp_state_);
+          *out++ = lp_state_;
+        } else if (shape == OSCILLATOR_SHAPE_SQUARE_DARK) {
+          const float integrator_coefficient = frequency * 2.0f;
+          this_sample = 4.0f * (this_sample - 0.5f);
+          lp_state_ += integrator_coefficient * (this_sample - lp_state_);
+          *out++ = lp_state_;
+        } else if (shape == OSCILLATOR_SHAPE_SQUARE_BRIGHT) {
+          const float integrator_coefficient = frequency * 2.0f;
+          this_sample = 2.0f * this_sample - 1.0f;
+          lp_state_ += integrator_coefficient * (this_sample - lp_state_);
+          *out++ = (this_sample - lp_state_) * 0.5f;
+        } else {
+          this_sample = 2.0f * this_sample - 1.0f;
+          *out++ = this_sample;
+        }
+      }
+    }
+    next_sample_ = next_sample;
+  }
+  
+  // Oscillator state.
+  float phase_;
+  float next_sample_;
+  float lp_state_;
+  float hp_state_;
+  bool high_;
+
+  // For interpolation of parameters.
+  float frequency_;
+  float pw_;
+  
+  DISALLOW_COPY_AND_ASSIGN(Oscillator);
+};
+
+}  // namespace plaits_alt
+
+#endif  // PLAITS_DSP_OSCILLATOR_OSCILLATOR_H_

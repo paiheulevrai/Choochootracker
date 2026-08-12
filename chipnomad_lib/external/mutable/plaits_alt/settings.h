@@ -1,0 +1,142 @@
+// Copyright 2016 Emilie Gillet.
+//
+// Author: Emilie Gillet (emilie.o.gillet@gmail.com)
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// See http://creativecommons.org/licenses/MIT/ for more information.
+//
+// -----------------------------------------------------------------------------
+//
+// Settings storage.
+
+#ifndef PLAITS_ALT_GUARD_PLAITS_SETTINGS_H_
+#define PLAITS_ALT_GUARD_PLAITS_SETTINGS_H_
+
+#include "stmlib/stmlib.h"
+#include "stmlib/system/storage.h"
+
+#include "plaits_alt/drivers/cv_adc.h"
+
+namespace plaits_alt {
+
+struct ChannelCalibrationData {
+  float offset;
+  float scale;
+  int16_t normalization_detection_threshold;
+  inline float Transform(float x) const {
+    return x * scale + offset;
+  }
+};
+
+struct PersistentData {
+  ChannelCalibrationData channel_calibration_data[CV_ADC_CHANNEL_LAST];
+  uint8_t padding[16];
+  enum { tag = 0x494C4143 };  // CALI
+};
+
+struct State {
+  // base firmware
+  uint8_t engine;
+  uint8_t lpg_colour;
+  uint8_t decay;
+  uint8_t octave;
+  uint8_t fine_tune;
+  // Retired fine-tune storage, reused as the high byte of the generated
+  // Starting Options profile ID. Older profiles leave it zero, making every
+  // current three-byte ID disjoint without growing State or erasing settings.
+  uint8_t options_profile_id_upper;
+
+  // alt firmware options
+  uint8_t locked_frequency_pot_option;
+  uint8_t model_cv_option;
+  uint8_t level_cv_option;
+  uint8_t aux_output_option;
+  uint8_t aux_subosc_option;
+  uint8_t chord_set_option;
+  uint8_t hold_on_trigger_option;
+  // Reuses the legacy navigation byte. Generated profile IDs always have a
+  // low byte greater than 1, so every state written by the previous firmware
+  // is guaranteed to receive its first apply-once option profile.
+  uint8_t options_profile_id_low;
+
+  // alt firmware other
+  uint8_t locked_octave;
+  uint8_t options_profile_id_high;
+
+  // Per-bank navigation memory (design "B"): the row last selected in each of up
+  // to four banks, so changing bank restores it — persisted across power cycles.
+  // Growing State by these bytes changes sizeof(State); ChunkStorage rejects the
+  // old-size chunk and reinitializes State once (calibration is unaffected).
+  uint8_t bank_last_row[4];
+
+  // Precision tuning: the captured manual root in semitones, Q8.
+  // A separate validity byte makes a freshly migrated state fall back to C4;
+  // growing State deliberately reinitializes legacy state while calibration
+  // survives in its independent PersistentData chunk.
+  int16_t tuned_root_q8;
+  uint8_t tuned_root_valid;
+
+  enum { tag = 0x54415453 };  // STAT
+};
+
+class Settings {
+ public:
+  Settings() { }
+  ~Settings() { }
+
+  bool Init();
+  void InitPersistentData();
+  void InitState();
+
+  void SavePersistentData();
+  void SaveState();
+
+  inline const ChannelCalibrationData& calibration_data(int channel) const {
+    return persistent_data_.channel_calibration_data[channel];
+  }
+
+  inline ChannelCalibrationData* mutable_calibration_data(int channel) {
+    return &persistent_data_.channel_calibration_data[channel];
+  }
+
+  inline const State& state() const {
+    return state_;
+  }
+
+  inline State* mutable_state() {
+    return &state_;
+  }
+
+ private:
+  PersistentData persistent_data_;
+  State state_;
+
+  stmlib::ChunkStorage<
+      0x08004000,
+      0x08007000,
+      PersistentData,
+      State> chunk_storage_;
+
+  DISALLOW_COPY_AND_ASSIGN(Settings);
+};
+
+}  // namespace plaits_alt
+
+#endif  // PLAITS_SETTINGS_H_

@@ -361,6 +361,7 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
         if (loadInstrumentSample(file, instrument)) return 1;
         break;
       case InstrumentType::Plaits:
+      case InstrumentType::PlaitsAlt:
         if (loadInstrumentPlaits(file, instrument)) return 1;
         break;
       default:
@@ -371,7 +372,7 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
   if (instrument->type == InstrumentType::Braids &&
       instrument->chip.braids.filterCutoffHz > 20000) {
     instrument->chip.braids.filterCutoffHz = 20000;
-  } else if (instrument->type == InstrumentType::Plaits &&
+  } else if ((instrument->type == InstrumentType::Plaits || instrument->type == InstrumentType::PlaitsAlt) &&
              instrument->chip.plaits.filterCutoffHz > 20000) {
     instrument->chip.plaits.filterCutoffHz = 20000;
   } else if (instrument->type == InstrumentType::Sample &&
@@ -563,6 +564,7 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
       saveInstrumentSample(file, instrument);
       break;
     case InstrumentType::Plaits:
+    case InstrumentType::PlaitsAlt:
       saveInstrumentPlaits(file, instrument);
       break;
     default:

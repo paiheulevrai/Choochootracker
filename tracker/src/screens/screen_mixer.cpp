@@ -19,12 +19,13 @@ static void drawStatic(void) {
     gfxPrint(0, 0, "MIXER");
     gfxPrint(3, 2, "LVL"); gfxPrint(8, 2, "REV"); gfxPrint(13, 2, "DLY");
     gfxPrint(18, 2, "MUTE"); gfxPrint(25, 2, "SOLO");
+    gfxPrint(32, 2, "CLIP");
   } else if (mixerPage == 1) {
-    gfxPrint(0, 0, "CLOUDS REVERB  SEL+UP: BACK");
+    gfxPrint(0, 0, "CLOUDS REVERB");
     gfxPrint(0, 3, "Return"); gfxPrint(0, 4, "Time");
     gfxPrint(0, 5, "Damping"); gfxPrint(0, 6, "Filter");
   } else {
-    gfxPrint(0, 0, "PING-PONG DELAY SEL+DOWN: BACK");
+    gfxPrint(0, 0, "PING-PONG DELAY");
     gfxPrint(0, 3, "Return"); gfxPrint(0, 4, "Ticks");
     gfxPrint(0, 5, "Feedback"); gfxPrint(0, 6, "Filter");
   }
@@ -51,6 +52,8 @@ static void drawField(int col, int row, CellState state) {
     else if (col == 2) gfxPrintf(13, 3 + row, "%03d", chipnomadState->project.trackDelaySend[row]);
     else if (col == 3) gfxPrint(18, 3 + row, audioManager.trackStates[row] == TRACK_MUTED ? "ON " : "OFF");
     else gfxPrint(25, 3 + row, audioManager.trackStates[row] == TRACK_SOLO ? "ON " : "OFF");
+    gfxSetFgColor(chipnomadState->trackClipping[row] ? appSettings.colorScheme.warning : appSettings.colorScheme.textDefault);
+    gfxPrint(32, 3 + row, chipnomadState->trackClipping[row] ? "!" : " ");
     return;
   }
   if (row < 0 || row >= 4) return;

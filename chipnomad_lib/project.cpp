@@ -91,6 +91,7 @@ FXGroup fxGroups[] = {
   {"Braids FX", fxNamesBraids, 0, 5, InstrumentType::Braids},
   {"Sample FX", fxNamesSample, 0, 6, InstrumentType::Sample},
   {"Plaits FX", fxNamesPlaits, 0, 7, InstrumentType::Plaits},
+  {"Plaits-Alt FX", fxNamesPlaits, 0, 7, InstrumentType::PlaitsAlt},
 };
 int fxGroupCount = sizeof(fxGroups) / sizeof(FXGroup);
 

@@ -51,26 +51,22 @@ static void onSampleLoaded(const char* path) {
 
 static int getColumnCount(int row) {
   if (row < 3) return instrumentCommonColumnCount(row);
-  return row == 12 ? 4 : 1;
+  if (row == 3) return 1;
+  return row == 8 ? 4 : 2;
 }
 
 static void drawStatic(void) {
   instrumentCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  static const char* labels[] = {
-    "Sample", "Pitch", "Start", "End", "Filter",
-    "Mode", "Slope", "Cutoff", "Reso"
-  };
-  for (int i = 0; i < 9; i++) gfxPrint(0, 6 + i, labels[i]);
-  gfxPrint(0, 15, "ADSR");
-  gfxPrint(6, 15, "A"); gfxPrint(11, 15, "D");
-  gfxPrint(16, 15, "S"); gfxPrint(21, 15, "R");
+  gfxPrint(0,6,"Sample"); gfxPrint(0,7,"Pitch"); gfxPrint(21,7,"Filter"); gfxPrint(0,8,"Start"); gfxPrint(21,8,"Mode"); gfxPrint(0,9,"End"); gfxPrint(21,9,"Slope"); gfxPrint(0,10,"Cutoff"); gfxPrint(21,10,"Reso");
+  gfxPrint(0,12,"ADSR"); gfxPrint(6,12,"A"); gfxPrint(11,12,"D"); gfxPrint(16,12,"S"); gfxPrint(21,12,"R");
 }
 
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
-  if (row == 12) gfxCursor(7 + col * 5, 15, 2);
-  else gfxCursor(12, row + 3, row == 3 ? 4 : 7);
+  if (row == 8) gfxCursor(7 + col * 5, 12, 2);
+  else if (row == 3) gfxCursor(11,6,28);
+  else gfxCursor(col ? 31 : 11,row+3,col?8:9);
 }
 
 static const char* sampleFilename(const char* path) {
@@ -82,22 +78,18 @@ static void drawField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
   InstrumentSample* sample = &chipnomadState->project.instruments[cInstrument].chip.sample;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  if (row == 12) {
+  if (row == 8) {
     uint8_t values[] = {sample->attack, sample->decay, sample->sustain, sample->release};
-    gfxPrint(7 + col * 5, 15, byteToHex(values[col]));
+    gfxPrint(7 + col * 5, 12, byteToHex(values[col]));
     return;
   }
-  gfxClearRect(12, row + 3, 27, 1);
+  if (row == 3) gfxClearRect(11,6,29,1); else gfxClearRect(col?31:11,row+3,col?9:10,1);
   switch (row) {
-    case 3: gfxPrintf(12, 6, "Load %s", sampleFilename(sample->path)); break;
-    case 4: gfxPrintf(12, 7, "%+d st", sample->pitch); break;
-    case 5: gfxPrint(12, 8, byteToHex(sample->start)); break;
-    case 6: gfxPrint(12, 9, byteToHex(sample->end)); break;
-    case 7: gfxPrint(12, 10, sample->filterEnabled ? "On" : "Off"); break;
-    case 8: { static const char* modes[] = {"LP", "BP", "HP"}; gfxPrint(12, 11, modes[sample->filterMode <= 2 ? sample->filterMode : 0]); break; }
-    case 9: gfxPrint(12, 12, sample->filterSlope24dB ? "24 dB" : "12 dB"); break;
-    case 10: gfxPrintf(12, 13, "%u Hz", sample->filterCutoffHz); break;
-    case 11: gfxPrint(12, 14, byteToHex(sample->filterResonance)); break;
+    case 3: gfxPrintf(11,6,"Load %s",sampleFilename(sample->path)); break;
+    case 4: if(!col) gfxPrintf(11,7,"%+d st",sample->pitch); else gfxPrint(31,7,sample->filterEnabled?"On":"Off"); break;
+    case 5: if(!col) gfxPrint(11,8,byteToHex(sample->start)); else { static const char* m[]={"LP","BP","HP"}; gfxPrint(31,8,m[sample->filterMode<=2?sample->filterMode:0]); } break;
+    case 6: if(!col) gfxPrint(11,9,byteToHex(sample->end)); else gfxPrint(31,9,sample->filterSlope24dB?"24 dB":"12 dB"); break;
+    case 7: if(!col) gfxPrintf(11,10,"%u Hz",sample->filterCutoffHz); else gfxPrint(31,10,byteToHex(sample->filterResonance)); break;
   }
 }
 
@@ -108,15 +100,11 @@ static int onEdit(int col, int row, CellEditAction action) {
   switch (row) {
     case 3:
       return 0;
-    case 4: handled = editSigned8(action, &sample->pitch, 12, -48, 48); break;
-    case 5: handled = edit8noLast(action, &sample->start, 16, 0, sample->end); break;
-    case 6: handled = edit8noLast(action, &sample->end, 16, sample->start, 255); break;
-    case 7: handled = edit8noLast(action, &sample->filterEnabled, 1, 0, 1); break;
-    case 8: handled = edit8noLast(action, &sample->filterMode, 1, 0, 2); break;
-    case 9: handled = edit8noLast(action, &sample->filterSlope24dB, 1, 0, 1); break;
-    case 10: handled = editFilterCutoff(action, &sample->filterCutoffHz); break;
-    case 11: handled = edit8noLast(action, &sample->filterResonance, 16, 0, 255); break;
-    case 12: {
+    case 4: handled=!col?editSigned8(action,&sample->pitch,12,-48,48):edit8noLast(action,&sample->filterEnabled,1,0,1); break;
+    case 5: handled=!col?edit8noLast(action,&sample->start,16,0,sample->end):edit8noLast(action,&sample->filterMode,1,0,2); break;
+    case 6: handled=!col?edit8noLast(action,&sample->end,16,sample->start,255):edit8noLast(action,&sample->filterSlope24dB,1,0,1); break;
+    case 7: handled=!col?editFilterCutoff(action,&sample->filterCutoffHz):edit8noLast(action,&sample->filterResonance,16,0,255); break;
+    case 8: {
       uint8_t* values[] = {&sample->attack, &sample->decay, &sample->sustain, &sample->release};
       handled = edit8noLast(action, values[col], 16, 0, 255);
       break;
@@ -193,7 +181,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
 }
 
 ScreenData screenInstrumentSample = {
-  .rows = 13, .cursorRow = 0, .cursorCol = 0, .topRow = 0,
+  .rows = 9, .cursorRow = 0, .cursorCol = 0, .topRow = 0,
   .selectMode = -1, .selectStartRow = 0, .selectStartCol = 0,
   .selectAnchorRow = 0, .selectAnchorCol = 0,
   .playbackLevel = ScreenPlaybackLevel::none,

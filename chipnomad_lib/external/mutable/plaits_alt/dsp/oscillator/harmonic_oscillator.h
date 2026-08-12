@@ -1,0 +1,291 @@
+// Copyright 2016 Emilie Gillet.
+//
+// Author: Emilie Gillet (emilie.o.gillet@gmail.com)
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+// 
+// See http://creativecommons.org/licenses/MIT/ for more information.
+//
+// -----------------------------------------------------------------------------
+//
+// Harmonic oscillator based on Chebyshev polynomials.
+// Works well for a small number of harmonics. For the higher order harmonics,
+// we need to reinitialize the recurrence by computing two high harmonics.
+
+#ifndef PLAITS_ALT_GUARD_PLAITS_DSP_OSCILLATOR_HARMONIC_OSCILLATOR_H_
+#define PLAITS_ALT_GUARD_PLAITS_DSP_OSCILLATOR_HARMONIC_OSCILLATOR_H_
+
+#include "stmlib/dsp/dsp.h"
+#include "stmlib/dsp/parameter_interpolator.h"
+
+#include "plaits_alt/dsp/oscillator/sine_oscillator.h"
+
+namespace plaits_alt {
+
+template<int num_harmonics>
+class HarmonicOscillator {
+ public:
+  HarmonicOscillator() { }
+  ~HarmonicOscillator() { }
+
+  void Init() {
+    phase_ = 0.0f;
+    frequency_ = 0.0f;
+    for (int i = 0; i < num_harmonics; ++i) {
+      amplitude_[i] = 0.0f;
+      right_amplitude_[i] = 0.0f;
+    }
+  }
+  
+  template<int first_harmonic_index>
+  void Render(
+      float frequency,
+      const float* amplitudes,
+      float* out,
+      size_t size) {
+    RenderInternal<first_harmonic_index, false>(
+        frequency, amplitudes, out, size, 0);
+  }
+
+  template<int first_harmonic_index>
+  void Render(
+      float frequency,
+      const float* amplitudes,
+      float* out,
+      size_t size,
+      uint32_t hard_sync) {
+    if (hard_sync) {
+      RenderInternal<first_harmonic_index, true>(
+          frequency, amplitudes, out, size, hard_sync);
+    } else {
+      RenderInternal<first_harmonic_index, false>(
+          frequency, amplitudes, out, size, 0);
+    }
+  }
+
+  template<int first_harmonic_index>
+  void RenderLinearFm(
+      float frequency,
+      const float* frequency_offset,
+      const float* amplitudes,
+      float* out,
+      size_t size,
+      uint32_t hard_sync = 0) {
+    if (!frequency_offset) {
+      Render<first_harmonic_index>(
+          frequency, amplitudes, out, size, hard_sync);
+      return;
+    }
+
+    CONSTRAIN(frequency, -0.5f, 0.5f);
+    stmlib::ParameterInterpolator am[num_harmonics];
+    stmlib::ParameterInterpolator fm(&frequency_, frequency, size);
+
+    for (int i = 0; i < num_harmonics; ++i) {
+      float f = fabsf(frequency) *
+          static_cast<float>(first_harmonic_index + i);
+      if (f >= 0.5f) {
+        f = 0.5f;
+      }
+      am[i].Init(&amplitude_[i], amplitudes[i] * (1.0f - f * 2.0f), size);
+    }
+
+    while (size--) {
+      if (hard_sync & 1) {
+        phase_ = 0.0f;
+      }
+      hard_sync >>= 1;
+
+      float f = fm.Next() + *frequency_offset++;
+      CONSTRAIN(f, -0.5f, 0.499999f);
+      phase_ += f;
+      if (phase_ >= 1.0f) {
+        phase_ -= 1.0f;
+      } else if (phase_ < 0.0f) {
+        phase_ += 1.0f;
+      }
+
+      const float two_x = 2.0f * SineNoWrap(phase_);
+      float previous, current;
+      if (first_harmonic_index == 1) {
+        previous = 1.0f;
+        current = two_x * 0.5f;
+      } else {
+        const float k = first_harmonic_index;
+        previous = Sine(phase_ * (k - 1.0f) + 0.25f);
+        current = Sine(phase_ * k);
+      }
+
+      float sum = 0.0f;
+      for (int i = 0; i < num_harmonics; ++i) {
+        sum += am[i].Next() * current;
+        const float temp = current;
+        current = two_x * current - previous;
+        previous = temp;
+      }
+      if (first_harmonic_index == 1) {
+        *out++ = sum;
+      } else {
+        *out++ += sum;
+      }
+    }
+  }
+
+  template<int first_harmonic_index, bool process_hard_sync>
+  void RenderInternal(
+      float frequency,
+      const float* amplitudes,
+      float* out,
+      size_t size,
+      uint32_t hard_sync) {
+    if (frequency >= 0.5f) {
+      frequency = 0.5f;
+    }
+    
+    stmlib::ParameterInterpolator am[num_harmonics];
+    stmlib::ParameterInterpolator fm(&frequency_, frequency, size);
+    
+    for (int i = 0; i < num_harmonics; ++i) {
+      float f = frequency * static_cast<float>(first_harmonic_index + i);
+      if (f >= 0.5f) {
+        f = 0.5f;
+      }
+      am[i].Init(&amplitude_[i], amplitudes[i] * (1.0f - f * 2.0f), size);
+    }
+
+    while (size--) {
+      if (process_hard_sync) {
+        if (hard_sync & 1) {
+          // All partials in a batch are derived from this one fundamental
+          // phase, so one reset coherently aligns the entire spectrum.
+          phase_ = 0.0f;
+        }
+        hard_sync >>= 1;
+      }
+      phase_ += fm.Next();
+      if (phase_ >= 1.0f) {
+        phase_ -= 1.0f;
+      }
+      const float two_x = 2.0f * SineNoWrap(phase_);
+      float previous, current;
+      if (first_harmonic_index == 1) {
+        previous = 1.0f;
+        current = two_x * 0.5f;
+      } else {
+        const float k = first_harmonic_index;
+        previous = Sine(phase_ * (k - 1.0f) + 0.25f);
+        current = Sine(phase_ * k);
+      }
+      
+      float sum = 0.0f;
+      for (int i = 0; i < num_harmonics; ++i) {
+        sum += am[i].Next() * current;
+        float temp = current;
+        current = two_x * current - previous;
+        previous = temp;
+      }
+      if (first_harmonic_index == 1) {
+        *out++ = sum;
+      } else {
+        *out++ += sum;
+      }
+    }
+  }
+
+  // Renders the same harmonic stack into a stereo pair, with independent
+  // per-harmonic amplitudes for each channel. The left channel shares its
+  // amplitude interpolation state with the mono Render.
+  template<int first_harmonic_index>
+  void RenderStereo(
+      float frequency,
+      const float* left_amplitudes,
+      const float* right_amplitudes,
+      float* left,
+      float* right,
+      size_t size) {
+    if (frequency >= 0.5f) {
+      frequency = 0.5f;
+    }
+
+    stmlib::ParameterInterpolator left_am[num_harmonics];
+    stmlib::ParameterInterpolator right_am[num_harmonics];
+    stmlib::ParameterInterpolator fm(&frequency_, frequency, size);
+
+    for (int i = 0; i < num_harmonics; ++i) {
+      float f = frequency * static_cast<float>(first_harmonic_index + i);
+      if (f >= 0.5f) {
+        f = 0.5f;
+      }
+      const float attenuation = 1.0f - f * 2.0f;
+      left_am[i].Init(
+          &amplitude_[i], left_amplitudes[i] * attenuation, size);
+      right_am[i].Init(
+          &right_amplitude_[i], right_amplitudes[i] * attenuation, size);
+    }
+
+    while (size--) {
+      phase_ += fm.Next();
+      if (phase_ >= 1.0f) {
+        phase_ -= 1.0f;
+      }
+      const float two_x = 2.0f * SineNoWrap(phase_);
+      float previous, current;
+      if (first_harmonic_index == 1) {
+        previous = 1.0f;
+        current = two_x * 0.5f;
+      } else {
+        const float k = first_harmonic_index;
+        previous = Sine(phase_ * (k - 1.0f) + 0.25f);
+        current = Sine(phase_ * k);
+      }
+
+      float left_sum = 0.0f;
+      float right_sum = 0.0f;
+      for (int i = 0; i < num_harmonics; ++i) {
+        left_sum += left_am[i].Next() * current;
+        right_sum += right_am[i].Next() * current;
+        float temp = current;
+        current = two_x * current - previous;
+        previous = temp;
+      }
+      if (first_harmonic_index == 1) {
+        *left++ = left_sum;
+        *right++ = right_sum;
+      } else {
+        *left++ += left_sum;
+        *right++ += right_sum;
+      }
+    }
+  }
+
+ private:
+  // Oscillator state.
+  float phase_;
+
+  // For interpolation of parameters.
+  float frequency_;
+  float amplitude_[num_harmonics];
+  float right_amplitude_[num_harmonics];
+  
+  DISALLOW_COPY_AND_ASSIGN(HarmonicOscillator);
+};
+
+}  // namespace plaits_alt
+
+#endif  // PLAITS_DSP_OSCILLATOR_HARMONIC_OSCILLATOR_H_

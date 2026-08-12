@@ -18,6 +18,7 @@ enum class InstrumentType : uint8_t {
   Braids = 4,
   Sample = 5,
   Plaits = 6,
+  PlaitsAlt = 7,
   totalCount,
 };
 

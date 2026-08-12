@@ -71,6 +71,8 @@ const char* instrumentTypeName(InstrumentType type) {
       return "Sample";
     case InstrumentType::Plaits:
       return "Plaits";
+    case InstrumentType::PlaitsAlt:
+      return "Plaits-Alt";
     case InstrumentType::none:
       return "None";
     default:

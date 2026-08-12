@@ -9,6 +9,7 @@
 #include "copy_paste.h"
 #include "file_browser.h"
 #include "import_vts.h"
+#include "selection_popup.h"
 #include <string.h>
 #include <strings.h>
 
@@ -16,6 +17,23 @@ extern const AppScreen screenInstrumentPool;
 
 int cInstrument = 0;
 static int isCharEdit = 0;
+static int typeButtonDown = 0;
+
+static const SelectionItem instrumentTypeChip[] = {
+  {"AY Classic", (int)InstrumentType::AY1, NULL, 0},
+  {"AY Plus", (int)InstrumentType::AY2, NULL, 0},
+  {"AY Sample", (int)InstrumentType::AYSample, NULL, 0},
+};
+static const SelectionItem instrumentTypeSynth[] = {
+  {"Braids", (int)InstrumentType::Braids, NULL, 0},
+  {"PCM Sample", (int)InstrumentType::Sample, NULL, 0},
+  {"Plaits", (int)InstrumentType::Plaits, NULL, 0},
+  {"Plaits-Alt", (int)InstrumentType::PlaitsAlt, NULL, 0},
+};
+static const SelectionItem instrumentTypeCategories[] = {
+  {"CHIP", -1, instrumentTypeChip, 3},
+  {"SYNTH", -1, instrumentTypeSynth, 4},
+};
 
 static void getInstrumentFilename(char* filename, int size) {
   if (strlen(chipnomadState->project.instruments[cInstrument].name) > 0) {
@@ -103,6 +121,52 @@ static void onInstrumentCancelled(void) {
 static void drawRowHeader(int row, CellState state);
 static void drawColHeader(int col, CellState state);
 
+static void setInstrumentType(InstrumentType newType) {
+  Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
+  InstrumentType oldType = instrument->type;
+  if (oldType == newType) {
+    screenSetup(&screenInstrument, cInstrument);
+    return;
+  }
+  getInstrumentFunctions(oldType).free(instrument);
+  instrument->type = newType;
+  getInstrumentFunctions(newType).init(instrument);
+  projectModified = 1;
+  screenSetup(&screenInstrument, cInstrument);
+}
+
+static void selectInstrumentType(int value) {
+  setInstrumentType((InstrumentType)value);
+}
+
+static void cancelInstrumentTypeSelection(void) {
+  screenSetup(&screenInstrument, cInstrument);
+}
+
+static int instrumentTypePopupInput(int isKeyDown, int keys, ScreenData* screen) {
+  if (screen->cursorRow != 0 || screen->cursorCol != 0) {
+    typeButtonDown = 0;
+    return 0;
+  }
+  if (isKeyDown && keys == keyEdit) {
+    typeButtonDown = 1;
+    return 1;
+  }
+  if (isKeyDown && (keys == (keyEdit | keyLeft) || keys == (keyEdit | keyRight))) {
+    typeButtonDown = 0;
+    return 0;
+  }
+  if (!isKeyDown && keys == 0 && typeButtonDown) {
+    typeButtonDown = 0;
+    selectionPopupSetup("INSTRUMENT TYPE", instrumentTypeCategories, 2,
+      (int)chipnomadState->project.instruments[cInstrument].type,
+      selectInstrumentType, cancelInstrumentTypeSelection);
+    screenSetup(&screenSelectionPopup, 0);
+    return 1;
+  }
+  return 0;
+}
+
 
 
 static ScreenData screenInstrumentNone = {
@@ -139,6 +203,7 @@ static ScreenData* instrumentScreen(void) {
     case InstrumentType::Braids:      data = &screenInstrumentBraids; break;
     case InstrumentType::Sample:      data = &screenInstrumentSample; break;
     case InstrumentType::Plaits:      data = &screenInstrumentPlaits; break;
+    case InstrumentType::PlaitsAlt:   data = &screenInstrumentPlaits; break;
     default: break;
   }
   data->drawRowHeader = drawRowHeader;
@@ -148,6 +213,7 @@ static ScreenData* instrumentScreen(void) {
 
 static void init(void) {
   isCharEdit = 0;
+  typeButtonDown = 0;
   screenInstrumentNone.cursorRow = 0;
   screenInstrumentNone.cursorCol = 0;
 }
@@ -199,8 +265,8 @@ void instrumentCommonDrawStatic(void) {
 
   gfxPrint(0, 3, "Name");
   gfxPrint(0, 4, "Transp.");
-  gfxPrint(17, 4, "Tbl. Tic");
-  gfxPrint(29, 4, "Vol");
+  gfxPrint(15, 4, "Tbl.Tic");
+  gfxPrint(28, 4, "Vol");
 }
 
 void instrumentCommonDrawCursor(int col, int row) {
@@ -221,7 +287,7 @@ void instrumentCommonDrawCursor(int col, int row) {
     gfxCursor(8, 4, 3);
   } else if (row == 2 && col == 1) {
     // Table tic speed
-    gfxCursor(26, 4, 2);
+    gfxCursor(23, 4, 2);
   } else if (row == 2 && col == 2) {
     gfxCursor(32, 4, 2);
   }
@@ -254,7 +320,7 @@ void instrumentCommonDrawField(int col, int row, CellState state) {
     gfxPrintf(8, 4, chipnomadState->project.instruments[cInstrument].transposeEnabled ? "On " : "Off");
   } else if (row == 2 && col == 1) {
     // Table tic speed
-    gfxPrint(26, 4, byteToHex(chipnomadState->project.instruments[cInstrument].tableSpeed));
+    gfxPrint(23, 4, byteToHex(chipnomadState->project.instruments[cInstrument].tableSpeed));
   } else if (row == 2 && col == 2) {
     gfxPrint(32, 4, byteToHex(chipnomadState->project.instruments[cInstrument].volume));
   }
@@ -270,17 +336,7 @@ int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
       1, 0, static_cast<uint8_t>(InstrumentType::totalCount) - 1);
     InstrumentType newType = chipnomadState->project.instruments[cInstrument].type;
 
-    if (oldType != newType) {
-      // Free old instrument data (critical for sample instruments to prevent memory leaks!)
-      // Note: free() will zero the entire struct including the type field
-      getInstrumentFunctions(oldType).free(&chipnomadState->project.instruments[cInstrument]);
-
-      // Restore the new type and initialize
-      chipnomadState->project.instruments[cInstrument].type = newType;
-      getInstrumentFunctions(newType).init(&chipnomadState->project.instruments[cInstrument]);
-
-      fullRedraw();
-    }
+    if (oldType != newType) setInstrumentType(newType);
   } else if (row == 0 && col == 1) {
     // Load instrument (supports .cni and .vts formats)
     fileBrowserSetup("LOAD INSTRUMENT", ".cni,.vts", appSettings.instrumentPath, onInstrumentLoaded, onInstrumentCancelled);
@@ -412,6 +468,8 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     if (screen->onInput && screen->onInput(isKeyDown, keys, tapCount)) {
       return 1;
     }
+
+    if (instrumentTypePopupInput(isKeyDown, keys, screen)) return 1;
 
     if (inputScreenNavigation(keys, tapCount)) return 1;
 

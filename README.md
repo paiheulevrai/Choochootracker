@@ -44,7 +44,7 @@ PortMaster.
 
 - Eight fixed monophonic tracks (with independent instruments)
 - AY Classic, AY Plus, and crunchy AY Sample playback (from Chipnomad)
-- All 47 Braids engines and all 24 Plaits engines (I couldn't decide between Plaits and Braids, they are both awesome)
+- All 47 Braids engines, 24 stock Plaits engines, and 24 non-duplicated Plaits-Alt engines
 - Clean mono or stereo PCM8/PCM16 sample playback (one-shot samples, like your Digitakt)
 - Multimode LP/HP/BP 12/24dB filter for all new synth/sample engines
 - Per-track volume, mute, solo, Reverb send, and Delay send
@@ -60,7 +60,7 @@ PortMaster.
 
 Instruments in LSDJ/Chipnomad work like "Machines" in the Elektron world.
 
-Each instrument has its sound engine and can be mixed/matched at will: you can have an AY bass on one track, a Braids drum model on another, a Plaits chord engine on the next, and a some repitched heehaa samples beside them.
+Each instrument has its sound engine and can be mixed/matched at will: you can have an AY bass on one track, a Braids drum model on another, a Plaits chord engine or a Plaits-Alt texture on the next, and some repitched heehaa samples beside them.
 
 There is no project-wide chip selection and no forced group of three AY channels. And of course you can use several instruments in a track so you can do "single track challenges".
 
