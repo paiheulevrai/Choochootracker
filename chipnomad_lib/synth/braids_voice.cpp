@@ -9,7 +9,6 @@ void BraidsVoice::init() {
   blockPosition_ = kBlockSize;
   model_ = 0;
   active_ = false;
-  gain_ = 1.0f;
   basePitch_ = 60 << 7;
   bits_ = 6;
   drift_ = signature_ = 0;
@@ -21,10 +20,7 @@ void BraidsVoice::init() {
   oscillator_.set_parameters(16384, 16384);
   memset(sync_, 0, sizeof(sync_));
 
-  filter_.init(kSampleRate);
-
-  envelopeEnabled_ = false;
-  envelope_.init(kSampleRate);
+  post_.init(kSampleRate);
 }
 
 bool BraidsVoice::setModel(uint8_t model) {
@@ -56,38 +52,34 @@ void BraidsVoice::setParameters(uint16_t timbre, uint16_t color) {
 }
 
 void BraidsVoice::setGain(float gain) {
-  gain_ = gain < 0.0f ? 0.0f : (gain > 1.0f ? 1.0f : gain);
+  post_.setGain(gain);
 }
 
 void BraidsVoice::setFilter(bool enabled, BraidsFilterMode mode,
                             bool slope24dB, float cutoffHz,
                             float resonance) {
-  filter_.configure(enabled, static_cast<uint8_t>(mode), slope24dB,
-                    cutoffHz, resonance);
+  post_.setFilter(enabled, static_cast<uint8_t>(mode), slope24dB, cutoffHz, resonance);
 }
 
 void BraidsVoice::setEnvelope(bool enabled, float attackSeconds,
                               float decaySeconds, float sustain,
                               float releaseSeconds, uint8_t shape) {
-  envelopeEnabled_ = enabled;
-  envelope_.configure(attackSeconds, decaySeconds, sustain, releaseSeconds, shape);
+  post_.setEnvelope(enabled, attackSeconds, decaySeconds, sustain, releaseSeconds, shape);
 }
 
 void BraidsVoice::noteOn() {
   active_ = true;
   strike();
-  if (envelopeEnabled_) {
-    envelope_.noteOn();
-  }
+  post_.noteOn();
 }
 
 void BraidsVoice::noteOff() {
-  if (envelopeEnabled_) envelope_.noteOff();
+  post_.noteOff();
 }
 
 void BraidsVoice::kill() {
   active_ = false;
-  envelope_.kill();
+  post_.kill();
 }
 
 void BraidsVoice::strike() {
@@ -121,10 +113,8 @@ void BraidsVoice::render(float* output, size_t samples) {
   for (size_t i = 0; i < samples; ++i) {
     if (blockPosition_ == kBlockSize) renderBlock();
     float sample = static_cast<float>(block_[blockPosition_++]) / 32768.0f;
-    sample = filter_.process(sample);
-    float envelope = envelopeEnabled_ ? envelope_.next() : 1.0f;
-    output[i] = sample * envelope * gain_;
-    if (envelopeEnabled_ && !envelope_.active()) {
+    output[i] = post_.process(sample);
+    if (!post_.envelopeActive()) {
       active_ = false;
       memset(output + i + 1, 0, (samples - i - 1) * sizeof(float));
       break;

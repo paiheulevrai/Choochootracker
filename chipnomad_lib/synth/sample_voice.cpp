@@ -20,16 +20,14 @@ void SampleVoice::init(float outputSampleRate) {
   startFrame_ = 0;
   endFrame_ = 0;
   active_ = false;
-  gain_ = 1.0f;
-  envelope_.init(outputSampleRate_);
-  filter_.init(outputSampleRate_);
+  post_.init(outputSampleRate_);
 }
 
 void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
                             float gain, uint8_t start, uint8_t end,
                             uint16_t cutoffHz, uint8_t resonance) {
   sample_ = sample;
-  gain_ = gain < 0.0f ? 0.0f : (gain > 1.0f ? 1.0f : gain);
+  post_.setGain(gain);
   if (!sample_ || !sample_->data || sample_->frameCount == 0) return;
 
   startFrame_ = (uint32_t)((uint64_t)start * (sample_->frameCount - 1) / 255);
@@ -39,29 +37,27 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
   if (endFrame_ <= startFrame_) endFrame_ = startFrame_ + 1;
   if (endFrame_ > sample_->frameCount) endFrame_ = sample_->frameCount;
   step_ = (sample_->sampleRate / outputSampleRate_) * pow(2.0, pitchCents / 1200.0);
-  filter_.configure(sample_->filterEnabled != 0, sample_->filterMode,
-                    sample_->filterSlope24dB != 0, cutoffHz,
-                    resonance / 255.0f);
-  envelope_.configure(envelopeTime(sample_->attack), envelopeTime(sample_->decay),
-                      sample_->sustain / 255.0f, envelopeTime(sample_->release),
-                      sample_->envelopeShape);
+  post_.setFilter(sample_->filterEnabled != 0, sample_->filterMode,
+                  sample_->filterSlope24dB != 0, cutoffHz, resonance / 255.0f);
+  post_.setEnvelope(true, envelopeTime(sample_->attack), envelopeTime(sample_->decay),
+                    sample_->sustain / 255.0f, envelopeTime(sample_->release),
+                    sample_->envelopeShape);
 }
 
 void SampleVoice::noteOn() {
   if (!sample_ || !sample_->data || endFrame_ <= startFrame_) return;
   position_ = startFrame_;
   active_ = true;
-  filter_.reset();
-  envelope_.noteOn();
+  post_.noteOn(true);
 }
 
 void SampleVoice::noteOff() {
-  if (active_) envelope_.noteOff();
+  if (active_) post_.noteOff();
 }
 
 void SampleVoice::kill() {
   active_ = false;
-  envelope_.kill();
+  post_.kill();
 }
 
 void SampleVoice::render(float* output, size_t frames) {
@@ -76,17 +72,15 @@ void SampleVoice::render(float* output, size_t frames) {
     }
     uint32_t next = frame + 1 < endFrame_ ? frame + 1 : frame;
     float fraction = (float)(position_ - frame);
-    float envelope = envelope_.next() * gain_;
-    if (!envelope_.active()) { kill(); break; }
+    if (!post_.envelopeActive()) { kill(); break; }
     for (int channel = 0; channel < 2; channel++) {
       int sourceChannel = sample_->channels == 1 ? 0 : channel;
       float a = sample_->data[frame * sample_->channels + sourceChannel] / 32768.0f;
       float b = sample_->data[next * sample_->channels + sourceChannel] / 32768.0f;
-      float value = (a + (b - a) * fraction) * envelope;
-      value = filter_.process(value, channel);
-      output[i * 2 + channel] = value;
+      output[i * 2 + channel] = post_.process(a + (b - a) * fraction, channel);
     }
     position_ += step_;
+    if (!post_.envelopeActive()) { kill(); break; }
   }
 }
 

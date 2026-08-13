@@ -250,7 +250,7 @@ The clean Sample engine plays mono or stereo PCM independently of AY emulation.
 - **Pitch** transposes by semitones (`-48` to `+48`).
 - **Start** and **End** set normalized playback boundaries (`00–FF`).
 - **Volume** is `00–FF`.
-- The optional filter provides LP/BP/HP, 12/24 dB slope, cutoff and resonance.
+- The optional filter provides LP/BP/HP, 12/24 dB slope, cutoff and resonance. Resonance follows an exponential response, giving finer control before the high-Q end of its range.
 - The ADSR shapes amplitude.
 
 Unsupported WAV formats display a longer error message. Convert unusual files to PCM8 or PCM16 WAV before importing.
@@ -363,7 +363,7 @@ The value is interpreted as a signed 8-bit relative change (`01` adds one, `FF` 
 | `BTM` | `00-FF` | Absolute normalized Timbre |
 | `BCL` | `00-FF` | Absolute normalized Color |
 | `BCF` | `00-FF` | Exponential cutoff, 20 Hz to 20 kHz |
-| `BRS` | `00-FF` | Filter resonance |
+| `BRS` | `00-FF` | Exponential filter resonance |
 
 ### Plaits FX
 
@@ -375,7 +375,7 @@ The value is interpreted as a signed 8-bit relative change (`01` adds one, `FF` 
 | `PMO` | `00-FF` | Absolute normalized Morph |
 | `PAX` | `00-FF` | Main/Aux blend: `00` Main, `FF` Aux |
 | `PCF` | `00-FF` | Exponential cutoff, 20 Hz to 20 kHz |
-| `PRS` | `00-FF` | Filter resonance |
+| `PRS` | `00-FF` | Exponential filter resonance |
 
 ### Sample FX
 
@@ -386,7 +386,7 @@ The value is interpreted as a signed 8-bit relative change (`01` adds one, `FF` 
 | `SEN` | `00-FF` | Normalized playback end |
 | `SVL` | `00-FF` | Absolute sample volume |
 | `SCF` | `00-FF` | Exponential cutoff, 20 Hz to 20 kHz |
-| `SRS` | `00-FF` | Filter resonance |
+| `SRS` | `00-FF` | Exponential filter resonance |
 
 ### AY FX shared by AY instruments
 

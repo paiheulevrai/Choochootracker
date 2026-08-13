@@ -3,8 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "multimode_filter.h"
-#include "envelope.h"
+#include "voice_post_processor.h"
 
 struct InstrumentSample;
 
@@ -19,7 +18,7 @@ class SampleVoice {
   void kill();
   void render(float* output, size_t frames);
   bool active() const { return active_; }
-  float envelopeLevel() const { return envelope_.level(); }
+  float envelopeLevel() const { return post_.envelopeLevel(); }
 
  private:
   const InstrumentSample* sample_;
@@ -29,11 +28,7 @@ class SampleVoice {
   uint32_t startFrame_;
   uint32_t endFrame_;
   bool active_;
-  float gain_;
-
-  Envelope envelope_;
-
-  MultimodeFilter filter_;
+  VoicePostProcessor<> post_;
 };
 
 int sampleLoadWav16(const char* path, InstrumentSample* sample,

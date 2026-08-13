@@ -7,8 +7,7 @@
 #include "braids/macro_oscillator.h"
 #include "braids/signature_waveshaper.h"
 #include "braids/vco_jitter_source.h"
-#include "multimode_filter.h"
-#include "envelope.h"
+#include "voice_post_processor.h"
 
 enum class BraidsFilterMode : uint8_t {
   lowPass,
@@ -40,7 +39,7 @@ class BraidsVoice {
 
   uint8_t model() const { return model_; }
   bool active() const { return active_; }
-  float envelopeLevel() const { return envelopeEnabled_ ? envelope_.level() : 1.0f; }
+  float envelopeLevel() const { return post_.envelopeLevel(); }
 
  private:
   void renderBlock();
@@ -58,10 +57,7 @@ class BraidsVoice {
   braids::SignatureWaveshaper signatureWaveshaper_;
   braids::VcoJitterSource jitterSource_;
 
-  MultimodeFilter filter_;
-
-  bool envelopeEnabled_;
-  Envelope envelope_;
+  VoicePostProcessor<> post_;
 };
 
 #endif

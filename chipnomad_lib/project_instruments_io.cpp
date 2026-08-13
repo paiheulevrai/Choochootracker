@@ -194,6 +194,34 @@ static int loadInstrumentAYSample(FILE* file, Instrument* instrument) {
   return 0;
 }
 
+static int loadVoicePostSetting(const char* line, InstrumentVoicePostSettings* post) {
+  if (strncmp(line, "- Filter enabled: ", 18) == 0) sscanf(line, "- Filter enabled: %hhu", &post->filterEnabled);
+  else if (strncmp(line, "- Filter mode: ", 15) == 0) sscanf(line, "- Filter mode: %hhu", &post->filterMode);
+  else if (strncmp(line, "- Filter slope: ", 16) == 0) sscanf(line, "- Filter slope: %hhu", &post->filterSlope24dB);
+  else if (strncmp(line, "- Filter cutoff: ", 17) == 0) sscanf(line, "- Filter cutoff: %hu", &post->filterCutoffHz);
+  else if (strncmp(line, "- Filter resonance: ", 20) == 0) sscanf(line, "- Filter resonance: %hhu", &post->filterResonance);
+  else if (strncmp(line, "- Attack: ", 10) == 0) sscanf(line, "- Attack: %hhu", &post->attack);
+  else if (strncmp(line, "- Decay: ", 9) == 0) sscanf(line, "- Decay: %hhu", &post->decay);
+  else if (strncmp(line, "- Sustain: ", 11) == 0) sscanf(line, "- Sustain: %hhu", &post->sustain);
+  else if (strncmp(line, "- Release: ", 11) == 0) sscanf(line, "- Release: %hhu", &post->release);
+  else if (strncmp(line, "- Envelope shape: ", 18) == 0) sscanf(line, "- Envelope shape: %hhu", &post->envelopeShape);
+  else return 0;
+  return 1;
+}
+
+static void saveVoicePostSettings(FILE* file, const InstrumentVoicePostSettings* post) {
+  fprintf(file, "- Filter enabled: %hhu\n", post->filterEnabled);
+  fprintf(file, "- Filter mode: %hhu\n", post->filterMode);
+  fprintf(file, "- Filter slope: %hhu\n", post->filterSlope24dB);
+  fprintf(file, "- Filter cutoff: %hu\n", post->filterCutoffHz);
+  fprintf(file, "- Filter resonance: %hhu\n", post->filterResonance);
+  fprintf(file, "- Attack: %hhu\n", post->attack);
+  fprintf(file, "- Decay: %hhu\n", post->decay);
+  fprintf(file, "- Sustain: %hhu\n", post->sustain);
+  fprintf(file, "- Release: %hhu\n", post->release);
+  fprintf(file, "- Envelope shape: %hhu\n", post->envelopeShape);
+}
+
 static int loadInstrumentBraids(FILE* file, Instrument* instrument) {
   InstrumentBraids* braids = &instrument->chip.braids;
   while (1) {
@@ -203,16 +231,7 @@ static int loadInstrumentBraids(FILE* file, Instrument* instrument) {
     if (strncmp(line, "- Model: ", 9) == 0) sscanf(line, "- Model: %hhu", &braids->model);
     else if (strncmp(line, "- Timbre: ", 10) == 0) sscanf(line, "- Timbre: %hu", &braids->timbre);
     else if (strncmp(line, "- Color: ", 9) == 0) sscanf(line, "- Color: %hu", &braids->color);
-    else if (strncmp(line, "- Filter enabled: ", 18) == 0) sscanf(line, "- Filter enabled: %hhu", &braids->filterEnabled);
-    else if (strncmp(line, "- Filter mode: ", 15) == 0) sscanf(line, "- Filter mode: %hhu", &braids->filterMode);
-    else if (strncmp(line, "- Filter slope: ", 16) == 0) sscanf(line, "- Filter slope: %hhu", &braids->filterSlope24dB);
-    else if (strncmp(line, "- Filter cutoff: ", 17) == 0) sscanf(line, "- Filter cutoff: %hu", &braids->filterCutoffHz);
-    else if (strncmp(line, "- Filter resonance: ", 20) == 0) sscanf(line, "- Filter resonance: %hhu", &braids->filterResonance);
-    else if (strncmp(line, "- Attack: ", 10) == 0) sscanf(line, "- Attack: %hhu", &braids->attack);
-    else if (strncmp(line, "- Decay: ", 9) == 0) sscanf(line, "- Decay: %hhu", &braids->decay);
-    else if (strncmp(line, "- Sustain: ", 11) == 0) sscanf(line, "- Sustain: %hhu", &braids->sustain);
-    else if (strncmp(line, "- Release: ", 11) == 0) sscanf(line, "- Release: %hhu", &braids->release);
-    else if (strncmp(line, "- Envelope shape: ", 18) == 0) sscanf(line, "- Envelope shape: %hhu", &braids->envelopeShape);
+    else loadVoicePostSetting(line, braids);
     consumeLine(file);
   }
 }
@@ -227,16 +246,7 @@ static int loadInstrumentSample(FILE* file, Instrument* instrument) {
     else if (strncmp(line, "- Sample start: ", 16) == 0) sscanf(line, "- Sample start: %hhu", &sample->start);
     else if (strncmp(line, "- Sample end: ", 14) == 0) sscanf(line, "- Sample end: %hhu", &sample->end);
     else if (strncmp(line, "- Sample volume: ", 17) == 0) sscanf(line, "- Sample volume: %hhu", &instrument->volume);
-    else if (strncmp(line, "- Filter enabled: ", 18) == 0) sscanf(line, "- Filter enabled: %hhu", &sample->filterEnabled);
-    else if (strncmp(line, "- Filter mode: ", 15) == 0) sscanf(line, "- Filter mode: %hhu", &sample->filterMode);
-    else if (strncmp(line, "- Filter slope: ", 16) == 0) sscanf(line, "- Filter slope: %hhu", &sample->filterSlope24dB);
-    else if (strncmp(line, "- Filter cutoff: ", 17) == 0) sscanf(line, "- Filter cutoff: %hu", &sample->filterCutoffHz);
-    else if (strncmp(line, "- Filter resonance: ", 20) == 0) sscanf(line, "- Filter resonance: %hhu", &sample->filterResonance);
-    else if (strncmp(line, "- Attack: ", 10) == 0) sscanf(line, "- Attack: %hhu", &sample->attack);
-    else if (strncmp(line, "- Decay: ", 9) == 0) sscanf(line, "- Decay: %hhu", &sample->decay);
-    else if (strncmp(line, "- Sustain: ", 11) == 0) sscanf(line, "- Sustain: %hhu", &sample->sustain);
-    else if (strncmp(line, "- Release: ", 11) == 0) sscanf(line, "- Release: %hhu", &sample->release);
-    else if (strncmp(line, "- Envelope shape: ", 18) == 0) sscanf(line, "- Envelope shape: %hhu", &sample->envelopeShape);
+    else loadVoicePostSetting(line, sample);
     consumeLine(file);
   }
   if (sample->path[0]) {
@@ -257,16 +267,7 @@ static int loadInstrumentPlaits(FILE* file, Instrument* instrument) {
     else if (strncmp(line, "- Morph: ", 9) == 0) sscanf(line, "- Morph: %hu", &p->morph);
     else if (strncmp(line, "- Aux mix: ", 11) == 0) sscanf(line, "- Aux mix: %hhu", &p->auxMix);
     else if (strncmp(line, "- Envelope mode: ", 17) == 0) sscanf(line, "- Envelope mode: %hhu", &p->envelopeMode);
-    else if (strncmp(line, "- Filter enabled: ", 18) == 0) sscanf(line, "- Filter enabled: %hhu", &p->filterEnabled);
-    else if (strncmp(line, "- Filter mode: ", 15) == 0) sscanf(line, "- Filter mode: %hhu", &p->filterMode);
-    else if (strncmp(line, "- Filter slope: ", 16) == 0) sscanf(line, "- Filter slope: %hhu", &p->filterSlope24dB);
-    else if (strncmp(line, "- Filter cutoff: ", 17) == 0) sscanf(line, "- Filter cutoff: %hu", &p->filterCutoffHz);
-    else if (strncmp(line, "- Filter resonance: ", 20) == 0) sscanf(line, "- Filter resonance: %hhu", &p->filterResonance);
-    else if (strncmp(line, "- Attack: ", 10) == 0) sscanf(line, "- Attack: %hhu", &p->attack);
-    else if (strncmp(line, "- Decay: ", 9) == 0) sscanf(line, "- Decay: %hhu", &p->decay);
-    else if (strncmp(line, "- Sustain: ", 11) == 0) sscanf(line, "- Sustain: %hhu", &p->sustain);
-    else if (strncmp(line, "- Release: ", 11) == 0) sscanf(line, "- Release: %hhu", &p->release);
-    else if (strncmp(line, "- Envelope shape: ", 18) == 0) sscanf(line, "- Envelope shape: %hhu", &p->envelopeShape);
+    else loadVoicePostSetting(line, p);
     consumeLine(file);
   }
 }
@@ -469,16 +470,7 @@ static int saveInstrumentBraids(FILE* file, Instrument* instrument) {
   fprintf(file, "- Model: %hhu\n", braids->model);
   fprintf(file, "- Timbre: %hu\n", braids->timbre);
   fprintf(file, "- Color: %hu\n", braids->color);
-  fprintf(file, "- Filter enabled: %hhu\n", braids->filterEnabled);
-  fprintf(file, "- Filter mode: %hhu\n", braids->filterMode);
-  fprintf(file, "- Filter slope: %hhu\n", braids->filterSlope24dB);
-  fprintf(file, "- Filter cutoff: %hu\n", braids->filterCutoffHz);
-  fprintf(file, "- Filter resonance: %hhu\n", braids->filterResonance);
-  fprintf(file, "- Attack: %hhu\n", braids->attack);
-  fprintf(file, "- Decay: %hhu\n", braids->decay);
-  fprintf(file, "- Sustain: %hhu\n", braids->sustain);
-  fprintf(file, "- Release: %hhu\n", braids->release);
-  fprintf(file, "- Envelope shape: %hhu\n", braids->envelopeShape);
+  saveVoicePostSettings(file, braids);
   return 0;
 }
 
@@ -488,16 +480,7 @@ static int saveInstrumentSample(FILE* file, Instrument* instrument) {
   fprintf(file, "- Sample pitch: %hhd\n", sample->pitch);
   fprintf(file, "- Sample start: %hhu\n", sample->start);
   fprintf(file, "- Sample end: %hhu\n", sample->end);
-  fprintf(file, "- Filter enabled: %hhu\n", sample->filterEnabled);
-  fprintf(file, "- Filter mode: %hhu\n", sample->filterMode);
-  fprintf(file, "- Filter slope: %hhu\n", sample->filterSlope24dB);
-  fprintf(file, "- Filter cutoff: %hu\n", sample->filterCutoffHz);
-  fprintf(file, "- Filter resonance: %hhu\n", sample->filterResonance);
-  fprintf(file, "- Attack: %hhu\n", sample->attack);
-  fprintf(file, "- Decay: %hhu\n", sample->decay);
-  fprintf(file, "- Sustain: %hhu\n", sample->sustain);
-  fprintf(file, "- Release: %hhu\n", sample->release);
-  fprintf(file, "- Envelope shape: %hhu\n", sample->envelopeShape);
+  saveVoicePostSettings(file, sample);
   return 0;
 }
 
@@ -509,16 +492,7 @@ static int saveInstrumentPlaits(FILE* file, Instrument* instrument) {
   fprintf(file, "- Morph: %hu\n", p->morph);
   fprintf(file, "- Aux mix: %hhu\n", p->auxMix);
   fprintf(file, "- Envelope mode: %hhu\n", p->envelopeMode);
-  fprintf(file, "- Filter enabled: %hhu\n", p->filterEnabled);
-  fprintf(file, "- Filter mode: %hhu\n", p->filterMode);
-  fprintf(file, "- Filter slope: %hhu\n", p->filterSlope24dB);
-  fprintf(file, "- Filter cutoff: %hu\n", p->filterCutoffHz);
-  fprintf(file, "- Filter resonance: %hhu\n", p->filterResonance);
-  fprintf(file, "- Attack: %hhu\n", p->attack);
-  fprintf(file, "- Decay: %hhu\n", p->decay);
-  fprintf(file, "- Sustain: %hhu\n", p->sustain);
-  fprintf(file, "- Release: %hhu\n", p->release);
-  fprintf(file, "- Envelope shape: %hhu\n", p->envelopeShape);
+  saveVoicePostSettings(file, p);
   return 0;
 }
 

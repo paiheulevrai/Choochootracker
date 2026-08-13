@@ -136,10 +136,7 @@ struct InstrumentAYSample {
   int8_t fineTune;
 };
 
-struct InstrumentBraids {
-  uint8_t model;
-  uint16_t timbre;
-  uint16_t color;
+struct InstrumentVoicePostSettings {
   uint8_t filterEnabled;
   uint8_t filterMode;
   uint8_t filterSlope24dB;
@@ -152,28 +149,24 @@ struct InstrumentBraids {
   uint8_t envelopeShape;
 };
 
-struct InstrumentPlaits {
+struct InstrumentBraids : InstrumentVoicePostSettings {
+  uint8_t model;
+  uint16_t timbre;
+  uint16_t color;
+};
+
+struct InstrumentPlaits : InstrumentVoicePostSettings {
   uint8_t engine;
   uint16_t harmonics;
   uint16_t timbre;
   uint16_t morph;
   uint8_t auxMix;
   uint8_t envelopeMode; // 0: TRIG/LPG, 2: post-VCA ADSR (1 loads as legacy VCA)
-  uint8_t filterEnabled;
-  uint8_t filterMode;
-  uint8_t filterSlope24dB;
-  uint16_t filterCutoffHz;
-  uint8_t filterResonance;
-  uint8_t attack;
-  uint8_t decay;
-  uint8_t sustain;
-  uint8_t release;
-  uint8_t envelopeShape;
 };
 
 #define PROJECT_SAMPLE_PATH_LENGTH 255
 
-struct InstrumentSample {
+struct InstrumentSample : InstrumentVoicePostSettings {
   char path[PROJECT_SAMPLE_PATH_LENGTH + 1];
   uint32_t sampleRate;
   uint32_t frameCount;
@@ -182,16 +175,6 @@ struct InstrumentSample {
   int8_t pitch;
   uint8_t start;
   uint8_t end;
-  uint8_t filterEnabled;
-  uint8_t filterMode;
-  uint8_t filterSlope24dB;
-  uint16_t filterCutoffHz;
-  uint8_t filterResonance;
-  uint8_t attack;
-  uint8_t decay;
-  uint8_t sustain;
-  uint8_t release;
-  uint8_t envelopeShape;
 };
 
 union InstrumentChipData {
