@@ -352,33 +352,45 @@ indicateur de performance ou changement DSP n'est proposé ici. L'ajout de
 Plaits-Alt doit être chiffré séparément (catalogue, IDs stables, données de
 projet, voix et tests), puis il héritera du gabarit et du popup ci-dessus.
 
-## Proposition — instruments modernes aérés
+## Écran instrument — gabarit implémenté
 
-L'affichage validé conserve la bonne densité horizontale : la source reste à
-gauche, le filtre à droite et le séquenceur ne bouge pas. Cette proposition
-utilise seulement l'espace vertical libre : une respiration après l'en-tête,
-des titres de section discrets et une seule enveloppe ADSR commune en bas.
+Le gabarit des moteurs de voix (Braids, Sample, Plaits et Plaits-Alt) utilise
+l'espace vertical libre sans déplacer le séquenceur. Le moteur a sa propre
+ligne pleine largeur ; les paramètres sont ensuite organisés en deux sections
+alignées. Cette structure évite que les noms de modèles longs empiètent sur le
+filtre.
 
 ```text
 INSTRUMENT 00
 
-Type    [Plaits-Alt]     Load  Save
-Name    [DIATONIC CHORD]
-Transp. [On ] Tbl.Tic[01] Vol[FF]  1 ---
-                                  2 ---
-SOURCE                  FILTER    3 ---
-Engine   [15 DIATONIC]  On  [On ] 4 ---
-Harmonic [0257]         Mode [LP] 5 ---
-Timbre   [0000]         Slope[24] 6 ---
-Morph    [0383]         Cutoff    7 ---
-Main/Aux [00  ]          [20000Hz]8 ---
-Env Mode [VCA ]         Reso [0B]
+Type    Plaits          Load  Save             1 ---
+Name                                            2 ---
+Transp. On      Tbl.Tic 01   Vol FF            3 ---
 
-ENVELOPE
-ADSR  A[01] D[20] S[00] R[20] Shape[AF]
-      /\____-------------------------\__
+Engine       00 VA VCF                         4 ---
+SOURCE                  FILTER                  5 ---
+Harmonic     0000        Status   On           6 ---
+Timbre       0003        Mode     LP           7 ---
+Morph        0000        Slope    12 dB        8 ---
+Main/Aux     00          Cutoff   20000 Hz
+Env Mode     VCA         Reso     00
+
+ADSR  AFF  D90  S80  R00  Shape 00
+      [graphique ADSR A → R, 17 colonnes × 3 lignes]
 ```
 
-Règles : pas de cadres, cartes ou icônes décoratives ; accents de couleur
-uniquement pour la section active, les valeurs modifiées et le focus ; garder
-`20000 Hz` et `24 dB` complètement visibles.
+Règles de présentation :
+
+- `Engine` (ou `Model` pour Braids, `Sample` pour PCM), `SOURCE`, `FILTER`,
+  `ADSR` et `LPG` sont en `textTitles`, la couleur d'accent des thèmes AY.
+- Les libellés de paramètres et les valeurs non focalisées restent en
+  `textDefault`; la valeur focalisée utilise `textValue`.
+- La ligne de statut du filtre s'appelle `Status`, pas `Filter`, car le titre
+  de section indique déjà le contexte.
+- Les valeurs commencent en colonne 26 : `20000 Hz` et `24 dB` doivent rester
+  entièrement visibles avant le séquenceur.
+- La preview ADSR est rasterisée, commune aux trois moteurs de voix, placée
+  sous A/D/S/R (colonnes 6 à 22) et haute de trois lignes. Elle reflète Attack,
+  Decay, Sustain, Release et Shape (`00` logarithmique, `80` linéaire, `FF`
+  exponentielle). En Plaits TRIG, la ligne devient `LPG` et aucune preview ADSR
+  n'est dessinée.
