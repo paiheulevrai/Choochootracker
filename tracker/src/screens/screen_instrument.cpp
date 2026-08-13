@@ -12,12 +12,14 @@
 #include "selection_popup.h"
 #include <string.h>
 #include <strings.h>
+#include <math.h>
 
 extern const AppScreen screenInstrumentPool;
 
 int cInstrument = 0;
 static int isCharEdit = 0;
 static int typeButtonDown = 0;
+static Bitmap* envelopePreviewBitmap = NULL;
 
 static const SelectionItem instrumentTypeChip[] = {
   {"AY Classic", (int)InstrumentType::AY1, NULL, 0},
@@ -324,6 +326,47 @@ void instrumentCommonDrawField(int col, int row, CellState state) {
   } else if (row == 2 && col == 2) {
     gfxPrint(32, 4, byteToHex(chipnomadState->project.instruments[cInstrument].volume));
   }
+}
+
+static float envelopePreviewCurve(float x, uint8_t shape) {
+  if (shape <= 0x80) {
+    float root = sqrtf(x);
+    return root + (x - root) * ((float)shape / 128.0f);
+  }
+  return x + (x * x - x) * ((float)(shape - 0x80) / 127.0f);
+}
+
+static void drawEnvelopePreviewSegment(Bitmap* bitmap, int x0, float start, int x1, float target, uint8_t shape) {
+  int width = x1 - x0;
+  if (width < 1) width = 1;
+  for (int x = 0; x <= width; x++) {
+    float progress = envelopePreviewCurve((float)x / width, shape);
+    float level = start + (target - start) * progress;
+    int y = bitmap->heightPixels - 1 - (int)(level * (bitmap->heightPixels - 2));
+    if (x0 + x >= 0 && x0 + x < bitmap->widthPixels && y >= 0 && y < bitmap->heightPixels) {
+      bitmap->data[y * bitmap->widthPixels + x0 + x] = 255;
+    }
+  }
+}
+
+void instrumentCommonDrawEnvelopePreview(uint8_t attack, uint8_t decay, uint8_t sustain, uint8_t release, uint8_t shape) {
+  if (!envelopePreviewBitmap) envelopePreviewBitmap = gfxBitmapCreate(17, 1);
+  if (!envelopePreviewBitmap) return;
+
+  Bitmap* bitmap = envelopePreviewBitmap;
+  memset(bitmap->data, 0, bitmap->widthPixels * bitmap->heightPixels);
+  const int width = bitmap->widthPixels - 1;
+  const int attackEnd = 3 + ((int)attack * width) / (255 * 7);
+  const int decayEnd = attackEnd + 3 + ((int)decay * width) / (255 * 6);
+  const int releaseStart = width - 3 - ((int)release * width) / (255 * 7);
+
+  float sustainLevel = (float)sustain / 255.0f;
+  drawEnvelopePreviewSegment(bitmap, 0, 0.0f, attackEnd, 1.0f, shape);
+  drawEnvelopePreviewSegment(bitmap, attackEnd, 1.0f, decayEnd, sustainLevel, shape);
+  drawEnvelopePreviewSegment(bitmap, decayEnd, sustainLevel, releaseStart, sustainLevel, shape);
+  drawEnvelopePreviewSegment(bitmap, releaseStart, sustainLevel, width, 0.0f, shape);
+  gfxSetFgColor(appSettings.colorScheme.textTitles);
+  gfxDrawBitmap(bitmap, 6, 15);
 }
 
 int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {

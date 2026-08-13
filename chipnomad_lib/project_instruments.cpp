@@ -104,17 +104,26 @@ static const char* modNameBraids(int modIndex) {
   return names[modIndex];
 }
 
+static void initVoicePostSettings(InstrumentVoicePostSettings* post) {
+  post->filterEnabled = 1;
+  post->filterMode = 0;
+  post->filterSlope24dB = 0;
+  post->filterCutoffHz = 20000;
+  post->filterResonance = 0;
+  post->attack = 1;
+  post->decay = 0;
+  post->sustain = 255;
+  post->release = 1;
+  post->envelopeShape = 0x80;
+}
+
 static int initBraidsInstrument(Instrument* instrument) {
   initCommon(instrument);
   instrument->type = InstrumentType::Braids;
   instrument->chip.braids.model = 0;
   instrument->chip.braids.timbre = 16384;
   instrument->chip.braids.color = 16384;
-  instrument->chip.braids.filterEnabled = 1;
-  instrument->chip.braids.filterCutoffHz = 20000;
-  instrument->chip.braids.sustain = 255;
-  instrument->chip.braids.release = 16;
-  instrument->chip.braids.envelopeShape = 0x80;
+  initVoicePostSettings(&instrument->chip.braids);
   return 0;
 }
 
@@ -137,11 +146,7 @@ static int initPlaitsInstrument(Instrument* instrument) {
   plaits->harmonics = 16384;
   plaits->timbre = 16384;
   plaits->morph = 16384;
-  plaits->filterEnabled = 1;
-  plaits->filterCutoffHz = 20000;
-  plaits->sustain = 255;
-  plaits->release = 16;
-  plaits->envelopeShape = 0x80;
+  initVoicePostSettings(plaits);
   return 0;
 }
 
@@ -165,11 +170,7 @@ static int initSampleInstrument(Instrument* instrument) {
   initCommon(instrument);
   instrument->type = InstrumentType::Sample;
   instrument->chip.sample.end = 255;
-  instrument->chip.sample.filterEnabled = 1;
-  instrument->chip.sample.filterCutoffHz = 20000;
-  instrument->chip.sample.sustain = 255;
-  instrument->chip.sample.release = 16;
-  instrument->chip.sample.envelopeShape = 0x80;
+  initVoicePostSettings(&instrument->chip.sample);
   return 0;
 }
 

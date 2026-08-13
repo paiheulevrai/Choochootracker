@@ -40,17 +40,20 @@ static int getColumnCount(int row) {
 
 static void drawStatic(void) {
   instrumentCommonDrawStatic();
+  gfxSetFgColor(appSettings.colorScheme.textTitles);
+  gfxPrint(0,6,"Model");
+  gfxPrint(0,7,"SOURCE"); gfxPrint(18,7,"FILTER");
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  gfxPrint(0,6,"Model"); gfxPrint(0,7,"Timbre"); gfxPrint(21,7,"Filter");
-  gfxPrint(0,8,"Color"); gfxPrint(21,8,"Mode"); gfxPrint(21,9,"Slope"); gfxPrint(21,10,"Cutoff"); gfxPrint(21,11,"Reso");
-  gfxPrint(0,13,"ADSR"); gfxPrint(6,13,"A"); gfxPrint(11,13,"D"); gfxPrint(16,13,"S"); gfxPrint(21,13,"R"); gfxPrint(27,13,"Shape");
+  gfxPrint(0,8,"Timbre"); gfxPrint(18,8,"Status");
+  gfxPrint(0,9,"Color"); gfxPrint(18,9,"Mode"); gfxPrint(18,10,"Slope"); gfxPrint(18,11,"Cutoff"); gfxPrint(18,12,"Reso");
+  gfxPrint(0,14,"ADSR"); gfxPrint(6,14,"A"); gfxPrint(11,14,"D"); gfxPrint(16,14,"S"); gfxPrint(21,14,"R"); gfxPrint(27,14,"Shape");
 }
 
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
-  if (row == 9) gfxCursor(col == 4 ? 35 : 7 + col * 5, 13, 2);
+  if (row == 9) gfxCursor(col == 4 ? 35 : 7 + col * 5, 14, 2);
   else if (row == 3) gfxCursor(11, 6, 28);
-  else gfxCursor(col ? 31 : 11, row + 3, col ? 8 : 9);
+  else gfxCursor(col ? 26 : 11, row + 4, col ? 8 : 7);
 }
 
 static void drawField(int col, int row, CellState state) {
@@ -59,17 +62,18 @@ static void drawField(int col, int row, CellState state) {
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   if (row == 9) {
     uint8_t values[] = {b->attack, b->decay, b->sustain, b->release, b->envelopeShape};
-    gfxPrint(col == 4 ? 35 : 7 + col * 5, 13, byteToHex(values[col]));
+    gfxPrint(col == 4 ? 35 : 7 + col * 5, 14, byteToHex(values[col]));
+    instrumentCommonDrawEnvelopePreview(b->attack, b->decay, b->sustain, b->release, b->envelopeShape);
     return;
   }
-  if (row == 3) gfxClearRect(11, 6, 29, 1); else gfxClearRect(col ? 31 : 11, row + 3, col ? 9 : 10, 1);
+  if (row == 3) gfxClearRect(11, 6, 29, 1); else gfxClearRect(col ? 26 : 11, row + 4, col ? 8 : 7, 1);
   switch (row) {
     case 3: gfxPrintf(12, 6, "%02d %s", b->model, modelNames[b->model <= 46 ? b->model : 0]); break;
-    case 4: if (!col) gfxPrintf(11,7,"%04u",(unsigned)((uint32_t)b->timbre*1023/32767)); else gfxPrint(31,7,b->filterEnabled?"On":"Off"); break;
-    case 5: if (!col) gfxPrintf(11,8,"%04u",(unsigned)((uint32_t)b->color*1023/32767)); else { static const char* m[]={"LP","BP","HP"}; gfxPrint(31,8,m[b->filterMode<=2?b->filterMode:0]); } break;
-    case 6: if (col) gfxPrint(31,9,b->filterSlope24dB?"24 dB":"12 dB"); break;
-    case 7: if (col) gfxPrintf(31,10,"%u Hz",b->filterCutoffHz); break;
-    case 8: if (col) gfxPrint(31,11,byteToHex(b->filterResonance)); break;
+    case 4: if (!col) gfxPrintf(11,8,"%04u",(unsigned)((uint32_t)b->timbre*1023/32767)); else gfxPrint(26,8,b->filterEnabled?"On":"Off"); break;
+    case 5: if (!col) gfxPrintf(11,9,"%04u",(unsigned)((uint32_t)b->color*1023/32767)); else { static const char* m[]={"LP","BP","HP"}; gfxPrint(26,9,m[b->filterMode<=2?b->filterMode:0]); } break;
+    case 6: if (col) gfxPrint(26,10,b->filterSlope24dB?"24 dB":"12 dB"); break;
+    case 7: if (col) gfxPrintf(26,11,"%u Hz",b->filterCutoffHz); break;
+    case 8: if (col) gfxPrint(26,12,byteToHex(b->filterResonance)); break;
   }
 }
 

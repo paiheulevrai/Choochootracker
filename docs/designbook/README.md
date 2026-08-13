@@ -351,3 +351,34 @@ La charge CPU est considérée acceptable selon les tests du 12 août. Aucun
 indicateur de performance ou changement DSP n'est proposé ici. L'ajout de
 Plaits-Alt doit être chiffré séparément (catalogue, IDs stables, données de
 projet, voix et tests), puis il héritera du gabarit et du popup ci-dessus.
+
+## Proposition — instruments modernes aérés
+
+L'affichage validé conserve la bonne densité horizontale : la source reste à
+gauche, le filtre à droite et le séquenceur ne bouge pas. Cette proposition
+utilise seulement l'espace vertical libre : une respiration après l'en-tête,
+des titres de section discrets et une seule enveloppe ADSR commune en bas.
+
+```text
+INSTRUMENT 00
+
+Type    [Plaits-Alt]     Load  Save
+Name    [DIATONIC CHORD]
+Transp. [On ] Tbl.Tic[01] Vol[FF]  1 ---
+                                  2 ---
+SOURCE                  FILTER    3 ---
+Engine   [15 DIATONIC]  On  [On ] 4 ---
+Harmonic [0257]         Mode [LP] 5 ---
+Timbre   [0000]         Slope[24] 6 ---
+Morph    [0383]         Cutoff    7 ---
+Main/Aux [00  ]          [20000Hz]8 ---
+Env Mode [VCA ]         Reso [0B]
+
+ENVELOPE
+ADSR  A[01] D[20] S[00] R[20] Shape[AF]
+      /\____-------------------------\__
+```
+
+Règles : pas de cadres, cartes ou icônes décoratives ; accents de couleur
+uniquement pour la section active, les valeurs modifiées et le focus ; garder
+`20000 Hz` et `24 dB` complètement visibles.

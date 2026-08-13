@@ -57,16 +57,19 @@ static int getColumnCount(int row) {
 
 static void drawStatic(void) {
   instrumentCommonDrawStatic();
+  gfxSetFgColor(appSettings.colorScheme.textTitles);
+  gfxPrint(0,6,"Sample");
+  gfxPrint(0,7,"SOURCE"); gfxPrint(18,7,"FILTER");
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  gfxPrint(0,6,"Sample"); gfxPrint(0,7,"Pitch"); gfxPrint(21,7,"Filter"); gfxPrint(0,8,"Start"); gfxPrint(21,8,"Mode"); gfxPrint(0,9,"End"); gfxPrint(21,9,"Slope"); gfxPrint(21,10,"Cutoff"); gfxPrint(21,11,"Reso");
-  gfxPrint(0,13,"ADSR"); gfxPrint(6,13,"A"); gfxPrint(11,13,"D"); gfxPrint(16,13,"S"); gfxPrint(21,13,"R"); gfxPrint(27,13,"Shape");
+  gfxPrint(0,8,"Pitch"); gfxPrint(18,8,"Status"); gfxPrint(0,9,"Start"); gfxPrint(18,9,"Mode"); gfxPrint(0,10,"End"); gfxPrint(18,10,"Slope"); gfxPrint(18,11,"Cutoff"); gfxPrint(18,12,"Reso");
+  gfxPrint(0,14,"ADSR"); gfxPrint(6,14,"A"); gfxPrint(11,14,"D"); gfxPrint(16,14,"S"); gfxPrint(21,14,"R"); gfxPrint(27,14,"Shape");
 }
 
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
-  if (row == 9) gfxCursor(col == 4 ? 35 : 7 + col * 5, 13, 2);
+  if (row == 9) gfxCursor(col == 4 ? 35 : 7 + col * 5, 14, 2);
   else if (row == 3) gfxCursor(11,6,28);
-  else gfxCursor(col ? 31 : 11,row+3,col?8:9);
+  else gfxCursor(col ? 26 : 11,row+4,col?8:7);
 }
 
 static const char* sampleFilename(const char* path) {
@@ -80,17 +83,18 @@ static void drawField(int col, int row, CellState state) {
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   if (row == 9) {
     uint8_t values[] = {sample->attack, sample->decay, sample->sustain, sample->release, sample->envelopeShape};
-    gfxPrint(col == 4 ? 35 : 7 + col * 5, 13, byteToHex(values[col]));
+    gfxPrint(col == 4 ? 35 : 7 + col * 5, 14, byteToHex(values[col]));
+    instrumentCommonDrawEnvelopePreview(sample->attack, sample->decay, sample->sustain, sample->release, sample->envelopeShape);
     return;
   }
-  if (row == 3) gfxClearRect(11,6,29,1); else gfxClearRect(col?31:11,row+3,col?9:10,1);
+  if (row == 3) gfxClearRect(11,6,29,1); else gfxClearRect(col?26:11,row+4,col?8:7,1);
   switch (row) {
     case 3: gfxPrintf(11,6,"Load %s",sampleFilename(sample->path)); break;
-    case 4: if(!col) gfxPrintf(11,7,"%+d st",sample->pitch); else gfxPrint(31,7,sample->filterEnabled?"On":"Off"); break;
-    case 5: if(!col) gfxPrint(11,8,byteToHex(sample->start)); else { static const char* m[]={"LP","BP","HP"}; gfxPrint(31,8,m[sample->filterMode<=2?sample->filterMode:0]); } break;
-    case 6: if(!col) gfxPrint(11,9,byteToHex(sample->end)); else gfxPrint(31,9,sample->filterSlope24dB?"24 dB":"12 dB"); break;
-    case 7: if(col) gfxPrintf(31,10,"%u Hz",sample->filterCutoffHz); break;
-    case 8: if(col) gfxPrint(31,11,byteToHex(sample->filterResonance)); break;
+    case 4: if(!col) gfxPrintf(11,8,"%+d st",sample->pitch); else gfxPrint(26,8,sample->filterEnabled?"On":"Off"); break;
+    case 5: if(!col) gfxPrint(11,9,byteToHex(sample->start)); else { static const char* m[]={"LP","BP","HP"}; gfxPrint(26,9,m[sample->filterMode<=2?sample->filterMode:0]); } break;
+    case 6: if(!col) gfxPrint(11,10,byteToHex(sample->end)); else gfxPrint(26,10,sample->filterSlope24dB?"24 dB":"12 dB"); break;
+    case 7: if(col) gfxPrintf(26,11,"%u Hz",sample->filterCutoffHz); break;
+    case 8: if(col) gfxPrint(26,12,byteToHex(sample->filterResonance)); break;
   }
 }
 
