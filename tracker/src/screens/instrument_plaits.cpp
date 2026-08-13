@@ -63,9 +63,14 @@ static void drawStatic(void) {
   gfxPrint(0, 12, "Env Mode");gfxPrint(18, 12, "Reso");
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
   if (p->envelopeMode == 0) {
-    gfxPrint(0, 14, "LPG"); gfxPrint(6, 14, "D"); gfxPrint(11, 14, "C");
+    gfxSetFgColor(appSettings.colorScheme.textTitles);
+    gfxPrint(0, 14, "LPG");
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxPrint(6, 14, "D"); gfxPrint(11, 14, "C");
   } else {
+    gfxSetFgColor(appSettings.colorScheme.textTitles);
     gfxPrint(0, 14, "ADSR");
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
     gfxPrint(6, 14, "A"); gfxPrint(11, 14, "D");
     gfxPrint(16, 14, "S"); gfxPrint(21, 14, "R"); gfxPrint(27, 14, "Shape");
   }

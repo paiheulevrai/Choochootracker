@@ -350,7 +350,7 @@ static void drawEnvelopePreviewSegment(Bitmap* bitmap, int x0, float start, int 
 }
 
 void instrumentCommonDrawEnvelopePreview(uint8_t attack, uint8_t decay, uint8_t sustain, uint8_t release, uint8_t shape) {
-  if (!envelopePreviewBitmap) envelopePreviewBitmap = gfxBitmapCreate(17, 1);
+  if (!envelopePreviewBitmap) envelopePreviewBitmap = gfxBitmapCreate(17, 3);
   if (!envelopePreviewBitmap) return;
 
   Bitmap* bitmap = envelopePreviewBitmap;

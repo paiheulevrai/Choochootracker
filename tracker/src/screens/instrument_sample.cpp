@@ -62,7 +62,10 @@ static void drawStatic(void) {
   gfxPrint(0,7,"SOURCE"); gfxPrint(18,7,"FILTER");
   gfxSetFgColor(appSettings.colorScheme.textDefault);
   gfxPrint(0,8,"Pitch"); gfxPrint(18,8,"Status"); gfxPrint(0,9,"Start"); gfxPrint(18,9,"Mode"); gfxPrint(0,10,"End"); gfxPrint(18,10,"Slope"); gfxPrint(18,11,"Cutoff"); gfxPrint(18,12,"Reso");
-  gfxPrint(0,14,"ADSR"); gfxPrint(6,14,"A"); gfxPrint(11,14,"D"); gfxPrint(16,14,"S"); gfxPrint(21,14,"R"); gfxPrint(27,14,"Shape");
+  gfxSetFgColor(appSettings.colorScheme.textTitles);
+  gfxPrint(0,14,"ADSR");
+  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxPrint(6,14,"A"); gfxPrint(11,14,"D"); gfxPrint(16,14,"S"); gfxPrint(21,14,"R"); gfxPrint(27,14,"Shape");
 }
 
 static void drawCursor(int col, int row) {
