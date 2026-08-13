@@ -31,7 +31,7 @@ void drawScreenMap() {
   if (currentScreen == &screenMixer) {
     gfxPrint(34, smY, "R");
     gfxPrint(34, smY + 2, "D");
-  } else if (currentScreen == &screenSong || currentScreen == &screenProject) {
+  } else if (currentScreen == &screenSong || currentScreen == &screenProject || currentScreen == &screenSettings) {
     gfxPrint(35, smY, "P");
   } else if (currentScreen == &screenPhrase || currentScreen == &screenGroove) {
     gfxPrint(37, smY, "G");
@@ -45,7 +45,7 @@ void drawScreenMap() {
   }
 
   // Show Settings below Song
-  if (currentScreen == &screenSong) {
+  if (currentScreen == &screenSong || currentScreen == &screenProject || currentScreen == &screenSettings) {
     gfxPrint(35, smY + 2, "S");
   }
 

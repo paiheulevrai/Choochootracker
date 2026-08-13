@@ -10,6 +10,12 @@ class BraidsVoice;
 class SampleVoice;
 class PlaitsVoice;
 class PlaitsAltVoice;
+
+struct VoiceMonitor {
+  float samples[64];
+  float envelope;
+  uint8_t active;
+};
 class MasterEffects;
 
 #define AUDIO_OVERLOAD_COOLDOWN_FRAMES 5
@@ -43,6 +49,7 @@ struct ChipNomadState {
   SampleVoice* sampleVoices[PROJECT_MAX_TRACKS];
   PlaitsVoice* plaitsVoices[PROJECT_MAX_TRACKS];
   PlaitsAltVoice* plaitsAltVoices[PROJECT_MAX_TRACKS];
+  VoiceMonitor voiceMonitors[PROJECT_MAX_TRACKS];
   MasterEffects* masterEffects;
 };
 

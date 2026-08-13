@@ -6,6 +6,7 @@
 
 #include "plaits/dsp/voice.h"
 #include "multimode_filter.h"
+#include "envelope.h"
 
 class PlaitsVoice {
  public:
@@ -19,21 +20,18 @@ class PlaitsVoice {
   void setFilter(bool enabled, uint8_t mode, bool slope24dB,
                  float cutoffHz, float resonance);
   void setEnvelope(float attackSeconds, float decaySeconds, float sustain,
-                   float releaseSeconds);
+                   float releaseSeconds, uint8_t shape = 0x80);
   void noteOn();
   void noteOff();
   void kill();
   void render(float* output, size_t samples);
 
   bool active() const { return active_; }
+  float envelopeLevel() const { return envelopeMode_ == 2 ? envelope_.level() : 1.0f; }
 
  private:
-  enum class EnvelopeStage : uint8_t { idle, attack, decay, sustain, release };
-
   void renderBlock();
   float nextSourceSample();
-  float processEnvelope();
-  void enterEnvelopeStage(EnvelopeStage stage);
 
   plaits::Voice voice_;
   char allocatorMemory_[16384];
@@ -55,11 +53,7 @@ class PlaitsVoice {
 
   MultimodeFilter filter_;
 
-  EnvelopeStage envelopeStage_;
-  float envelopeLevel_;
-  float attackSeconds_, decaySeconds_, sustain_, releaseSeconds_;
-  float envelopeIncrement_;
-  uint32_t envelopeSamplesLeft_;
+  PlaitsEnvelope envelope_;
 };
 
 #endif

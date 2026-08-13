@@ -297,6 +297,7 @@ static void handleFX_KIL(PlaybackState* state, PlaybackTrackState* track, int tr
   if (fx->counter >= fx->fxValue) {
     fx->isOn = 0;
     track->note.pitchBase = EMPTY_VALUE_8;
+    track->note.noteKilled = 1;
   }
 }
 
@@ -342,6 +343,7 @@ static void handleFX_RET(PlaybackState* state, PlaybackTrackState* track, int tr
 
   if (fx->counter % delay == 0) {
     setupInstrument(state, trackIdx);
+    track->note.noteTriggered = 1;
     tableInit(state, trackIdx, &track->note.instrumentTable, track->note.instrumentTable.tableIdx, 0, 1);
     tableInit(state, trackIdx, &track->note.auxTable, track->note.auxTable.tableIdx, 0, 1);
     restartFX(state, trackIdx);

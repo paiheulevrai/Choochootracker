@@ -9,16 +9,16 @@
   "attr": {
     "title": "ChooChooTracker",
     "porter": [
-      "surga"
+      "Pierre-Emmanuel SURGA"
     ],
     "desc": "A mobile tracker combining AY/YM, Braids, Plaits and PCM samples with per-track sends and FX.",
     "desc_md": null,
     "inst": "Ready to run",
     "inst_md": null,
     "genres": [
-      "other"
+      "music"
     ],
-    "image": null,
+    "image": "cover.png",
     "rtr": true,
     "exp": false,
     "runtime": [],

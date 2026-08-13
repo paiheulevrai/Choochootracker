@@ -24,14 +24,7 @@ void BraidsVoice::init() {
   filter_.init(kSampleRate);
 
   envelopeEnabled_ = false;
-  envelopeStage_ = EnvelopeStage::idle;
-  envelopeLevel_ = 0.0f;
-  envelopeAttackSeconds_ = 0.0f;
-  envelopeDecaySeconds_ = 0.0f;
-  envelopeSustain_ = 1.0f;
-  envelopeReleaseSeconds_ = 0.0f;
-  envelopeIncrement_ = 0.0f;
-  envelopeSamplesLeft_ = 0;
+  envelope_.init(kSampleRate);
 }
 
 bool BraidsVoice::setModel(uint8_t model) {
@@ -75,91 +68,26 @@ void BraidsVoice::setFilter(bool enabled, BraidsFilterMode mode,
 
 void BraidsVoice::setEnvelope(bool enabled, float attackSeconds,
                               float decaySeconds, float sustain,
-                              float releaseSeconds) {
+                              float releaseSeconds, uint8_t shape) {
   envelopeEnabled_ = enabled;
-  envelopeAttackSeconds_ = attackSeconds < 0.0f ? 0.0f : attackSeconds;
-  envelopeDecaySeconds_ = decaySeconds < 0.0f ? 0.0f : decaySeconds;
-  envelopeSustain_ = sustain < 0.0f ? 0.0f : (sustain > 1.0f ? 1.0f : sustain);
-  envelopeReleaseSeconds_ = releaseSeconds < 0.0f ? 0.0f : releaseSeconds;
-}
-
-void BraidsVoice::enterEnvelopeStage(EnvelopeStage stage) {
-  envelopeStage_ = stage;
-  float seconds = 0.0f;
-  float target = envelopeLevel_;
-
-  switch (stage) {
-    case EnvelopeStage::attack:
-      seconds = envelopeAttackSeconds_;
-      target = 1.0f;
-      break;
-    case EnvelopeStage::decay:
-      seconds = envelopeDecaySeconds_;
-      target = envelopeSustain_;
-      break;
-    case EnvelopeStage::release:
-      seconds = envelopeReleaseSeconds_;
-      target = 0.0f;
-      break;
-    case EnvelopeStage::sustain:
-      envelopeLevel_ = envelopeSustain_;
-      envelopeSamplesLeft_ = 0;
-      envelopeIncrement_ = 0.0f;
-      return;
-    default:
-      envelopeLevel_ = 0.0f;
-      envelopeSamplesLeft_ = 0;
-      envelopeIncrement_ = 0.0f;
-      active_ = false;
-      return;
-  }
-
-  envelopeSamplesLeft_ = static_cast<uint32_t>(seconds * kSampleRate);
-  if (envelopeSamplesLeft_ == 0) {
-    envelopeLevel_ = target;
-    if (stage == EnvelopeStage::attack) enterEnvelopeStage(EnvelopeStage::decay);
-    else if (stage == EnvelopeStage::decay) enterEnvelopeStage(EnvelopeStage::sustain);
-    else enterEnvelopeStage(EnvelopeStage::idle);
-    return;
-  }
-  envelopeIncrement_ = (target - envelopeLevel_) / envelopeSamplesLeft_;
+  envelope_.configure(attackSeconds, decaySeconds, sustain, releaseSeconds, shape);
 }
 
 void BraidsVoice::noteOn() {
   active_ = true;
   strike();
   if (envelopeEnabled_) {
-    envelopeLevel_ = 0.0f;
-    enterEnvelopeStage(EnvelopeStage::attack);
+    envelope_.noteOn();
   }
 }
 
 void BraidsVoice::noteOff() {
-  if (envelopeEnabled_) enterEnvelopeStage(EnvelopeStage::release);
+  if (envelopeEnabled_) envelope_.noteOff();
 }
 
 void BraidsVoice::kill() {
   active_ = false;
-  envelopeStage_ = EnvelopeStage::idle;
-  envelopeLevel_ = 0.0f;
-}
-
-float BraidsVoice::processEnvelope() {
-  if (!envelopeEnabled_) return 1.0f;
-  if (envelopeSamplesLeft_ > 0) {
-    envelopeLevel_ += envelopeIncrement_;
-    if (--envelopeSamplesLeft_ == 0) {
-      if (envelopeStage_ == EnvelopeStage::attack) {
-        envelopeLevel_ = 1.0f;
-        enterEnvelopeStage(EnvelopeStage::decay);
-      } else if (envelopeStage_ == EnvelopeStage::decay) {
-        enterEnvelopeStage(EnvelopeStage::sustain);
-      } else if (envelopeStage_ == EnvelopeStage::release) {
-        enterEnvelopeStage(EnvelopeStage::idle);
-      }
-    }
-  }
-  return envelopeLevel_;
+  envelope_.kill();
 }
 
 void BraidsVoice::strike() {
@@ -194,6 +122,12 @@ void BraidsVoice::render(float* output, size_t samples) {
     if (blockPosition_ == kBlockSize) renderBlock();
     float sample = static_cast<float>(block_[blockPosition_++]) / 32768.0f;
     sample = filter_.process(sample);
-    output[i] = sample * processEnvelope() * gain_;
+    float envelope = envelopeEnabled_ ? envelope_.next() : 1.0f;
+    output[i] = sample * envelope * gain_;
+    if (envelopeEnabled_ && !envelope_.active()) {
+      active_ = false;
+      memset(output + i + 1, 0, (samples - i - 1) * sizeof(float));
+      break;
+    }
   }
 }

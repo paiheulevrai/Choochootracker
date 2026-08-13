@@ -114,6 +114,7 @@ static int initBraidsInstrument(Instrument* instrument) {
   instrument->chip.braids.filterCutoffHz = 20000;
   instrument->chip.braids.sustain = 255;
   instrument->chip.braids.release = 16;
+  instrument->chip.braids.envelopeShape = 0x80;
   return 0;
 }
 
@@ -140,6 +141,7 @@ static int initPlaitsInstrument(Instrument* instrument) {
   plaits->filterCutoffHz = 20000;
   plaits->sustain = 255;
   plaits->release = 16;
+  plaits->envelopeShape = 0x80;
   return 0;
 }
 
@@ -167,6 +169,7 @@ static int initSampleInstrument(Instrument* instrument) {
   instrument->chip.sample.filterCutoffHz = 20000;
   instrument->chip.sample.sustain = 255;
   instrument->chip.sample.release = 16;
+  instrument->chip.sample.envelopeShape = 0x80;
   return 0;
 }
 

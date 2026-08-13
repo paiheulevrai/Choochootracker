@@ -149,6 +149,7 @@ struct InstrumentBraids {
   uint8_t decay;
   uint8_t sustain;
   uint8_t release;
+  uint8_t envelopeShape;
 };
 
 struct InstrumentPlaits {
@@ -167,6 +168,7 @@ struct InstrumentPlaits {
   uint8_t decay;
   uint8_t sustain;
   uint8_t release;
+  uint8_t envelopeShape;
 };
 
 #define PROJECT_SAMPLE_PATH_LENGTH 255
@@ -189,6 +191,7 @@ struct InstrumentSample {
   uint8_t decay;
   uint8_t sustain;
   uint8_t release;
+  uint8_t envelopeShape;
 };
 
 union InstrumentChipData {

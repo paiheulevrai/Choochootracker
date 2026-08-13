@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "multimode_filter.h"
+#include "envelope.h"
 
 struct InstrumentSample;
 
@@ -18,13 +19,9 @@ class SampleVoice {
   void kill();
   void render(float* output, size_t frames);
   bool active() const { return active_; }
+  float envelopeLevel() const { return envelope_.level(); }
 
  private:
-  enum class EnvelopeStage : uint8_t { idle, attack, decay, sustain, release };
-
-  void enterEnvelopeStage(EnvelopeStage stage);
-  float processEnvelope();
-
   const InstrumentSample* sample_;
   float outputSampleRate_;
   double position_;
@@ -34,10 +31,7 @@ class SampleVoice {
   bool active_;
   float gain_;
 
-  EnvelopeStage envelopeStage_;
-  float envelopeLevel_;
-  float envelopeIncrement_;
-  uint32_t envelopeSamplesLeft_;
+  Envelope envelope_;
 
   MultimodeFilter filter_;
 };

@@ -21,10 +21,7 @@ void SampleVoice::init(float outputSampleRate) {
   endFrame_ = 0;
   active_ = false;
   gain_ = 1.0f;
-  envelopeStage_ = EnvelopeStage::idle;
-  envelopeLevel_ = 0.0f;
-  envelopeIncrement_ = 0.0f;
-  envelopeSamplesLeft_ = 0;
+  envelope_.init(outputSampleRate_);
   filter_.init(outputSampleRate_);
 }
 
@@ -45,72 +42,26 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
   filter_.configure(sample_->filterEnabled != 0, sample_->filterMode,
                     sample_->filterSlope24dB != 0, cutoffHz,
                     resonance / 255.0f);
-}
-
-void SampleVoice::enterEnvelopeStage(EnvelopeStage stage) {
-  envelopeStage_ = stage;
-  float target = envelopeLevel_;
-  float seconds = 0.0f;
-  if (stage == EnvelopeStage::attack) {
-    target = 1.0f;
-    seconds = envelopeTime(sample_->attack);
-  } else if (stage == EnvelopeStage::decay) {
-    target = sample_->sustain / 255.0f;
-    seconds = envelopeTime(sample_->decay);
-  } else if (stage == EnvelopeStage::release) {
-    target = 0.0f;
-    seconds = envelopeTime(sample_->release);
-  } else if (stage == EnvelopeStage::sustain) {
-    envelopeLevel_ = sample_->sustain / 255.0f;
-    envelopeSamplesLeft_ = 0;
-    return;
-  } else {
-    envelopeLevel_ = 0.0f;
-    envelopeSamplesLeft_ = 0;
-    active_ = false;
-    return;
-  }
-
-  envelopeSamplesLeft_ = (uint32_t)(seconds * outputSampleRate_);
-  if (envelopeSamplesLeft_ == 0) {
-    envelopeLevel_ = target;
-    if (stage == EnvelopeStage::attack) enterEnvelopeStage(EnvelopeStage::decay);
-    else if (stage == EnvelopeStage::decay) enterEnvelopeStage(EnvelopeStage::sustain);
-    else enterEnvelopeStage(EnvelopeStage::idle);
-    return;
-  }
-  envelopeIncrement_ = (target - envelopeLevel_) / envelopeSamplesLeft_;
-}
-
-float SampleVoice::processEnvelope() {
-  if (envelopeSamplesLeft_ > 0) {
-    envelopeLevel_ += envelopeIncrement_;
-    if (--envelopeSamplesLeft_ == 0) {
-      if (envelopeStage_ == EnvelopeStage::attack) enterEnvelopeStage(EnvelopeStage::decay);
-      else if (envelopeStage_ == EnvelopeStage::decay) enterEnvelopeStage(EnvelopeStage::sustain);
-      else if (envelopeStage_ == EnvelopeStage::release) enterEnvelopeStage(EnvelopeStage::idle);
-    }
-  }
-  return envelopeLevel_;
+  envelope_.configure(envelopeTime(sample_->attack), envelopeTime(sample_->decay),
+                      sample_->sustain / 255.0f, envelopeTime(sample_->release),
+                      sample_->envelopeShape);
 }
 
 void SampleVoice::noteOn() {
   if (!sample_ || !sample_->data || endFrame_ <= startFrame_) return;
   position_ = startFrame_;
   active_ = true;
-  envelopeLevel_ = 0.0f;
   filter_.reset();
-  enterEnvelopeStage(EnvelopeStage::attack);
+  envelope_.noteOn();
 }
 
 void SampleVoice::noteOff() {
-  if (active_) enterEnvelopeStage(EnvelopeStage::release);
+  if (active_) envelope_.noteOff();
 }
 
 void SampleVoice::kill() {
   active_ = false;
-  envelopeStage_ = EnvelopeStage::idle;
-  envelopeLevel_ = 0.0f;
+  envelope_.kill();
 }
 
 void SampleVoice::render(float* output, size_t frames) {
@@ -125,7 +76,8 @@ void SampleVoice::render(float* output, size_t frames) {
     }
     uint32_t next = frame + 1 < endFrame_ ? frame + 1 : frame;
     float fraction = (float)(position_ - frame);
-    float envelope = processEnvelope() * gain_;
+    float envelope = envelope_.next() * gain_;
+    if (!envelope_.active()) { kill(); break; }
     for (int channel = 0; channel < 2; channel++) {
       int sourceChannel = sample_->channels == 1 ? 0 : channel;
       float a = sample_->data[frame * sample_->channels + sourceChannel] / 32768.0f;

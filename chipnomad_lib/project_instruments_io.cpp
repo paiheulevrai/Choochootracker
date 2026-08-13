@@ -212,6 +212,7 @@ static int loadInstrumentBraids(FILE* file, Instrument* instrument) {
     else if (strncmp(line, "- Decay: ", 9) == 0) sscanf(line, "- Decay: %hhu", &braids->decay);
     else if (strncmp(line, "- Sustain: ", 11) == 0) sscanf(line, "- Sustain: %hhu", &braids->sustain);
     else if (strncmp(line, "- Release: ", 11) == 0) sscanf(line, "- Release: %hhu", &braids->release);
+    else if (strncmp(line, "- Envelope shape: ", 18) == 0) sscanf(line, "- Envelope shape: %hhu", &braids->envelopeShape);
     consumeLine(file);
   }
 }
@@ -235,6 +236,7 @@ static int loadInstrumentSample(FILE* file, Instrument* instrument) {
     else if (strncmp(line, "- Decay: ", 9) == 0) sscanf(line, "- Decay: %hhu", &sample->decay);
     else if (strncmp(line, "- Sustain: ", 11) == 0) sscanf(line, "- Sustain: %hhu", &sample->sustain);
     else if (strncmp(line, "- Release: ", 11) == 0) sscanf(line, "- Release: %hhu", &sample->release);
+    else if (strncmp(line, "- Envelope shape: ", 18) == 0) sscanf(line, "- Envelope shape: %hhu", &sample->envelopeShape);
     consumeLine(file);
   }
   if (sample->path[0]) {
@@ -264,6 +266,7 @@ static int loadInstrumentPlaits(FILE* file, Instrument* instrument) {
     else if (strncmp(line, "- Decay: ", 9) == 0) sscanf(line, "- Decay: %hhu", &p->decay);
     else if (strncmp(line, "- Sustain: ", 11) == 0) sscanf(line, "- Sustain: %hhu", &p->sustain);
     else if (strncmp(line, "- Release: ", 11) == 0) sscanf(line, "- Release: %hhu", &p->release);
+    else if (strncmp(line, "- Envelope shape: ", 18) == 0) sscanf(line, "- Envelope shape: %hhu", &p->envelopeShape);
     consumeLine(file);
   }
 }
@@ -475,6 +478,7 @@ static int saveInstrumentBraids(FILE* file, Instrument* instrument) {
   fprintf(file, "- Decay: %hhu\n", braids->decay);
   fprintf(file, "- Sustain: %hhu\n", braids->sustain);
   fprintf(file, "- Release: %hhu\n", braids->release);
+  fprintf(file, "- Envelope shape: %hhu\n", braids->envelopeShape);
   return 0;
 }
 
@@ -493,6 +497,7 @@ static int saveInstrumentSample(FILE* file, Instrument* instrument) {
   fprintf(file, "- Decay: %hhu\n", sample->decay);
   fprintf(file, "- Sustain: %hhu\n", sample->sustain);
   fprintf(file, "- Release: %hhu\n", sample->release);
+  fprintf(file, "- Envelope shape: %hhu\n", sample->envelopeShape);
   return 0;
 }
 
@@ -513,6 +518,7 @@ static int saveInstrumentPlaits(FILE* file, Instrument* instrument) {
   fprintf(file, "- Decay: %hhu\n", p->decay);
   fprintf(file, "- Sustain: %hhu\n", p->sustain);
   fprintf(file, "- Release: %hhu\n", p->release);
+  fprintf(file, "- Envelope shape: %hhu\n", p->envelopeShape);
   return 0;
 }
 

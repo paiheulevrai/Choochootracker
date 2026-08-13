@@ -58,6 +58,13 @@ Mappings can be changed in **Settings > Key mapping**.
 - **Select + Play** starts all tracks when used outside the Song screen.
 - **Edit + Play** previews an instrument from the Instrument Pool.
 
+### Track activity display
+
+The small display at the upper right of each track shows its current sound. AY
+tracks show their tone/noise/envelope state. Braids, PCM Sample, Plaits and
+Plaits-Alt tracks show the most recent output waveform, with the current
+envelope level drawn as a dim horizontal guide.
+
 ## 3. Song structure and screen map
 
 The main navigation row is:

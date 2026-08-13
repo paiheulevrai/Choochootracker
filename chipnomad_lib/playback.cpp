@@ -90,6 +90,7 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   track->note.volume = 0;
   track->note.noteTriggered = 0;
   track->note.noteReleased = 0;
+  track->note.noteKilled = 0;
   track->note.volume1 = 0;
   track->note.volume2 = 0;
   track->note.volume3 = 0;

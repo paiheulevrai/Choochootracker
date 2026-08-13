@@ -17,6 +17,19 @@ static void updateBraidsVoices(ChipNomadState* state);
 static void updateSampleVoices(ChipNomadState* state);
 static void updatePlaitsVoices(ChipNomadState* state);
 static void updatePlaitsAltVoices(ChipNomadState* state);
+static void applyVoiceEvents(ChipNomadState* state);
+
+static void captureVoiceMonitor(ChipNomadState* state, int trackIdx,
+                                const float* samples, int frames,
+                                int channels, float envelope) {
+  VoiceMonitor* monitor = &state->voiceMonitors[trackIdx];
+  for (int i = 0; i < 64; ++i) {
+    int frame = frames > 1 ? (i * (frames - 1)) / 63 : 0;
+    monitor->samples[i] = samples[frame * channels];
+  }
+  monitor->envelope = envelope;
+  monitor->active = 1;
+}
 
 static int resizeMixBuffers(ChipNomadState* state, int requiredSize) {
   float* mixBuffer = (float*)malloc(requiredSize * sizeof(float));
@@ -196,6 +209,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
       updateBraidsVoices(state);
       updatePlaitsVoices(state);
       updatePlaitsAltVoices(state);
+      applyVoiceEvents(state);
       // Decrease audio overload cooldown each frame
       if (state->audioOverload > 0) {
         state->audioOverload--;
@@ -212,6 +226,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
     int samplesToRender = ((int)state->frameSampleCounter < samplesLeft) ?
     (int)state->frameSampleCounter : samplesLeft;
     int bufferOffset = (samples - samplesLeft) * 2;
+    for (int i = 0; i < state->project.tracksCount; ++i) state->voiceMonitors[i].active = 0;
 
     // Clear buffer section
     for (int i = 0; i < samplesToRender * 2; i++) {
@@ -260,6 +275,8 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
       BraidsVoice* voice = state->braidsVoices[trackIdx];
       if (!voice->active()) continue;
       voice->render(state->mixBuffer, samplesToRender);
+      captureVoiceMonitor(state, trackIdx, state->mixBuffer, samplesToRender, 1,
+                          voice->envelopeLevel());
       float trackGain = state->project.trackVolume[trackIdx] / 100.0f;
       float reverbSend = effectiveTrackSend(state, trackIdx, true);
       float delaySend = effectiveTrackSend(state, trackIdx, false);
@@ -280,6 +297,8 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
       SampleVoice* voice = state->sampleVoices[trackIdx];
       if (!voice->active()) continue;
       voice->render(state->mixBuffer, samplesToRender);
+      captureVoiceMonitor(state, trackIdx, state->mixBuffer, samplesToRender, 2,
+                          voice->envelopeLevel());
       float trackGain = state->project.trackVolume[trackIdx] / 100.0f;
       float reverbSend = effectiveTrackSend(state, trackIdx, true);
       float delaySend = effectiveTrackSend(state, trackIdx, false);
@@ -297,6 +316,8 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
       PlaitsVoice* voice = state->plaitsVoices[trackIdx];
       if (!voice->active()) continue;
       voice->render(state->mixBuffer, samplesToRender);
+      captureVoiceMonitor(state, trackIdx, state->mixBuffer, samplesToRender, 1,
+                          voice->envelopeLevel());
       float trackGain = state->project.trackVolume[trackIdx] / 100.0f;
       float reverbSend = effectiveTrackSend(state, trackIdx, true);
       float delaySend = effectiveTrackSend(state, trackIdx, false);
@@ -318,6 +339,8 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
       PlaitsAltVoice* voice = state->plaitsAltVoices[trackIdx];
       if (!voice->active()) continue;
       voice->render(state->mixBuffer, samplesToRender);
+      captureVoiceMonitor(state, trackIdx, state->mixBuffer, samplesToRender, 1,
+                          voice->envelopeLevel());
       float trackGain = state->project.trackVolume[trackIdx] / 100.0f;
       float reverbSend = effectiveTrackSend(state, trackIdx, true);
       float delaySend = effectiveTrackSend(state, trackIdx, false);
@@ -371,6 +394,40 @@ static float envelopeTime(uint8_t value) {
   return normalized * normalized * 5.0f;
 }
 
+static void applyVoiceEvents(ChipNomadState* state) {
+  PlaybackState* playback = &state->playbackState;
+  Project* project = &state->project;
+  for (int trackIdx = 0; trackIdx < project->tracksCount; ++trackIdx) {
+    PlaybackTrackState* track = &playback->tracks[trackIdx];
+    if (!track->note.noteTriggered && !track->note.noteReleased && !track->note.noteKilled) continue;
+    if (track->note.instrument == EMPTY_VALUE_8) continue;
+    switch (project->instruments[track->note.instrument].type) {
+      case InstrumentType::Sample:
+        if (track->note.noteKilled) state->sampleVoices[trackIdx]->kill();
+        else if (track->note.noteTriggered) state->sampleVoices[trackIdx]->noteOn();
+        else state->sampleVoices[trackIdx]->noteOff();
+        break;
+      case InstrumentType::Braids:
+        if (track->note.noteKilled) state->braidsVoices[trackIdx]->kill();
+        else if (track->note.noteTriggered) state->braidsVoices[trackIdx]->noteOn();
+        else state->braidsVoices[trackIdx]->noteOff();
+        break;
+      case InstrumentType::Plaits:
+        if (track->note.noteKilled) state->plaitsVoices[trackIdx]->kill();
+        else if (track->note.noteTriggered) state->plaitsVoices[trackIdx]->noteOn();
+        else state->plaitsVoices[trackIdx]->noteOff();
+        break;
+      case InstrumentType::PlaitsAlt:
+        if (track->note.noteKilled) state->plaitsAltVoices[trackIdx]->kill();
+        else if (track->note.noteTriggered) state->plaitsAltVoices[trackIdx]->noteOn();
+        else state->plaitsAltVoices[trackIdx]->noteOff();
+        break;
+      default: break;
+    }
+    track->note.noteTriggered = track->note.noteReleased = track->note.noteKilled = 0;
+  }
+}
+
 static void updateSampleVoices(ChipNomadState* state) {
   Project* project = &state->project;
   PlaybackState* playback = &state->playbackState;
@@ -418,14 +475,6 @@ static void updateSampleVoices(ChipNomadState* state) {
     }
     voice->configure(sample, (float)pitchCents, gain, start, end,
                      (uint16_t)cutoff, (uint8_t)resonance);
-    if (track->note.noteTriggered) {
-      voice->noteOn();
-      track->note.noteTriggered = 0;
-    }
-    if (track->note.noteReleased) {
-      voice->noteOff();
-      track->note.noteReleased = 0;
-    }
   }
 }
 
@@ -496,7 +545,7 @@ static void updateBraidsVoices(ChipNomadState* state) {
 
     voice->setEnvelope(true,
       envelopeTime(instrument->attack), envelopeTime(instrument->decay),
-      instrument->sustain / 255.0f, envelopeTime(instrument->release));
+      instrument->sustain / 255.0f, envelopeTime(instrument->release), instrument->envelopeShape);
 
     if (track->note.pitchFinal != EMPTY_VALUE_8) {
       int cents = (project->linearPitch
@@ -506,14 +555,6 @@ static void updateBraidsVoices(ChipNomadState* state) {
       voice->setPitch(static_cast<int16_t>((cents * 128) / 100));
     }
 
-    if (track->note.noteTriggered) {
-      voice->noteOn();
-      track->note.noteTriggered = 0;
-    }
-    if (track->note.noteReleased) {
-      voice->noteOff();
-      track->note.noteReleased = 0;
-    }
   }
 }
 
@@ -583,15 +624,7 @@ static void updatePlaitsVoices(ChipNomadState* state) {
     voice->setFilter(p->filterEnabled != 0, p->filterMode, p->filterSlope24dB != 0,
                      cutoff, resonance / 255.0f);
     voice->setEnvelope(envelopeTime(p->attack), envelopeTime(p->decay),
-                       p->sustain / 255.0f, envelopeTime(p->release));
-    if (track->note.noteTriggered) {
-      voice->noteOn();
-      track->note.noteTriggered = 0;
-    }
-    if (track->note.noteReleased) {
-      voice->noteOff();
-      track->note.noteReleased = 0;
-    }
+                       p->sustain / 255.0f, envelopeTime(p->release), p->envelopeShape);
   }
 }
 
@@ -648,9 +681,7 @@ static void updatePlaitsAltVoices(ChipNomadState* state) {
     voice->setFilter(p->filterEnabled != 0, p->filterMode, p->filterSlope24dB != 0,
       cutoff, resonance / 255.0f);
     voice->setEnvelope(envelopeTime(p->attack), envelopeTime(p->decay),
-      p->sustain / 255.0f, envelopeTime(p->release));
-    if (track->note.noteTriggered) { voice->noteOn(); track->note.noteTriggered = 0; }
-    if (track->note.noteReleased) { voice->noteOff(); track->note.noteReleased = 0; }
+      p->sustain / 255.0f, envelopeTime(p->release), p->envelopeShape);
   }
 }
 

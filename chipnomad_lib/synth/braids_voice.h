@@ -8,6 +8,7 @@
 #include "braids/signature_waveshaper.h"
 #include "braids/vco_jitter_source.h"
 #include "multimode_filter.h"
+#include "envelope.h"
 
 enum class BraidsFilterMode : uint8_t {
   lowPass,
@@ -30,7 +31,7 @@ class BraidsVoice {
   void setFilter(bool enabled, BraidsFilterMode mode, bool slope24dB,
                  float cutoffHz, float resonance);
   void setEnvelope(bool enabled, float attackSeconds, float decaySeconds,
-                   float sustain, float releaseSeconds);
+                   float sustain, float releaseSeconds, uint8_t shape = 0x80);
   void noteOn();
   void noteOff();
   void kill();
@@ -39,13 +40,10 @@ class BraidsVoice {
 
   uint8_t model() const { return model_; }
   bool active() const { return active_; }
+  float envelopeLevel() const { return envelopeEnabled_ ? envelope_.level() : 1.0f; }
 
  private:
-  enum class EnvelopeStage : uint8_t { idle, attack, decay, sustain, release };
-
   void renderBlock();
-  float processEnvelope();
-  void enterEnvelopeStage(EnvelopeStage stage);
 
   braids::MacroOscillator oscillator_;
   int16_t block_[kBlockSize];
@@ -63,14 +61,7 @@ class BraidsVoice {
   MultimodeFilter filter_;
 
   bool envelopeEnabled_;
-  EnvelopeStage envelopeStage_;
-  float envelopeLevel_;
-  float envelopeAttackSeconds_;
-  float envelopeDecaySeconds_;
-  float envelopeSustain_;
-  float envelopeReleaseSeconds_;
-  float envelopeIncrement_;
-  uint32_t envelopeSamplesLeft_;
+  Envelope envelope_;
 };
 
 #endif

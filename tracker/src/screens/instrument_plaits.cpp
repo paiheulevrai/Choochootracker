@@ -45,7 +45,7 @@ static int getColumnCount(int row) {
   if (row == 3) return 1;
   if (row == 9) {
     InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
-    return p->envelopeMode == 0 ? 2 : 4;
+    return p->envelopeMode == 0 ? 2 : 5;
   }
   return 2;
 }
@@ -54,24 +54,24 @@ static void drawStatic(void) {
   instrumentCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textDefault);
   gfxPrint(0, 6, "Engine");
-  gfxPrint(0, 7, "Harmonic"); gfxPrint(21, 7, "Env Mode");
-  gfxPrint(0, 8, "Timbre");   gfxPrint(21, 8, "Filter");
-  gfxPrint(0, 9, "Morph");    gfxPrint(21, 9, "Mode");
-  gfxPrint(0, 10, "Main/Aux");gfxPrint(21, 10, "Slope");
-  gfxPrint(0, 11, "Cutoff");  gfxPrint(21, 11, "Reso");
+  gfxPrint(0, 7, "Harmonic"); gfxPrint(21, 7, "Filter");
+  gfxPrint(0, 8, "Timbre");   gfxPrint(21, 8, "Mode");
+  gfxPrint(0, 9, "Morph");    gfxPrint(21, 9, "Slope");
+  gfxPrint(0, 10, "Main/Aux");gfxPrint(21, 10, "Cutoff");
+  gfxPrint(0, 11, "Env Mode");gfxPrint(21, 11, "Reso");
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
   if (p->envelopeMode == 0) {
     gfxPrint(0, 13, "LPG"); gfxPrint(6, 13, "D"); gfxPrint(11, 13, "C");
   } else {
     gfxPrint(0, 13, "ADSR");
     gfxPrint(6, 13, "A"); gfxPrint(11, 13, "D");
-    gfxPrint(16, 13, "S"); gfxPrint(21, 13, "R");
+    gfxPrint(16, 13, "S"); gfxPrint(21, 13, "R"); gfxPrint(27, 13, "Shape");
   }
 }
 
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
-  if (row == 9) gfxCursor(7 + col * 5, 13, 2);
+  if (row == 9) gfxCursor(col == 4 ? 35 : 7 + col * 5, 13, 2);
   else if (row == 3) gfxCursor(11, 6, 28);
   else gfxCursor(col ? 31 : 11, row + 3, col ? 8 : 9);
 }
@@ -81,9 +81,9 @@ static void drawField(int col, int row, CellState state) {
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   if (row == 9) {
-    uint8_t values[] = {p->attack, p->decay, p->sustain, p->release};
+    uint8_t values[] = {p->attack, p->decay, p->sustain, p->release, p->envelopeShape};
     uint8_t value = p->envelopeMode == 0 ? values[col + 1] : values[col];
-    gfxPrint(7 + col * 5, 13, byteToHex(value));
+    gfxPrint(col == 4 ? 35 : 7 + col * 5, 13, byteToHex(value));
     return;
   }
   if (row == 3) gfxClearRect(11, 6, 29, 1);
@@ -91,11 +91,11 @@ static void drawField(int col, int row, CellState state) {
   switch (row) {
     case 3: gfxPrintf(12, 6, "%02d %s", p->engine,
       (isAlt() ? altEngineNames : engineNames)[p->engine < 24 ? p->engine : 0]); break;
-    case 4: if (!col) gfxPrintf(11, 7, "%04u", (unsigned)((uint32_t)p->harmonics * 1023 / 32767)); else gfxPrint(31, 7, p->envelopeMode == 0 ? "TRIG" : "VCA"); break;
-    case 5: if (!col) gfxPrintf(11, 8, "%04u", (unsigned)((uint32_t)p->timbre * 1023 / 32767)); else gfxPrint(31, 8, p->filterEnabled ? "On" : "Off"); break;
-    case 6: if (!col) gfxPrintf(11, 9, "%04u", (unsigned)((uint32_t)p->morph * 1023 / 32767)); else { static const char* modes[] = {"LP", "BP", "HP"}; gfxPrint(31, 9, modes[p->filterMode <= 2 ? p->filterMode : 0]); } break;
-    case 7: if (!col) gfxPrint(11, 10, byteToHex(p->auxMix)); else gfxPrint(31, 10, p->filterSlope24dB ? "24 dB" : "12 dB"); break;
-    case 8: if (!col) gfxPrintf(11, 11, "%u Hz", p->filterCutoffHz); else gfxPrint(31, 11, byteToHex(p->filterResonance)); break;
+    case 4: if (!col) gfxPrintf(11, 7, "%04u", (unsigned)((uint32_t)p->harmonics * 1023 / 32767)); else gfxPrint(31, 7, p->filterEnabled ? "On" : "Off"); break;
+    case 5: if (!col) gfxPrintf(11, 8, "%04u", (unsigned)((uint32_t)p->timbre * 1023 / 32767)); else { static const char* modes[] = {"LP", "BP", "HP"}; gfxPrint(31, 8, modes[p->filterMode <= 2 ? p->filterMode : 0]); } break;
+    case 6: if (!col) gfxPrintf(11, 9, "%04u", (unsigned)((uint32_t)p->morph * 1023 / 32767)); else gfxPrint(31, 9, p->filterSlope24dB ? "24 dB" : "12 dB"); break;
+    case 7: if (!col) gfxPrint(11, 10, byteToHex(p->auxMix)); else gfxPrintf(31, 10, "%u Hz", p->filterCutoffHz); break;
+    case 8: if (!col) gfxPrint(11, 11, p->envelopeMode == 0 ? "TRIG" : "VCA"); else gfxPrint(31, 11, byteToHex(p->filterResonance)); break;
   }
 }
 
@@ -107,22 +107,17 @@ static int onEdit(int col, int row, CellEditAction action) {
     case 3:
       handled = edit8noLast(action, &p->engine, 1, 0, 23);
       break;
-    case 4: if (!col) handled = editOscillatorParameter(action, &p->harmonics); else {
-      {
-        uint8_t mode = p->envelopeMode == 0 ? 0 : 1;
-        handled = edit8noLast(action, &mode, 1, 0, 1);
-        if (handled) {
-          p->envelopeMode = mode == 0 ? 0 : 2;
-          screenSetup(&screenInstrument, cInstrument);
-        }
-      }
-    } break;
-    case 5: handled = !col ? editOscillatorParameter(action, &p->timbre) : edit8noLast(action, &p->filterEnabled, 1, 0, 1); break;
-    case 6: handled = !col ? editOscillatorParameter(action, &p->morph) : edit8noLast(action, &p->filterMode, 1, 0, 2); break;
-    case 7: handled = !col ? edit8noLast(action, &p->auxMix, 16, 0, 255) : edit8noLast(action, &p->filterSlope24dB, 1, 0, 1); break;
-    case 8: handled = !col ? editFilterCutoff(action, &p->filterCutoffHz) : edit8noLast(action, &p->filterResonance, 16, 0, 255); break;
+    case 4: handled = !col ? editOscillatorParameter(action, &p->harmonics) : edit8noLast(action, &p->filterEnabled, 1, 0, 1); break;
+    case 5: handled = !col ? editOscillatorParameter(action, &p->timbre) : edit8noLast(action, &p->filterMode, 1, 0, 2); break;
+    case 6: handled = !col ? editOscillatorParameter(action, &p->morph) : edit8noLast(action, &p->filterSlope24dB, 1, 0, 1); break;
+    case 7: handled = !col ? edit8noLast(action, &p->auxMix, 16, 0, 255) : editFilterCutoff(action, &p->filterCutoffHz); break;
+    case 8: if (!col) {
+      uint8_t mode = p->envelopeMode == 0 ? 0 : 1;
+      handled = edit8noLast(action, &mode, 1, 0, 1);
+      if (handled) { p->envelopeMode = mode == 0 ? 0 : 2; screenSetup(&screenInstrument, cInstrument); }
+    } else handled = edit8noLast(action, &p->filterResonance, 16, 0, 255); break;
     case 9: {
-      uint8_t* values[] = {&p->attack, &p->decay, &p->sustain, &p->release};
+      uint8_t* values[] = {&p->attack, &p->decay, &p->sustain, &p->release, &p->envelopeShape};
       handled = edit8noLast(action, values[p->envelopeMode == 0 ? col + 1 : col], 16, 0, 255);
       break;
     }

@@ -124,8 +124,39 @@ static int getAYEnvelopeHeight(int x, int envShape) {
   return 0;
 }
 
+static Bitmap* drawVoiceWaveform(int trackIdx) {
+  VoiceMonitor* monitor = &chipnomadState->voiceMonitors[trackIdx];
+  if (!monitor->active) return emptyBitmap;
+
+  Bitmap* bitmap = waveformBitmaps[trackIdx];
+  memset(bitmap->data, 0, bitmap->widthPixels * bitmap->heightPixels);
+  int previousY = charH / 2;
+  for (int x = 0; x < charW; ++x) {
+    int sampleIdx = charW > 1 ? (x * 63) / (charW - 1) : 0;
+    float sample = monitor->samples[sampleIdx];
+    if (sample > 1.0f) sample = 1.0f;
+    if (sample < -1.0f) sample = -1.0f;
+    int y = (charH - 1) / 2 - (int)(sample * (charH - 1) / 2.0f);
+    drawVerticalLine(bitmap, x, previousY, y, 255);
+    previousY = y;
+  }
+
+  int envelopeY = charH - 1 - (int)(monitor->envelope * (charH - 1));
+  if (envelopeY < 0) envelopeY = 0;
+  for (int x = 0; x < charW; ++x) bitmap->data[envelopeY * charW + x] = ENVELOPE_DIM_BRIGHTNESS;
+  return bitmap;
+}
+
 Bitmap* waveformDisplayGetBitmap(int trackIdx) {
   PlaybackTrackState* track = &chipnomadState->playbackState.tracks[trackIdx];
+
+  if (track->note.instrument != EMPTY_VALUE_8) {
+    InstrumentType type = chipnomadState->project.instruments[track->note.instrument].type;
+    if (type == InstrumentType::Braids || type == InstrumentType::Sample ||
+        type == InstrumentType::Plaits || type == InstrumentType::PlaitsAlt) {
+      return drawVoiceWaveform(trackIdx);
+    }
+  }
 
   // Check if track is playing
   if (track->note.pitchFinal == EMPTY_VALUE_8) {
