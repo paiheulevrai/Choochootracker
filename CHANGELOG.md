@@ -1,5 +1,18 @@
 # ChooChooTracker changelog
 
+## v0.1.0-prealpha.3 (August 13, 2026)
+
+- Added a continuous `00`–`FF` envelope Shape control, shared by Sample,
+  Braids and Plaits voices: logarithmic through linear to exponential.
+- Unified tracker RET and KIL note events across AY, Sample, Braids, Plaits
+  and Plaits-Alt voices.
+- Added live waveform activity displays for Sample, Braids, Plaits and
+  Plaits-Alt tracks, with an envelope-level guide.
+- Kept Filter, Slope, Cutoff and Resonance grouped in the instrument UI;
+  corrected the Project and Settings screen-map indicators.
+- Updated the PortMaster package metadata, cover reference and credits to
+  Pierre-Emmanuel SURGA.
+
 ## v0.1.0-prealpha.1 (August 9, 2026)
 
 - Added the 47 accessible Mutable Instruments Braids models as one instrument type.
