@@ -187,11 +187,17 @@ void appSetup(void) {
     return;
   }
 
-  // Try to load an auto-saved project
-  if (projectLoad(&chipnomadState->project, getAutosavePath())) {
-    // Failed to load autosave, initialize empty project
+#ifdef WEB_BUILD
+  // The browser build starts with the packaged demo instead of a persisted autosave.
+  if (projectLoad(&chipnomadState->project, "/projects/TECNODEMO.cct")) {
     projectInitAY(&chipnomadState->project);
   }
+#else
+  // Native builds restore the user's auto-saved project.
+  if (projectLoad(&chipnomadState->project, getAutosavePath())) {
+    projectInitAY(&chipnomadState->project);
+  }
+#endif
 
   // Initialize all screen states
   screensInitAll();
