@@ -7,6 +7,10 @@
   required DLLs, and all runtime assets/dependencies, like the PortMaster
   package.
 - PortMaster: use the existing WSL2 ARM64 toolchain: `make -j4 PortMaster`.
+- For a PortMaster release, run `make -j4 -f Makefile.portmaster PortMaster-deploy`.
+  It writes `releases/choochootracker.zip`; validate it with
+  `unzip -t releases/choochootracker.zip`. Final releases still require a
+  hardware check on the target console.
 - Web: Emscripten is already installed at `.tmp/emsdk`. Use PowerShell, not
   MSYS2 Bash. The SDK requires its bundled Python:
 
@@ -23,6 +27,9 @@
 - If web reports `clang++.exe: permission denied`, repair the execution
   permission/security block on `.tmp/emsdk/upstream/bin/clang++.exe`; do not
   install another Emscripten SDK.
+- `web-deploy` updates the checked-in `web/dist/` bundle. Regenerate and
+  commit it after WebAssembly source changes; Vercel serves that bundle
+  directly and does not build Emscripten itself.
 
 ## Verification and commits
 
