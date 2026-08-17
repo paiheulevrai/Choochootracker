@@ -28,13 +28,16 @@ static const SelectionItem instrumentTypeChip[] = {
 };
 static const SelectionItem instrumentTypeSynth[] = {
   {"Braids", (int)InstrumentType::Braids, NULL, 0},
-  {"PCM Sample", (int)InstrumentType::Sample, NULL, 0},
   {"Plaits", (int)InstrumentType::Plaits, NULL, 0},
   {"Plaits-Alt", (int)InstrumentType::PlaitsAlt, NULL, 0},
 };
+static const SelectionItem instrumentTypeSample[] = {
+  {"PCM Sample", (int)InstrumentType::Sample, NULL, 0},
+};
 static const SelectionItem instrumentTypeCategories[] = {
   {"CHIP", -1, instrumentTypeChip, 3},
-  {"SYNTH", -1, instrumentTypeSynth, 4},
+  {"SAMPLE", -1, instrumentTypeSample, 1},
+  {"SYNTH", -1, instrumentTypeSynth, 3},
 };
 
 static void getInstrumentFilename(char* filename, int size) {
@@ -160,7 +163,7 @@ static int instrumentTypePopupInput(int isKeyDown, int keys, ScreenData* screen)
   }
   if (!isKeyDown && keys == 0 && typeButtonDown) {
     typeButtonDown = 0;
-    selectionPopupSetup("INSTRUMENT TYPE", instrumentTypeCategories, 2,
+    selectionPopupSetup("INSTRUMENT TYPE", instrumentTypeCategories, 3,
       (int)chipnomadState->project.instruments[cInstrument].type,
       selectInstrumentType, cancelInstrumentTypeSelection);
     screenSetup(&screenSelectionPopup, 0);

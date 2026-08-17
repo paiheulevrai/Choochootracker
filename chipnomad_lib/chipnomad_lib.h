@@ -82,6 +82,9 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
 */
 int chipnomadRender(ChipNomadState* state, float* buffer, int samples);
 
+// Fast offline level balancing over a short render. Returns 0 on success.
+int chipnomadAutoMix(ChipNomadState* state, int seconds, uint8_t proposed[PROJECT_MAX_TRACKS]);
+
 /**
 * Set emulation quality for all chips
 * @param state ChipNomad state

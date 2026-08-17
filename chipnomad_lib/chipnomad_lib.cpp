@@ -56,6 +56,11 @@ static int instrumentFXCutoff(uint8_t value) {
   return (int)filterCutoffFromControl(value);
 }
 
+static float mixerGain(uint8_t value) {
+  if (value == 0) return 0.0f;
+  return powf(10.0f, -60.0f * (100 - value) / 2000.0f);
+}
+
 static float effectiveTrackSend(ChipNomadState* state, int trackIdx,
                                 bool reverb) {
   PlaybackTrackState* track = &state->playbackState.tracks[trackIdx];
@@ -74,7 +79,8 @@ static float effectiveTrackSend(ChipNomadState* state, int trackIdx,
         ? value + modulation : modulation;
     }
   }
-  return clampInt(value, 0, 100) / 100.0f;
+  value = clampInt(value, 0, 100);
+  return state->project.perceptualEffects ? mixerGain((uint8_t)value) : value / 100.0f;
 }
 
 static inline void mixTrackSample(ChipNomadState* state, int trackIdx,
@@ -394,6 +400,64 @@ static float envelopeTime(uint8_t value) {
   return normalized * normalized * 5.0f;
 }
 
+static float autoMixRender(ChipNomadState* state, int seconds, float* rms) {
+  const int frames = 1024;
+  float buffer[frames * 2];
+  double energy = 0.0;
+  int rendered = 0;
+  float peak = 0.0f;
+  playbackStartSong(&state->playbackState, 0, 0, 0);
+  while (rendered < seconds * state->sampleRate) {
+    int count = chipnomadRender(state, buffer, frames);
+    if (count <= 0) break;
+    for (int i = 0; i < count * 2; ++i) {
+      float value = buffer[i];
+      energy += value * value;
+      if (fabsf(value) > peak) peak = fabsf(value);
+    }
+    rendered += count;
+  }
+  if (rms) *rms = rendered ? sqrtf((float)(energy / (rendered * 2))) : 0.0f;
+  return peak;
+}
+
+int chipnomadAutoMix(ChipNomadState* state, int seconds, uint8_t proposed[PROJECT_MAX_TRACKS]) {
+  if (!state || seconds < 1) return 1;
+  ChipNomadState* analysis = chipnomadCreate();
+  if (!analysis) return 1;
+  analysis->project = state->project; // Sample buffers are read-only during rendering.
+  analysis->project.reverbReturn = analysis->project.delayReturn = 0;
+  analysis->project.tracksCount = state->project.tracksCount;
+  playbackInit(&analysis->playbackState, &analysis->project);
+  chipnomadInitChips(analysis, 48000, NULL);
+
+  float rms[PROJECT_MAX_TRACKS] = {};
+  float sumLog = 0.0f;
+  int active = 0;
+  for (int track = 0; track < analysis->project.tracksCount; ++track) {
+    for (int i = 0; i < PROJECT_MAX_TRACKS; ++i) analysis->playbackState.trackEnabled[i] = i == track;
+    autoMixRender(analysis, seconds, &rms[track]);
+    if (rms[track] > 0.0001f) { sumLog += logf(rms[track]); active++; }
+  }
+  if (!active) { chipnomadDestroy(analysis); return 1; }
+  float target = expf(sumLog / active);
+  for (int i = 0; i < analysis->project.tracksCount; ++i) {
+    if (rms[i] <= 0.0001f) continue;
+    float ratio = sqrtf(target / rms[i]); // Keep musical differences while correcting extremes.
+    ratio = fminf(2.0f, fmaxf(0.25f, ratio));
+    analysis->project.trackVolume[i] = (uint8_t)fminf(100.0f,
+      state->project.trackVolume[i] * ratio + 0.5f);
+  }
+  for (int i = 0; i < PROJECT_MAX_TRACKS; ++i) analysis->playbackState.trackEnabled[i] = 1;
+  float peak = autoMixRender(analysis, seconds, NULL);
+  float safety = peak > 0.89f ? 0.89f / peak : 1.0f;
+  for (int i = 0; i < state->project.tracksCount; ++i) {
+    proposed[i] = (uint8_t)(analysis->project.trackVolume[i] * safety + 0.5f);
+  }
+  chipnomadDestroy(analysis);
+  return 0;
+}
+
 static void applyVoiceEvents(ChipNomadState* state) {
   PlaybackState* playback = &state->playbackState;
   Project* project = &state->project;
@@ -442,6 +506,7 @@ static void updateSampleVoices(ChipNomadState* state) {
 
     InstrumentSample* sample = &project->instruments[track->note.instrument].chip.sample;
     int pitchCents = sample->pitch * 100 + track->note.fineOffset;
+    int speedPercent = sample->speedPercent;
     uint8_t start = sample->start;
     uint8_t end = sample->end;
     int cutoff = sample->filterCutoffHz;
@@ -471,9 +536,12 @@ static void updateSampleVoices(ChipNomadState* state) {
         gain *= playbackModScaleToRange(mod->outValue, 255) / 255.0f;
       } else if (mod->modulation->destination == 2) {
         pitchCents += playbackModScaleToRange(mod->outValue, 1200);
+      } else if (mod->modulation->destination == 5) {
+        speedPercent += playbackModScaleToRange(mod->outValue, 500);
       }
     }
-    voice->configure(sample, (float)pitchCents, gain, start, end,
+    speedPercent = clampInt(speedPercent, 0, 500);
+    voice->configure(sample, (float)pitchCents, gain, (float)speedPercent, start, end,
                      (uint16_t)cutoff, (uint8_t)resonance);
   }
 }

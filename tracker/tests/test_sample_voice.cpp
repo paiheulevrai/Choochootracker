@@ -41,7 +41,7 @@ TEST_CASE("SampleVoice renders PCM16 with envelope and every filter mode") {
       SampleVoice voice;
       float output[256 * 2];
       voice.init(48000.0f);
-      voice.configure(&sample, 0.0f, 1.0f, sample.start, sample.end,
+      voice.configure(&sample, 0.0f, 1.0f, 100.0f, sample.start, sample.end,
                       sample.filterCutoffHz, sample.filterResonance);
       voice.noteOn();
       voice.render(output, 256);
@@ -73,11 +73,35 @@ TEST_CASE("SampleVoice start and end delimit playback") {
   SampleVoice voice;
   float output[128 * 2];
   voice.init(48000.0f);
-  voice.configure(&sample, 0.0f, 1.0f, sample.start, sample.end,
+  voice.configure(&sample, 0.0f, 1.0f, 100.0f, sample.start, sample.end,
                   sample.filterCutoffHz, sample.filterResonance);
   voice.noteOn();
   voice.render(output, 128);
   CHECK_FALSE(voice.active());
+}
+
+TEST_CASE("SampleVoice loops and grain time keeps rendering") {
+  int16_t pcm[64];
+  for (int i = 0; i < 64; ++i) pcm[i] = i * 400 - 12000;
+  InstrumentSample sample;
+  std::memset(&sample, 0, sizeof(sample));
+  sample.sampleRate = 48000;
+  sample.frameCount = 64;
+  sample.channels = 1;
+  sample.data = pcm;
+  sample.end = 255;
+  sample.loopMode = 1;
+  sample.sustain = 255;
+
+  SampleVoice voice;
+  float output[256 * 2];
+  voice.init(48000.0f);
+  voice.configure(&sample, 0.0f, 1.0f, 1200.0f, sample.start, sample.end,
+                  sample.filterCutoffHz, sample.filterResonance);
+  voice.noteOn();
+  voice.render(output, 256);
+  CHECK(voice.active());
+  for (float value : output) CHECK(std::isfinite(value));
 }
 
 TEST_CASE("Sample loader accepts unsigned PCM8 WAV") {

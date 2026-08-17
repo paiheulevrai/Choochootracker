@@ -195,7 +195,7 @@ static int previewSample(const char* path) {
     samplePreview.end = 255;
     samplePreview.sustain = 255;
     samplePreview.filterCutoffHz = 20000;
-    samplePreviewVoice.configure(&samplePreview, 0.0f, 1.0f, 0, 255, 20000, 0);
+    samplePreviewVoice.configure(&samplePreview, 0.0f, 1.0f, 100.0f, 0, 255, 20000, 0);
     samplePreviewVoice.noteOn();
   }
   resume();

@@ -173,8 +173,10 @@ struct InstrumentSample : InstrumentVoicePostSettings {
   uint8_t channels;
   int16_t* data;
   int8_t pitch;
+  uint16_t speedPercent;
   uint8_t start;
   uint8_t end;
+  uint8_t loopMode; // 0: off, 1: loop, 2: ping-pong
 };
 
 union InstrumentChipData {

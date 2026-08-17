@@ -5,6 +5,11 @@
 
 #include "project.h"
 
+static float mixerGain(uint8_t value) {
+  if (value == 0) return 0.0f;
+  return powf(10.0f, -60.0f * (100 - value) / 2000.0f);
+}
+
 void MasterEffects::init(float sampleRate) {
   sampleRate_ = sampleRate > 0.0f ? sampleRate : 96000.0f;
   reverb_.Init(reverbMemory_);
@@ -35,11 +40,17 @@ void MasterEffects::process(float* reverbBus, float* delayBus, float* output,
     }
     reverb_.set_amount(1.0f);
     reverb_.set_input_gain(0.2f);
-    reverb_.set_time(0.2f + project->reverbTime / 255.0f * 0.78f);
+    float time = project->reverbTime / 255.0f;
+    reverb_.set_time(project->perceptualEffects
+      ? 0.20f * powf(0.98f / 0.20f, time)
+      : 0.2f + time * 0.78f);
     reverb_.set_diffusion(0.625f);
-    reverb_.set_lp(0.02f + project->reverbDamping / 255.0f * 0.96f);
+    float damping = project->reverbDamping / 255.0f;
+    reverb_.set_lp(project->perceptualEffects
+      ? 0.02f + 0.96f * damping * damping
+      : 0.02f + damping * 0.96f);
     reverb_.Process(reverbFrames_.data(), frames);
-    float gain = project->reverbReturn / 100.0f;
+    float gain = project->perceptualEffects ? mixerGain(project->reverbReturn) : project->reverbReturn / 100.0f;
     for (size_t i = 0; i < frames; ++i) {
       output[i * 2] += reverbFrames_[i].l * gain;
       output[i * 2 + 1] += reverbFrames_[i].r * gain;
@@ -52,7 +63,7 @@ void MasterEffects::process(float* reverbBus, float* delayBus, float* output,
   size_t delaySamples = (size_t)(sampleRate_ * project->delayTicks / tickRate + 0.5f);
   delaySamples = std::max<size_t>(1, std::min(delaySamples, capacity - 1));
   float feedback = std::min<int>(project->delayFeedback, 95) / 100.0f;
-  float returnGain = project->delayReturn / 100.0f;
+  float returnGain = project->perceptualEffects ? mixerGain(project->delayReturn) : project->delayReturn / 100.0f;
   for (size_t i = 0; i < frames; ++i) {
     size_t read = (delayWrite_ + capacity - delaySamples) % capacity;
     float wetL = lowpass(delayLine_[read * 2], project->delayFilterCutoffHz, delayFilterState_[0]);

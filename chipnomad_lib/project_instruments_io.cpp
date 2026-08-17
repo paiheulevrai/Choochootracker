@@ -243,8 +243,10 @@ static int loadInstrumentSample(FILE* file, Instrument* instrument) {
     if (line == NULL || line[0] == '#') break;
     if (strncmp(line, "- Sample path: ", 15) == 0) sscanf(line, "- Sample path: %255[^\n]", sample->path);
     else if (strncmp(line, "- Sample pitch: ", 16) == 0) sscanf(line, "- Sample pitch: %hhd", &sample->pitch);
+    else if (strncmp(line, "- Sample speed: ", 16) == 0) sscanf(line, "- Sample speed: %hu", &sample->speedPercent);
     else if (strncmp(line, "- Sample start: ", 16) == 0) sscanf(line, "- Sample start: %hhu", &sample->start);
     else if (strncmp(line, "- Sample end: ", 14) == 0) sscanf(line, "- Sample end: %hhu", &sample->end);
+    else if (strncmp(line, "- Sample loop: ", 15) == 0) sscanf(line, "- Sample loop: %hhu", &sample->loopMode);
     else if (strncmp(line, "- Sample volume: ", 17) == 0) sscanf(line, "- Sample volume: %hhu", &instrument->volume);
     else loadVoicePostSetting(line, sample);
     consumeLine(file);
@@ -253,6 +255,7 @@ static int loadInstrumentSample(FILE* file, Instrument* instrument) {
     char error[64];
     sampleLoadWav16(sample->path, sample, error, sizeof(error));
   }
+  if (sample->loopMode > 2) sample->loopMode = 0;
   return 0;
 }
 
@@ -478,8 +481,10 @@ static int saveInstrumentSample(FILE* file, Instrument* instrument) {
   InstrumentSample* sample = &instrument->chip.sample;
   fprintf(file, "- Sample path: %s\n", sample->path);
   fprintf(file, "- Sample pitch: %hhd\n", sample->pitch);
+  fprintf(file, "- Sample speed: %hu\n", sample->speedPercent);
   fprintf(file, "- Sample start: %hhu\n", sample->start);
   fprintf(file, "- Sample end: %hhu\n", sample->end);
+  fprintf(file, "- Sample loop: %hhu\n", sample->loopMode);
   saveVoicePostSettings(file, sample);
   return 0;
 }

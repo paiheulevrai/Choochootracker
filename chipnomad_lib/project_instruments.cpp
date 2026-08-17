@@ -162,7 +162,7 @@ static int initPlaitsAltInstrument(Instrument* instrument) {
 }
 
 static const char* modNameSample(int modIndex) {
-  static const char *names[] = {"Off", "Volume", "Pitch", "Cutoff", "Reso"};
+  static const char *names[] = {"Off", "Volume", "Pitch", "Cutoff", "Reso", "Time"};
   return names[modIndex];
 }
 
@@ -170,6 +170,7 @@ static int initSampleInstrument(Instrument* instrument) {
   initCommon(instrument);
   instrument->type = InstrumentType::Sample;
   instrument->chip.sample.end = 255;
+  instrument->chip.sample.speedPercent = 100;
   initVoicePostSettings(&instrument->chip.sample);
   return 0;
 }
@@ -185,7 +186,7 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
   switch (type) {
     case InstrumentType::AY1:
       return (InstrumentFunctions){
-        .modDestinationsCount = 4,
+        .modDestinationsCount = 5,
         .modName = modNameAY1,
         .init = initAY1Instrument,
         .free = freeAY1Instrument

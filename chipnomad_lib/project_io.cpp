@@ -646,6 +646,8 @@ static int projectLoadInternal(FILE* file, Project* project) {
   char buf[128];
   Project p;
   projectInit(&p);
+  p.signedTrackSpeed = 0; // Absent from old files: retain the legacy SPD map.
+  p.perceptualEffects = 0;
 
   snprintf(projectFileError, 40, "Module header");
   char* line = peekLine(file);
@@ -758,6 +760,18 @@ static int projectLoadInternal(FILE* file, Project* project) {
     p.linearPitch = (uint8_t)tempLinearPitch;
     consumeLine(file);
     line = peekLine(file);  // Read next line for chip type
+    if (line == NULL) return 1;
+  }
+  if (line && sscanf(line, "- Signed track speed: %d", &tempLinearPitch) == 1) {
+    p.signedTrackSpeed = tempLinearPitch != 0;
+    consumeLine(file);
+    line = peekLine(file);
+    if (line == NULL) return 1;
+  }
+  if (line && sscanf(line, "- Perceptual effects: %d", &tempLinearPitch) == 1) {
+    p.perceptualEffects = tempLinearPitch != 0;
+    consumeLine(file);
+    line = peekLine(file);
     if (line == NULL) return 1;
   }
   // If linear pitch not found, line already contains the chip type line
@@ -1132,6 +1146,8 @@ static int projectSaveInternal(FILE* file, Project* project) {
   fprintf(file, "- Delay: %hhu,%hhu,%hhu,%hu\n", project->delayReturn, project->delayTicks,
     project->delayFeedback, project->delayFilterCutoffHz);
   fprintf(file, "- Linear pitch: %d\n", project->linearPitch);
+  fprintf(file, "- Signed track speed: %d\n", project->signedTrackSpeed);
+  fprintf(file, "- Perceptual effects: %d\n", project->perceptualEffects);
   fprintf(file, "- Chip type: %s\n", chipNames[static_cast<int>(project->chipType)]);
 
   switch (project->chipType) {

@@ -2,14 +2,28 @@
 #include "audio_manager.h"
 #include "common.h"
 #include "corelib_gfx.h"
+#include <stdio.h>
+#include <string.h>
 
 static void fullRedraw(void);
 static int displayedCpuLoad = -1;
 static int mixerPage = 0; // 0 mixer, 1 reverb, 2 delay
+static uint8_t autoMixPreview[PROJECT_MAX_TRACKS];
+static uint8_t autoMixOriginal[PROJECT_MAX_TRACKS];
+
+static void applyAutoMix(void) {
+  projectModified = 1;
+  screenSetup(&screenMixer, 0);
+}
+static void cancelAutoMix(void) {
+  for (int i = 0; i < chipnomadState->project.tracksCount; ++i)
+    chipnomadState->project.trackVolume[i] = autoMixOriginal[i];
+  screenSetup(&screenMixer, 0);
+}
 
 int screenMixerGetPage(void) { return mixerPage; }
 
-static int columnCount(int row) { return mixerPage == 0 ? 5 : 1; }
+static int columnCount(int row) { return mixerPage == 0 ? (row == PROJECT_MAX_TRACKS ? 1 : 5) : 1; }
 static void drawRowHeader(int row, CellState state) {}
 static void drawColHeader(int col, CellState state) {}
 
@@ -20,6 +34,7 @@ static void drawStatic(void) {
     gfxPrint(3, 2, "LVL"); gfxPrint(8, 2, "REV"); gfxPrint(13, 2, "DLY");
     gfxPrint(18, 2, "MUTE"); gfxPrint(25, 2, "SOLO");
     gfxPrint(32, 2, "CLIP");
+    gfxPrint(0, 12, "AUTO MIX");
   } else if (mixerPage == 1) {
     gfxPrint(0, 0, "CLOUDS REVERB");
     gfxPrint(0, 3, "Return"); gfxPrint(0, 4, "Time");
@@ -35,6 +50,7 @@ static void drawCursor(int col, int row) {
   if (mixerPage == 0) {
     static const int x[] = {3, 8, 13, 18, 25};
     static const int width[] = {3, 3, 3, 3, 3};
+    if (row == PROJECT_MAX_TRACKS) { gfxCursor(10, 12, 16); return; }
     if (col < 0 || col >= 5 || row < 0 || row >= PROJECT_MAX_TRACKS) return;
     gfxCursor(x[col], 3 + row, width[col]);
   } else if (row >= 0 && row < 4) {
@@ -45,6 +61,11 @@ static void drawCursor(int col, int row) {
 static void drawField(int col, int row, CellState state) {
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   if (mixerPage == 0) {
+    if (row == PROJECT_MAX_TRACKS) {
+      gfxClearRect(10, 12, 16, 1);
+      gfxPrint(10, 12, state == CellState::focus ? "> RUN AUTO MIX <" : "[ RUN AUTO MIX ]");
+      return;
+    }
     if (col < 0 || col >= 5 || row < 0 || row >= PROJECT_MAX_TRACKS) return;
     gfxPrintf(0, 3 + row, "T%d", row + 1);
     if (col == 0) gfxPrintf(3, 3 + row, "%03d", chipnomadState->project.trackVolume[row]);
@@ -60,8 +81,8 @@ static void drawField(int col, int row, CellState state) {
   Project* p = &chipnomadState->project;
   if (mixerPage == 1) {
     if (row == 0) gfxPrintf(12, 3, "%03d%%", p->reverbReturn);
-    else if (row == 1) gfxPrintf(12, 4, "%02X", p->reverbTime);
-    else if (row == 2) gfxPrintf(12, 5, "%02X", p->reverbDamping);
+    else if (row == 1) gfxPrintf(12, 4, "%03d%%", p->reverbTime * 100 / 255);
+    else if (row == 2) gfxPrintf(12, 5, "%03d%%", p->reverbDamping * 100 / 255);
     else gfxPrintf(12, 6, "%u Hz", p->reverbFilterCutoffHz);
   } else {
     if (row == 0) gfxPrintf(12, 3, "%03d%%", p->delayReturn);
@@ -75,6 +96,25 @@ static int onEdit(int col, int row, CellEditAction action) {
   Project* p = &chipnomadState->project;
   int handled = 0;
   if (mixerPage == 0) {
+    if (row == PROJECT_MAX_TRACKS) {
+      if (action != CellEditAction::tap) return 0;
+      if (chipnomadAutoMix(chipnomadState, 6, autoMixPreview)) screenMessage(MESSAGE_TIME, "Auto mix: no audio");
+      else {
+        char summary[128] = "Apply? ";
+        for (int i = 0; i < chipnomadState->project.tracksCount; ++i) {
+          autoMixOriginal[i] = chipnomadState->project.trackVolume[i];
+          char change[16];
+          snprintf(change, sizeof(change), "T%d %d>%d ", i + 1,
+            autoMixOriginal[i], autoMixPreview[i]);
+          strncat(summary, change, sizeof(summary) - strlen(summary) - 1);
+          chipnomadState->project.trackVolume[i] = autoMixPreview[i];
+        }
+        playbackStartSong(&chipnomadState->playbackState, 0, 0, 1);
+        confirmSetup(summary, applyAutoMix, cancelAutoMix);
+        screenSetup(&screenConfirm, 0);
+      }
+      return 1;
+    }
     if (col < 0 || col >= 5 || row < 0 || row >= PROJECT_MAX_TRACKS) return 0;
     if (col == 0) handled = edit8noLast(action, &p->trackVolume[row], 10, 0, 100);
     else if (col == 1) handled = edit8noLast(action, &p->trackReverbSend[row], 10, 0, 100);
@@ -113,7 +153,7 @@ static ScreenData screen = {
   .isCellValid = NULL, .getLoopRange = NULL,
 };
 
-static void setup(int input) { displayedCpuLoad = -1; mixerPage = 0; screen.rows = PROJECT_MAX_TRACKS; }
+static void setup(int input) { displayedCpuLoad = -1; mixerPage = 0; screen.rows = PROJECT_MAX_TRACKS + 1; }
 static void fullRedraw(void) { screenFullRedraw(&screen); }
 static void draw(void) {
   int cpuLoad = audioManager.getCpuLoadPercent();
@@ -126,7 +166,7 @@ static void draw(void) {
 
 static void setPage(int page) {
   mixerPage = page;
-  screen.rows = page == 0 ? PROJECT_MAX_TRACKS : 4;
+  screen.rows = page == 0 ? PROJECT_MAX_TRACKS + 1 : 4;
   screen.cursorRow = 0;
   screen.cursorCol = 0;
   fullRedraw();

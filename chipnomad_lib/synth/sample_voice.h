@@ -11,7 +11,7 @@ class SampleVoice {
  public:
   void init(float outputSampleRate);
   void configure(const InstrumentSample* sample, float pitchCents, float gain,
-                 uint8_t start, uint8_t end, uint16_t cutoffHz,
+                 float speedPercent, uint8_t start, uint8_t end, uint16_t cutoffHz,
                  uint8_t resonance);
   void noteOn();
   void noteOff();
@@ -25,9 +25,22 @@ class SampleVoice {
   float outputSampleRate_;
   double position_;
   double step_;
+  int direction_;
+  bool reverse_;
+  float timeStretch_;
+  bool granular_;
+  bool grainExhausted_;
+  double grainPosition_[2];
+  double nextGrainPosition_;
+  uint32_t grainAge_[2];
+  uint32_t grainSize_;
+  uint32_t grainHop_;
   uint32_t startFrame_;
   uint32_t endFrame_;
   bool active_;
+  bool advancePosition();
+  float sampleAt(double position, int channel) const;
+  float grainSampleAt(double position, int channel) const;
   VoicePostProcessor<> post_;
 };
 

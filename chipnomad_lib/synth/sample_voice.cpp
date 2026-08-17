@@ -17,6 +17,11 @@ void SampleVoice::init(float outputSampleRate) {
   outputSampleRate_ = outputSampleRate;
   position_ = 0.0;
   step_ = 1.0;
+  direction_ = 1;
+  reverse_ = false;
+  timeStretch_ = 1.0f;
+  granular_ = false;
+  grainExhausted_ = false;
   startFrame_ = 0;
   endFrame_ = 0;
   active_ = false;
@@ -24,19 +29,26 @@ void SampleVoice::init(float outputSampleRate) {
 }
 
 void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
-                            float gain, uint8_t start, uint8_t end,
+                            float gain, float speedPercent, uint8_t start, uint8_t end,
                             uint16_t cutoffHz, uint8_t resonance) {
   sample_ = sample;
   post_.setGain(gain);
   if (!sample_ || !sample_->data || sample_->frameCount == 0) return;
 
-  startFrame_ = (uint32_t)((uint64_t)start * (sample_->frameCount - 1) / 255);
-  endFrame_ = end == 255
+  uint32_t startFrame = (uint32_t)((uint64_t)start * (sample_->frameCount - 1) / 255);
+  uint32_t endFrame = end == 255
     ? sample_->frameCount
     : (uint32_t)((uint64_t)(end + 1) * sample_->frameCount / 256);
+  reverse_ = start > end;
+  startFrame_ = reverse_ ? endFrame - 1 : startFrame;
+  endFrame_ = reverse_ ? startFrame + 1 : endFrame;
   if (endFrame_ <= startFrame_) endFrame_ = startFrame_ + 1;
   if (endFrame_ > sample_->frameCount) endFrame_ = sample_->frameCount;
   step_ = (sample_->sampleRate / outputSampleRate_) * pow(2.0, pitchCents / 1200.0);
+  timeStretch_ = speedPercent / 100.0f;
+  granular_ = fabsf(timeStretch_ - 1.0f) > 0.001f;
+  grainSize_ = (uint32_t)(outputSampleRate_ * 0.040f);
+  grainHop_ = grainSize_ / 2;
   post_.setFilter(sample_->filterEnabled != 0, sample_->filterMode,
                   sample_->filterSlope24dB != 0, cutoffHz, resonance / 255.0f);
   post_.setEnvelope(true, envelopeTime(sample_->attack), envelopeTime(sample_->decay),
@@ -47,8 +59,70 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
 void SampleVoice::noteOn() {
   if (!sample_ || !sample_->data || endFrame_ <= startFrame_) return;
   position_ = startFrame_;
+  direction_ = reverse_ ? -1 : 1;
+  grainExhausted_ = false;
+  grainPosition_[0] = reverse_ ? endFrame_ - 1 : startFrame_;
+  grainPosition_[1] = grainPosition_[0] + direction_ * step_ * grainHop_ * timeStretch_;
+  grainAge_[0] = grainHop_;
+  grainAge_[1] = 0;
+  nextGrainPosition_ = grainPosition_[1] + direction_ * step_ * grainHop_ * timeStretch_;
   active_ = true;
   post_.noteOn(true);
+}
+
+float SampleVoice::sampleAt(double position, int channel) const {
+  uint32_t frame = (uint32_t)position;
+  uint32_t next = direction_ > 0
+    ? (frame + 1 < endFrame_ ? frame + 1 : frame)
+    : (frame > startFrame_ ? frame - 1 : frame);
+  int sourceChannel = sample_->channels == 1 ? 0 : channel;
+  float a = sample_->data[frame * sample_->channels + sourceChannel] / 32768.0f;
+  float b = sample_->data[next * sample_->channels + sourceChannel] / 32768.0f;
+  return a + (b - a) * (float)(position - frame);
+}
+
+float SampleVoice::grainSampleAt(double position, int channel) const {
+  const double first = startFrame_;
+  const double length = endFrame_ - startFrame_;
+  if (sample_->loopMode == 1) {
+    position = fmod(position - first, length);
+    if (position < 0.0) position += length;
+    position += first;
+  } else if (sample_->loopMode == 2) {
+    double span = length > 1.0 ? length - 1.0 : 1.0;
+    double period = span * 2.0;
+    position = fmod(position - first, period);
+    if (position < 0.0) position += period;
+    position = first + (position <= span ? position : period - position);
+  } else if (position < first || position >= endFrame_) {
+    return 0.0f;
+  }
+  uint32_t frame = (uint32_t)position;
+  uint32_t next = frame + 1 < endFrame_ ? frame + 1 : frame;
+  int sourceChannel = sample_->channels == 1 ? 0 : channel;
+  float a = sample_->data[frame * sample_->channels + sourceChannel] / 32768.0f;
+  float b = sample_->data[next * sample_->channels + sourceChannel] / 32768.0f;
+  return a + (b - a) * (float)(position - frame);
+}
+
+bool SampleVoice::advancePosition() {
+  position_ += step_ * direction_;
+  if (position_ >= startFrame_ && position_ < endFrame_) return true;
+  if (sample_->loopMode == 0) return false;
+  double first = startFrame_;
+  double last = endFrame_ - 1.0;
+  if (sample_->loopMode == 1) {
+    double length = endFrame_ - startFrame_;
+    while (position_ >= endFrame_) position_ -= length;
+    while (position_ < startFrame_) position_ += length;
+  } else if (position_ > last) {
+    position_ = last - (position_ - last);
+    direction_ = -1;
+  } else {
+    position_ = first + (first - position_);
+    direction_ = 1;
+  }
+  return true;
 }
 
 void SampleVoice::noteOff() {
@@ -65,21 +139,36 @@ void SampleVoice::render(float* output, size_t frames) {
   if (!active_ || !sample_ || !sample_->data) return;
 
   for (size_t i = 0; i < frames; i++) {
-    uint32_t frame = (uint32_t)position_;
-    if (frame >= endFrame_) {
-      kill();
-      break;
-    }
-    uint32_t next = frame + 1 < endFrame_ ? frame + 1 : frame;
-    float fraction = (float)(position_ - frame);
     if (!post_.envelopeActive()) { kill(); break; }
-    for (int channel = 0; channel < 2; channel++) {
-      int sourceChannel = sample_->channels == 1 ? 0 : channel;
-      float a = sample_->data[frame * sample_->channels + sourceChannel] / 32768.0f;
-      float b = sample_->data[next * sample_->channels + sourceChannel] / 32768.0f;
-      output[i * 2 + channel] = post_.process(a + (b - a) * fraction, channel);
+    if (granular_) {
+      for (int grain = 0; grain < 2; ++grain) {
+        if (grainAge_[grain] >= grainSize_) {
+          grainPosition_[grain] = nextGrainPosition_;
+          nextGrainPosition_ += direction_ * step_ * grainHop_ * timeStretch_;
+          grainAge_[grain] = 0;
+          if (sample_->loopMode == 0 && nextGrainPosition_ >= endFrame_) grainExhausted_ = true;
+        }
+      }
+      for (int channel = 0; channel < 2; ++channel) {
+        float value = 0.0f;
+        for (int grain = 0; grain < 2; ++grain) {
+          float phase = (float)grainAge_[grain] / (float)(grainSize_ - 1);
+          float window = sinf(3.14159265f * phase);
+          value += grainSampleAt(grainPosition_[grain] + direction_ * step_ * grainAge_[grain], channel) * window * window;
+        }
+        output[i * 2 + channel] = post_.process(value, channel);
+      }
+      grainAge_[0]++;
+      grainAge_[1]++;
+      if (grainExhausted_ && sample_->loopMode == 0 &&
+          grainPosition_[0] + step_ * grainAge_[0] >= endFrame_ &&
+          grainPosition_[1] + step_ * grainAge_[1] >= endFrame_) { kill(); break; }
+    } else {
+      for (int channel = 0; channel < 2; channel++) {
+        output[i * 2 + channel] = post_.process(sampleAt(position_, channel), channel);
+      }
+      if (!advancePosition()) { kill(); break; }
     }
-    position_ += step_;
     if (!post_.envelopeActive()) { kill(); break; }
   }
 }

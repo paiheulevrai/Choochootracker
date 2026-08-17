@@ -281,14 +281,14 @@ TEST_CASE_FIXTURE(PlaybackFixture, "MOD 22 triggers on the second visit") {
   CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
 }
 
-TEST_CASE_FIXTURE(PlaybackFixture, "SPD 0A doubles one track clock and persists") {
+TEST_CASE_FIXTURE(PlaybackFixture, "SPD 01 doubles one track clock and persists") {
   state->project.phrases[0].rows[0].fx[0][0] = fxSPD;
-  state->project.phrases[0].rows[0].fx[0][1] = 0x0A;
+  state->project.phrases[0].rows[0].fx[0][1] = 0x01;
   state->project.chains[0].rows[0].phrase = 0;
   state->project.song[0][0] = 0;
   playbackStartSong(&state->playbackState, 0, 0, 0);
   advanceFrames(1);
-  CHECK(state->playbackState.tracks[0].speedRatio == 0x0A);
+  CHECK(state->playbackState.tracks[0].speedRatio == 0x01);
   advanceFrames(3);
   CHECK(state->playbackState.tracks[0].phraseRow == 1);
   advanceFrames(3);

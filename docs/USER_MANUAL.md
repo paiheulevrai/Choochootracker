@@ -379,6 +379,12 @@ The value is interpreted as a signed 8-bit relative change (`01` adds one, `FF` 
 
 ### Sample FX
 
+The PCM Sample instrument lives in the `SAMPLE` category. `Start` and `End`
+define the playback region; when Start is greater than End the region plays in
+reverse. Loop offers Off, Loop, and Ping-Pong modes. Speed is a granular
+time-stretch control from 0% to 500% (100% is normal) and does not transpose
+the sample.
+
 | FX | Value | Meaning |
 |---|---|---|
 | `SPT` | signed `XX` | Sample transposition in semitones |
@@ -387,6 +393,18 @@ The value is interpreted as a signed 8-bit relative change (`01` adds one, `FF` 
 | `SVL` | `00-FF` | Absolute sample volume |
 | `SCF` | `00-FF` | Exponential cutoff, 20 Hz to 20 kHz |
 | `SRS` | `00-FF` | Exponential filter resonance |
+
+`SPD` is a persistent per-track clock ratio: `00` is normal speed, positive
+values accelerate (`01` = x2), and signed negative hex values slow down
+(`FF` = /2). Older projects keep their original SPD interpretation.
+
+### Auto Mix
+
+The Mixer contains an `AUTO MIX` button. It renders six seconds offline,
+proposes conservative track-level changes to leave peak headroom, and starts a
+temporary preview. Apply keeps the proposed levels; Cancel restores the eight
+previous levels. It is a quick anti-clipping helper, not a replacement for a
+manual mix.
 
 ### AY FX shared by AY instruments
 

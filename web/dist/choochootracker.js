@@ -76,7 +76,7 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: C:\msys64\tmp\tmppu7xmv2d.js
+// include: C:\Users\surga\AppData\Local\Temp\tmpeuhr6fba.js
 
   if (!Module['expectedDataFileDownloads']) Module['expectedDataFileDownloads'] = 0;
   Module['expectedDataFileDownloads']++;
@@ -214,21 +214,21 @@ Module['FS_createPath']("/", "wavetables", true, true);
 
   })();
 
-// end include: C:\msys64\tmp\tmppu7xmv2d.js
-// include: C:\msys64\tmp\tmpr301evui.js
+// end include: C:\Users\surga\AppData\Local\Temp\tmpeuhr6fba.js
+// include: C:\Users\surga\AppData\Local\Temp\tmp5drucmjn.js
 
     // All the pre-js content up to here must remain later on, we need to run
     // it.
     if ((typeof ENVIRONMENT_IS_WASM_WORKER != 'undefined' && ENVIRONMENT_IS_WASM_WORKER) || (typeof ENVIRONMENT_IS_PTHREAD != 'undefined' && ENVIRONMENT_IS_PTHREAD) || (typeof ENVIRONMENT_IS_AUDIO_WORKLET != 'undefined' && ENVIRONMENT_IS_AUDIO_WORKLET)) Module['preRun'] = [];
     var necessaryPreJSTasks = Module['preRun'].slice();
-  // end include: C:\msys64\tmp\tmpr301evui.js
-// include: C:\msys64\tmp\tmp564ji5u0.js
+  // end include: C:\Users\surga\AppData\Local\Temp\tmp5drucmjn.js
+// include: C:\Users\surga\AppData\Local\Temp\tmpd_p2oo4m.js
 
     if (!Module['preRun']) throw 'Module.preRun should exist because file support used it; did a pre-js delete it?';
     necessaryPreJSTasks.forEach((task) => {
       if (Module['preRun'].indexOf(task) < 0) throw 'All preRun tasks that exist before user pre-js code should remain after; did you replace Module or modify Module.preRun?';
     });
-  // end include: C:\msys64\tmp\tmp564ji5u0.js
+  // end include: C:\Users\surga\AppData\Local\Temp\tmpd_p2oo4m.js
 
 
 var programArgs = [];
@@ -996,8 +996,6 @@ async function createWasm() {
     };
 
   
-
-  var ___call_sighandler = (fp, sig) => ((a1) => dynCall_vi(fp, a1))(sig);
 
   
   class ExceptionInfo {
@@ -4295,21 +4293,42 @@ var UTF8Decoder = globalThis.TextDecoder && new TextDecoder();
   var __abort_js = () =>
       abort('native code called abort()');
 
-  var runtimeKeepaliveCounter = 0;
-  var __emscripten_runtime_keepalive_clear = () => {
-      noExitRuntime = false;
-      runtimeKeepaliveCounter = 0;
-    };
-
-  var timers = {
-  };
+  var _emscripten_get_now = () => performance.now();
   
-  var clearTimers = () => {
-      for (var t of Object.values(timers)) {
-        clearTimeout(t.id);
+  var _emscripten_date_now = () => Date.now();
+  
+  var nowIsMonotonic = 1;
+  
+  var checkWasiClock = (clock_id) => clock_id >= 0 && clock_id <= 3;
+  
+  var INT53_MAX = 9007199254740992;
+  
+  var INT53_MIN = -9007199254740992;
+  var bigintToI53Checked = (num) => (num < INT53_MIN || num > INT53_MAX) ? NaN : Number(num);
+  
+  function _clock_time_get(clk_id, ignored_precision, ptime) {
+    ignored_precision = bigintToI53Checked(ignored_precision);
+  
+  
+      if (!checkWasiClock(clk_id)) {
+        return 28;
       }
-    };
-  
+      var now;
+      // all wasi clocks but realtime are monotonic
+      if (clk_id === 0) {
+        now = _emscripten_date_now();
+      } else if (nowIsMonotonic) {
+        now = _emscripten_get_now();
+      } else {
+        return 52;
+      }
+      // "now" is in ms, and wasi times are in ns.
+      var nsec = Math.round(now * 1000 * 1000);
+      HEAP64[((ptime)>>3)] = BigInt(nsec);
+      return 0;
+    ;
+  }
+
   var handleException = (e) => {
       // Certain exception types we do not treat as errors since they are used for
       // internal control flow.
@@ -4329,6 +4348,7 @@ var UTF8Decoder = globalThis.TextDecoder && new TextDecoder();
     };
   
   
+  var runtimeKeepaliveCounter = 0;
   var keepRuntimeAlive = () => noExitRuntime || runtimeKeepaliveCounter > 0;
   var _proc_exit = (code) => {
       EXITSTATUS = code;
@@ -4379,64 +4399,6 @@ var UTF8Decoder = globalThis.TextDecoder && new TextDecoder();
         maybeExit();
       }
     };
-  
-  
-  var _emscripten_get_now = () => performance.now();
-  var __setitimer_js = (which, timeout_ms) => {
-      // First, clear any existing timer.
-      if (timers[which]) {
-        clearTimeout(timers[which].id);
-        delete timers[which];
-      }
-  
-      // A timeout of zero simply cancels the current timeout so we have nothing
-      // more to do.
-      if (!timeout_ms) return 0;
-  
-      var id = setTimeout(() => {
-        assert(which in timers);
-        delete timers[which];
-        callUserCallback(() => __emscripten_timeout(which, _emscripten_get_now()));
-      }, timeout_ms);
-      timers[which] = { id, timeout_ms };
-      return 0;
-    };
-
-  
-  var _emscripten_date_now = () => Date.now();
-  
-  var nowIsMonotonic = 1;
-  
-  var checkWasiClock = (clock_id) => clock_id >= 0 && clock_id <= 3;
-  
-  var INT53_MAX = 9007199254740992;
-  
-  var INT53_MIN = -9007199254740992;
-  var bigintToI53Checked = (num) => (num < INT53_MIN || num > INT53_MAX) ? NaN : Number(num);
-  
-  function _clock_time_get(clk_id, ignored_precision, ptime) {
-    ignored_precision = bigintToI53Checked(ignored_precision);
-  
-  
-      if (!checkWasiClock(clk_id)) {
-        return 28;
-      }
-      var now;
-      // all wasi clocks but realtime are monotonic
-      if (clk_id === 0) {
-        now = _emscripten_date_now();
-      } else if (nowIsMonotonic) {
-        now = _emscripten_get_now();
-      } else {
-        return 52;
-      }
-      // "now" is in ms, and wasi times are in ns.
-      var nsec = Math.round(now * 1000 * 1000);
-      HEAP64[((ptime)>>3)] = BigInt(nsec);
-      return 0;
-    ;
-  }
-
   
   function getFullscreenElement() {
       return document.fullscreenElement
@@ -6367,6 +6329,10 @@ var UTF8Decoder = globalThis.TextDecoder && new TextDecoder();
     };
 
   
+  var __emscripten_runtime_keepalive_clear = () => {
+      noExitRuntime = false;
+      runtimeKeepaliveCounter = 0;
+    };
   
   var _emscripten_force_exit = (status) => {
       warnOnce('emscripten_force_exit cannot actually shut down the runtime, as the build does not have EXIT_RUNTIME set');
@@ -9144,7 +9110,6 @@ var UTF8Decoder = globalThis.TextDecoder && new TextDecoder();
 
 
 
-
   var autoResumeAudioContext = (ctx) => {
       for (var event of ['keydown', 'mousedown', 'touchstart']) {
         for (var element of [document, document.getElementById('canvas')]) {
@@ -10091,22 +10056,22 @@ function checkIncomingModuleAPI() {
   ignoredModuleProp('wasmBinary');
 }
 var ASM_CONSTS = {
-  352188: ($0) => { var str = UTF8ToString($0) + '\n\n' + 'Abort/Retry/Ignore/AlwaysIgnore? [ariA] :'; var reply = window.prompt(str, "i"); if (reply === null) { reply = "i"; } return reply.length === 1 ? reply.charCodeAt(0) : -1; },  
- 352403: () => { if (typeof(AudioContext) !== 'undefined') { return true; } else if (typeof(webkitAudioContext) !== 'undefined') { return true; } return false; },  
- 352550: () => { if ((typeof(navigator.mediaDevices) !== 'undefined') && (typeof(navigator.mediaDevices.getUserMedia) !== 'undefined')) { return true; } else if (typeof(navigator.webkitGetUserMedia) !== 'undefined') { return true; } return false; },  
- 352784: ($0) => { if(typeof(Module['SDL2']) === 'undefined') { Module['SDL2'] = {}; } var SDL2 = Module['SDL2']; if (!$0) { SDL2.audio = {}; } else { SDL2.capture = {}; } if (!SDL2.audioContext) { if (typeof(AudioContext) !== 'undefined') { SDL2.audioContext = new AudioContext(); } else if (typeof(webkitAudioContext) !== 'undefined') { SDL2.audioContext = new webkitAudioContext(); } if (SDL2.audioContext) { if ((typeof navigator.userActivation) === 'undefined') { autoResumeAudioContext(SDL2.audioContext); } } } return SDL2.audioContext === undefined ? -1 : 0; },  
- 353336: () => { var SDL2 = Module['SDL2']; return SDL2.audioContext.sampleRate; },  
- 353404: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; var have_microphone = function(stream) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); SDL2.capture.silenceTimer = undefined; SDL2.capture.silenceBuffer = undefined } SDL2.capture.mediaStreamNode = SDL2.audioContext.createMediaStreamSource(stream); SDL2.capture.scriptProcessorNode = SDL2.audioContext.createScriptProcessor($1, $0, 1); SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) { if ((SDL2 === undefined) || (SDL2.capture === undefined)) { return; } audioProcessingEvent.outputBuffer.getChannelData(0).fill(0.0); SDL2.capture.currentCaptureBuffer = audioProcessingEvent.inputBuffer; dynCall('vp', $2, [$3]); }; SDL2.capture.mediaStreamNode.connect(SDL2.capture.scriptProcessorNode); SDL2.capture.scriptProcessorNode.connect(SDL2.audioContext.destination); SDL2.capture.stream = stream; }; var no_microphone = function(error) { }; SDL2.capture.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.capture.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { SDL2.capture.currentCaptureBuffer = SDL2.capture.silenceBuffer; dynCall('vp', $2, [$3]); }; SDL2.capture.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); if ((navigator.mediaDevices !== undefined) && (navigator.mediaDevices.getUserMedia !== undefined)) { navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(have_microphone).catch(no_microphone); } else if (navigator.webkitGetUserMedia !== undefined) { navigator.webkitGetUserMedia({ audio: true, video: false }, have_microphone, no_microphone); } },  
- 355097: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; SDL2.audio.scriptProcessorNode = SDL2.audioContext['createScriptProcessor']($1, 0, $0); SDL2.audio.scriptProcessorNode['onaudioprocess'] = function (e) { if ((SDL2 === undefined) || (SDL2.audio === undefined)) { return; } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); SDL2.audio.silenceTimer = undefined; SDL2.audio.silenceBuffer = undefined; } SDL2.audio.currentOutputBuffer = e['outputBuffer']; dynCall('vp', $2, [$3]); }; SDL2.audio.scriptProcessorNode['connect'](SDL2.audioContext['destination']); if (SDL2.audioContext.state === 'suspended') { SDL2.audio.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.audio.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { if ((typeof navigator.userActivation) !== 'undefined') { if (navigator.userActivation.hasBeenActive) { SDL2.audioContext.resume(); } } SDL2.audio.currentOutputBuffer = SDL2.audio.silenceBuffer; dynCall('vp', $2, [$3]); SDL2.audio.currentOutputBuffer = undefined; }; SDL2.audio.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); } },  
- 356272: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.capture.currentCaptureBuffer.getChannelData(c); if (channelData.length != $1) { throw 'Web Audio capture buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } if (numChannels == 1) { for (var j = 0; j < $1; ++j) { setValue($0 + (j * 4), channelData[j], 'float'); } } else { for (var j = 0; j < $1; ++j) { setValue($0 + (((j * numChannels) + c) * 4), channelData[j], 'float'); } } } },  
- 356877: ($0, $1) => { var SDL2 = Module['SDL2']; var buf = $0 >>> 2; var numChannels = SDL2.audio.currentOutputBuffer['numberOfChannels']; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.audio.currentOutputBuffer['getChannelData'](c); if (channelData.length != $1) { throw 'Web Audio output buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } for (var j = 0; j < $1; ++j) { channelData[j] = HEAPF32[buf + (j*numChannels + c)]; } } },  
- 357366: ($0) => { var SDL2 = Module['SDL2']; if ($0) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); } if (SDL2.capture.stream !== undefined) { var tracks = SDL2.capture.stream.getAudioTracks(); for (var i = 0; i < tracks.length; i++) { SDL2.capture.stream.removeTrack(tracks[i]); } } if (SDL2.capture.scriptProcessorNode !== undefined) { SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) {}; SDL2.capture.scriptProcessorNode.disconnect(); } if (SDL2.capture.mediaStreamNode !== undefined) { SDL2.capture.mediaStreamNode.disconnect(); } SDL2.capture = undefined; } else { if (SDL2.audio.scriptProcessorNode != undefined) { SDL2.audio.scriptProcessorNode.disconnect(); } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); } SDL2.audio = undefined; } if ((SDL2.audioContext !== undefined) && (SDL2.audio === undefined) && (SDL2.capture === undefined)) { SDL2.audioContext.close(); SDL2.audioContext = undefined; } },  
- 358372: () => { return window.innerWidth; },  
- 358402: () => { return window.innerHeight; },  
- 358433: ($0, $1, $2) => { var w = $0; var h = $1; var pixels = $2; if (!Module['SDL2']) Module['SDL2'] = {}; var SDL2 = Module['SDL2']; if (SDL2.ctxCanvas !== Module['canvas']) { SDL2.ctx = Browser.createContext(Module['canvas'], false, true); SDL2.ctxCanvas = Module['canvas']; } if (SDL2.w !== w || SDL2.h !== h || SDL2.imageCtx !== SDL2.ctx) { SDL2.image = SDL2.ctx.createImageData(w, h); SDL2.w = w; SDL2.h = h; SDL2.imageCtx = SDL2.ctx; } var data = SDL2.image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = 0xff; src++; dst += 4; } } else { if (SDL2.data32Data !== data) { SDL2.data32 = new Int32Array(data.buffer); SDL2.data8 = new Uint8Array(data.buffer); SDL2.data32Data = data; } var data32 = SDL2.data32; num = data32.length; data32.set(HEAP32.subarray(src, src + num)); var data8 = SDL2.data8; var i = 3; var j = i + 4*num; if (num % 8 == 0) { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; } } else { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; } } } SDL2.ctx.putImageData(SDL2.image, 0, 0); },  
- 359899: ($0, $1, $2, $3, $4) => { var w = $0; var h = $1; var hot_x = $2; var hot_y = $3; var pixels = $4; var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h; var ctx = canvas.getContext("2d"); var image = ctx.createImageData(w, h); var data = image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = (val >> 24) & 0xff; src++; dst += 4; } } else { var data32 = new Int32Array(data.buffer); num = data32.length; data32.set(HEAP32.subarray(src, src + num)); } ctx.putImageData(image, 0, 0); var url = hot_x === 0 && hot_y === 0 ? "url(" + canvas.toDataURL() + "), auto" : "url(" + canvas.toDataURL() + ") " + hot_x + " " + hot_y + ", auto"; var urlBuf = _malloc(url.length + 1); stringToUTF8(url, urlBuf, url.length + 1); return urlBuf; },  
- 360887: ($0) => { if (Module['canvas']) { Module['canvas'].style['cursor'] = UTF8ToString($0); } },  
- 360970: () => { if (Module['canvas']) { Module['canvas'].style['cursor'] = 'none'; } }
+  410420: ($0) => { var str = UTF8ToString($0) + '\n\n' + 'Abort/Retry/Ignore/AlwaysIgnore? [ariA] :'; var reply = window.prompt(str, "i"); if (reply === null) { reply = "i"; } return reply.length === 1 ? reply.charCodeAt(0) : -1; },  
+ 410635: () => { if (typeof(AudioContext) !== 'undefined') { return true; } else if (typeof(webkitAudioContext) !== 'undefined') { return true; } return false; },  
+ 410782: () => { if ((typeof(navigator.mediaDevices) !== 'undefined') && (typeof(navigator.mediaDevices.getUserMedia) !== 'undefined')) { return true; } else if (typeof(navigator.webkitGetUserMedia) !== 'undefined') { return true; } return false; },  
+ 411016: ($0) => { if(typeof(Module['SDL2']) === 'undefined') { Module['SDL2'] = {}; } var SDL2 = Module['SDL2']; if (!$0) { SDL2.audio = {}; } else { SDL2.capture = {}; } if (!SDL2.audioContext) { if (typeof(AudioContext) !== 'undefined') { SDL2.audioContext = new AudioContext(); } else if (typeof(webkitAudioContext) !== 'undefined') { SDL2.audioContext = new webkitAudioContext(); } if (SDL2.audioContext) { if ((typeof navigator.userActivation) === 'undefined') { autoResumeAudioContext(SDL2.audioContext); } } } return SDL2.audioContext === undefined ? -1 : 0; },  
+ 411568: () => { var SDL2 = Module['SDL2']; return SDL2.audioContext.sampleRate; },  
+ 411636: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; var have_microphone = function(stream) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); SDL2.capture.silenceTimer = undefined; SDL2.capture.silenceBuffer = undefined } SDL2.capture.mediaStreamNode = SDL2.audioContext.createMediaStreamSource(stream); SDL2.capture.scriptProcessorNode = SDL2.audioContext.createScriptProcessor($1, $0, 1); SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) { if ((SDL2 === undefined) || (SDL2.capture === undefined)) { return; } audioProcessingEvent.outputBuffer.getChannelData(0).fill(0.0); SDL2.capture.currentCaptureBuffer = audioProcessingEvent.inputBuffer; dynCall('vp', $2, [$3]); }; SDL2.capture.mediaStreamNode.connect(SDL2.capture.scriptProcessorNode); SDL2.capture.scriptProcessorNode.connect(SDL2.audioContext.destination); SDL2.capture.stream = stream; }; var no_microphone = function(error) { }; SDL2.capture.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.capture.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { SDL2.capture.currentCaptureBuffer = SDL2.capture.silenceBuffer; dynCall('vp', $2, [$3]); }; SDL2.capture.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); if ((navigator.mediaDevices !== undefined) && (navigator.mediaDevices.getUserMedia !== undefined)) { navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(have_microphone).catch(no_microphone); } else if (navigator.webkitGetUserMedia !== undefined) { navigator.webkitGetUserMedia({ audio: true, video: false }, have_microphone, no_microphone); } },  
+ 413329: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; SDL2.audio.scriptProcessorNode = SDL2.audioContext['createScriptProcessor']($1, 0, $0); SDL2.audio.scriptProcessorNode['onaudioprocess'] = function (e) { if ((SDL2 === undefined) || (SDL2.audio === undefined)) { return; } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); SDL2.audio.silenceTimer = undefined; SDL2.audio.silenceBuffer = undefined; } SDL2.audio.currentOutputBuffer = e['outputBuffer']; dynCall('vp', $2, [$3]); }; SDL2.audio.scriptProcessorNode['connect'](SDL2.audioContext['destination']); if (SDL2.audioContext.state === 'suspended') { SDL2.audio.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.audio.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { if ((typeof navigator.userActivation) !== 'undefined') { if (navigator.userActivation.hasBeenActive) { SDL2.audioContext.resume(); } } SDL2.audio.currentOutputBuffer = SDL2.audio.silenceBuffer; dynCall('vp', $2, [$3]); SDL2.audio.currentOutputBuffer = undefined; }; SDL2.audio.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); } },  
+ 414504: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.capture.currentCaptureBuffer.getChannelData(c); if (channelData.length != $1) { throw 'Web Audio capture buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } if (numChannels == 1) { for (var j = 0; j < $1; ++j) { setValue($0 + (j * 4), channelData[j], 'float'); } } else { for (var j = 0; j < $1; ++j) { setValue($0 + (((j * numChannels) + c) * 4), channelData[j], 'float'); } } } },  
+ 415109: ($0, $1) => { var SDL2 = Module['SDL2']; var buf = $0 >>> 2; var numChannels = SDL2.audio.currentOutputBuffer['numberOfChannels']; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.audio.currentOutputBuffer['getChannelData'](c); if (channelData.length != $1) { throw 'Web Audio output buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } for (var j = 0; j < $1; ++j) { channelData[j] = HEAPF32[buf + (j*numChannels + c)]; } } },  
+ 415598: ($0) => { var SDL2 = Module['SDL2']; if ($0) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); } if (SDL2.capture.stream !== undefined) { var tracks = SDL2.capture.stream.getAudioTracks(); for (var i = 0; i < tracks.length; i++) { SDL2.capture.stream.removeTrack(tracks[i]); } } if (SDL2.capture.scriptProcessorNode !== undefined) { SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) {}; SDL2.capture.scriptProcessorNode.disconnect(); } if (SDL2.capture.mediaStreamNode !== undefined) { SDL2.capture.mediaStreamNode.disconnect(); } SDL2.capture = undefined; } else { if (SDL2.audio.scriptProcessorNode != undefined) { SDL2.audio.scriptProcessorNode.disconnect(); } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); } SDL2.audio = undefined; } if ((SDL2.audioContext !== undefined) && (SDL2.audio === undefined) && (SDL2.capture === undefined)) { SDL2.audioContext.close(); SDL2.audioContext = undefined; } },  
+ 416604: ($0, $1, $2) => { var w = $0; var h = $1; var pixels = $2; if (!Module['SDL2']) Module['SDL2'] = {}; var SDL2 = Module['SDL2']; if (SDL2.ctxCanvas !== Module['canvas']) { SDL2.ctx = Browser.createContext(Module['canvas'], false, true); SDL2.ctxCanvas = Module['canvas']; } if (SDL2.w !== w || SDL2.h !== h || SDL2.imageCtx !== SDL2.ctx) { SDL2.image = SDL2.ctx.createImageData(w, h); SDL2.w = w; SDL2.h = h; SDL2.imageCtx = SDL2.ctx; } var data = SDL2.image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = 0xff; src++; dst += 4; } } else { if (SDL2.data32Data !== data) { SDL2.data32 = new Int32Array(data.buffer); SDL2.data8 = new Uint8Array(data.buffer); SDL2.data32Data = data; } var data32 = SDL2.data32; num = data32.length; data32.set(HEAP32.subarray(src, src + num)); var data8 = SDL2.data8; var i = 3; var j = i + 4*num; if (num % 8 == 0) { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; } } else { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; } } } SDL2.ctx.putImageData(SDL2.image, 0, 0); },  
+ 418070: ($0, $1, $2, $3, $4) => { var w = $0; var h = $1; var hot_x = $2; var hot_y = $3; var pixels = $4; var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h; var ctx = canvas.getContext("2d"); var image = ctx.createImageData(w, h); var data = image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = (val >> 24) & 0xff; src++; dst += 4; } } else { var data32 = new Int32Array(data.buffer); num = data32.length; data32.set(HEAP32.subarray(src, src + num)); } ctx.putImageData(image, 0, 0); var url = hot_x === 0 && hot_y === 0 ? "url(" + canvas.toDataURL() + "), auto" : "url(" + canvas.toDataURL() + ") " + hot_x + " " + hot_y + ", auto"; var urlBuf = _malloc(url.length + 1); stringToUTF8(url, urlBuf, url.length + 1); return urlBuf; },  
+ 419058: ($0) => { if (Module['canvas']) { Module['canvas'].style['cursor'] = UTF8ToString($0); } },  
+ 419141: () => { if (Module['canvas']) { Module['canvas'].style['cursor'] = 'none'; } },  
+ 419210: () => { return window.innerWidth; },  
+ 419240: () => { return window.innerHeight; }
 };
 
 // Imports from the Wasm binary.
@@ -10118,27 +10083,27 @@ var _strerror = makeInvalidEarlyAccess('_strerror');
 var _fflush = makeInvalidEarlyAccess('_fflush');
 var _emscripten_stack_get_end = makeInvalidEarlyAccess('_emscripten_stack_get_end');
 var _emscripten_stack_get_base = makeInvalidEarlyAccess('_emscripten_stack_get_base');
-var __emscripten_timeout = makeInvalidEarlyAccess('__emscripten_timeout');
 var _emscripten_stack_init = makeInvalidEarlyAccess('_emscripten_stack_init');
 var _emscripten_stack_get_free = makeInvalidEarlyAccess('_emscripten_stack_get_free');
 var __emscripten_stack_restore = makeInvalidEarlyAccess('__emscripten_stack_restore');
 var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc');
 var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
 var dynCall_vii = makeInvalidEarlyAccess('dynCall_vii');
-var dynCall_viii = makeInvalidEarlyAccess('dynCall_viii');
-var dynCall_vi = makeInvalidEarlyAccess('dynCall_vi');
-var dynCall_iiiiii = makeInvalidEarlyAccess('dynCall_iiiiii');
-var dynCall_viiii = makeInvalidEarlyAccess('dynCall_viiii');
 var dynCall_iii = makeInvalidEarlyAccess('dynCall_iii');
 var dynCall_v = makeInvalidEarlyAccess('dynCall_v');
+var dynCall_vi = makeInvalidEarlyAccess('dynCall_vi');
+var dynCall_i = makeInvalidEarlyAccess('dynCall_i');
 var dynCall_ii = makeInvalidEarlyAccess('dynCall_ii');
+var dynCall_fif = makeInvalidEarlyAccess('dynCall_fif');
 var dynCall_iiii = makeInvalidEarlyAccess('dynCall_iiii');
-var dynCall_fi = makeInvalidEarlyAccess('dynCall_fi');
 var dynCall_viiiii = makeInvalidEarlyAccess('dynCall_viiiii');
+var dynCall_viiii = makeInvalidEarlyAccess('dynCall_viiii');
 var dynCall_viiiiii = makeInvalidEarlyAccess('dynCall_viiiiii');
+var dynCall_fi = makeInvalidEarlyAccess('dynCall_fi');
+var dynCall_viii = makeInvalidEarlyAccess('dynCall_viii');
+var dynCall_viiiiiiii = makeInvalidEarlyAccess('dynCall_viiiiiiii');
+var dynCall_iiiiii = makeInvalidEarlyAccess('dynCall_iiiiii');
 var dynCall_iiiii = makeInvalidEarlyAccess('dynCall_iiiii');
-var dynCall_jiji = makeInvalidEarlyAccess('dynCall_jiji');
-var dynCall_ji = makeInvalidEarlyAccess('dynCall_ji');
 var dynCall_iiiiiiii = makeInvalidEarlyAccess('dynCall_iiiiiiii');
 var dynCall_iiiiiiiiii = makeInvalidEarlyAccess('dynCall_iiiiiiiiii');
 var dynCall_iiiiiiiiiiiiiiff = makeInvalidEarlyAccess('dynCall_iiiiiiiiiiiiiiff');
@@ -10146,10 +10111,10 @@ var dynCall_iiiiiiiii = makeInvalidEarlyAccess('dynCall_iiiiiiiii');
 var dynCall_viiiiiii = makeInvalidEarlyAccess('dynCall_viiiiiii');
 var dynCall_viiiiiiiiiii = makeInvalidEarlyAccess('dynCall_viiiiiiiiiii');
 var dynCall_iiiiiidiiff = makeInvalidEarlyAccess('dynCall_iiiiiidiiff');
-var dynCall_i = makeInvalidEarlyAccess('dynCall_i');
+var dynCall_ji = makeInvalidEarlyAccess('dynCall_ji');
+var dynCall_jiji = makeInvalidEarlyAccess('dynCall_jiji');
 var dynCall_vffff = makeInvalidEarlyAccess('dynCall_vffff');
 var dynCall_vf = makeInvalidEarlyAccess('dynCall_vf');
-var dynCall_viiiiiiii = makeInvalidEarlyAccess('dynCall_viiiiiiii');
 var dynCall_viiiiiiiii = makeInvalidEarlyAccess('dynCall_viiiiiiiii');
 var dynCall_vff = makeInvalidEarlyAccess('dynCall_vff');
 var dynCall_vfi = makeInvalidEarlyAccess('dynCall_vfi');
@@ -10160,7 +10125,6 @@ var dynCall_vifff = makeInvalidEarlyAccess('dynCall_vifff');
 var dynCall_viffff = makeInvalidEarlyAccess('dynCall_viffff');
 var dynCall_vfff = makeInvalidEarlyAccess('dynCall_vfff');
 var dynCall_iidiiiii = makeInvalidEarlyAccess('dynCall_iidiiiii');
-var dynCall_fif = makeInvalidEarlyAccess('dynCall_fif');
 var _asyncify_start_unwind = makeInvalidEarlyAccess('_asyncify_start_unwind');
 var _asyncify_stop_unwind = makeInvalidEarlyAccess('_asyncify_stop_unwind');
 var _asyncify_start_rewind = makeInvalidEarlyAccess('_asyncify_start_rewind');
@@ -10178,27 +10142,27 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['fflush'] != 'undefined', 'missing Wasm export: fflush');
   assert(typeof wasmExports['emscripten_stack_get_end'] != 'undefined', 'missing Wasm export: emscripten_stack_get_end');
   assert(typeof wasmExports['emscripten_stack_get_base'] != 'undefined', 'missing Wasm export: emscripten_stack_get_base');
-  assert(typeof wasmExports['_emscripten_timeout'] != 'undefined', 'missing Wasm export: _emscripten_timeout');
   assert(typeof wasmExports['emscripten_stack_init'] != 'undefined', 'missing Wasm export: emscripten_stack_init');
   assert(typeof wasmExports['emscripten_stack_get_free'] != 'undefined', 'missing Wasm export: emscripten_stack_get_free');
   assert(typeof wasmExports['_emscripten_stack_restore'] != 'undefined', 'missing Wasm export: _emscripten_stack_restore');
   assert(typeof wasmExports['_emscripten_stack_alloc'] != 'undefined', 'missing Wasm export: _emscripten_stack_alloc');
   assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
   assert(typeof wasmExports['dynCall_vii'] != 'undefined', 'missing Wasm export: dynCall_vii');
-  assert(typeof wasmExports['dynCall_viii'] != 'undefined', 'missing Wasm export: dynCall_viii');
-  assert(typeof wasmExports['dynCall_vi'] != 'undefined', 'missing Wasm export: dynCall_vi');
-  assert(typeof wasmExports['dynCall_iiiiii'] != 'undefined', 'missing Wasm export: dynCall_iiiiii');
-  assert(typeof wasmExports['dynCall_viiii'] != 'undefined', 'missing Wasm export: dynCall_viiii');
   assert(typeof wasmExports['dynCall_iii'] != 'undefined', 'missing Wasm export: dynCall_iii');
   assert(typeof wasmExports['dynCall_v'] != 'undefined', 'missing Wasm export: dynCall_v');
+  assert(typeof wasmExports['dynCall_vi'] != 'undefined', 'missing Wasm export: dynCall_vi');
+  assert(typeof wasmExports['dynCall_i'] != 'undefined', 'missing Wasm export: dynCall_i');
   assert(typeof wasmExports['dynCall_ii'] != 'undefined', 'missing Wasm export: dynCall_ii');
+  assert(typeof wasmExports['dynCall_fif'] != 'undefined', 'missing Wasm export: dynCall_fif');
   assert(typeof wasmExports['dynCall_iiii'] != 'undefined', 'missing Wasm export: dynCall_iiii');
-  assert(typeof wasmExports['dynCall_fi'] != 'undefined', 'missing Wasm export: dynCall_fi');
   assert(typeof wasmExports['dynCall_viiiii'] != 'undefined', 'missing Wasm export: dynCall_viiiii');
+  assert(typeof wasmExports['dynCall_viiii'] != 'undefined', 'missing Wasm export: dynCall_viiii');
   assert(typeof wasmExports['dynCall_viiiiii'] != 'undefined', 'missing Wasm export: dynCall_viiiiii');
+  assert(typeof wasmExports['dynCall_fi'] != 'undefined', 'missing Wasm export: dynCall_fi');
+  assert(typeof wasmExports['dynCall_viii'] != 'undefined', 'missing Wasm export: dynCall_viii');
+  assert(typeof wasmExports['dynCall_viiiiiiii'] != 'undefined', 'missing Wasm export: dynCall_viiiiiiii');
+  assert(typeof wasmExports['dynCall_iiiiii'] != 'undefined', 'missing Wasm export: dynCall_iiiiii');
   assert(typeof wasmExports['dynCall_iiiii'] != 'undefined', 'missing Wasm export: dynCall_iiiii');
-  assert(typeof wasmExports['dynCall_jiji'] != 'undefined', 'missing Wasm export: dynCall_jiji');
-  assert(typeof wasmExports['dynCall_ji'] != 'undefined', 'missing Wasm export: dynCall_ji');
   assert(typeof wasmExports['dynCall_iiiiiiii'] != 'undefined', 'missing Wasm export: dynCall_iiiiiiii');
   assert(typeof wasmExports['dynCall_iiiiiiiiii'] != 'undefined', 'missing Wasm export: dynCall_iiiiiiiiii');
   assert(typeof wasmExports['dynCall_iiiiiiiiiiiiiiff'] != 'undefined', 'missing Wasm export: dynCall_iiiiiiiiiiiiiiff');
@@ -10206,10 +10170,10 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['dynCall_viiiiiii'] != 'undefined', 'missing Wasm export: dynCall_viiiiiii');
   assert(typeof wasmExports['dynCall_viiiiiiiiiii'] != 'undefined', 'missing Wasm export: dynCall_viiiiiiiiiii');
   assert(typeof wasmExports['dynCall_iiiiiidiiff'] != 'undefined', 'missing Wasm export: dynCall_iiiiiidiiff');
-  assert(typeof wasmExports['dynCall_i'] != 'undefined', 'missing Wasm export: dynCall_i');
+  assert(typeof wasmExports['dynCall_ji'] != 'undefined', 'missing Wasm export: dynCall_ji');
+  assert(typeof wasmExports['dynCall_jiji'] != 'undefined', 'missing Wasm export: dynCall_jiji');
   assert(typeof wasmExports['dynCall_vffff'] != 'undefined', 'missing Wasm export: dynCall_vffff');
   assert(typeof wasmExports['dynCall_vf'] != 'undefined', 'missing Wasm export: dynCall_vf');
-  assert(typeof wasmExports['dynCall_viiiiiiii'] != 'undefined', 'missing Wasm export: dynCall_viiiiiiii');
   assert(typeof wasmExports['dynCall_viiiiiiiii'] != 'undefined', 'missing Wasm export: dynCall_viiiiiiiii');
   assert(typeof wasmExports['dynCall_vff'] != 'undefined', 'missing Wasm export: dynCall_vff');
   assert(typeof wasmExports['dynCall_vfi'] != 'undefined', 'missing Wasm export: dynCall_vfi');
@@ -10220,7 +10184,6 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['dynCall_viffff'] != 'undefined', 'missing Wasm export: dynCall_viffff');
   assert(typeof wasmExports['dynCall_vfff'] != 'undefined', 'missing Wasm export: dynCall_vfff');
   assert(typeof wasmExports['dynCall_iidiiiii'] != 'undefined', 'missing Wasm export: dynCall_iidiiiii');
-  assert(typeof wasmExports['dynCall_fif'] != 'undefined', 'missing Wasm export: dynCall_fif');
   assert(typeof wasmExports['asyncify_start_unwind'] != 'undefined', 'missing Wasm export: asyncify_start_unwind');
   assert(typeof wasmExports['asyncify_stop_unwind'] != 'undefined', 'missing Wasm export: asyncify_stop_unwind');
   assert(typeof wasmExports['asyncify_start_rewind'] != 'undefined', 'missing Wasm export: asyncify_start_rewind');
@@ -10235,27 +10198,27 @@ function assignWasmExports(wasmExports) {
   _fflush = createExportWrapper('fflush', wasmExports['fflush'], 1);
   _emscripten_stack_get_end = wasmExports['emscripten_stack_get_end'];
   _emscripten_stack_get_base = wasmExports['emscripten_stack_get_base'];
-  __emscripten_timeout = createExportWrapper('_emscripten_timeout', wasmExports['_emscripten_timeout'], 2);
   _emscripten_stack_init = wasmExports['emscripten_stack_init'];
   _emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'];
   __emscripten_stack_restore = wasmExports['_emscripten_stack_restore'];
   __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'];
   _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
   dynCall_vii = dynCalls['vii'] = createExportWrapper('dynCall_vii', wasmExports['dynCall_vii'], 3);
-  dynCall_viii = dynCalls['viii'] = createExportWrapper('dynCall_viii', wasmExports['dynCall_viii'], 4);
-  dynCall_vi = dynCalls['vi'] = createExportWrapper('dynCall_vi', wasmExports['dynCall_vi'], 2);
-  dynCall_iiiiii = dynCalls['iiiiii'] = createExportWrapper('dynCall_iiiiii', wasmExports['dynCall_iiiiii'], 6);
-  dynCall_viiii = dynCalls['viiii'] = createExportWrapper('dynCall_viiii', wasmExports['dynCall_viiii'], 5);
   dynCall_iii = dynCalls['iii'] = createExportWrapper('dynCall_iii', wasmExports['dynCall_iii'], 3);
   dynCall_v = dynCalls['v'] = createExportWrapper('dynCall_v', wasmExports['dynCall_v'], 1);
+  dynCall_vi = dynCalls['vi'] = createExportWrapper('dynCall_vi', wasmExports['dynCall_vi'], 2);
+  dynCall_i = dynCalls['i'] = createExportWrapper('dynCall_i', wasmExports['dynCall_i'], 1);
   dynCall_ii = dynCalls['ii'] = createExportWrapper('dynCall_ii', wasmExports['dynCall_ii'], 2);
+  dynCall_fif = dynCalls['fif'] = createExportWrapper('dynCall_fif', wasmExports['dynCall_fif'], 3);
   dynCall_iiii = dynCalls['iiii'] = createExportWrapper('dynCall_iiii', wasmExports['dynCall_iiii'], 4);
-  dynCall_fi = dynCalls['fi'] = createExportWrapper('dynCall_fi', wasmExports['dynCall_fi'], 2);
   dynCall_viiiii = dynCalls['viiiii'] = createExportWrapper('dynCall_viiiii', wasmExports['dynCall_viiiii'], 6);
+  dynCall_viiii = dynCalls['viiii'] = createExportWrapper('dynCall_viiii', wasmExports['dynCall_viiii'], 5);
   dynCall_viiiiii = dynCalls['viiiiii'] = createExportWrapper('dynCall_viiiiii', wasmExports['dynCall_viiiiii'], 7);
+  dynCall_fi = dynCalls['fi'] = createExportWrapper('dynCall_fi', wasmExports['dynCall_fi'], 2);
+  dynCall_viii = dynCalls['viii'] = createExportWrapper('dynCall_viii', wasmExports['dynCall_viii'], 4);
+  dynCall_viiiiiiii = dynCalls['viiiiiiii'] = createExportWrapper('dynCall_viiiiiiii', wasmExports['dynCall_viiiiiiii'], 9);
+  dynCall_iiiiii = dynCalls['iiiiii'] = createExportWrapper('dynCall_iiiiii', wasmExports['dynCall_iiiiii'], 6);
   dynCall_iiiii = dynCalls['iiiii'] = createExportWrapper('dynCall_iiiii', wasmExports['dynCall_iiiii'], 5);
-  dynCall_jiji = dynCalls['jiji'] = createExportWrapper('dynCall_jiji', wasmExports['dynCall_jiji'], 4);
-  dynCall_ji = dynCalls['ji'] = createExportWrapper('dynCall_ji', wasmExports['dynCall_ji'], 2);
   dynCall_iiiiiiii = dynCalls['iiiiiiii'] = createExportWrapper('dynCall_iiiiiiii', wasmExports['dynCall_iiiiiiii'], 8);
   dynCall_iiiiiiiiii = dynCalls['iiiiiiiiii'] = createExportWrapper('dynCall_iiiiiiiiii', wasmExports['dynCall_iiiiiiiiii'], 10);
   dynCall_iiiiiiiiiiiiiiff = dynCalls['iiiiiiiiiiiiiiff'] = createExportWrapper('dynCall_iiiiiiiiiiiiiiff', wasmExports['dynCall_iiiiiiiiiiiiiiff'], 16);
@@ -10263,10 +10226,10 @@ function assignWasmExports(wasmExports) {
   dynCall_viiiiiii = dynCalls['viiiiiii'] = createExportWrapper('dynCall_viiiiiii', wasmExports['dynCall_viiiiiii'], 8);
   dynCall_viiiiiiiiiii = dynCalls['viiiiiiiiiii'] = createExportWrapper('dynCall_viiiiiiiiiii', wasmExports['dynCall_viiiiiiiiiii'], 12);
   dynCall_iiiiiidiiff = dynCalls['iiiiiidiiff'] = createExportWrapper('dynCall_iiiiiidiiff', wasmExports['dynCall_iiiiiidiiff'], 11);
-  dynCall_i = dynCalls['i'] = createExportWrapper('dynCall_i', wasmExports['dynCall_i'], 1);
+  dynCall_ji = dynCalls['ji'] = createExportWrapper('dynCall_ji', wasmExports['dynCall_ji'], 2);
+  dynCall_jiji = dynCalls['jiji'] = createExportWrapper('dynCall_jiji', wasmExports['dynCall_jiji'], 4);
   dynCall_vffff = dynCalls['vffff'] = createExportWrapper('dynCall_vffff', wasmExports['dynCall_vffff'], 5);
   dynCall_vf = dynCalls['vf'] = createExportWrapper('dynCall_vf', wasmExports['dynCall_vf'], 2);
-  dynCall_viiiiiiii = dynCalls['viiiiiiii'] = createExportWrapper('dynCall_viiiiiiii', wasmExports['dynCall_viiiiiiii'], 9);
   dynCall_viiiiiiiii = dynCalls['viiiiiiiii'] = createExportWrapper('dynCall_viiiiiiiii', wasmExports['dynCall_viiiiiiiii'], 10);
   dynCall_vff = dynCalls['vff'] = createExportWrapper('dynCall_vff', wasmExports['dynCall_vff'], 3);
   dynCall_vfi = dynCalls['vfi'] = createExportWrapper('dynCall_vfi', wasmExports['dynCall_vfi'], 3);
@@ -10277,7 +10240,6 @@ function assignWasmExports(wasmExports) {
   dynCall_viffff = dynCalls['viffff'] = createExportWrapper('dynCall_viffff', wasmExports['dynCall_viffff'], 6);
   dynCall_vfff = dynCalls['vfff'] = createExportWrapper('dynCall_vfff', wasmExports['dynCall_vfff'], 4);
   dynCall_iidiiiii = dynCalls['iidiiiii'] = createExportWrapper('dynCall_iidiiiii', wasmExports['dynCall_iidiiiii'], 8);
-  dynCall_fif = dynCalls['fif'] = createExportWrapper('dynCall_fif', wasmExports['dynCall_fif'], 3);
   _asyncify_start_unwind = createExportWrapper('asyncify_start_unwind', wasmExports['asyncify_start_unwind'], 1);
   _asyncify_stop_unwind = createExportWrapper('asyncify_stop_unwind', wasmExports['asyncify_stop_unwind'], 0);
   _asyncify_start_rewind = createExportWrapper('asyncify_start_rewind', wasmExports['asyncify_start_rewind'], 1);
@@ -10287,8 +10249,6 @@ function assignWasmExports(wasmExports) {
 }
 
 var wasmImports = {
-  /** @export */
-  __call_sighandler: ___call_sighandler,
   /** @export */
   __cxa_throw: ___cxa_throw,
   /** @export */
@@ -10317,10 +10277,6 @@ var wasmImports = {
   __syscall_unlinkat: ___syscall_unlinkat,
   /** @export */
   _abort_js: __abort_js,
-  /** @export */
-  _emscripten_runtime_keepalive_clear: __emscripten_runtime_keepalive_clear,
-  /** @export */
-  _setitimer_js: __setitimer_js,
   /** @export */
   clock_time_get: _clock_time_get,
   /** @export */
@@ -10788,9 +10744,7 @@ var wasmImports = {
   /** @export */
   fd_seek: _fd_seek,
   /** @export */
-  fd_write: _fd_write,
-  /** @export */
-  proc_exit: _proc_exit
+  fd_write: _fd_write
 };
 
 

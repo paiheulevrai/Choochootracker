@@ -61,7 +61,7 @@ static void drawStatic(void) {
   gfxPrint(0,6,"Sample");
   gfxPrint(0,7,"SOURCE"); gfxPrint(18,7,"FILTER");
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  gfxPrint(0,8,"Pitch"); gfxPrint(18,8,"Status"); gfxPrint(0,9,"Start"); gfxPrint(18,9,"Mode"); gfxPrint(0,10,"End"); gfxPrint(18,10,"Slope"); gfxPrint(18,11,"Cutoff"); gfxPrint(18,12,"Reso");
+  gfxPrint(0,8,"Pitch"); gfxPrint(18,8,"Status"); gfxPrint(0,9,"Start"); gfxPrint(18,9,"Mode"); gfxPrint(0,10,"End"); gfxPrint(18,10,"Slope"); gfxPrint(0,11,"Loop"); gfxPrint(18,11,"Cutoff"); gfxPrint(0,12,"Speed"); gfxPrint(18,12,"Reso");
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0,14,"ADSR");
   gfxSetFgColor(appSettings.colorScheme.textDefault);
@@ -96,8 +96,8 @@ static void drawField(int col, int row, CellState state) {
     case 4: if(!col) gfxPrintf(11,8,"%+d st",sample->pitch); else gfxPrint(26,8,sample->filterEnabled?"On":"Off"); break;
     case 5: if(!col) gfxPrint(11,9,byteToHex(sample->start)); else { static const char* m[]={"LP","BP","HP"}; gfxPrint(26,9,m[sample->filterMode<=2?sample->filterMode:0]); } break;
     case 6: if(!col) gfxPrint(11,10,byteToHex(sample->end)); else gfxPrint(26,10,sample->filterSlope24dB?"24 dB":"12 dB"); break;
-    case 7: if(col) gfxPrintf(26,11,"%u Hz",sample->filterCutoffHz); break;
-    case 8: if(col) gfxPrint(26,12,byteToHex(sample->filterResonance)); break;
+    case 7: if(!col) { static const char* m[]={"Off","Loop","Ping"}; gfxPrint(11,11,m[sample->loopMode<=2?sample->loopMode:0]); } else gfxPrintf(26,11,"%u Hz",sample->filterCutoffHz); break;
+    case 8: if(!col) gfxPrintf(11,12,"%03u%%",sample->speedPercent); else gfxPrint(26,12,byteToHex(sample->filterResonance)); break;
   }
 }
 
@@ -109,10 +109,10 @@ static int onEdit(int col, int row, CellEditAction action) {
     case 3:
       return 0;
     case 4: handled=!col?editSigned8(action,&sample->pitch,12,-48,48):edit8noLast(action,&sample->filterEnabled,1,0,1); break;
-    case 5: handled=!col?edit8noLast(action,&sample->start,16,0,sample->end):edit8noLast(action,&sample->filterMode,1,0,2); break;
-    case 6: handled=!col?edit8noLast(action,&sample->end,16,sample->start,255):edit8noLast(action,&sample->filterSlope24dB,1,0,1); break;
-    case 7: handled=col?editFilterCutoff(action,&sample->filterCutoffHz):0; break;
-    case 8: handled=col?edit8noLast(action,&sample->filterResonance,16,0,255):0; break;
+    case 5: handled=!col?edit8noLast(action,&sample->start,16,0,255):edit8noLast(action,&sample->filterMode,1,0,2); break;
+    case 6: handled=!col?edit8noLast(action,&sample->end,16,0,255):edit8noLast(action,&sample->filterSlope24dB,1,0,1); break;
+    case 7: handled=!col?edit8noLast(action,&sample->loopMode,1,0,2):editFilterCutoff(action,&sample->filterCutoffHz); break;
+    case 8: handled=!col?edit16withMinMax(action,&sample->speedPercent,25,0,500):edit8noLast(action,&sample->filterResonance,16,0,255); break;
     case 9: {
       uint8_t* values[] = {&sample->attack, &sample->decay, &sample->sustain, &sample->release, &sample->envelopeShape};
       handled = edit8noLast(action, values[col], 16, 0, 255);

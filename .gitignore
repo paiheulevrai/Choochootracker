@@ -19,3 +19,5 @@ libchipnomad.so
 tracker/platforms/android/app/src/main/assets/chipnomad_data
 rg_log.txt
 chipnomad_log.txt
+
+.vercel

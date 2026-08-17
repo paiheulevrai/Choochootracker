@@ -231,6 +231,8 @@ struct Project {
   ChipSetup chipSetup;
   int chipsCount;
   uint8_t linearPitch;
+  uint8_t signedTrackSpeed;
+  uint8_t perceptualEffects;
 
   int tracksCount;
   uint8_t trackVolume[PROJECT_MAX_TRACKS];

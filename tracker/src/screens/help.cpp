@@ -431,7 +431,7 @@ static void initFxHelpText() {
   fxHelpText[fxSRS] = "Sample Resonance FX\nOverrides resonance until\nthe next note trigger";
   fxHelpText[fxPRO] = "Probability\n00-64 = 0-100 percent\nConditions on a row use AND";
   fxHelpText[fxMOD] = "Modulo condition\nAB triggers pass A of B\nExample 34 = 3:4";
-  fxHelpText[fxSPD] = "Track playback speed\n00-10: /7 ... normal ... x7\nPersists until next SPD";
+  fxHelpText[fxSPD] = "Track playback speed\n00=x1, 01=x2, FF=/2\nPersists until next SPD";
   fxHelpText[fxPMD] = "Plaits Engine FX\n00-17 selects 24 engines\nuntil the next note trigger";
   fxHelpText[fxPHA] = "Plaits Harmonics FX\nOverrides harmonics until\nthe next note trigger";
   fxHelpText[fxPTM] = "Plaits Timbre FX\nOverrides timbre until\nthe next note trigger";

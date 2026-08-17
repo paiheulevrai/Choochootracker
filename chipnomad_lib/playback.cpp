@@ -76,7 +76,7 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   track->grooveIdx = 0;
   track->grooveRow = 0;
   track->pendingGrooveIdx = 0;
-  track->speedRatio = 9;
+  track->speedRatio = state->p->signedTrackSpeed ? 0 : 9;
   track->speedPhase = 0;
   memset(track->conditionVisits, 0, sizeof(track->conditionVisits));
   track->conditionRandom = 0x6d2b79f5u ^ (uint32_t)(trackIdx + 1) * 0x9e3779b9u;
@@ -359,7 +359,7 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     uint8_t fxType = phraseRow->fx[i][0];
     uint8_t fxValue = phraseRow->fx[i][1];
 
-    if (fxType == fxSPD && fxValue <= 0x10) {
+    if (fxType == fxSPD && (p->signedTrackSpeed || fxValue <= 0x10)) {
       track->speedRatio = fxValue;
       track->speedPhase = 0;
     } else if (!skipDelCheck && (fxType == fxDEL && fxValue != 0)) {
@@ -1040,9 +1040,22 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
           // The current groove row doesn't have a value, stop playback
           resetTrack(state, trackIdx);
         } else {
-          uint8_t ratio = track->speedRatio <= 0x10 ? track->speedRatio : 9;
-          track->speedPhase += speedNumerator[ratio];
-          uint32_t threshold = (uint32_t)grooveValue * speedDenominator[ratio];
+          uint8_t ratio = track->speedRatio;
+          uint32_t threshold;
+          if (p->signedTrackSpeed) {
+            int speed = (int8_t)ratio;
+            if (speed >= 0) {
+              track->speedPhase += speed + 1; // 00=x1, 01=x2, ...
+              threshold = grooveValue;
+            } else {
+              track->speedPhase += 1;
+              threshold = (uint32_t)grooveValue * (1 - speed); // FF=/2, FE=/3, ...
+            }
+          } else {
+            ratio = ratio <= 0x10 ? ratio : 9;
+            track->speedPhase += speedNumerator[ratio];
+            threshold = (uint32_t)grooveValue * speedDenominator[ratio];
+          }
 
           if (track->speedPhase >= threshold) {
             // Go to the next groove row
