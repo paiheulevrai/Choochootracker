@@ -2,6 +2,7 @@
 #define CHOOCHOO_MODEL_CATALOG_H
 
 #include "selection_popup.h"
+#include "project_instruments.h"
 
 extern const SelectionItem plaitsCategories[];
 extern const int plaitsCategoryCount;
@@ -11,5 +12,6 @@ extern const SelectionItem braidsCategories[];
 extern const int braidsCategoryCount;
 
 bool modelCatalogsValid();
+const char* modelCatalogName(InstrumentType type, int value);
 
 #endif

@@ -331,6 +331,78 @@ void instrumentCommonDrawField(int col, int row, CellState state) {
   }
 }
 
+void instrumentCommonDrawVoicePostStatic(int drawEnvelope) {
+  gfxSetFgColor(appSettings.colorScheme.textTitles);
+  gfxPrint(18, 7, "FILTER");
+  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxPrint(18, 8, "Status");
+  gfxPrint(18, 9, "Mode");
+  gfxPrint(18, 10, "Slope");
+  gfxPrint(18, 11, "Cutoff");
+  gfxPrint(18, 12, "Reso");
+  if (drawEnvelope) {
+    gfxSetFgColor(appSettings.colorScheme.textTitles);
+    gfxPrint(0, 14, "ADSR");
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxPrint(6, 14, "A");
+    gfxPrint(11, 14, "D");
+    gfxPrint(16, 14, "S");
+    gfxPrint(21, 14, "R");
+    gfxPrint(27, 14, "Shape");
+  }
+}
+
+int instrumentCommonDrawVoicePostCursor(int col, int row) {
+  if (row == 9) {
+    gfxCursor(col == 4 ? 35 : 7 + col * 5, 14, 2);
+    return 1;
+  }
+  if (col && row >= 4 && row <= 8) {
+    gfxCursor(26, row + 4, 8);
+    return 1;
+  }
+  return 0;
+}
+
+int instrumentCommonDrawVoicePostField(int col, int row, CellState state,
+                                        const InstrumentVoicePostSettings* post) {
+  if (row == 9) {
+    const uint8_t values[] = {post->attack, post->decay, post->sustain, post->release, post->envelopeShape};
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxPrint(col == 4 ? 35 : 7 + col * 5, 14, byteToHex(values[col]));
+    instrumentCommonDrawEnvelopePreview(post->attack, post->decay, post->sustain, post->release, post->envelopeShape);
+    return 1;
+  }
+  if (!col || row < 4 || row > 8) return 0;
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxClearRect(26, row + 4, 8, 1);
+  switch (row) {
+    case 4: gfxPrint(26, 8, post->filterEnabled ? "On" : "Off"); break;
+    case 5: { static const char* modes[] = {"LP", "BP", "HP"}; gfxPrint(26, 9, modes[post->filterMode <= 2 ? post->filterMode : 0]); break; }
+    case 6: gfxPrint(26, 10, post->filterSlope24dB ? "24 dB" : "12 dB"); break;
+    case 7: gfxPrintf(26, 11, "%u Hz", post->filterCutoffHz); break;
+    case 8: gfxPrint(26, 12, byteToHex(post->filterResonance)); break;
+  }
+  return 1;
+}
+
+int instrumentCommonOnEditVoicePost(int col, int row, CellEditAction action,
+                                     InstrumentVoicePostSettings* post) {
+  if (row == 9) {
+    uint8_t* values[] = {&post->attack, &post->decay, &post->sustain, &post->release, &post->envelopeShape};
+    return edit8noLast(action, values[col], 16, 0, 255);
+  }
+  if (!col) return 0;
+  switch (row) {
+    case 4: return edit8noLast(action, &post->filterEnabled, 1, 0, 1);
+    case 5: return edit8noLast(action, &post->filterMode, 1, 0, 2);
+    case 6: return edit8noLast(action, &post->filterSlope24dB, 1, 0, 1);
+    case 7: return editFilterCutoff(action, &post->filterCutoffHz);
+    case 8: return edit8noLast(action, &post->filterResonance, 16, 0, 255);
+    default: return 0;
+  }
+}
+
 static float envelopePreviewCurve(float x, uint8_t shape) {
   if (shape <= 0x80) {
     float root = sqrtf(x);

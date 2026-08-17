@@ -105,3 +105,31 @@ bool modelCatalogsValid() {
          catalogValid(plaitsAltCategories, plaitsAltCategoryCount, 24) &&
          catalogValid(braidsCategories, braidsCategoryCount, 47);
 }
+
+const char* modelCatalogName(InstrumentType type, int value) {
+  const SelectionItem* categories = NULL;
+  int categoryCount = 0;
+  switch (type) {
+    case InstrumentType::Braids:
+      categories = braidsCategories;
+      categoryCount = braidsCategoryCount;
+      break;
+    case InstrumentType::Plaits:
+      categories = plaitsCategories;
+      categoryCount = plaitsCategoryCount;
+      break;
+    case InstrumentType::PlaitsAlt:
+      categories = plaitsAltCategories;
+      categoryCount = plaitsAltCategoryCount;
+      break;
+    default:
+      return "UNKNOWN";
+  }
+  for (int category = 0; category < categoryCount; ++category) {
+    for (int item = 0; item < categories[category].childCount; ++item) {
+      const SelectionItem* model = &categories[category].children[item];
+      if (model->value == value) return model->label;
+    }
+  }
+  return "UNKNOWN";
+}

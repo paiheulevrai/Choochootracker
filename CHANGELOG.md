@@ -1,5 +1,13 @@
 # ChooChooTracker changelog
 
+## v0.1.0-prealpha.4 (August 17, 2026)
+
+- Added PCM Sample speed control and one-shot, looping and ping-pong playback.
+- Added sample time-stretch and per-track auto-mix controls.
+- Refined the shared instrument layout and envelope display.
+- Centralized synth model labels and the shared filter/ADSR instrument panel.
+- Regenerated the browser bundle for the current tracker sources.
+
 ## v0.1.0-prealpha.3 (August 13, 2026)
 
 - Added a continuous `00`–`FF` envelope Shape control, shared by Sample,

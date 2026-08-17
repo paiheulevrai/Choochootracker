@@ -26,20 +26,6 @@ static void openEngineSelection() {
   screenSetup(&screenSelectionPopup, 0);
 }
 
-static const char* engineNames[] = {
-  "VA VCF", "PHASE DIST", "6-OP FM 1", "6-OP FM 2", "6-OP FM 3", "WAVE TERRAIN",
-  "STRING MACH", "CHIPTUNE", "VIRTUAL ANALOG", "WAVESHAPING", "2-OP FM", "FORMANT",
-  "HARMONIC", "WAVETABLE", "CHORD", "SPEECH", "SWARM", "NOISE", "PARTICLE",
-  "STRING", "MODAL", "BASS DRUM", "SNARE DRUM", "HI-HAT"
-};
-static const char* altEngineNames[] = {
-  "GLISSON", "PULSAR", "GENDY", "SCANNED", "LOOPBACK", "PHASE WEAVE",
-  "SIDEBAND BANK", "UNDERTOW", "ATTRACTOR", "LOCKSTEP", "REED PIPE", "BRASS",
-  "SHAKERS", "CLAPS", "FRESHETS FORMANT", "DIATONIC CHORD", "SCALE STACK",
-  "WT DIATONIC CHORD", "WT SCALE STACK", "HELIX", "BYTEBEAT", "RULEFIELD",
-  "SPECTRAL SPIRAL", "PHASE FLOCK"
-};
-
 static int getColumnCount(int row) {
   if (row < 3) return instrumentCommonColumnCount(row);
   if (row == 3) return 1;
@@ -54,31 +40,27 @@ static void drawStatic(void) {
   instrumentCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0, 6, "Engine");
-  gfxPrint(0, 7, "SOURCE");   gfxPrint(18, 7, "FILTER");
+  gfxPrint(0, 7, "SOURCE");
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  gfxPrint(0, 8, "Harmonic"); gfxPrint(18, 8, "Status");
-  gfxPrint(0, 9, "Timbre");   gfxPrint(18, 9, "Mode");
-  gfxPrint(0, 10, "Morph");   gfxPrint(18, 10, "Slope");
-  gfxPrint(0, 11, "Main/Aux");gfxPrint(18, 11, "Cutoff");
-  gfxPrint(0, 12, "Env Mode");gfxPrint(18, 12, "Reso");
+  gfxPrint(0, 8, "Harmonic");
+  gfxPrint(0, 9, "Timbre");
+  gfxPrint(0, 10, "Morph");
+  gfxPrint(0, 11, "Main/Aux");
+  gfxPrint(0, 12, "Env Mode");
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
+  instrumentCommonDrawVoicePostStatic(p->envelopeMode != 0);
   if (p->envelopeMode == 0) {
     gfxSetFgColor(appSettings.colorScheme.textTitles);
     gfxPrint(0, 14, "LPG");
     gfxSetFgColor(appSettings.colorScheme.textDefault);
     gfxPrint(6, 14, "D"); gfxPrint(11, 14, "C");
-  } else {
-    gfxSetFgColor(appSettings.colorScheme.textTitles);
-    gfxPrint(0, 14, "ADSR");
-    gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(6, 14, "A"); gfxPrint(11, 14, "D");
-    gfxPrint(16, 14, "S"); gfxPrint(21, 14, "R"); gfxPrint(27, 14, "Shape");
   }
 }
 
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
-  if (row == 9) gfxCursor(col == 4 ? 35 : 7 + col * 5, 14, 2);
+  InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
+  if (p->envelopeMode != 0 && instrumentCommonDrawVoicePostCursor(col, row)) return;
   else if (row == 3) gfxCursor(11, 6, 28);
   else gfxCursor(col ? 26 : 11, row + 4, col ? 8 : 7);
 }
@@ -86,6 +68,7 @@ static void drawCursor(int col, int row) {
 static void drawField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
+  if (p->envelopeMode != 0 && instrumentCommonDrawVoicePostField(col, row, state, p)) return;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   if (row == 9) {
     uint8_t values[] = {p->attack, p->decay, p->sustain, p->release, p->envelopeShape};
@@ -99,19 +82,23 @@ static void drawField(int col, int row, CellState state) {
   if (row == 3) gfxClearRect(11, 6, 29, 1);
   else gfxClearRect(col ? 26 : 11, row + 4, col ? 8 : 7, 1);
   switch (row) {
-    case 3: gfxPrintf(12, 6, "%02d %s", p->engine,
-      (isAlt() ? altEngineNames : engineNames)[p->engine < 24 ? p->engine : 0]); break;
-    case 4: if (!col) gfxPrintf(11, 8, "%04u", (unsigned)((uint32_t)p->harmonics * 1023 / 32767)); else gfxPrint(26, 8, p->filterEnabled ? "On" : "Off"); break;
-    case 5: if (!col) gfxPrintf(11, 9, "%04u", (unsigned)((uint32_t)p->timbre * 1023 / 32767)); else { static const char* modes[] = {"LP", "BP", "HP"}; gfxPrint(26, 9, modes[p->filterMode <= 2 ? p->filterMode : 0]); } break;
-    case 6: if (!col) gfxPrintf(11, 10, "%04u", (unsigned)((uint32_t)p->morph * 1023 / 32767)); else gfxPrint(26, 10, p->filterSlope24dB ? "24 dB" : "12 dB"); break;
-    case 7: if (!col) gfxPrint(11, 11, byteToHex(p->auxMix)); else gfxPrintf(26, 11, "%u Hz", p->filterCutoffHz); break;
-    case 8: if (!col) gfxPrint(11, 12, p->envelopeMode == 0 ? "TRIG" : "VCA"); else gfxPrint(26, 12, byteToHex(p->filterResonance)); break;
+    case 3: gfxPrintf(12, 6, "%02d %s", p->engine, modelCatalogName(isAlt() ? InstrumentType::PlaitsAlt : InstrumentType::Plaits, p->engine)); break;
+    case 4: if (!col) gfxPrintf(11, 8, "%04u", (unsigned)((uint32_t)p->harmonics * 1023 / 32767)); break;
+    case 5: if (!col) gfxPrintf(11, 9, "%04u", (unsigned)((uint32_t)p->timbre * 1023 / 32767)); break;
+    case 6: if (!col) gfxPrintf(11, 10, "%04u", (unsigned)((uint32_t)p->morph * 1023 / 32767)); break;
+    case 7: if (!col) gfxPrint(11, 11, byteToHex(p->auxMix)); break;
+    case 8: if (!col) gfxPrint(11, 12, p->envelopeMode == 0 ? "TRIG" : "VCA"); break;
   }
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
+  if (p->envelopeMode != 0 && ((row == 9) || (col && row >= 4 && row <= 8))) {
+    int handled = instrumentCommonOnEditVoicePost(col, row, action, p);
+    if (handled) projectModified = 1;
+    return handled;
+  }
   int handled = 0;
   switch (row) {
     case 3:

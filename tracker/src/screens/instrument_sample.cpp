@@ -59,18 +59,15 @@ static void drawStatic(void) {
   instrumentCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0,6,"Sample");
-  gfxPrint(0,7,"SOURCE"); gfxPrint(18,7,"FILTER");
+  gfxPrint(0,7,"SOURCE");
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  gfxPrint(0,8,"Pitch"); gfxPrint(18,8,"Status"); gfxPrint(0,9,"Start"); gfxPrint(18,9,"Mode"); gfxPrint(0,10,"End"); gfxPrint(18,10,"Slope"); gfxPrint(0,11,"Loop"); gfxPrint(18,11,"Cutoff"); gfxPrint(0,12,"Speed"); gfxPrint(18,12,"Reso");
-  gfxSetFgColor(appSettings.colorScheme.textTitles);
-  gfxPrint(0,14,"ADSR");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
-  gfxPrint(6,14,"A"); gfxPrint(11,14,"D"); gfxPrint(16,14,"S"); gfxPrint(21,14,"R"); gfxPrint(27,14,"Shape");
+  gfxPrint(0,8,"Pitch"); gfxPrint(0,9,"Start"); gfxPrint(0,10,"End"); gfxPrint(0,11,"Loop"); gfxPrint(0,12,"Speed");
+  instrumentCommonDrawVoicePostStatic(1);
 }
 
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
-  if (row == 9) gfxCursor(col == 4 ? 35 : 7 + col * 5, 14, 2);
+  if (instrumentCommonDrawVoicePostCursor(col, row)) return;
   else if (row == 3) gfxCursor(11,6,28);
   else gfxCursor(col ? 26 : 11,row+4,col?8:7);
 }
@@ -83,41 +80,36 @@ static const char* sampleFilename(const char* path) {
 static void drawField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
   InstrumentSample* sample = &chipnomadState->project.instruments[cInstrument].chip.sample;
+  if (instrumentCommonDrawVoicePostField(col, row, state, sample)) return;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  if (row == 9) {
-    uint8_t values[] = {sample->attack, sample->decay, sample->sustain, sample->release, sample->envelopeShape};
-    gfxPrint(col == 4 ? 35 : 7 + col * 5, 14, byteToHex(values[col]));
-    instrumentCommonDrawEnvelopePreview(sample->attack, sample->decay, sample->sustain, sample->release, sample->envelopeShape);
-    return;
-  }
   if (row == 3) gfxClearRect(11,6,29,1); else gfxClearRect(col?26:11,row+4,col?8:7,1);
   switch (row) {
     case 3: gfxPrintf(11,6,"Load %s",sampleFilename(sample->path)); break;
-    case 4: if(!col) gfxPrintf(11,8,"%+d st",sample->pitch); else gfxPrint(26,8,sample->filterEnabled?"On":"Off"); break;
-    case 5: if(!col) gfxPrint(11,9,byteToHex(sample->start)); else { static const char* m[]={"LP","BP","HP"}; gfxPrint(26,9,m[sample->filterMode<=2?sample->filterMode:0]); } break;
-    case 6: if(!col) gfxPrint(11,10,byteToHex(sample->end)); else gfxPrint(26,10,sample->filterSlope24dB?"24 dB":"12 dB"); break;
-    case 7: if(!col) { static const char* m[]={"Off","Loop","Ping"}; gfxPrint(11,11,m[sample->loopMode<=2?sample->loopMode:0]); } else gfxPrintf(26,11,"%u Hz",sample->filterCutoffHz); break;
-    case 8: if(!col) gfxPrintf(11,12,"%03u%%",sample->speedPercent); else gfxPrint(26,12,byteToHex(sample->filterResonance)); break;
+    case 4: if(!col) gfxPrintf(11,8,"%+d st",sample->pitch); break;
+    case 5: if(!col) gfxPrint(11,9,byteToHex(sample->start)); break;
+    case 6: if(!col) gfxPrint(11,10,byteToHex(sample->end)); break;
+    case 7: if(!col) { static const char* m[]={"Off","Loop","Ping"}; gfxPrint(11,11,m[sample->loopMode<=2?sample->loopMode:0]); } break;
+    case 8: if(!col) gfxPrintf(11,12,"%03u%%",sample->speedPercent); break;
   }
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);
   InstrumentSample* sample = &chipnomadState->project.instruments[cInstrument].chip.sample;
+  if ((row == 9) || (col && row >= 4 && row <= 8)) {
+    int handled = instrumentCommonOnEditVoicePost(col, row, action, sample);
+    if (handled) projectModified = 1;
+    return handled;
+  }
   int handled = 0;
   switch (row) {
     case 3:
       return 0;
-    case 4: handled=!col?editSigned8(action,&sample->pitch,12,-48,48):edit8noLast(action,&sample->filterEnabled,1,0,1); break;
-    case 5: handled=!col?edit8noLast(action,&sample->start,16,0,255):edit8noLast(action,&sample->filterMode,1,0,2); break;
-    case 6: handled=!col?edit8noLast(action,&sample->end,16,0,255):edit8noLast(action,&sample->filterSlope24dB,1,0,1); break;
-    case 7: handled=!col?edit8noLast(action,&sample->loopMode,1,0,2):editFilterCutoff(action,&sample->filterCutoffHz); break;
-    case 8: handled=!col?edit16withMinMax(action,&sample->speedPercent,25,0,500):edit8noLast(action,&sample->filterResonance,16,0,255); break;
-    case 9: {
-      uint8_t* values[] = {&sample->attack, &sample->decay, &sample->sustain, &sample->release, &sample->envelopeShape};
-      handled = edit8noLast(action, values[col], 16, 0, 255);
-      break;
-    }
+    case 4: handled=!col?editSigned8(action,&sample->pitch,12,-48,48):0; break;
+    case 5: handled=!col?edit8noLast(action,&sample->start,16,0,255):0; break;
+    case 6: handled=!col?edit8noLast(action,&sample->end,16,0,255):0; break;
+    case 7: handled=!col?edit8noLast(action,&sample->loopMode,1,0,2):0; break;
+    case 8: handled=!col?edit16withMinMax(action,&sample->speedPercent,25,0,500):0; break;
   }
   if (handled) projectModified = 1;
   return handled;
