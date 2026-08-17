@@ -6,6 +6,8 @@
 // Common rows on the project screen
 #define SCR_PROJECT_ROWS (6)
 
+int projectLoadFromPath(const char* path);
+
 int projectCommonColumnCount(int row);
 void projectCommonDrawStatic(void);
 void projectCommonDrawCursor(int col, int row);

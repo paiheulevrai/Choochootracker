@@ -11,6 +11,10 @@
 #include "waveform_display.h"
 #include "corelib_input.h"
 
+#ifdef WEB_BUILD
+#include <emscripten/emscripten.h>
+#endif
+
 // Raw input callback for key mapping screen
 void (*inputRawCallback)(InputCode input, int isDown) = NULL;
 
@@ -188,13 +192,15 @@ void appSetup(void) {
   }
 
 #ifdef WEB_BUILD
-  // The browser build starts with the packaged demo instead of a persisted autosave.
-  if (projectLoad(&chipnomadState->project, "/projects/TECNODEMO.cct")) {
+  // Restore the browser's IndexedDB-backed autosave, with the demo as fallback.
+  if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0) {
+    projectInitAY(&chipnomadState->project);
+  } else if (projectLoad(&chipnomadState->project, "/projects/TECNODEMO.cct") == 0) {
     projectInitAY(&chipnomadState->project);
   }
 #else
   // Native builds restore the user's auto-saved project.
-  if (projectLoad(&chipnomadState->project, getAutosavePath())) {
+  if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0) {
     projectInitAY(&chipnomadState->project);
   }
 #endif
@@ -219,6 +225,13 @@ void appSetup(void) {
 
   screenSetup(&screenSong, 0);
 }
+
+#ifdef WEB_BUILD
+extern "C" EMSCRIPTEN_KEEPALIVE int webSaveProject(const char* path) {
+  if (!chipnomadState || !path || !path[0]) return 1;
+  return projectSave(&chipnomadState->project, path);
+}
+#endif
 
 /**
 * @brief Release all resources before closing the application

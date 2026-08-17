@@ -18,6 +18,10 @@
     #status { color: #efcf7f; min-height: 1.5em; }
     button { color: #001f00; background: #efcf7f; border: 0; padding: .55rem 1rem;
       font-weight: 700; cursor: pointer; }
+    button:disabled { cursor: wait; opacity: .55; }
+    #file-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem;
+      width: min(100%, 640px); margin: 0 auto .75rem; }
+    #file-controls button { padding: .42rem .7rem; font-size: .8rem; }
     #touch-controls { display: none; width: min(100%, 640px); margin: .75rem auto 0;
       padding: .8rem 1rem .65rem; border: 1px solid #3b4350; border-radius: 1.2rem;
       background: linear-gradient(#4e3e00, #241a00); box-shadow: inset 0 1px #a06000;
@@ -49,6 +53,15 @@
     <p>PREALPHA - DON'T MISS YOUR STOP</p>
     <button id="start">Start tracker</button>
     <div id="status">Ready</div>
+    <div id="file-controls" aria-label="Project and sample files">
+      <button id="import-project" disabled>Import .cct</button>
+      <button id="import-samples" disabled>Import WAVs</button>
+      <button id="import-folder" disabled>Import sample folder</button>
+      <button id="export-project" disabled>Download .cct</button>
+      <input id="project-input" type="file" accept=".cct" hidden>
+      <input id="sample-input" type="file" accept=".wav,audio/wav" multiple hidden>
+      <input id="sample-folder-input" type="file" accept=".wav,audio/wav" webkitdirectory multiple hidden>
+    </div>
     <div class="links"><a href="https://github.com/paiheulevrai/Choochootracker/blob/main/docs/USER_MANUAL.md">Manual</a><a href="https://github.com/paiheulevrai/Choochootracker">GitHub</a></div>
     <canvas id="tracker" width="640" height="480" tabindex="0" aria-label="ChooChooTracker"></canvas>
     <div id="touch-controls" aria-label="Touch controls">
@@ -69,7 +82,60 @@
   <script>
     const status = document.querySelector('#status');
     const start = document.querySelector('#start');
+    const fileControls = document.querySelectorAll('#file-controls button');
     let trackerStarted = false;
+    let storageSyncing = false;
+    const getFs = () => (typeof FS !== 'undefined' ? FS : (window.Module && window.Module.FS));
+
+    const userPath = (name) => name.split('/').filter((part) => part && part !== '.' && part !== '..')
+      .map((part) => part.replace(/[^a-zA-Z0-9._ -]/g, '_')).join('/');
+    const ensureUserDirectories = (fs) => {
+      fs.mkdirTree('/user/projects');
+      fs.mkdirTree('/user/samples');
+      fs.mkdirTree('/user/exports');
+    };
+    const syncUserStorage = (done) => {
+      const fs = getFs();
+      if (!fs || storageSyncing) return;
+      storageSyncing = true;
+      fs.syncfs(false, (error) => {
+        storageSyncing = false;
+        if (error) status.textContent = 'Could not save browser storage.';
+        if (done) done(error);
+      });
+    };
+    window.choochooDownloadFile = (path) => {
+      const fs = getFs();
+      if (!fs) return;
+      try {
+        const bytes = fs.readFile(path);
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([bytes]));
+        link.download = path.split('/').pop();
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        syncUserStorage();
+      } catch (_) {
+        status.textContent = 'Could not download ' + path.split('/').pop() + '.';
+      }
+    };
+    const importFiles = async (files, root) => {
+      const fs = getFs();
+      if (!fs) return 0;
+      let count = 0;
+      for (const file of files) {
+        const relativePath = userPath(file.webkitRelativePath || file.name);
+        if (!relativePath) continue;
+        const path = root + '/' + relativePath;
+        fs.mkdirTree(path.slice(0, path.lastIndexOf('/')));
+        fs.writeFile(path, new Uint8Array(await file.arrayBuffer()));
+        count++;
+      }
+      syncUserStorage((error) => {
+        status.textContent = error ? 'Import kept in memory, but browser storage failed.' : count + ' file' + (count === 1 ? '' : 's') + ' saved in browser storage.';
+      });
+      return count;
+    };
     const loadTracker = () => {
       if (trackerStarted) return;
       trackerStarted = true;
@@ -78,8 +144,24 @@
       status.textContent = 'Loading tracker…';
       window.Module = window.Module || {};
       window.Module.canvas = document.querySelector('#tracker');
+      window.Module.preRun = (window.Module.preRun || []).concat(() => {
+        try {
+          FS.mkdir('/user');
+        } catch (_) {}
+        ensureUserDirectories(FS);
+        FS.mount(IDBFS, {}, '/user');
+        addRunDependency('choochootracker-user-storage');
+        FS.syncfs(true, (error) => {
+          if (error) status.textContent = 'Browser storage could not be opened.';
+          removeRunDependency('choochootracker-user-storage');
+        });
+      });
       window.Module.onAbort = () => { status.textContent = 'Tracker startup failed.'; };
-      window.Module.onRuntimeInitialized = () => { status.textContent = 'Ready — enjoy the ride.'; };
+      window.Module.onRuntimeInitialized = () => {
+        status.textContent = 'Ready — files stay in this browser.';
+        fileControls.forEach((button) => { button.disabled = false; });
+        setInterval(() => syncUserStorage(), 10000);
+      };
       const script = document.createElement('script');
       script.src = 'choochootracker.js';
       script.onerror = () => { status.textContent = 'WebAssembly bundle not found.'; };
@@ -87,6 +169,34 @@
     };
     start.addEventListener('click', loadTracker);
     window.addEventListener('load', loadTracker);
+    window.addEventListener('pagehide', () => syncUserStorage());
+
+    document.querySelector('#import-project').addEventListener('click', () => document.querySelector('#project-input').click());
+    document.querySelector('#import-samples').addEventListener('click', () => document.querySelector('#sample-input').click());
+    document.querySelector('#import-folder').addEventListener('click', () => document.querySelector('#sample-folder-input').click());
+    document.querySelector('#project-input').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const path = '/user/projects/' + userPath(file.name);
+      await importFiles([file], '/user/projects');
+      const result = window.Module.ccall('webLoadProject', 'number', ['string'], [path]);
+      status.textContent = result === 0 ? 'Project loaded: ' + file.name : 'Could not load ' + file.name + '.';
+      event.target.value = '';
+    });
+    const importSamples = async (event) => {
+      if (event.target.files.length) await importFiles(event.target.files, '/user/samples');
+      event.target.value = '';
+    };
+    document.querySelector('#sample-input').addEventListener('change', importSamples);
+    document.querySelector('#sample-folder-input').addEventListener('change', importSamples);
+    document.querySelector('#export-project').addEventListener('click', () => {
+      const path = '/user/exports/choochootracker.cct';
+      if (window.Module.ccall('webSaveProject', 'number', ['string'], [path]) !== 0) {
+        status.textContent = 'Could not save the current project.';
+        return;
+      }
+      window.choochooDownloadFile(path);
+    });
 
     document.querySelectorAll('#touch-controls button').forEach((button) => {
       const send = (down) => {

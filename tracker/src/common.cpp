@@ -50,13 +50,23 @@ void initDefaultAppSettings(void) {
   strncpy(appSettings.themeName, "Wood", THEME_NAME_LENGTH);
   appSettings.themeName[THEME_NAME_LENGTH] = '\0';
   appSettings.projectFilename[0] = '\0';
+#ifdef WEB_BUILD
+  strncpy(appSettings.projectPath, "/user/projects", PATH_LENGTH);
+  appSettings.projectPath[PATH_LENGTH] = '\0';
+#else
   appSettings.projectPath[0] = '\0';
+#endif
   appSettings.pitchTablePath[0] = '\0';
   appSettings.instrumentPath[0] = '\0';
   appSettings.themePath[0] = '\0';
   appSettings.fontPath[0] = '\0';
   appSettings.fontFolderPath[0] = '\0';
+#ifdef WEB_BUILD
+  strncpy(appSettings.samplePath, "/user/samples", PATH_LENGTH);
+  appSettings.samplePath[PATH_LENGTH] = '\0';
+#else
   appSettings.samplePath[0] = '\0';
+#endif
   appSettings.wavetablePath[0] = '\0';
 }
 
@@ -67,9 +77,13 @@ ChipNomadState* chipnomadState;
 int projectModified = 0;
 
 int settingsSave(void) {
+#ifdef WEB_BUILD
+  snprintf(settingsPath, sizeof(settingsPath), "/user/settings.txt");
+#else
   char defaultDir[PATH_LENGTH];
   if (fileGetDefaultDirectory(defaultDir, PATH_LENGTH) != 0) return 1;
   snprintf(settingsPath, sizeof(settingsPath), "%s%ssettings.txt", defaultDir, PATH_SEPARATOR_STR);
+#endif
 
   FILE* file = fopen(settingsPath, "w");
   if (file == NULL) return 1;
@@ -139,9 +153,13 @@ int settingsLoad(void) {
   // Always initialize defaults first
   initDefaultAppSettings();
 
+#ifndef WEB_BUILD
   char defaultDir[PATH_LENGTH];
   if (fileGetDefaultDirectory(defaultDir, PATH_LENGTH) != 0) return 1;
   snprintf(settingsPath, sizeof(settingsPath), "%s%ssettings.txt", defaultDir, PATH_SEPARATOR_STR);
+#else
+  snprintf(settingsPath, sizeof(settingsPath), "/user/settings.txt");
+#endif
 
   FILE* file = fopen(settingsPath, "r");
   if (file == NULL) return 1;
@@ -346,10 +364,14 @@ int loadTheme(const char* path) {
 }
 
 const char* getAutosavePath(void) {
+#ifdef WEB_BUILD
+  return "/user/autosave.cct";
+#else
   char defaultDir[PATH_LENGTH];
   if (fileGetDefaultDirectory(defaultDir, PATH_LENGTH) != 0) return AUTOSAVE_FILENAME;
   snprintf(autosavePath, sizeof(autosavePath), "%s%s%s", defaultDir, PATH_SEPARATOR_STR, AUTOSAVE_FILENAME);
   return autosavePath;
+#endif
 }
 
 void extractFilenameWithoutExtension(const char* path, char* output, int maxLength) {

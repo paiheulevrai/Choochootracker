@@ -13,16 +13,20 @@
 #include <string.h>
 #include <strings.h>
 
+#ifdef WEB_BUILD
+#include <emscripten/emscripten.h>
+#endif
+
 static int isCharEdit = 0;
 static char* editingString = NULL;
 static int editingStringLength = 0;
 static int tickRateI = 0;
 static uint16_t tickRateF = 0;
 
-static void onProjectLoaded(const char* path) {
+int projectLoadFromPath(const char* path) {
   if (!path) {
     screenSetup(&screenProject, 0);
-    return;
+    return 1;
   }
 
   // Store the directory path from the selected file
@@ -78,7 +82,18 @@ static void onProjectLoaded(const char* path) {
   }
 
   screenSetup(&screenProject, 0);
+  return loadResult;
 }
+
+static void onProjectLoaded(const char* path) {
+  projectLoadFromPath(path);
+}
+
+#ifdef WEB_BUILD
+extern "C" EMSCRIPTEN_KEEPALIVE int webLoadProject(const char* path) {
+  return projectLoadFromPath(path);
+}
+#endif
 
 static void onProjectSaved(const char* folderPath) {
   char fullPath[2048];

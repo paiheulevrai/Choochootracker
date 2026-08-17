@@ -7,8 +7,18 @@
 #include "export/export.h"
 #include <string.h>
 
+#ifdef WEB_BUILD
+#include <emscripten/emscripten.h>
+EM_JS(void, webDownloadExportFile, (const char* path), {
+  if (window.choochooDownloadFile) window.choochooDownloadFile(UTF8ToString(path));
+});
+#endif
+
 // Export state
 Exporter* currentExporter = NULL;
+static char currentExportPath[1024];
+static int currentExportIsStems = 0;
+static int currentExportTrackCount = 0;
 
 static void drawRowHeader(int row, CellState state) {}
 static void drawColHeader(int col, CellState state) {}
@@ -66,6 +76,17 @@ static void draw(void) {
     if (seconds == -1) {
       if (currentExporter->finish() == 0) {
         screenMessage(MESSAGE_TIME, "Export completed");
+#ifdef WEB_BUILD
+        if (currentExportIsStems) {
+          for (int i = 0; i < currentExportTrackCount; i++) {
+            char path[1100];
+            snprintf(path, sizeof(path), "%s-%02d.wav", currentExportPath, i + 1);
+            webDownloadExportFile(path);
+          }
+        } else {
+          webDownloadExportFile(currentExportPath);
+        }
+#endif
       } else {
         screenMessage(MESSAGE_TIME, "Export failed");
       }
@@ -204,8 +225,13 @@ static int stemsFilesExist(const char* basePath, int trackCount) {
 
 static void generateMultiFileExportPath(char* outputPath, int maxLen, FileExistsCheckFunc checkFunc, int count) {
   char basePath[512];
+#ifdef WEB_BUILD
+  const char* projectName = appSettings.projectFilename[0] ? appSettings.projectFilename : "choochootracker";
+  snprintf(basePath, sizeof(basePath), "/user/exports/%s", projectName);
+#else
   snprintf(basePath, sizeof(basePath), "%s%s%s",
     appSettings.projectPath, PATH_SEPARATOR_STR, appSettings.projectFilename);
+#endif
 
   if (!checkFunc(basePath, count)) {
     strncpy(outputPath, basePath, maxLen - 1);
@@ -214,15 +240,18 @@ static void generateMultiFileExportPath(char* outputPath, int maxLen, FileExists
   }
 
   for (int i = 1; i <= 999; i++) {
-    snprintf(outputPath, maxLen, "%s%s%s_%03d",
-      appSettings.projectPath, PATH_SEPARATOR_STR, appSettings.projectFilename, i);
+#ifdef WEB_BUILD
+    snprintf(outputPath, maxLen, "/user/exports/%s_%03d", projectName, i);
+#else
+    snprintf(outputPath, maxLen, "%s%s%s_%03d", appSettings.projectPath, PATH_SEPARATOR_STR, appSettings.projectFilename, i);
+#endif
     if (!checkFunc(outputPath, count)) {
       return;
     }
   }
 
-  snprintf(outputPath, maxLen, "%s%s%s",
-    appSettings.projectPath, PATH_SEPARATOR_STR, appSettings.projectFilename);
+  strncpy(outputPath, basePath, maxLen - 1);
+  outputPath[maxLen - 1] = 0;
 }
 
 void generateStemsExportPath(char* outputPath, int maxLen) {
@@ -232,8 +261,13 @@ void generateStemsExportPath(char* outputPath, int maxLen) {
 
 void generateExportPath(char* outputPath, int maxLen, const char* extension) {
   char basePath[512];
+#ifdef WEB_BUILD
+  const char* projectName = appSettings.projectFilename[0] ? appSettings.projectFilename : "choochootracker";
+  snprintf(basePath, sizeof(basePath), "/user/exports/%s.%s", projectName, extension);
+#else
   snprintf(basePath, sizeof(basePath), "%s%s%s.%s",
     appSettings.projectPath, PATH_SEPARATOR_STR, appSettings.projectFilename, extension);
+#endif
 
   if (!fileExists(basePath)) {
     strncpy(outputPath, basePath, maxLen - 1);
@@ -242,8 +276,11 @@ void generateExportPath(char* outputPath, int maxLen, const char* extension) {
   }
 
   for (int i = 1; i <= 999; i++) {
-    snprintf(outputPath, maxLen, "%s%s%s_%03d.%s",
-      appSettings.projectPath, PATH_SEPARATOR_STR, appSettings.projectFilename, i, extension);
+#ifdef WEB_BUILD
+    snprintf(outputPath, maxLen, "/user/exports/%s_%03d.%s", projectName, i, extension);
+#else
+    snprintf(outputPath, maxLen, "%s%s%s_%03d.%s", appSettings.projectPath, PATH_SEPARATOR_STR, appSettings.projectFilename, i, extension);
+#endif
     if (!fileExists(outputPath)) {
       return;
     }
@@ -266,6 +303,10 @@ int exportCommonOnEdit(int col, int row, CellEditAction action) {
 
     currentExporter = new ExporterWAV(exportPath, &chipnomadState->project, startRow, sampleRates[currentSampleRateIndex], bitDepths[currentBitDepthIndex], appSettings.mixVolume);
     if (currentExporter) {
+      strncpy(currentExportPath, exportPath, sizeof(currentExportPath) - 1);
+      currentExportPath[sizeof(currentExportPath) - 1] = 0;
+      currentExportIsStems = 0;
+      currentExportTrackCount = 0;
       screenMessage(MESSAGE_TIME, "Starting export...");
     } else {
       screenMessage(MESSAGE_TIME, "Export failed to start");
@@ -280,6 +321,10 @@ int exportCommonOnEdit(int col, int row, CellEditAction action) {
     currentExporter = new ExporterWAV(basePath, &chipnomadState->project, startRow, sampleRates[currentSampleRateIndex], bitDepths[currentBitDepthIndex], appSettings.mixVolume, true);
     if (currentExporter) {
       int trackCount = chipnomadState->project.tracksCount;
+      strncpy(currentExportPath, basePath, sizeof(currentExportPath) - 1);
+      currentExportPath[sizeof(currentExportPath) - 1] = 0;
+      currentExportIsStems = 1;
+      currentExportTrackCount = trackCount;
       screenMessage(MESSAGE_TIME, "Starting stems export (%d files)...", trackCount);
     } else {
       screenMessage(MESSAGE_TIME, "Export failed to start");
