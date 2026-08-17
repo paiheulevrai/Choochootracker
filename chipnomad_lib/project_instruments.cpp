@@ -162,7 +162,9 @@ static int initPlaitsAltInstrument(Instrument* instrument) {
 }
 
 static const char* modNameSample(int modIndex) {
-  static const char *names[] = {"Off", "Volume", "Pitch", "Cutoff", "Reso", "Speed", "Loop"};
+  static const char *names[] = {
+    "Off", "Volume", "Pitch", "Start", "End", "Speed", "Loop", "Cutoff", "Reso"
+  };
   return names[modIndex];
 }
 
@@ -214,7 +216,7 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
       };
     case InstrumentType::Sample:
       return (InstrumentFunctions){
-        .modDestinationsCount = 6,
+        .modDestinationsCount = 8,
         .modName = modNameSample,
         .init = initSampleInstrument,
         .free = freeSampleInstrument

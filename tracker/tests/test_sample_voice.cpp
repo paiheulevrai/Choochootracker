@@ -81,10 +81,14 @@ TEST_CASE("SampleVoice start and end delimit playback") {
   CHECK_FALSE(voice.active());
 }
 
-TEST_CASE("Sample modulation exposes speed and loop destinations") {
-  CHECK(instrumentModDestinationMax(InstrumentType::Sample) == 24);
+TEST_CASE("Sample modulation exposes all sample parameter destinations") {
+  CHECK(instrumentModDestinationMax(InstrumentType::Sample) == 26);
+  CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Sample, 3), "Start") == 0);
+  CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Sample, 4), "End") == 0);
   CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Sample, 5), "Speed") == 0);
   CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Sample, 6), "Loop") == 0);
+  CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Sample, 7), "Cutoff") == 0);
+  CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Sample, 8), "Reso") == 0);
 }
 
 TEST_CASE("SampleVoice loops and grain time keeps rendering") {

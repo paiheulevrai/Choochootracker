@@ -535,18 +535,40 @@ static void updateSampleVoices(ChipNomadState* state) {
     for (int i = 0; i < 4; i++) {
       PlaybackModState* mod = &track->note.modulation[i];
       if (!mod->modulation) continue;
-      if (mod->modulation->destination == 1) {
-        gain *= playbackModScaleToRange(mod->outValue, 255) / 255.0f;
-      } else if (mod->modulation->destination == 2) {
-        pitchCents += playbackModScaleToRange(mod->outValue, 1200);
-      } else if (mod->modulation->destination == 5) {
-        speedPercent += playbackModScaleToRange(mod->outValue, 500);
-      } else if (mod->modulation->destination == 6) {
-        loopMode += playbackModScaleToRange(mod->outValue, 2);
+      int value = playbackModScaleToRange(mod->outValue, 255);
+      switch (mod->modulation->destination) {
+        case 1:
+          gain *= value / 255.0f;
+          break;
+        case 2:
+          pitchCents += playbackModScaleToRange(mod->outValue, 1200);
+          break;
+        case 3:
+          start = clampInt(start + value, 0, 255);
+          break;
+        case 4:
+          end = clampInt(end + value, 0, 255);
+          break;
+        case 5:
+          speedPercent += playbackModScaleToRange(mod->outValue, 500);
+          break;
+        case 6:
+          loopMode += playbackModScaleToRange(mod->outValue, 2);
+          break;
+        case 7:
+          cutoff += playbackModScaleToRange(mod->outValue, 20000);
+          break;
+        case 8:
+          resonance += value;
+          break;
       }
     }
     speedPercent = clampInt(speedPercent, 0, 500);
     loopMode = clampInt(loopMode, 0, 2);
+    start = clampInt(start, 0, 255);
+    end = clampInt(end, 0, 255);
+    cutoff = clampInt(cutoff, 20, 20000);
+    resonance = clampInt(resonance, 0, 255);
     voice->configure(sample, (float)pitchCents, gain, (float)speedPercent, start, end, (uint8_t)loopMode,
                      (uint16_t)cutoff, (uint8_t)resonance);
   }
