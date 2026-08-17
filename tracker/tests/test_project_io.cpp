@@ -94,7 +94,7 @@ TEST_CASE_FIXTURE(TestFixture, "projectLoad_version_1_0_format") {
   CHECK(std::strcmp(p.title, "Legacy Project") == 0);
 }
 
-TEST_CASE_FIXTURE(TestFixture, "projectSave_always_version_2_0") {
+TEST_CASE_FIXTURE(TestFixture, "projectSave_always_version_3_0") {
   Project p;
   projectInit(&p);
 
@@ -114,16 +114,16 @@ TEST_CASE_FIXTURE(TestFixture, "projectSave_always_version_2_0") {
   std::strcpy(p.pitchTable.noteNames[0], "C-4");
   p.pitchTable.values[0] = 1000;
 
-  int result = projectSave(&p, "tests/test_v2_output.cnm");
+  int result = projectSave(&p, "tests/test_v3_output.cnm");
   CHECK(result == 0);
 
-  // Read the file and check it starts with version 2.0
-  FILE* file = fopen("tests/test_v2_output.cnm", "r");
+  // Read the file and check it starts with version 3.0
+  FILE* file = fopen("tests/test_v3_output.cnm", "r");
   CHECK(file != nullptr);
   char firstLine[256];
   char* readResult = fgets(firstLine, sizeof(firstLine), file);
   CHECK(readResult != nullptr);
-  CHECK(std::strstr(firstLine, "# ChipNomad Tracker Module 2.0") != nullptr);
+  CHECK(std::strstr(firstLine, "# ChooChooTracker Module 3.0") != nullptr);
   fclose(file);
 }
 

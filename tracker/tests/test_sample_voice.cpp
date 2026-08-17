@@ -41,7 +41,7 @@ TEST_CASE("SampleVoice renders PCM16 with envelope and every filter mode") {
       SampleVoice voice;
       float output[256 * 2];
       voice.init(48000.0f);
-      voice.configure(&sample, 0.0f, 1.0f, 100.0f, sample.start, sample.end,
+      voice.configure(&sample, 0.0f, 1.0f, 100.0f, sample.start, sample.end, sample.loopMode,
                       sample.filterCutoffHz, sample.filterResonance);
       voice.noteOn();
       voice.render(output, 256);
@@ -68,16 +68,23 @@ TEST_CASE("SampleVoice start and end delimit playback") {
   sample.data = pcm;
   sample.start = 64;
   sample.end = 128;
+  sample.loopMode = 1;
   sample.sustain = 255;
 
   SampleVoice voice;
   float output[128 * 2];
   voice.init(48000.0f);
-  voice.configure(&sample, 0.0f, 1.0f, 100.0f, sample.start, sample.end,
+  voice.configure(&sample, 0.0f, 1.0f, 100.0f, sample.start, sample.end, 0,
                   sample.filterCutoffHz, sample.filterResonance);
   voice.noteOn();
   voice.render(output, 128);
   CHECK_FALSE(voice.active());
+}
+
+TEST_CASE("Sample modulation exposes speed and loop destinations") {
+  CHECK(instrumentModDestinationMax(InstrumentType::Sample) == 24);
+  CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Sample, 5), "Speed") == 0);
+  CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Sample, 6), "Loop") == 0);
 }
 
 TEST_CASE("SampleVoice loops and grain time keeps rendering") {
@@ -96,7 +103,7 @@ TEST_CASE("SampleVoice loops and grain time keeps rendering") {
   SampleVoice voice;
   float output[256 * 2];
   voice.init(48000.0f);
-  voice.configure(&sample, 0.0f, 1.0f, 1200.0f, sample.start, sample.end,
+  voice.configure(&sample, 0.0f, 1.0f, 1200.0f, sample.start, sample.end, sample.loopMode,
                   sample.filterCutoffHz, sample.filterResonance);
   voice.noteOn();
   voice.render(output, 256);

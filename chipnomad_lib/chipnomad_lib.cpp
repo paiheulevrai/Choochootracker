@@ -507,6 +507,7 @@ static void updateSampleVoices(ChipNomadState* state) {
     InstrumentSample* sample = &project->instruments[track->note.instrument].chip.sample;
     int pitchCents = sample->pitch * 100 + track->note.fineOffset;
     int speedPercent = sample->speedPercent;
+    int loopMode = sample->loopMode;
     uint8_t start = sample->start;
     uint8_t end = sample->end;
     int cutoff = sample->filterCutoffHz;
@@ -529,6 +530,8 @@ static void updateSampleVoices(ChipNomadState* state) {
     if (track->note.fx[fxSVL].isOn) gain = track->note.fx[fxSVL].fxValue / 255.0f;
     if (track->note.fx[fxSCF].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxSCF].fxValue);
     if (track->note.fx[fxSRS].isOn) resonance = track->note.fx[fxSRS].fxValue;
+    if (track->note.fx[fxSSP].isOn) speedPercent = track->note.fx[fxSSP].fxValue * 500 / 255;
+    if (track->note.fx[fxSLP].isOn) loopMode = track->note.fx[fxSLP].fxValue;
     for (int i = 0; i < 4; i++) {
       PlaybackModState* mod = &track->note.modulation[i];
       if (!mod->modulation) continue;
@@ -538,10 +541,13 @@ static void updateSampleVoices(ChipNomadState* state) {
         pitchCents += playbackModScaleToRange(mod->outValue, 1200);
       } else if (mod->modulation->destination == 5) {
         speedPercent += playbackModScaleToRange(mod->outValue, 500);
+      } else if (mod->modulation->destination == 6) {
+        loopMode += playbackModScaleToRange(mod->outValue, 2);
       }
     }
     speedPercent = clampInt(speedPercent, 0, 500);
-    voice->configure(sample, (float)pitchCents, gain, (float)speedPercent, start, end,
+    loopMode = clampInt(loopMode, 0, 2);
+    voice->configure(sample, (float)pitchCents, gain, (float)speedPercent, start, end, (uint8_t)loopMode,
                      (uint16_t)cutoff, (uint8_t)resonance);
   }
 }

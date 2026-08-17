@@ -72,6 +72,7 @@ int fxBraidsCount = sizeof(fxNamesBraids) / sizeof(FXName);
 FXName fxNamesSample[] = {
   {fxSPT, "SPT"}, {fxSST, "SST"}, {fxSEN, "SEN"},
   {fxSVL, "SVL"}, {fxSCF, "SCF"}, {fxSRS, "SRS"},
+  {fxSSP, "SSP"}, {fxSLP, "SLP"},
 };
 int fxSampleCount = sizeof(fxNamesSample) / sizeof(FXName);
 

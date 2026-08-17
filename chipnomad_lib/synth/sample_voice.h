@@ -11,7 +11,7 @@ class SampleVoice {
  public:
   void init(float outputSampleRate);
   void configure(const InstrumentSample* sample, float pitchCents, float gain,
-                 float speedPercent, uint8_t start, uint8_t end, uint16_t cutoffHz,
+                 float speedPercent, uint8_t start, uint8_t end, uint8_t loopMode, uint16_t cutoffHz,
                  uint8_t resonance);
   void noteOn();
   void noteOff();
@@ -27,6 +27,7 @@ class SampleVoice {
   double step_;
   int direction_;
   bool reverse_;
+  uint8_t loopMode_;
   float timeStretch_;
   bool granular_;
   bool grainExhausted_;

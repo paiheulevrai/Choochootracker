@@ -123,6 +123,10 @@ enum FX {
 
   // TODO: SID FX
 
+  // PCM Sample FX added after existing values to preserve project files.
+  fxSSP, // Speed
+  fxSLP, // Loop mode
+
   // Total count - must be last
   fxTotalCount
 };

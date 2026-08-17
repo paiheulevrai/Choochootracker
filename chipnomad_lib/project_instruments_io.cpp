@@ -294,6 +294,10 @@ static int loadModulation(FILE* file, Instrument* instrument) {
         &instrument->modulation[i].p2,
         &instrument->modulation[i].p3,
         &instrument->modulation[i].p4);
+      if (projectFileVersion < 3 && instrument->type == InstrumentType::Sample &&
+          instrument->modulation[i].destination >= 5) {
+        instrument->modulation[i].destination += 2;
+      }
     }
     consumeLine(file);
   }

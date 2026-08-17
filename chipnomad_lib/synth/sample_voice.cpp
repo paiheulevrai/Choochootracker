@@ -19,6 +19,7 @@ void SampleVoice::init(float outputSampleRate) {
   step_ = 1.0;
   direction_ = 1;
   reverse_ = false;
+  loopMode_ = 0;
   timeStretch_ = 1.0f;
   granular_ = false;
   grainExhausted_ = false;
@@ -29,7 +30,7 @@ void SampleVoice::init(float outputSampleRate) {
 }
 
 void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
-                            float gain, float speedPercent, uint8_t start, uint8_t end,
+                            float gain, float speedPercent, uint8_t start, uint8_t end, uint8_t loopMode,
                             uint16_t cutoffHz, uint8_t resonance) {
   sample_ = sample;
   post_.setGain(gain);
@@ -47,6 +48,7 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
   step_ = (sample_->sampleRate / outputSampleRate_) * pow(2.0, pitchCents / 1200.0);
   timeStretch_ = speedPercent / 100.0f;
   granular_ = fabsf(timeStretch_ - 1.0f) > 0.001f;
+  loopMode_ = loopMode > 2 ? 0 : loopMode;
   grainSize_ = (uint32_t)(outputSampleRate_ * 0.040f);
   grainHop_ = grainSize_ / 2;
   post_.setFilter(sample_->filterEnabled != 0, sample_->filterMode,
@@ -84,11 +86,11 @@ float SampleVoice::sampleAt(double position, int channel) const {
 float SampleVoice::grainSampleAt(double position, int channel) const {
   const double first = startFrame_;
   const double length = endFrame_ - startFrame_;
-  if (sample_->loopMode == 1) {
+  if (loopMode_ == 1) {
     position = fmod(position - first, length);
     if (position < 0.0) position += length;
     position += first;
-  } else if (sample_->loopMode == 2) {
+  } else if (loopMode_ == 2) {
     double span = length > 1.0 ? length - 1.0 : 1.0;
     double period = span * 2.0;
     position = fmod(position - first, period);
@@ -108,10 +110,10 @@ float SampleVoice::grainSampleAt(double position, int channel) const {
 bool SampleVoice::advancePosition() {
   position_ += step_ * direction_;
   if (position_ >= startFrame_ && position_ < endFrame_) return true;
-  if (sample_->loopMode == 0) return false;
+  if (loopMode_ == 0) return false;
   double first = startFrame_;
   double last = endFrame_ - 1.0;
-  if (sample_->loopMode == 1) {
+  if (loopMode_ == 1) {
     double length = endFrame_ - startFrame_;
     while (position_ >= endFrame_) position_ -= length;
     while (position_ < startFrame_) position_ += length;
@@ -146,7 +148,7 @@ void SampleVoice::render(float* output, size_t frames) {
           grainPosition_[grain] = nextGrainPosition_;
           nextGrainPosition_ += direction_ * step_ * grainHop_ * timeStretch_;
           grainAge_[grain] = 0;
-          if (sample_->loopMode == 0 && nextGrainPosition_ >= endFrame_) grainExhausted_ = true;
+          if (loopMode_ == 0 && nextGrainPosition_ >= endFrame_) grainExhausted_ = true;
         }
       }
       for (int channel = 0; channel < 2; ++channel) {
@@ -160,7 +162,7 @@ void SampleVoice::render(float* output, size_t frames) {
       }
       grainAge_[0]++;
       grainAge_[1]++;
-      if (grainExhausted_ && sample_->loopMode == 0 &&
+      if (grainExhausted_ && loopMode_ == 0 &&
           grainPosition_[0] + step_ * grainAge_[0] >= endFrame_ &&
           grainPosition_[1] + step_ * grainAge_[1] >= endFrame_) { kill(); break; }
     } else {

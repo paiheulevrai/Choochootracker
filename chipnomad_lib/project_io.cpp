@@ -10,7 +10,7 @@
 
 // Shared state
 char projectFileError[41];
-int projectFileVersion = 2;  // Default to current version
+int projectFileVersion = 3;  // Default to current version
 static char chipNames[][16] = { "AY8910" };
 
 // Peek/consume implementation - single global buffer (ChipNomad is single-threaded)
@@ -662,7 +662,9 @@ static int projectLoadInternal(FILE* file, Project* project) {
 
   // Detect version
   if (strlen(version) > 0) {
-    if (strncmp(version, " 2.0", 4) == 0) {
+    if (strncmp(version, " 3.0", 4) == 0) {
+      projectFileVersion = 3;
+    } else if (strncmp(version, " 2.0", 4) == 0) {
       projectFileVersion = 2;
     } else if (strncmp(version, " 1.0", 4) == 0) {
       projectFileVersion = 1;
@@ -1125,7 +1127,7 @@ static int projectSaveAYWavetables(FILE* file, Project* project) {
 }
 
 static int projectSaveInternal(FILE* file, Project* project) {
-  fprintf(file, "# ChooChooTracker Module 2.0\n\n");
+  fprintf(file, "# ChooChooTracker Module 3.0\n\n");
 
   fprintf(file, "- Title: %s\n", project->title);
   fprintf(file, "- Author: %s\n", project->author);
@@ -1207,7 +1209,7 @@ int instrumentSave(Project* project, const char* path, int instrumentIdx) {
     return 1;
   }
 
-  fprintf(file, "# ChipNomad Instrument 2.0\n\n");
+  fprintf(file, "# ChipNomad Instrument 3.0\n\n");
   instrumentSaveData(file, 0, &project->instruments[instrumentIdx]);
   saveTable(file, 0, &project->tables[instrumentIdx]);
 
@@ -1225,7 +1227,9 @@ static int instrumentLoadInternal(FILE* file, Project* project, int instrumentId
 
   // Detect version
   if (strlen(line) > 22) {
-    if (strncmp(line + 22, " 2.0", 4) == 0) {
+    if (strncmp(line + 22, " 3.0", 4) == 0) {
+      projectFileVersion = 3;
+    } else if (strncmp(line + 22, " 2.0", 4) == 0) {
       projectFileVersion = 2;
     } else if (strncmp(line + 22, " 1.0", 4) == 0) {
       projectFileVersion = 1;

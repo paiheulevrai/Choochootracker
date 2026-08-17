@@ -316,6 +316,8 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     case fxSVL: snprintf(buffer, bufferSize, "Sample volume %hhu", fx[1]); break;
     case fxSCF: snprintf(buffer, bufferSize, "Sample cutoff %hhu", fx[1]); break;
     case fxSRS: snprintf(buffer, bufferSize, "Sample resonance %hhu", fx[1]); break;
+    case fxSSP: snprintf(buffer, bufferSize, "Sample speed %hhu", fx[1]); break;
+    case fxSLP: snprintf(buffer, bufferSize, "Sample loop mode %hhu", fx[1]); break;
     case fxPRO: snprintf(buffer, bufferSize, "Probability %hhu%%", fx[1] > 100 ? 100 : fx[1]); break;
     case fxMOD: snprintf(buffer, bufferSize, "Modulo %hhu:%hhu", fx[1] >> 4, fx[1] & 15); break;
     case fxSPD: snprintf(buffer, bufferSize, "Track clock mode %02hX", fx[1]); break;
@@ -429,6 +431,8 @@ static void initFxHelpText() {
   fxHelpText[fxSVL] = "Sample Volume FX\nOverrides sample volume until\nthe next note trigger";
   fxHelpText[fxSCF] = "Sample Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
   fxHelpText[fxSRS] = "Sample Resonance FX\nOverrides resonance until\nthe next note trigger";
+  fxHelpText[fxSSP] = "Sample Speed FX\n00-FF maps to 0-500 percent\nuntil the next note trigger";
+  fxHelpText[fxSLP] = "Sample Loop FX\n00 off, 01 loop, 02 ping-pong\nuntil the next note trigger";
   fxHelpText[fxPRO] = "Probability\n00-64 = 0-100 percent\nConditions on a row use AND";
   fxHelpText[fxMOD] = "Modulo condition\nAB triggers pass A of B\nExample 34 = 3:4";
   fxHelpText[fxSPD] = "Track playback speed\n00=x1, 01=x2, FF=/2\nPersists until next SPD";

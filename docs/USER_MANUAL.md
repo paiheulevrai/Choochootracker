@@ -393,6 +393,11 @@ the sample.
 | `SVL` | `00-FF` | Absolute sample volume |
 | `SCF` | `00-FF` | Exponential cutoff, 20 Hz to 20 kHz |
 | `SRS` | `00-FF` | Exponential filter resonance |
+| `SSP` | `00-FF` | Sample speed, mapped from 0% to 500% |
+| `SLP` | `00-02` | Loop mode: Off, Loop, Ping-Pong |
+
+Sample modulation destinations also include `Speed` (relative, clamped to
+0–500%) and `Loop` (relative, clamped to the three loop modes).
 
 `SPD` is a persistent per-track clock ratio: `00` is normal speed, positive
 values accelerate (`01` = x2), and signed negative hex values slow down
