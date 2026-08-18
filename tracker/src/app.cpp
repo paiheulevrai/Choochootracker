@@ -193,19 +193,21 @@ void appSetup(void) {
 
 #ifdef WEB_BUILD
   // Restore the browser's IndexedDB-backed autosave, with the demo as fallback.
+  int projectLoaded = 0;
   if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0) {
-    projectInitAY(&chipnomadState->project);
-      extractFilenameWithoutExtension(getAutosavePath(), appSettings.projectFilename, FILENAME_LENGTH + 1);
+    projectLoaded = 1;
+    extractFilenameWithoutExtension(getAutosavePath(), appSettings.projectFilename, FILENAME_LENGTH + 1);
   } else if (projectLoad(&chipnomadState->project, "/projects/TECNODEMO.cct") == 0) {
-    projectInitAY(&chipnomadState->project);
-      extractFilenameWithoutExtension("/projects/TECNODEMO.cct", appSettings.projectFilename, FILENAME_LENGTH + 1);
+    projectLoaded = 1;
+    extractFilenameWithoutExtension("/projects/TECNODEMO.cct", appSettings.projectFilename, FILENAME_LENGTH + 1);
   }
+  if (!projectLoaded) projectInitAY(&chipnomadState->project);
 #else
   // Native builds restore the user's auto-saved project.
-  if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0) {
+  if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0)
+    extractFilenameWithoutExtension(getAutosavePath(), appSettings.projectFilename, FILENAME_LENGTH + 1);
+  else
     projectInitAY(&chipnomadState->project);
-      extractFilenameWithoutExtension(getAutosavePath(), appSettings.projectFilename, FILENAME_LENGTH + 1);
-  }
 #endif
 
   // Initialize all screen states

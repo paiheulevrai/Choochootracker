@@ -87,8 +87,7 @@
     let storageSyncing = false;
     const getFs = () => (typeof FS !== 'undefined' ? FS : (window.Module && window.Module.FS));
 
-    const userPath = (name) => name.split('/').filter((part) => part && part !== '.' && part !== '..')
-      .map((part) => part.replace(/[^a-zA-Z0-9._ -]/g, '_')).join('/');
+    const userPath = (name) => name.split('/').filter((part) => part && part !== '.' && part !== '..').join('/');
     const ensureUserDirectories = (fs) => {
       fs.mkdirTree('/user/projects');
       fs.mkdirTree('/user/samples');
@@ -148,12 +147,15 @@
         try {
           FS.mkdir('/user');
         } catch (_) {}
-        ensureUserDirectories(FS);
         FS.mount(IDBFS, {}, '/user');
         addRunDependency('choochootracker-user-storage');
         FS.syncfs(true, (error) => {
           if (error) status.textContent = 'Browser storage could not be opened.';
-          removeRunDependency('choochootracker-user-storage');
+          ensureUserDirectories(FS);
+          FS.syncfs(false, (saveError) => {
+            if (saveError) status.textContent = 'Browser storage could not be initialized.';
+            removeRunDependency('choochootracker-user-storage');
+          });
         });
       });
       window.Module.onAbort = () => { status.textContent = 'Tracker startup failed.'; };
@@ -168,8 +170,7 @@
       document.body.appendChild(script);
     };
     start.addEventListener('click', loadTracker);
-    // Do not auto-start on page load — require a user gesture to initialize audio/context.
-    // window.addEventListener('load', loadTracker);
+    window.addEventListener('load', loadTracker);
     window.addEventListener('pagehide', () => syncUserStorage());
 
     document.querySelector('#import-project').addEventListener('click', () => document.querySelector('#project-input').click());
