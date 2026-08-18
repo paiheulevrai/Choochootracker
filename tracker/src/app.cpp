@@ -10,9 +10,12 @@
 #include "project_utils.h"
 #include "waveform_display.h"
 #include "corelib_input.h"
+#include <ctype.h>
 
 #ifdef WEB_BUILD
 #include <emscripten/emscripten.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #endif
 
 // Raw input callback for key mapping screen
@@ -191,12 +194,29 @@ void appSetup(void) {
     return;
   }
 
+  // Web builds: restore the browser's IndexedDB-backed autosave, with the demo as fallback.
 #ifdef WEB_BUILD
-  // Restore the browser's IndexedDB-backed autosave, with the demo as fallback.
   if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0) {
     projectInitAY(&chipnomadState->project);
   } else if (projectLoad(&chipnomadState->project, "/projects/TECNODEMO.cct") == 0) {
+    // Loaded bundled demo - ensure some small tweaks needed for web default
     projectInitAY(&chipnomadState->project);
+    // Ensure the kick sample plays at 100% speed when using the bundled demo
+    for (int i = 0; i < PROJECT_MAX_INSTRUMENTS; ++i) {
+      Instrument* inst = &chipnomadState->project.instruments[i];
+      if (inst->type == InstrumentType::Sample) {
+        // Case-insensitive check for "KICK" in the instrument name
+        const char* name = inst->name;
+        if (name && strlen(name) > 0) {
+          char lower[PROJECT_INSTRUMENT_NAME_LENGTH + 2];
+          int j = 0; for (; j < PROJECT_INSTRUMENT_NAME_LENGTH && name[j]; ++j) lower[j] = tolower((unsigned char)name[j]);
+          lower[j] = '\0';
+          if (strstr(lower, "kick") != NULL) {
+            inst->chip.sample.speedPercent = 100;
+          }
+        }
+      }
+    }
   }
 #else
   // Native builds restore the user's auto-saved project.
@@ -204,7 +224,8 @@ void appSetup(void) {
     projectInitAY(&chipnomadState->project);
   }
 #endif
-
+  // Initialize all screen states
+  
   // Initialize all screen states
   screensInitAll();
 
@@ -229,6 +250,40 @@ void appSetup(void) {
 #ifdef WEB_BUILD
 extern "C" EMSCRIPTEN_KEEPALIVE int webSaveProject(const char* path) {
   if (!chipnomadState || !path || !path[0]) return 1;
+  // Ensure parent directories exist (Emscripten FS expects directories to be present)
+  char dirBuf[PATH_LENGTH + 256];
+  strncpy(dirBuf, path, sizeof(dirBuf) - 1);
+  dirBuf[sizeof(dirBuf) - 1] = '\0';
+  char* lastSep = strrchr(dirBuf, '/');
+  if (lastSep) {
+    *lastSep = '\0';
+    // Create each level if missing
+    char tmp[PATH_LENGTH + 256];
+    tmp[0] = '\0';
+    const char* p = dirBuf;
+    while (*p) {
+      const char* next = strchr(p, '/');
+      size_t len = next ? (size_t)(next - p) : strlen(p);
+      if (len > 0) {
+        size_t curLen = strlen(tmp);
+        if (curLen + 1 + len < sizeof(tmp)) {
+          if (curLen == 0) {
+            strncpy(tmp, p, len);
+            tmp[len] = '\0';
+          } else {
+            tmp[curLen] = '/';
+            strncpy(tmp + curLen + 1, p, len);
+            tmp[curLen + 1 + len] = '\0';
+          }
+          // Attempt to create directory; ignore if it already exists
+          (void)mkdir(tmp, 0777);
+        }
+      }
+      if (!next) break;
+      p = next + 1;
+    }
+  }
+
   return projectSave(&chipnomadState->project, path);
 }
 #endif
