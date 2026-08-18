@@ -196,9 +196,20 @@ void appSetup(void) {
 
   // Web builds: restore the browser's IndexedDB-backed autosave, with the demo as fallback.
 #ifdef WEB_BUILD
-  if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0) {
-    projectInitAY(&chipnomadState->project);
-  } else if (projectLoad(&chipnomadState->project, "/projects/TECNODEMO.cct") == 0) {
+  struct stat st;
+  int loadDemo = 1;
+  if (stat(getAutosavePath(), &st) == 0) {
+    if (st.st_size < 64) {
+      // Tiny autosave file — likely corrupt/empty from prior runs. Remove it so demo becomes fallback.
+      unlink(getAutosavePath());
+    } else {
+      if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0) {
+        projectInitAY(&chipnomadState->project);
+        loadDemo = 0;
+      }
+    }
+  }
+  if (loadDemo && projectLoad(&chipnomadState->project, "/projects/TECNODEMO.cct") == 0) {
     // Loaded bundled demo - ensure some small tweaks needed for web default
     projectInitAY(&chipnomadState->project);
     // Ensure the kick sample plays at 100% speed when using the bundled demo
