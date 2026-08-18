@@ -168,7 +168,8 @@
       document.body.appendChild(script);
     };
     start.addEventListener('click', loadTracker);
-    window.addEventListener('load', loadTracker);
+    // Do not auto-start on page load — require a user gesture to initialize audio/context.
+    // window.addEventListener('load', loadTracker);
     window.addEventListener('pagehide', () => syncUserStorage());
 
     document.querySelector('#import-project').addEventListener('click', () => document.querySelector('#project-input').click());
