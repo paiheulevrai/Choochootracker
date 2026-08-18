@@ -156,6 +156,30 @@ TEST_CASE_FIXTURE(PlaybackFixture, "each tracker track owns an AY") {
   CHECK((second->getRegister(7) & 0x36) == 0x36);
 }
 
+TEST_CASE_FIXTURE(PlaybackFixture, "auto mix relieves an octave-band pileup") {
+  Project* p = &state->project;
+  p->chipsCount = 3;
+  p->tracksCount = 3;
+  chipnomadInitChips(state, 44100, mockChipFactory);
+  playbackInit(&state->playbackState, p);
+  setInstrument(0, 0, 0, 15, 0);
+  p->instruments[0].volume = 255;
+  for (int track = 0; track < 3; ++track) {
+    p->phrases[track].rows[0].note = track < 2 ? 36 : 72;
+    p->phrases[track].rows[0].instrument = 0;
+    p->phrases[track].rows[0].volume = 15;
+    for (int row = 0; row < 12; ++row) p->chains[track].rows[row].phrase = track;
+    p->song[0][track] = track;
+  }
+
+  uint8_t proposed[PROJECT_MAX_TRACKS] = {};
+  REQUIRE(chipnomadAutoMix(state, 1, proposed) == 0);
+  CHECK(proposed[0] < proposed[2]);
+  CHECK(proposed[1] < proposed[2]);
+  CHECK(proposed[0] >= 25);
+  CHECK(proposed[1] >= 25);
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "ADSR volume envelope ranges") {
   // Test with A=15, D=16, S=1, R=10
   // This should produce low initial volume, decay to sustain level 1, then release

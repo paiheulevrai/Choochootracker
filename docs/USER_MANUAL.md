@@ -1,10 +1,10 @@
 # ChooChooTracker User Manual
 
-ChooChooTracker is an eight-track music tracker designed for small screens and handheld consoles. Its workflow follows the LSDj family of trackers: a song contains chains, chains contain phrases, and phrases contain notes, instruments and FX. Each instrument chooses its own sound engine, so AY, Braids, Plaits and PCM samples can be freely mixed in one project.
+ChooChooTracker is an eight-track music tracker for small screens and handheld consoles. It follows the LSDj workflow: songs contain chains, chains contain phrases, and phrases contain notes, instruments and FX. Each instrument uses its own sound engine, so a project can mix AY, Braids, Plaits and PCM samples.
 
 This manual describes the current development build. Features marked as requiring hardware validation should be tested on the target ArkOS/PortMaster console before live use.
 
-Since this is a fork from Chipnomad and using Mutable Instruments Braids and Plaits engine, I strongly recommend you also read the user manuals from these projects.
+ChooChooTracker is based on ChipNomad and includes Mutable Instruments Braids and Plaits engines. Their manuals remain the best source for model-specific synthesis details.
 
 ## 1. Installation and files
 
@@ -80,7 +80,7 @@ M S C P I T
 - **I**: Instrument
 - **T**: Table
 
-Same as LSDJ but I added the Mixer as first entry.
+This follows LSDj's layout, with Mixer added as the first screen.
 
 Secondary screens appear above or below their parent:
 - Project and Settings surround Song.
@@ -95,15 +95,15 @@ The hierarchy is:
 Song track -> Chain -> Phrase row -> Note + Instrument + FX
 ```
 
-There are always eight independent tracks. An AY instrument used on one track does not share a forced three-channel chip with other tracks (this is a break from Chipnomad)
+Projects always have eight independent tracks. An AY instrument on one track does not share a forced three-channel chip with the others. This differs from ChipNomad.
 
 ## 4. A first pattern
 
-1. Open the Song screen and create or enter a chain number on a track (like "0")
-2. Move to Chain and enter a phrase number (like "0")
+1. Open Song and create or enter a chain number on a track, for example `0`.
+2. Open Chain and enter a phrase number, for example `0`.
 3. Move to Phrase and enter notes.
 4. Enter an instrument number next to a note ("0" is fine). Create that instrument in the Instrument screen or Instrument Pool.
-5. Press Play (start button on the RG console)
+5. Press Play (the Start button on an RG console).
 6. Add FX in the phrase FX columns as needed.
 7. Set track levels and sends in Mixer, then save the project from Project.
 
@@ -115,9 +115,9 @@ Each track has:
 
 | Field | Meaning |
 |---|---|
-| LVL | Post-engine track level, 000–100 |
-| REV | Send to the shared Clouds reverb, 000–100 |
-| DLY | Send to the shared ping-pong delay, 000–100 |
+| LVL | Post-engine track level, 000-100 |
+| REV | Send to the shared Clouds reverb, 000-100 |
+| DLY | Send to the shared ping-pong delay, 000-100 |
 | MUTE | Silence this track |
 | SOLO | Listen to this track alone |
 
@@ -128,11 +128,11 @@ The mixer is track-based. If a track changes instruments, its level and sends re
 Press **Select + Up** from Mixer to open the reverb settings screen
 
 - **Return**: wet reverb level in the master mix.
-- **Time**: decay/time control, `00–FF`.
-- **Damping**: high-frequency absorption, `00–FF`.
+- **Time**: decay/time control, `00-FF`.
+- **Damping**: high-frequency absorption, `00-FF`.
 - **Filter**: low-pass filter applied before the reverb.
 
-It is not the complete Clouds granular processor, only its meme lush reverb.
+This is the Clouds reverb section, not the complete Clouds granular processor.
 
 ### Ping-pong Delay
 
@@ -149,19 +149,19 @@ The first repeat alternates according to the stereo input and subsequent feedbac
 
 ### Song
 
-The Song screen contains eight columns, one per track. Each cell refers to a chain. The song can contain up to 256 rows (`00–FF`).
+The Song screen contains eight columns, one per track. Each cell refers to a chain. The song can contain up to 256 rows (`00-FF`).
 
 ### Chain
 
-A chain is an ordered list of phrases (a phrase is a 16 steps pattern) with optional transposition. Reusing a chain or phrase lets one edit repeated musical material once.
+A chain is an ordered list of 16-step phrases with optional transposition. Reusing a chain or phrase lets you edit repeated material in one place.
 
 ### Phrase
 
-That's what you'd call a track pattern in a traditional step sequencer.
+A phrase is the track pattern in a traditional step sequencer.
 
-A phrase has 16 rows (equivalent to your 16 steps). A  row contains a note, instrument and FX columns. Notes use tracker notation such as `C-4`; an empty note does not retrigger the voice. Instrument changes are allowed on every row and a track may alternate freely between AY, Braids, Plaits and Sample instruments. You can change the note lengh either by using the kill note FX, or by playing a subsequent note with an unset instrument.
+A phrase has 16 rows. Each row contains a note, an instrument and FX columns. Notes use tracker notation such as `C-4`; an empty note does not retrigger the voice. You can change instruments on any row and alternate between AY, Braids, Plaits and Sample instruments on the same track. Change note length with the kill-note FX, or play a following note with no instrument set.
 
-The FX selector only shows common FX plus the FX relevant to the instrument on that row. This prevents engine-specific commands from becoming one unmaintainable global list. Scroll down screen, we have more FXs than Chipnomad.
+The FX selector shows common commands plus those supported by the instrument on that row. This keeps engine-specific commands out of one long global list. ChooChooTracker supports more FX than ChipNomad.
 
 ## 7. Instruments
 
@@ -186,7 +186,7 @@ Braids provides 47 synthesis models. Its main controls are:
 
 Tap **Model** to choose from categorized model lists. **BITS**, **DRFT**, and **SIGN** are global Braids settings rather than instrument parameters. BITS reduces output resolution, DRFT adds oscillator pitch instability, and SIGN blends the original Braids waveform-imperfection algorithm. SIGN uses a stable character generated for this installation and stored in `settings.txt`.
 
-Braids terminology follows the original Mutable Instruments module: the audible result of Timbre and Color depends on the selected model. Refer ot the original Braids manual (available on Mutable's Github) for a list and details of all the models.
+Braids terminology follows the original Mutable Instruments module: the audible result of Timbre and Color depends on the selected model. Refer to the original Braids manual, available from Mutable Instruments, for the full model list and details.
 
 The model popup contains every model exactly once:
 
@@ -248,8 +248,8 @@ The clean Sample engine plays mono or stereo PCM independently of AY emulation.
 - Tap **Sample** to load an uncompressed 8-bit or 16-bit PCM WAV. Press **Play** in the browser to audition the highlighted file.
 - On the Sample instrument screen, use **Edit + Left/Right** to load the previous or next WAV in the same folder.
 - **Pitch** transposes by semitones (`-48` to `+48`).
-- **Start** and **End** set normalized playback boundaries (`00–FF`).
-- **Volume** is `00–FF`.
+- **Start** and **End** set normalized playback boundaries (`00-FF`).
+- **Volume** is `00-FF`.
 - The optional filter provides LP/BP/HP, 12/24 dB slope, cutoff and resonance. Resonance follows an exponential response, giving finer control before the high-Q end of its range.
 - The ADSR shapes amplitude.
 
@@ -257,11 +257,11 @@ Unsupported WAV formats display a longer error message. Convert unusual files to
 
 ## 8. Modulation, Tables, Groove and Wavetables
 
-Each instrument has four modulation slots. A slot can use ADSR, AHD or LFO behavior and targets a destination offered by that engine. Engine-specific destinations include Braids Timbre/Color, Plaits Harmonic/Timbre/Morph/Main-Aux and Sample playback/filter parameters. Generic destinations can modulate the track's Reverb/Delay sends or one of the four parameters of another modulation slot. Cross-modulation uses the source's previous tick and cannot target itself.
+Each instrument has four modulation slots. A slot can use ADSR, AHD or LFO behavior and targets a destination offered by that engine. The signed `Amt` is relative to the target's current value: positive values raise it and negative values lower it. Engine-specific destinations include Braids Timbre/Color, Plaits Harmonic/Timbre/Morph/Main-Aux and Sample playback/filter parameters. Generic destinations can modulate the track's Reverb/Delay sends or one of the four parameters of another modulation slot. Cross-modulation uses the source's previous tick and cannot target itself.
 
 Tap a destination to open the categorized selector. Synth macro parameters are shown as `000-1023`; this is a normalized interface range mapped to the engine's internal resolution. Instrument and send filters cover 20 Hz to 20 kHz on an exponential control curve.
 
-Tables are small per-instrument sequences that can automate commands over time. Groove defines tick lengths used by phrase rows. Wavetables are used by compatible AY software oscillator modes (these won't work with the Braids/Plaits wavetable modes. Maybe later? Open a github issue if you're into that)
+Tables are small per-instrument sequences that can automate commands over time. Groove defines tick lengths used by phrase rows. Wavetables are used by compatible AY software oscillator modes. They do not apply to the Braids or Plaits wavetable engines.
 
 ## 9. Tracker FX
 
@@ -306,7 +306,7 @@ Inspired by Swedish "trig conditions", the tracker supports trig probabilities a
 
 | FX | Value | Meaning |
 |---|---|---|
-| `PRO` | `00–64` | Absolute trigger probability from 0 to 100% |
+| `PRO` | `00-64` | Absolute trigger probability from 0 to 100% |
 | `MOD` | `AB` | Trigger on iteration A of B; for example `12`, `22`, `14`, `34` |
 
 `MOD` counters are local to the track and phrase. Invalid combinations, such as A greater than B, do not trigger.
@@ -315,25 +315,25 @@ Inspired by Swedish "trig conditions", the tracker supports trig probabilities a
 
 #### Playback speed
 
-Inspired by Nerdseq, we support individual playback speed per track
+Like Nerdseq, ChooChooTracker supports an independent playback speed for each track.
 
-| `SPD` | `00–10` | Persistent playback speed for this track |
+| `SPD` | `00-10` | Persistent playback speed for this track |
 
 `SPD` remains active until another `SPD` command changes it:
 
 | Value | Speed | Value | Speed |
 |---|---:|---|---:|
 | 00 | /7 | 09 | Normal |
-| 01 | /6 | 0A | ×2 |
-| 02 | /5 | 0B | ×4 |
-| 03 | /3 | 0C | ×8 |
-| 04 | /32 | 0D | ×3 |
-| 05 | /16 | 0E | ×5 |
-| 06 | /8 | 0F | ×6 |
-| 07 | /4 | 10 | ×7 |
+| 01 | /6 | 0A | x2 |
+| 02 | /5 | 0B | x4 |
+| 03 | /3 | 0C | x8 |
+| 04 | /32 | 0D | x3 |
+| 05 | /16 | 0E | x5 |
+| 06 | /8 | 0F | x6 |
+| 07 | /4 | 10 | x7 |
 | 08 | /2 | | |
 
-Very high multipliers can exceed the resolution of the current tracker tick scheduler and haven't been tested (yet).
+Very high multipliers can exceed the resolution of the tracker tick scheduler and have not been hardware-tested.
 
 ### Modulation FX
 
@@ -341,11 +341,11 @@ Phrase and table FX can change a modulation slot without editing the instrument:
 
 | FX pattern | Meaning |
 |---|---|
-| `M1A`, `M2A`, `M3A`, `M4A` | Relative Amount offset for modulation slot 1…4 |
-| `M11`, `M12`, `M13`, `M14` | Relative P1…P4 offsets for modulation slot 1 |
-| `M21`, `M22`, `M23`, `M24` | Relative P1…P4 offsets for modulation slot 2 |
-| `M31`, `M32`, `M33`, `M34` | Relative P1…P4 offsets for modulation slot 3 |
-| `M41`, `M42`, `M43`, `M44` | Relative P1…P4 offsets for modulation slot 4 |
+| `M1A`, `M2A`, `M3A`, `M4A` | Relative Amount offset for modulation slot 1...4 |
+| `M11`, `M12`, `M13`, `M14` | Relative P1...P4 offsets for modulation slot 1 |
+| `M21`, `M22`, `M23`, `M24` | Relative P1...P4 offsets for modulation slot 2 |
+| `M31`, `M32`, `M33`, `M34` | Relative P1...P4 offsets for modulation slot 3 |
+| `M41`, `M42`, `M43`, `M44` | Relative P1...P4 offsets for modulation slot 4 |
 
 The value is interpreted as a signed 8-bit relative change (`01` adds one, `FF` subtracts one). Repeated commands accumulate. Effective values are clamped to their valid range.
 
@@ -397,7 +397,7 @@ the sample.
 | `SLP` | `00-02` | Loop mode: Off, Loop, Ping-Pong |
 
 Sample modulation destinations also include `Speed` (relative, clamped to
-0–500%) and `Loop` (relative, clamped to the three loop modes).
+0-500%) and `Loop` (relative, clamped to the three loop modes).
 
 `SPD` is a persistent per-track clock ratio: `00` is normal speed, positive
 values accelerate (`01` = x2), and signed negative hex values slow down
@@ -406,10 +406,12 @@ values accelerate (`01` = x2), and signed negative hex values slow down
 ### Auto Mix
 
 The Mixer contains an `AUTO MIX` button. It renders six seconds offline,
-proposes conservative track-level changes to leave peak headroom, and starts a
-temporary preview. Apply keeps the proposed levels; Cancel restores the eight
-previous levels. It is a quick anti-clipping helper, not a replacement for a
-manual mix.
+balances track loudness, then checks eight octave bands against a pink-noise
+profile and gently lowers tracks feeding congested bands. It proposes
+conservative track-level changes to leave peak headroom and starts a temporary
+preview. Apply keeps the proposed levels; Cancel restores the eight previous
+levels. It is a quick anti-clipping helper. It does not replace a manual mix
+or per-track EQ.
 
 ### AY FX shared by AY instruments
 
@@ -457,7 +459,7 @@ AY Sample accepts the shared AY commands plus `TNN`, `TNP`, `TNF`, `TRT`, `SFN`,
 
 | FX | Value | Detailed behavior |
 |---|---|---|
-| `SMS` | `00-FF` | Sets legacy AY Sample playback start to `XX × 64` source samples. |
+| `SMS` | `00-FF` | Sets legacy AY Sample playback start to `XX x 64` source samples. |
 
 Engine parameter FX apply to their matching instrument type and are reset at the next note trigger unless stated otherwise. `SPD` is intentionally persistent.
 
@@ -468,8 +470,8 @@ The FX selector filters this reference to common commands plus the group support
 Project provides Load, Save, New, Export and Manage commands, plus filename, title and author metadata.
 
 - **Linear pitch** selects the pitch-table mode. **Off** is the default and the hardware-validated setting for correct AY, Braids and Plaits octave tracking.
-- **Tick rate** sets tracker timing and displays the corresponding BPM (`tick rate × 60 / 24`).
-- ChooChooTracker saves projects as `.cct`, our proprietary format that's not compatible with Chipnomad.
+- **Tick rate** sets tracker timing and displays the corresponding BPM (`tick rate x 60 / 24`).
+- ChooChooTracker saves projects as `.cct`. This format is not compatible with ChipNomad.
 
 Save before changing instrument types or loading another project.
 
@@ -480,7 +482,7 @@ Save before changing instrument types or loading another project.
 - **AY Quality** changes AY/YM emulation quality only.
 - **Sample dithering** controls AY Sample dithering only.
 - **Braids BITS / DRFT / SIGN** apply globally to every Braids instrument. Their behavior and saved installation character match the description in the Braids section.
-- **Key mapping**, **Load font**, and **Edit color theme** customize the interface. Should be compatible with Chipnomad font and themes.
+- **Key mapping**, **Load font**, and **Edit color theme** customize the interface. ChipNomad fonts and themes should work.
 - **Quit ChooChooTracker** exits cleanly.
 
 ## 12. Performance and troubleshooting
@@ -495,7 +497,7 @@ Check the instrument number, track mute/solo state, track LVL, application Mix v
 
 ### Wrong pitch
 
-Use tonal material and verify several octaves. Keep Linear pitch Off for the currently validated Braids behavior. Percussive or noisy Plaits engines are not suitable tuner references. Open a github issue if that's too weird.
+Use tonal material and check several octaves. Keep Linear pitch Off for the currently validated Braids behavior. Percussive and noisy Plaits engines are poor tuner references.
 
 ### Input feels wrong
 

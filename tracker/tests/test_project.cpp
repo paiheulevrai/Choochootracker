@@ -64,6 +64,16 @@ TEST_CASE_FIXTURE(ProjectFixture, "projectInit tables empty") {
     CHECK(tableIsEmpty(&p, i));
 }
 
+TEST_CASE("modulation destination limits match every engine's routing") {
+  CHECK(instrumentModDestinationMax(InstrumentType::AY1) == 22);
+  CHECK(instrumentModDestinationMax(InstrumentType::AY2) == 28);
+  CHECK(instrumentModDestinationMax(InstrumentType::AYSample) == 24);
+  CHECK(instrumentModDestinationMax(InstrumentType::Braids) == 24);
+  CHECK(instrumentModDestinationMax(InstrumentType::Sample) == 26);
+  CHECK(instrumentModDestinationMax(InstrumentType::Plaits) == 26);
+  CHECK(instrumentModDestinationMax(InstrumentType::PlaitsAlt) == 26);
+}
+
 // instrumentIsEmpty tests
 
 TEST_CASE_FIXTURE(ProjectFixture, "instrumentIsEmpty true for none") {

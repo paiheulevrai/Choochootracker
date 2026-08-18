@@ -60,7 +60,8 @@ static void drawStatic(void) {
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
-  if (p->envelopeMode != 0 && instrumentCommonDrawVoicePostCursor(col, row)) return;
+  if ((row != 9 || p->envelopeMode != 0) &&
+      instrumentCommonDrawVoicePostCursor(col, row)) return;
   else if (row == 3) gfxCursor(11, 6, 28);
   else gfxCursor(col ? 26 : 11, row + 4, col ? 8 : 7);
 }
@@ -68,7 +69,8 @@ static void drawCursor(int col, int row) {
 static void drawField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
-  if (p->envelopeMode != 0 && instrumentCommonDrawVoicePostField(col, row, state, p)) return;
+  if ((row != 9 || p->envelopeMode != 0) &&
+      instrumentCommonDrawVoicePostField(col, row, state, p)) return;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   if (row == 9) {
     uint8_t values[] = {p->attack, p->decay, p->sustain, p->release, p->envelopeShape};
@@ -94,7 +96,8 @@ static void drawField(int col, int row, CellState state) {
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
-  if (p->envelopeMode != 0 && ((row == 9) || (col && row >= 4 && row <= 8))) {
+  if ((p->envelopeMode != 0 && row == 9) ||
+      (col && row >= 4 && row <= 8)) {
     int handled = instrumentCommonOnEditVoicePost(col, row, action, p);
     if (handled) projectModified = 1;
     return handled;

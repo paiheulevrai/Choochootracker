@@ -188,21 +188,21 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
   switch (type) {
     case InstrumentType::AY1:
       return (InstrumentFunctions){
-        .modDestinationsCount = 5,
+        .modDestinationsCount = 4,
         .modName = modNameAY1,
         .init = initAY1Instrument,
         .free = freeAY1Instrument
       };
     case InstrumentType::AY2:
       return (InstrumentFunctions){
-        .modDestinationsCount = 8,
+        .modDestinationsCount = 10,
         .modName = modNameAY2,
         .init = initAY2Instrument,
         .free = freeAY2Instrument
       };
     case InstrumentType::AYSample:
       return (InstrumentFunctions){
-        .modDestinationsCount = 5,
+        .modDestinationsCount = 6,
         .modName = modNameAYSample,
         .init = initAYSampleInstrument,
         .free = freeAYSampleInstrument
@@ -223,14 +223,14 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
       };
     case InstrumentType::Plaits:
       return (InstrumentFunctions){
-        .modDestinationsCount = 10,
+        .modDestinationsCount = 8,
         .modName = modNamePlaits,
         .init = initPlaitsInstrument,
         .free = freePlaitsInstrument
       };
     case InstrumentType::PlaitsAlt:
       return (InstrumentFunctions){
-        .modDestinationsCount = 10,
+        .modDestinationsCount = 8,
         .modName = modNamePlaits,
         .init = initPlaitsAltInstrument,
         .free = freePlaitsInstrument

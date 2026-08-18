@@ -400,10 +400,20 @@ static float envelopeTime(uint8_t value) {
   return normalized * normalized * 5.0f;
 }
 
-static float autoMixRender(ChipNomadState* state, int seconds, float* rms) {
+enum { AUTO_MIX_BANDS = 8 };
+
+static float autoMixRender(ChipNomadState* state, int seconds, float* rms,
+                           float bandRms[AUTO_MIX_BANDS]) {
   const int frames = 1024;
   float buffer[frames * 2];
   double energy = 0.0;
+  double bandEnergy[AUTO_MIX_BANDS] = {};
+  float lowPass[AUTO_MIX_BANDS - 1] = {};
+  float coefficients[AUTO_MIX_BANDS - 1];
+  for (int band = 0; band < AUTO_MIX_BANDS - 1; ++band) {
+    float cutoff = 80.0f * (1 << band);
+    coefficients[band] = 1.0f - expf(-2.0f * 3.141592653589793f * cutoff / state->sampleRate);
+  }
   int rendered = 0;
   float peak = 0.0f;
   playbackStartSong(&state->playbackState, 0, 0, 0);
@@ -415,9 +425,25 @@ static float autoMixRender(ChipNomadState* state, int seconds, float* rms) {
       energy += value * value;
       if (fabsf(value) > peak) peak = fabsf(value);
     }
+    for (int frame = 0; frame < count; ++frame) {
+      float value = (buffer[frame * 2] + buffer[frame * 2 + 1]) * 0.5f;
+      float previous = value;
+      for (int band = 0; band < AUTO_MIX_BANDS - 1; ++band) {
+        lowPass[band] += coefficients[band] * (value - lowPass[band]);
+        float filtered = lowPass[band] - (band ? lowPass[band - 1] : 0.0f);
+        bandEnergy[band] += filtered * filtered;
+        previous = lowPass[band];
+      }
+      float high = value - previous;
+      bandEnergy[AUTO_MIX_BANDS - 1] += high * high;
+    }
     rendered += count;
   }
   if (rms) *rms = rendered ? sqrtf((float)(energy / (rendered * 2))) : 0.0f;
+  if (bandRms) {
+    for (int band = 0; band < AUTO_MIX_BANDS; ++band)
+      bandRms[band] = rendered ? sqrtf((float)(bandEnergy[band] / rendered)) : 0.0f;
+  }
   return peak;
 }
 
@@ -432,24 +458,56 @@ int chipnomadAutoMix(ChipNomadState* state, int seconds, uint8_t proposed[PROJEC
   chipnomadInitChips(analysis, 48000, NULL);
 
   float rms[PROJECT_MAX_TRACKS] = {};
+  float trackBands[PROJECT_MAX_TRACKS][AUTO_MIX_BANDS] = {};
   float sumLog = 0.0f;
   int active = 0;
   for (int track = 0; track < analysis->project.tracksCount; ++track) {
     for (int i = 0; i < PROJECT_MAX_TRACKS; ++i) analysis->playbackState.trackEnabled[i] = i == track;
-    autoMixRender(analysis, seconds, &rms[track]);
+    autoMixRender(analysis, seconds, &rms[track], trackBands[track]);
     if (rms[track] > 0.0001f) { sumLog += logf(rms[track]); active++; }
   }
   if (!active) { chipnomadDestroy(analysis); return 1; }
   float target = expf(sumLog / active);
+  float trackGain[PROJECT_MAX_TRACKS] = {};
   for (int i = 0; i < analysis->project.tracksCount; ++i) {
     if (rms[i] <= 0.0001f) continue;
     float ratio = sqrtf(target / rms[i]); // Keep musical differences while correcting extremes.
     ratio = fminf(2.0f, fmaxf(0.25f, ratio));
     analysis->project.trackVolume[i] = (uint8_t)fminf(100.0f,
       state->project.trackVolume[i] * ratio + 0.5f);
+    trackGain[i] = analysis->project.trackVolume[i] /
+      (float)state->project.trackVolume[i];
   }
   for (int i = 0; i < PROJECT_MAX_TRACKS; ++i) analysis->playbackState.trackEnabled[i] = 1;
-  float peak = autoMixRender(analysis, seconds, NULL);
+  float mixBands[AUTO_MIX_BANDS] = {};
+  autoMixRender(analysis, seconds, NULL, mixBands);
+
+  // Pink noise has comparable energy in each octave. Attenuate only tracks
+  // that materially contribute to octaves above the mix's geometric mean.
+  float sumLogBands = 0.0f;
+  int activeBands = 0;
+  for (int band = 0; band < AUTO_MIX_BANDS; ++band) {
+    if (mixBands[band] > 0.0001f) { sumLogBands += logf(mixBands[band]); activeBands++; }
+  }
+  if (activeBands) {
+    float pinkTarget = expf(sumLogBands / activeBands);
+    for (int track = 0; track < analysis->project.tracksCount; ++track) {
+      if (!trackGain[track]) continue;
+      float masking = 0.0f;
+      for (int band = 0; band < AUTO_MIX_BANDS; ++band) {
+        if (mixBands[band] <= pinkTarget) continue;
+        float contribution = trackBands[track][band] * trackGain[track] / mixBands[band];
+        masking += contribution * contribution * logf(mixBands[band] / pinkTarget);
+      }
+      float correction = fmaxf(0.85f, expf(-0.5f * masking));
+      float volume = analysis->project.trackVolume[track] * correction;
+      volume = fmaxf(state->project.trackVolume[track] * 0.25f,
+        fminf(state->project.trackVolume[track] * 2.0f, volume));
+      analysis->project.trackVolume[track] = (uint8_t)fminf(100.0f, volume + 0.5f);
+    }
+  }
+
+  float peak = autoMixRender(analysis, seconds, NULL, NULL);
   float safety = peak > 0.89f ? 0.89f / peak : 1.0f;
   for (int i = 0; i < state->project.tracksCount; ++i) {
     proposed[i] = (uint8_t)(analysis->project.trackVolume[i] * safety + 0.5f);
