@@ -21,7 +21,7 @@ SOURCES := $(filter-out platforms/sdl2/corelib_mainloop.cpp,$(SOURCES)) \
 web:
 	@mkdir -p $(WEB_BUILD)
 	em++ $(WEB_CFLAGS) $(SOURCES) $(WEB_LDFLAGS) -o $(WEB_BUILD)/choochootracker.html \
-		-sASSERTIONS=1 -sSTACK_SIZE=1048576 -sGL_ASSERTIONS=1
+	-sASSERTIONS=1 -sSTACK_SIZE=8388608 -sGL_ASSERTIONS=1
 	@cp ../web/index.html $(WEB_BUILD)/index.html
 
 web-deploy: web
