@@ -183,6 +183,36 @@ static int freeSampleInstrument(Instrument* instrument) {
   return 0;
 }
 
+static const char* modNameSCWF(int modIndex) {
+  static const char *names[] = {"Off", "Volume", "Pitch", "Detune", "Mix", "Cutoff", "Reso"};
+  return names[modIndex];
+}
+
+static int initSCWFInstrument(Instrument* instrument) {
+  initCommon(instrument);
+  instrument->type = InstrumentType::SCWF;
+  instrument->chip.scwf.mix = 128;
+  initVoicePostSettings(&instrument->chip.scwf);
+  return 0;
+}
+
+static int freeSCWFInstrument(Instrument* instrument) {
+  free(instrument->chip.scwf.oscillator[0].data);
+  free(instrument->chip.scwf.oscillator[1].data);
+  freeCommon(instrument);
+  return 0;
+}
+
+static int initBYOWTBLInstrument(Instrument* instrument) {
+  initSCWFInstrument(instrument);
+  instrument->type = InstrumentType::BYOWTBL;
+  return 0;
+}
+
+static int freeBYOWTBLInstrument(Instrument* instrument) {
+  return freeSCWFInstrument(instrument);
+}
+
 // Get function pointers for instrument type
 InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
   switch (type) {
@@ -220,6 +250,20 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
         .modName = modNameSample,
         .init = initSampleInstrument,
         .free = freeSampleInstrument
+      };
+    case InstrumentType::SCWF:
+      return (InstrumentFunctions){
+        .modDestinationsCount = 6,
+        .modName = modNameSCWF,
+        .init = initSCWFInstrument,
+        .free = freeSCWFInstrument
+      };
+    case InstrumentType::BYOWTBL:
+      return (InstrumentFunctions){
+        .modDestinationsCount = 6,
+        .modName = modNameSCWF,
+        .init = initBYOWTBLInstrument,
+        .free = freeBYOWTBLInstrument
       };
     case InstrumentType::Plaits:
       return (InstrumentFunctions){

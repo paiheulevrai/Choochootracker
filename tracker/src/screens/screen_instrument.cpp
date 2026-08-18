@@ -33,10 +33,12 @@ static const SelectionItem instrumentTypeSynth[] = {
 };
 static const SelectionItem instrumentTypeSample[] = {
   {"PCM Sample", (int)InstrumentType::Sample, NULL, 0},
+  {"2xSCWF", (int)InstrumentType::SCWF, NULL, 0},
+  {"BYOWTBL", (int)InstrumentType::BYOWTBL, NULL, 0},
 };
 static const SelectionItem instrumentTypeCategories[] = {
   {"CHIP", -1, instrumentTypeChip, 3},
-  {"SAMPLE", -1, instrumentTypeSample, 1},
+  {"SAMPLE", -1, instrumentTypeSample, 3},
   {"SYNTH", -1, instrumentTypeSynth, 3},
 };
 
@@ -207,6 +209,8 @@ static ScreenData* instrumentScreen(void) {
     case InstrumentType::AYSample:    data = &screenInstrumentAYSample; break;
     case InstrumentType::Braids:      data = &screenInstrumentBraids; break;
     case InstrumentType::Sample:      data = &screenInstrumentSample; break;
+    case InstrumentType::SCWF:        data = &screenInstrumentSCWF; break;
+    case InstrumentType::BYOWTBL:     data = &screenInstrumentBYOWTBL; break;
     case InstrumentType::Plaits:      data = &screenInstrumentPlaits; break;
     case InstrumentType::PlaitsAlt:   data = &screenInstrumentPlaits; break;
     default: break;

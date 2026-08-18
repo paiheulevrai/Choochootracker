@@ -24,14 +24,14 @@
      CAHORS                                       MONTAUBAN
           >>>  8 TRACKS / 96 kHz / CHIPNOMAD-BASED  >>>
 
-     .oO[ AY / BRAIDS / PLAITS / PCM SAMPLES / FX SENDS ]Oo.
+.oO[ AY / BRAIDS / PLAITS / PCM SAMPLES / SCWF/ WAVETABLES ]Oo.
 ````
 
 ChooChooTracker is a music tracker for handheld consoles.
 
 Write a beat on the train, automate a weird little synth line, send it through reverb, then keep going until you miss your stop.
 
-This is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with A LOT of extra synth engines, high quality PCM samples playback, global reverb/delay, and some other small changes. It keeps ChipNomad's supafast LSDJ-inspired tracker workflow but departs from the chiptune-only vision of Megus to offer a metric ton of modern sound design options. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
+This is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with A LOT of extra synth engines, high quality PCM samples / SCWF / Serum wavetables playback, global reverb/delay, and some other small changes. It keeps ChipNomad's supafast LSDJ-inspired tracker workflow but departs from the chiptune-only vision of Megus to offer a metric ton of modern sound design options. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
 
 The main target is the Anbernic RG353V through PortMaster. 
 A native Windows build is available for development and desktop testing.
@@ -45,14 +45,16 @@ It should work on any Portmaster capable system, and should also compile on Andr
 - AY Classic, AY Plus, and crunchy AY Sample playback (from Chipnomad)
 - All 47 Braids engines, 24 stock Plaits engines, and 24 additional Plaits-Alt engines
 - Clean mono or stereo PCM8/PCM16 sample playback (one-shot samples, like your Digitakt)
+- Dual single cycle waveform oscillator: with mix & detune
+- Dual wavetable oscillator: bring your own Serum wavetables !
 - Multimode LP/HP/BP 12/24dB filter for all new synth/sample engines
 - Per-track volume, mute, solo, Reverb send, and Delay send
 - Mutable Instruments Clouds meme lush reverb
 - Tick-synchronized filtered ping-pong delay
 - Three tracker FX columns per row
 - Added tracker FX inspired by Elektron and Nerdseq: Probability, modulo conditions, and per-track invididual playback speed
-- Synth engines parameters can be set by FX, kinda like P-locks.
-- Modulation per track: ADSR, AHD, 2x LFO. Modulations can target modulations.
+- Synth engines parameters can be set by TrackFX, kinda like P-locks.
+- 4x mod sources per track: ADSR, AHD, LFO. Modulations can target modulations.
 - Tracker tables, grooves, chains, and songs
 
 ## One tracker, very different voices
@@ -94,9 +96,9 @@ This is an early test build. Save often and don't get too attached to your proje
 
 ## Current limits
 
-- Braids, Plaits, Plaits-alt, Samples, track FX, mixer and sends: working or it seems.
+- Everything: working or it seems.
 - there may still be some crashes and bugs
-- Visual identity will be finalized later, after functional stabilization.
+- Visual identity will be finalized once bugs become so rare you collect them.
 
 ## Why the train name?
 

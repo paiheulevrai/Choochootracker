@@ -19,6 +19,8 @@ enum class InstrumentType : uint8_t {
   Sample = 5,
   Plaits = 6,
   PlaitsAlt = 7,
+  SCWF = 8,
+  BYOWTBL = 9,
   totalCount,
 };
 
@@ -179,12 +181,29 @@ struct InstrumentSample : InstrumentVoicePostSettings {
   uint8_t loopMode; // 0: off, 1: loop, 2: ping-pong
 };
 
+// 2xSCWF is a pair of forward-looping, one-cycle PCM waveforms.  It shares
+// the sample loader and post-processing settings, but is a synthesizer voice,
+// not a sample-playback mode.
+struct InstrumentSCWF : InstrumentVoicePostSettings {
+  InstrumentSample oscillator[2];
+  uint8_t detune;
+  uint8_t mix;
+};
+
+struct InstrumentBYOWTBL : InstrumentSCWF {
+  uint16_t frameSize[2];
+  uint16_t tableFrames[2];
+  uint8_t frameIndex[2];
+};
+
 union InstrumentChipData {
   InstrumentAY1 ay;
   InstrumentAY2 ay2;
   InstrumentAYSample aySample;
   InstrumentBraids braids;
   InstrumentSample sample;
+  InstrumentSCWF scwf;
+  InstrumentBYOWTBL byowtbl;
   InstrumentPlaits plaits;
 };
 

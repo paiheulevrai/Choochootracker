@@ -318,6 +318,10 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     case fxSRS: snprintf(buffer, bufferSize, "Sample resonance %hhu", fx[1]); break;
     case fxSSP: snprintf(buffer, bufferSize, "Sample speed %hhu", fx[1]); break;
     case fxSLP: snprintf(buffer, bufferSize, "Sample loop mode %hhu", fx[1]); break;
+    case fxSDT: snprintf(buffer, bufferSize, "2xSCWF detune %hhu", fx[1]); break;
+    case fxSMX: snprintf(buffer, bufferSize, "2xSCWF oscillator mix %hhu", fx[1]); break;
+    case fxSCF2: snprintf(buffer, bufferSize, "2xSCWF cutoff %hhu", fx[1]); break;
+    case fxSRS2: snprintf(buffer, bufferSize, "2xSCWF resonance %hhu", fx[1]); break;
     case fxPRO: snprintf(buffer, bufferSize, "Probability %hhu%%", fx[1] > 100 ? 100 : fx[1]); break;
     case fxMOD: snprintf(buffer, bufferSize, "Modulo %hhu:%hhu", fx[1] >> 4, fx[1] & 15); break;
     case fxSPD: snprintf(buffer, bufferSize, "Track clock mode %02hX", fx[1]); break;

@@ -8,6 +8,7 @@
 
 class BraidsVoice;
 class SampleVoice;
+class SCWFVoice;
 class PlaitsVoice;
 class PlaitsAltVoice;
 
@@ -47,6 +48,7 @@ struct ChipNomadState {
   int aySampleDithering;
   BraidsVoice* braidsVoices[PROJECT_MAX_TRACKS];
   SampleVoice* sampleVoices[PROJECT_MAX_TRACKS];
+  SCWFVoice* scwfVoices[PROJECT_MAX_TRACKS];
   PlaitsVoice* plaitsVoices[PROJECT_MAX_TRACKS];
   PlaitsAltVoice* plaitsAltVoices[PROJECT_MAX_TRACKS];
   VoiceMonitor voiceMonitors[PROJECT_MAX_TRACKS];

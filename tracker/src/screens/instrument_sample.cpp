@@ -23,6 +23,7 @@ static void onSampleLoaded(const char* path) {
   audioManager.stopSamplePreview();
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
   char error[64];
+  audioManager.pause();
   if (sampleLoadWav16(path, &instrument->chip.sample, error, sizeof(error))) {
     screenMessage(MESSAGE_TIME * 3, "%s", error);
   } else {
@@ -46,6 +47,7 @@ static void onSampleLoaded(const char* path) {
       (unsigned long)instrument->chip.sample.frameCount,
       (unsigned long)instrument->chip.sample.sampleRate);
   }
+  audioManager.resume();
   screenSetup(&screenInstrument, cInstrument);
 }
 
@@ -77,6 +79,12 @@ static const char* sampleFilename(const char* path) {
   return separator ? separator + 1 : path;
 }
 
+static const char* shortSampleFilename(const char* path, size_t maxLength) {
+  const char* name = sampleFilename(path);
+  size_t length = strlen(name);
+  return length > maxLength ? name + length - maxLength : name;
+}
+
 static void drawField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
   InstrumentSample* sample = &chipnomadState->project.instruments[cInstrument].chip.sample;
@@ -84,7 +92,7 @@ static void drawField(int col, int row, CellState state) {
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   if (row == 3) gfxClearRect(11,6,29,1); else gfxClearRect(col?26:11,row+4,col?8:7,1);
   switch (row) {
-    case 3: gfxPrintf(11,6,"Load %s",sampleFilename(sample->path)); break;
+    case 3: gfxPrint(11,6,sample->path[0] ? shortSampleFilename(sample->path, 28) : "Load"); break;
     case 4: if(!col) gfxPrintf(11,8,"%+d st",sample->pitch); break;
     case 5: if(!col) gfxPrint(11,9,byteToHex(sample->start)); break;
     case 6: if(!col) gfxPrint(11,10,byteToHex(sample->end)); break;

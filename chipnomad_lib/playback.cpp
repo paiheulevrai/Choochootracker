@@ -660,6 +660,8 @@ static void handleInstrument(PlaybackState* state, int trackIdx) {
   case InstrumentType::Plaits:
   case InstrumentType::PlaitsAlt:
   case InstrumentType::Sample:
+  case InstrumentType::SCWF:
+  case InstrumentType::BYOWTBL:
     break;
   case InstrumentType::none:
     break;

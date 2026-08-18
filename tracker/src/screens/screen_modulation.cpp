@@ -48,6 +48,7 @@ static SelectionItem engineDestinations[32];
 static SelectionItem sendDestinations[2];
 static SelectionItem parameterDestinations[16];
 static int editedModIndex;
+static int destinationButtonDown;
 
 static void destinationSelected(int value) {
   chipnomadState->project.instruments[cInstrument].modulation[editedModIndex].destination = value;
@@ -89,6 +90,7 @@ static void drawColHeader(int col, CellState state);
 static void drawField(int col, int row, CellState state);
 static int onEdit(int col, int row, CellEditAction action);
 static int isCellValid(int col, int row);
+static int onInput(int isKeyDown, int keys, int tapCount);
 
 // ScreenData definition
 static ScreenData screenData = {
@@ -110,7 +112,7 @@ static ScreenData screenData = {
   .drawColHeader = drawColHeader,
   .drawField = drawField,
   .onEdit = onEdit,
-  .onInput = NULL,
+  .onInput = onInput,
   .onRawInput = NULL,
   .isCellValid = isCellValid,
   .getLoopRange = NULL,
@@ -408,6 +410,30 @@ static void fullRedraw(void) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  if (getModRow(screenData.cursorRow) == 1) {
+    Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
+    Modulation* mod = &instrument->modulation[getModIndex(screenData.cursorCol, screenData.cursorRow)];
+    if (isKeyDown && keys == keyEdit) {
+      destinationButtonDown = 1;
+      return 1;
+    }
+    if (isKeyDown && (keys == (keyEdit | keyLeft) || keys == (keyEdit | keyRight))) {
+      int maximum = instrumentModDestinationMax(instrument->type);
+      if (keys == (keyEdit | keyRight)) mod->destination = mod->destination >= maximum ? 0 : mod->destination + 1;
+      else mod->destination = mod->destination == 0 ? maximum : mod->destination - 1;
+      destinationButtonDown = 0;
+      projectModified = 1;
+      drawField(screenData.cursorCol, screenData.cursorRow, CellState::focus);
+      return 1;
+    }
+    if (!isKeyDown && keys == 0 && destinationButtonDown) {
+      destinationButtonDown = 0;
+      openDestinationPopup(getModIndex(screenData.cursorCol, screenData.cursorRow));
+      return 1;
+    }
+  } else {
+    destinationButtonDown = 0;
+  }
   if (keys == 0) {
     playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
   }

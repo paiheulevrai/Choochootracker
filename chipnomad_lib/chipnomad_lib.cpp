@@ -2,6 +2,7 @@
 #include "playback.h"
 #include "synth/braids_voice.h"
 #include "synth/sample_voice.h"
+#include "synth/scwf_voice.h"
 #undef LUT_FM_FREQUENCY_QUANTIZER
 #undef LUT_FM_FREQUENCY_QUANTIZER_SIZE
 #include "synth/plaits_voice.h"
@@ -15,6 +16,7 @@
 static void detectAYPitchConflicts(ChipNomadState* state);
 static void updateBraidsVoices(ChipNomadState* state);
 static void updateSampleVoices(ChipNomadState* state);
+static void updateSCWFVoices(ChipNomadState* state);
 static void updatePlaitsVoices(ChipNomadState* state);
 static void updatePlaitsAltVoices(ChipNomadState* state);
 static void applyVoiceEvents(ChipNomadState* state);
@@ -133,6 +135,8 @@ ChipNomadState* chipnomadCreate(void) {
     state->braidsVoices[i]->init();
     state->sampleVoices[i] = new SampleVoice();
     state->sampleVoices[i]->init(96000.0f);
+    state->scwfVoices[i] = new SCWFVoice();
+    state->scwfVoices[i]->init(96000.0f);
     state->plaitsVoices[i] = new PlaitsVoice();
     state->plaitsVoices[i]->init(96000.0f);
     state->plaitsAltVoices[i] = new PlaitsAltVoice();
@@ -156,6 +160,7 @@ void chipnomadDestroy(ChipNomadState* state) {
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
     delete state->braidsVoices[i];
     delete state->sampleVoices[i];
+    delete state->scwfVoices[i];
     delete state->plaitsVoices[i];
     delete state->plaitsAltVoices[i];
   }
@@ -188,6 +193,7 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
   state->masterEffects->init((float)sampleRate);
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
     state->sampleVoices[i]->init((float)sampleRate);
+    state->scwfVoices[i]->init((float)sampleRate);
     state->plaitsVoices[i]->init((float)sampleRate);
     state->plaitsAltVoices[i]->init((float)sampleRate);
   }
@@ -212,6 +218,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
       state->frameSampleCounter += state->sampleRate / state->project.tickRate;
       allTracksStopped = playbackNextFrame(state);
       updateSampleVoices(state);
+      updateSCWFVoices(state);
       updateBraidsVoices(state);
       updatePlaitsVoices(state);
       updatePlaitsAltVoices(state);
@@ -313,6 +320,25 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
         mixTrackSample(state, trackIdx, &buffer[bufferOffset + i],
           &state->reverbBuffer[i], &state->delayBuffer[i], sample,
           reverbSend, delaySend);
+      }
+    }
+
+    // Plaits runs at its native 48 kHz and is interpolated to the output rate.
+    // 2xSCWF is a clean stereo oscillator voice with the same post path as Sample.
+    for (int trackIdx = 0; trackIdx < state->project.tracksCount; trackIdx++) {
+      if (!state->playbackState.trackEnabled[trackIdx]) continue;
+      SCWFVoice* voice = state->scwfVoices[trackIdx];
+      if (!voice->active()) continue;
+      voice->render(state->mixBuffer, samplesToRender);
+      captureVoiceMonitor(state, trackIdx, state->mixBuffer, samplesToRender, 2,
+                          voice->envelopeLevel());
+      float trackGain = state->project.trackVolume[trackIdx] / 100.0f;
+      float reverbSend = effectiveTrackSend(state, trackIdx, true);
+      float delaySend = effectiveTrackSend(state, trackIdx, false);
+      for (int i = 0; i < samplesToRender * 2; ++i) {
+        float sample = state->mixBuffer[i] * trackGain;
+        mixTrackSample(state, trackIdx, &buffer[bufferOffset + i],
+          &state->reverbBuffer[i], &state->delayBuffer[i], sample, reverbSend, delaySend);
       }
     }
 
@@ -529,6 +555,12 @@ static void applyVoiceEvents(ChipNomadState* state) {
         else if (track->note.noteTriggered) state->sampleVoices[trackIdx]->noteOn();
         else state->sampleVoices[trackIdx]->noteOff();
         break;
+      case InstrumentType::SCWF:
+      case InstrumentType::BYOWTBL:
+        if (track->note.noteKilled) state->scwfVoices[trackIdx]->kill();
+        else if (track->note.noteTriggered) state->scwfVoices[trackIdx]->noteOn();
+        else state->scwfVoices[trackIdx]->noteOff();
+        break;
       case InstrumentType::Braids:
         if (track->note.noteKilled) state->braidsVoices[trackIdx]->kill();
         else if (track->note.noteTriggered) state->braidsVoices[trackIdx]->noteOn();
@@ -629,6 +661,59 @@ static void updateSampleVoices(ChipNomadState* state) {
     resonance = clampInt(resonance, 0, 255);
     voice->configure(sample, (float)pitchCents, gain, (float)speedPercent, start, end, (uint8_t)loopMode,
                      (uint16_t)cutoff, (uint8_t)resonance);
+  }
+}
+
+static void updateSCWFVoices(ChipNomadState* state) {
+  Project* project = &state->project;
+  PlaybackState* playback = &state->playbackState;
+  for (int trackIdx = 0; trackIdx < project->tracksCount; ++trackIdx) {
+    PlaybackTrackState* track = &playback->tracks[trackIdx];
+    SCWFVoice* voice = state->scwfVoices[trackIdx];
+    if (track->note.instrument == EMPTY_VALUE_8 ||
+        (project->instruments[track->note.instrument].type != InstrumentType::SCWF &&
+         project->instruments[track->note.instrument].type != InstrumentType::BYOWTBL)) {
+      voice->kill();
+      continue;
+    }
+    Instrument* instrument = &project->instruments[track->note.instrument];
+    InstrumentSCWF* scwf = &instrument->chip.scwf;
+    InstrumentBYOWTBL* byowtbl = &instrument->chip.byowtbl;
+    int detune = scwf->detune;
+    int mix = scwf->mix;
+    int cutoff = scwf->filterCutoffHz;
+    int resonance = scwf->filterResonance;
+    int pitchModulation = 0;
+    float gain = instrument->volume / 255.0f;
+    if (track->note.fx[fxSDT].isOn) detune = track->note.fx[fxSDT].fxValue;
+    if (track->note.fx[fxSMX].isOn) mix = track->note.fx[fxSMX].fxValue;
+    if (track->note.fx[fxSCF2].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxSCF2].fxValue);
+    if (track->note.fx[fxSRS2].isOn) resonance = track->note.fx[fxSRS2].fxValue;
+    for (int i = 0; i < 4; ++i) {
+      PlaybackModState* mod = &track->note.modulation[i];
+      if (!mod->modulation) continue;
+      int value = playbackModScaleToRange(mod->outValue, 255);
+      switch (mod->modulation->destination) {
+        case 1: gain = mod->modulation->type == ModulationType::LFO ? gain + value / 255.0f : value / 255.0f; break;
+        case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
+        case 3: detune += value; break;
+        case 4: mix += value; break;
+        case 5: cutoff += playbackModScaleToRange(mod->outValue, 20000); break;
+        case 6: resonance += value; break;
+      }
+    }
+    int cents = track->note.pitchFinal == EMPTY_VALUE_8 ? 6000 :
+      (project->linearPitch ? project->pitchTable.values[track->note.pitchFinal]
+                            : (track->note.pitchFinal + 12) * 100) +
+      track->note.fineOffset + pitchModulation;
+    detune = clampInt(detune, 0, SCWF_DETUNE_MAX);
+    mix = clampInt(mix, 0, 255);
+    cutoff = clampInt(cutoff, 20, 20000);
+    resonance = clampInt(resonance, 0, 255);
+    voice->configure(scwf, (float)cents, gain, scwfDetuneCents((uint8_t)detune), (uint8_t)mix,
+                     (uint16_t)cutoff, (uint8_t)resonance,
+                     instrument->type == InstrumentType::BYOWTBL ? byowtbl->frameSize : NULL,
+                     instrument->type == InstrumentType::BYOWTBL ? byowtbl->frameIndex : NULL);
   }
 }
 

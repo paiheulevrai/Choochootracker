@@ -4,6 +4,34 @@ ChooChooTracker is an eight-track music tracker for small screens and handheld c
 
 This manual describes the current development build. Features marked as requiring hardware validation should be tested on the target ArkOS/PortMaster console before live use.
 
+## 2xSCWF
+
+2xSCWF is a dual single-cycle waveform synthesizer in the SAMPLE instrument
+category. Load one mono WAV containing exactly one period into each oscillator;
+both oscillators always read forward and wrap at the end of their cycle. Mix
+crossfades A and B. Detune is fine and exponential from unison through +200 ct,
+then advances in semitone steps from +3 st to +24 st.
+
+This differs fundamentally from PCM Sample. PCM Sample transposes a recording
+by changing its playback speed. 2xSCWF treats each file as a one-cycle table:
+the table is traversed once per oscillator cycle, so A4 traverses it exactly
+440 times per second regardless of the WAV file's recorded sample rate.
+
+The factory waveforms/AKWF/ folder contains 50 CC0 Adventure Kid Waveforms.
+SDT overrides Detune, SMX overrides Mix, SCF overrides filter cutoff, and SRS
+overrides filter resonance for a step. Modulation targets are Volume, Pitch,
+Detune, Mix, Cutoff and Reso.
+
+## BYOWTBL
+
+BYOWTBL is the dual wavetable counterpart to 2xSCWF. Each oscillator loads a
+mono Serum-compatible or WaveEdit WAV containing consecutive single-cycle
+frames. `Pos A` and `Pos B` independently scan their tables from `00` to `FF`;
+the engine linearly interpolates both within a frame and between adjacent
+frames. `Mix` crossfades the oscillators and `Detune` offsets oscillator B.
+The initial version deliberately has no mipmaps, so bright tables can alias at
+high notes.
+
 ChooChooTracker is based on ChipNomad and includes Mutable Instruments Braids and Plaits engines. Their manuals remain the best source for model-specific synthesis details.
 
 ## 1. Installation and files

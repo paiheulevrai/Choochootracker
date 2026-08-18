@@ -3,10 +3,10 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdarg.h>
-#include <errno.h>
 #include "project.h"
 #include "project_io_common.h"
 #include "synth/sample_voice.h"
+#include "synth/wavetable_loader.h"
 #include "utils.h"
 
 // Shared state
@@ -909,15 +909,34 @@ static void projectLoadRelativeSamples(Project* project, const char* projectPath
 
   size_t directoryLength = (size_t)(slash - projectPath + 1);
   for (int i = 0; i < PROJECT_MAX_INSTRUMENTS; ++i) {
-    InstrumentSample* sample = &project->instruments[i].chip.sample;
-    if (project->instruments[i].type != InstrumentType::Sample || sample->data ||
-        !sample->path[0] || pathIsAbsolute(sample->path)) continue;
-    char fullPath[1024];
-    if (directoryLength + strlen(sample->path) >= sizeof(fullPath)) continue;
-    memcpy(fullPath, projectPath, directoryLength);
-    strcpy(fullPath + directoryLength, sample->path);
-    char error[64];
-    sampleLoadWav16(fullPath, sample, error, sizeof(error));
+    Instrument* instrument = &project->instruments[i];
+    InstrumentSample* samples[2] = {NULL, NULL};
+    int count = 0;
+    if (instrument->type == InstrumentType::Sample) {
+      samples[count++] = &instrument->chip.sample;
+    } else if (instrument->type == InstrumentType::SCWF) {
+      samples[count++] = &instrument->chip.scwf.oscillator[0];
+      samples[count++] = &instrument->chip.scwf.oscillator[1];
+    } else if (instrument->type == InstrumentType::BYOWTBL) {
+      samples[count++] = &instrument->chip.byowtbl.oscillator[0];
+      samples[count++] = &instrument->chip.byowtbl.oscillator[1];
+    }
+    for (int j = 0; j < count; ++j) {
+      InstrumentSample* sample = samples[j];
+      if (sample->data || !sample->path[0] || pathIsAbsolute(sample->path)) continue;
+      char fullPath[1024];
+      if (directoryLength + strlen(sample->path) >= sizeof(fullPath)) continue;
+      memcpy(fullPath, projectPath, directoryLength);
+      strcpy(fullPath + directoryLength, sample->path);
+      char error[64];
+      if (instrument->type == InstrumentType::BYOWTBL) {
+        int index = sample == &instrument->chip.byowtbl.oscillator[1];
+        wavetableLoadWav(fullPath, sample, &instrument->chip.byowtbl.frameSize[index],
+                         &instrument->chip.byowtbl.tableFrames[index], error, sizeof(error));
+      } else {
+        sampleLoadWav16(fullPath, sample, error, sizeof(error));
+      }
+    }
   }
 }
 
@@ -925,54 +944,14 @@ int projectLoad(Project* p, const char* path) {
   projectFileError[0] = 0;
   resetPeekConsume();  // Ensure clean state
 
-  if (!path || !path[0]) {
-    snprintf(projectFileError, 40, "Invalid path");
-    return 1;
-  }
-
-#ifdef WEB_BUILD
-  /* Debug: announce load attempt and file size to stderr (visible in browser console) */
-  {
-    FILE* tf = fopen(path, "rb");
-    if (tf) {
-      fseek(tf, 0, SEEK_END);
-      long sz = ftell(tf);
-      fclose(tf);
-      fprintf(stderr, "projectLoad: opening '%s' (size=%ld)\n", path, sz);
-    } else {
-      fprintf(stderr, "projectLoad: opening '%s' (file not found)\n", path);
-    }
-  }
-#endif
-
   FILE* file = fopen(path, "rb");
   if (file == NULL) {
-    /* Create a short, safe path representation for the error buffer */
-    char shortPath[32];
-    size_t plen = strlen(path);
-    if (plen < sizeof(shortPath) - 1) {
-      strncpy(shortPath, path, sizeof(shortPath) - 1);
-      shortPath[sizeof(shortPath) - 1] = '\0';
-    } else {
-      /* Keep the tail of the path for readability */
-      strncpy(shortPath, path + plen - (sizeof(shortPath) - 5), sizeof(shortPath) - 5);
-      shortPath[0] = '.'; shortPath[1] = '.'; shortPath[2] = '.';
-      shortPath[sizeof(shortPath) - 1] = '\0';
-    }
-    const char* errstr = strerror(errno);
-    /* Truncate message if necessary - snprintf will handle truncation */
-    snprintf(projectFileError, 40, "Can't open %s: %s", shortPath, errstr ? errstr : "?");
-    /* Also emit to stderr for easier browser/emscripten console visibility */
-    fprintf(stderr, "projectLoad: fopen('%s') failed: %s\n", path, errstr ? errstr : "?");
+    snprintf(projectFileError, 40, "Can't open file");
     return 1;
   }
 
   int result = projectLoadInternal(file, p);
   fclose(file);
-  /* If successful, clear the error buffer so leftover sentinel messages aren't reported */
-  if (!result) projectFileError[0] = '\0';
-  /* Debug log: report result and any parsed error string */
-  fprintf(stderr, "projectLoad: result=%d error=\"%s\"\n", result, projectFileError);
   if (!result) projectLoadRelativeSamples(p, path);
   return result;
 }

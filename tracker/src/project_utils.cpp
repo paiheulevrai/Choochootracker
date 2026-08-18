@@ -69,6 +69,10 @@ const char* instrumentTypeName(InstrumentType type) {
       return "Braids";
     case InstrumentType::Sample:
       return "Sample";
+    case InstrumentType::SCWF:
+      return "2xSCWF";
+    case InstrumentType::BYOWTBL:
+      return "BYOWTBL";
     case InstrumentType::Plaits:
       return "Plaits";
     case InstrumentType::PlaitsAlt:

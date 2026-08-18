@@ -76,6 +76,11 @@ FXName fxNamesSample[] = {
 };
 int fxSampleCount = sizeof(fxNamesSample) / sizeof(FXName);
 
+FXName fxNamesSCWF[] = {
+  {fxSDT, "SDT"}, {fxSMX, "SMX"}, {fxSCF2, "SCF"}, {fxSRS2, "SRS"},
+};
+int fxSCWFCount = sizeof(fxNamesSCWF) / sizeof(FXName);
+
 FXName fxNamesPlaits[] = {
   {fxPMD, "PMD"}, {fxPHA, "PHA"}, {fxPTM, "PTM"}, {fxPMO, "PMO"},
   {fxPAX, "PAX"}, {fxPCF, "PCF"}, {fxPRS, "PRS"},
@@ -91,6 +96,7 @@ FXGroup fxGroups[] = {
   {"AYSample FX", fxNamesAYSample, 0, 8, InstrumentType::AYSample},
   {"Braids FX", fxNamesBraids, 0, 5, InstrumentType::Braids},
   {"Sample FX", fxNamesSample, 0, 6, InstrumentType::Sample},
+  {"2xSCWF FX", fxNamesSCWF, 0, 4, InstrumentType::SCWF},
   {"Plaits FX", fxNamesPlaits, 0, 7, InstrumentType::Plaits},
   {"Plaits-Alt FX", fxNamesPlaits, 0, 7, InstrumentType::PlaitsAlt},
 };
@@ -112,7 +118,9 @@ void fillFXNames() {
   fxGroups[4].count = fxAYSampleCount;
   fxGroups[5].count = fxBraidsCount;
   fxGroups[6].count = fxSampleCount;
-  fxGroups[7].count = fxPlaitsCount;
+  fxGroups[7].count = fxSCWFCount;
+  fxGroups[8].count = fxPlaitsCount;
+  fxGroups[9].count = fxPlaitsCount;
 
   // Fill FX names from all groups
   for (int g = 0; g < fxGroupCount; g++) {

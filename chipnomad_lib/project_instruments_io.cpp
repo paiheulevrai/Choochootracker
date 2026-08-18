@@ -1,6 +1,7 @@
 #include "project.h"
 #include "project_io_common.h"
 #include "synth/sample_voice.h"
+#include "synth/wavetable_loader.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -259,6 +260,49 @@ static int loadInstrumentSample(FILE* file, Instrument* instrument) {
   return 0;
 }
 
+static int loadInstrumentSCWF(FILE* file, Instrument* instrument) {
+  InstrumentSCWF* scwf = &instrument->chip.scwf;
+  while (1) {
+    char* line = peekLine(file);
+    if (line == NULL || line[0] == '#') break;
+    if (strncmp(line, "- Oscillator A path: ", 21) == 0) sscanf(line, "- Oscillator A path: %255[^\n]", scwf->oscillator[0].path);
+    else if (strncmp(line, "- Oscillator B path: ", 21) == 0) sscanf(line, "- Oscillator B path: %255[^\n]", scwf->oscillator[1].path);
+    else if (strncmp(line, "- Detune: ", 10) == 0) sscanf(line, "- Detune: %hhu", &scwf->detune);
+    else if (strncmp(line, "- Mix: ", 7) == 0) sscanf(line, "- Mix: %hhu", &scwf->mix);
+    else loadVoicePostSetting(line, scwf);
+    consumeLine(file);
+  }
+  for (int i = 0; i < 2; ++i) {
+    if (!scwf->oscillator[i].path[0]) continue;
+    char error[64];
+    sampleLoadWav16(scwf->oscillator[i].path, &scwf->oscillator[i], error, sizeof(error));
+  }
+  return 0;
+}
+
+static int loadInstrumentBYOWTBL(FILE* file, Instrument* instrument) {
+  InstrumentBYOWTBL* table = &instrument->chip.byowtbl;
+  while (1) {
+    char* line = peekLine(file);
+    if (line == NULL || line[0] == '#') break;
+    if (strncmp(line, "- Oscillator A path: ", 21) == 0) sscanf(line, "- Oscillator A path: %255[^\n]", table->oscillator[0].path);
+    else if (strncmp(line, "- Oscillator B path: ", 21) == 0) sscanf(line, "- Oscillator B path: %255[^\n]", table->oscillator[1].path);
+    else if (strncmp(line, "- Position A: ", 14) == 0) sscanf(line, "- Position A: %hhu", &table->frameIndex[0]);
+    else if (strncmp(line, "- Position B: ", 14) == 0) sscanf(line, "- Position B: %hhu", &table->frameIndex[1]);
+    else if (strncmp(line, "- Detune: ", 10) == 0) sscanf(line, "- Detune: %hhu", &table->detune);
+    else if (strncmp(line, "- Mix: ", 7) == 0) sscanf(line, "- Mix: %hhu", &table->mix);
+    else loadVoicePostSetting(line, table);
+    consumeLine(file);
+  }
+  for (int i = 0; i < 2; ++i) {
+    if (!table->oscillator[i].path[0]) continue;
+    char error[64];
+    if (wavetableLoadWav(table->oscillator[i].path, &table->oscillator[i],
+                         &table->frameSize[i], &table->tableFrames[i], error, sizeof(error))) return 1;
+  }
+  return 0;
+}
+
 static int loadInstrumentPlaits(FILE* file, Instrument* instrument) {
   InstrumentPlaits* p = &instrument->chip.plaits;
   while (1) {
@@ -370,6 +414,12 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
         break;
       case InstrumentType::Sample:
         if (loadInstrumentSample(file, instrument)) return 1;
+        break;
+      case InstrumentType::SCWF:
+        if (loadInstrumentSCWF(file, instrument)) return 1;
+        break;
+      case InstrumentType::BYOWTBL:
+        if (loadInstrumentBYOWTBL(file, instrument)) return 1;
         break;
       case InstrumentType::Plaits:
       case InstrumentType::PlaitsAlt:
@@ -493,6 +543,28 @@ static int saveInstrumentSample(FILE* file, Instrument* instrument) {
   return 0;
 }
 
+static int saveInstrumentSCWF(FILE* file, Instrument* instrument) {
+  InstrumentSCWF* scwf = &instrument->chip.scwf;
+  fprintf(file, "- Oscillator A path: %s\n", scwf->oscillator[0].path);
+  fprintf(file, "- Oscillator B path: %s\n", scwf->oscillator[1].path);
+  fprintf(file, "- Detune: %hhu\n", scwf->detune);
+  fprintf(file, "- Mix: %hhu\n", scwf->mix);
+  saveVoicePostSettings(file, scwf);
+  return 0;
+}
+
+static int saveInstrumentBYOWTBL(FILE* file, Instrument* instrument) {
+  InstrumentBYOWTBL* table = &instrument->chip.byowtbl;
+  fprintf(file, "- Oscillator A path: %s\n", table->oscillator[0].path);
+  fprintf(file, "- Oscillator B path: %s\n", table->oscillator[1].path);
+  fprintf(file, "- Position A: %hhu\n", table->frameIndex[0]);
+  fprintf(file, "- Position B: %hhu\n", table->frameIndex[1]);
+  fprintf(file, "- Detune: %hhu\n", table->detune);
+  fprintf(file, "- Mix: %hhu\n", table->mix);
+  saveVoicePostSettings(file, table);
+  return 0;
+}
+
 static int saveInstrumentPlaits(FILE* file, Instrument* instrument) {
   InstrumentPlaits* p = &instrument->chip.plaits;
   fprintf(file, "- Engine: %hhu\n", p->engine);
@@ -551,6 +623,12 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
       break;
     case InstrumentType::Sample:
       saveInstrumentSample(file, instrument);
+      break;
+    case InstrumentType::SCWF:
+      saveInstrumentSCWF(file, instrument);
+      break;
+    case InstrumentType::BYOWTBL:
+      saveInstrumentBYOWTBL(file, instrument);
       break;
     case InstrumentType::Plaits:
     case InstrumentType::PlaitsAlt:

@@ -122,6 +122,57 @@ Profiling showed that all eight AY emulators were rendering even for empty, Brai
 
 -> Update from August 10: Skipping unused AY voices rendering dropped the empty project CPU load to 2%. Huge improvement.
 
+## Loquelic Iteritas-inspired dual oscillator
+
+The existing Braids and Plaits instruments already cover parts of this sound
+space: Braids provides VOSIM, FM, feedback/chaotic FM, sync and ring-style
+multi-oscillator models; Plaits provides 2-op/6-op FM, phase distortion and
+waveshaping. Neither exposes the Loquelic-style architecture as independent
+Pitch A/Pitch B controls with selectable oscillator sync, cross phase
+modulation, AM/ring blend and a final wavefolder.
+
+A small dedicated voice is therefore feasible and musically distinct. Start
+with the PM path: two band-limited oscillators, independent pitch offsets,
+one-way or bidirectional phase modulation, AM/ring blend, selectable sync and
+a final wavefolder. VOSIM and the summation-series path can follow if the PM
+voice proves useful. Do not reproduce Loquelic's variable-time aliasing
+strategy initially: it is a deliberate hardware character, costly to fit into
+the fixed-rate tracker renderer, and not required for the core patchability.
+
+Verdict: feasible, medium risk. Prototype the PM voice and measure CPU with
+eight voices, reverb and delay before adding other algorithms. Reference:
+[Noise Engineering Loquelic Iteritas manual](https://manuals.noiseengineering.us/li/).
+
+## Serum-compatible wavetable oscillator
+
+Serum wavetables are mono RIFF/WAV files containing consecutive single-cycle
+frames. The conventional frame length is 2048 samples. Serum can also write a
+`clm ` RIFF metadata chunk containing the frame length and its preferred
+interpolation mode; the audio remains ordinary PCM/float WAV data. Supporting
+the audio frames and treating missing `clm ` metadata as 2048-sample frames is
+enough to import the common format. The optional chunk should be parsed, but
+not required, so ordinary concatenated WAV wavetables work too.
+
+This is a new modern instrument, not an extension of the 32-step/4-bit AY
+wavetable editor. A practical first version stores up to 256 frames, converts
+input to mono 16-bit (or keeps float internally), resamples every frame to a
+fixed internal length such as 512 samples, linearly interpolates within a
+frame and between neighbouring frames, and exposes Position, Frame LFO,
+Detune, Unison and the shared post-filter/envelope. At 256 x 512 x 16-bit, one
+loaded table is 256 KiB; allocation must therefore be per instrument rather
+than embedded in the project struct. Project files should retain a source path
+and reload it, like PCM Sample and 2xSCWF, rather than serializing the full
+table.
+
+Spectral interpolation and Serum's imported metadata modes are worthwhile
+later, but not for v1: time-domain frame interpolation is small, predictable
+and musical. Add mipmaps or harmonic-band tables before calling high notes
+production-ready; otherwise bright Serum tables will alias. Reference:
+[Xfer's format notes](https://xferrecords.com/forums/general/file-types).
+
+Verdict: feasible, medium risk. Parsing/import is low risk; anti-aliasing,
+memory limits and a usable frame-position UI are the real implementation work.
+
 ## Fixes prompted by testing
 
 - New projects now initialize the linear pitch table in cents.

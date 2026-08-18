@@ -127,6 +127,12 @@ enum FX {
   fxSSP, // Speed
   fxSLP, // Loop mode
 
+  // 2xSCWF FX (absolute)
+  fxSDT, // Detune
+  fxSMX, // Oscillator mix
+  fxSCF2, // Filter cutoff
+  fxSRS2, // Filter resonance
+
   // Total count - must be last
   fxTotalCount
 };

@@ -394,3 +394,98 @@ Règles de présentation :
   Decay, Sustain, Release et Shape (`00` logarithmique, `80` linéaire, `FF`
   exponentielle). En Plaits TRIG, la ligne devient `LPG` et aucune preview ADSR
   n'est dessinée.
+
+## Pistes différées
+
+### Glyphes contextuels dans les fiches instrument
+
+Les futures fiches instrument pourront associer un glyphe compact à certains
+paramètres musicaux. Le texte reste toujours visible : le glyphe donne un repère
+immédiat et autorise des libellés courts, sans devenir une iconographie à
+apprendre.
+
+```text
+ENG  ⚡   HARMO ∥   TIMB ≈   MORPH ◇   MIX ⊙
+STAT ●   FILT [LP]   SLOPE /   CUT ─●─   RES ···
+```
+
+- Les formes sont dessinées dans la bitmap font existante, avec l'épaisseur et
+  les couleurs du thème ; aucune police ou bibliothèque supplémentaire.
+- Elles accompagnent seulement les paramètres à lecture rapide : moteur,
+  Harmo/Timb, Morph, Main/Aux, filtre, statut, volume, sends et ADSR.
+- Les glyphes de valeur utilisent peu d'états discrets (par exemple 4, 8 ou 16)
+  et sont redessinés lors d'une modification ; pas d'animation permanente.
+- `ADSR`, `VOL`, `LP/BP/HP`, `Hz` et `dB` restent des termes explicites.
+
+### Écran titre
+
+Avant le tracker, ajouter un écran titre d'inspiration SNES : logo
+`CHOOCHOOTRACKER`, fond et cadre cohérents avec le thème actif, puis un menu
+vertical volontairement court.
+
+Le visuel de référence est
+`inspirations/titlescreendraft.png`. Son illustration pixel art 256 couleurs
+(train, pont, montagnes et logo) est à reprendre comme base, en conservant sa
+composition générale. Le cadrage sera ajusté au 640 × 480 de la RG353V ; le
+menu existant de la maquette est remplacé par celui ci-dessous.
+
+```text
+             CHOOCHOOTRACKER
+
+                 > CONTINUE
+                   OPEN
+                   NEW
+```
+
+- `CONTINUE` recharge le dernier projet ouvert ou sauvegardé ; il est indisponible
+  lorsqu'aucun projet récent n'est connu.
+- `OPEN` ouvre le navigateur de projets existant.
+- `NEW` crée un projet vierge avec le flux actuel.
+- Les trois actions réemploient les flux de chargement/création existants :
+  l'écran titre n'ajoute ni format de projet, ni sauvegarde automatique.
+
+### Langage visuel partagé avec le tracker
+
+Le tracker ne doit pas devenir une illustration pleine page : sa densité et sa
+lecture immédiate restent prioritaires. Il peut toutefois reprendre les codes
+du titre pour que les deux écrans appartiennent au même jeu :
+
+- fond bleu nuit ou bleu ardoise, avec panneaux presque noirs ;
+- cadres fins brun/métal et angles légèrement renforcés, réservés aux panneaux,
+  popups et focus ;
+- texte crème clair, titres dorés et valeur/focus jaune chaud ;
+- touches bleu acier ou vert paysage pour les valeurs secondaires et états
+  actifs ;
+- bitmap font nette et glyphes à 1 px, sans texture sous les données du tracker.
+
+Le séquenceur conserve des cellules sobres et planes. Les textures, le décor et
+les gros logos restent propres à l'écran titre ; ils ne doivent pas concurrencer
+notes, FX, curseur de lecture et valeurs éditables.
+
+**Règle de densité :** cette direction ne modifie ni le nombre de champs
+visibles, ni les coordonnées, ni les commandes des écrans tracker existants.
+Les maquettes illustrées sont des références de palette, de cadres, de typo et
+de glyphes ; elles ne sont pas des propositions d'ajouter des panneaux, des
+contrôles ou de l'information. L'habillage 16 bits ferroviaire doit se poser
+autour de l'UI actuelle, jamais la densifier.
+
+### Plan d'intégration — après stabilisation
+
+Ce chantier est esthétique. Il attend la fin des tests et débugs fonctionnels,
+afin de ne pas mélanger les régressions d'interface avec celles du moteur ou du
+format de projet.
+
+1. Créer un thème optionnel `Railway 16-bit` : palette bleu nuit, crème, or,
+   acier et états de focus. Les thèmes et les neuf couleurs principales sont
+   déjà configurables ; cette étape ne change aucune navigation.
+2. Poser un habillage léger autour des coordonnées existantes : titre, cadre
+   externe, séparateurs et panneaux sobres. La grille tracker reste plane.
+3. Ajouter les glyphes contextuels et leurs quelques états discrets aux fiches
+   instrument, sans créer de nouvelles cellules éditables.
+4. Ajouter l'écran titre illustré et ses trois actions `CONTINUE`, `OPEN`,
+   `NEW`, en réemployant les flux de projet existants.
+5. Vérifier le rendu et la lisibilité sur Windows, Web et RG353V.
+
+La cible est une semaine environ pour une finition complète, découpée en
+étapes utilisables et réversibles. Ce n'est pas une réécriture : ni le moteur
+audio, ni les contrôles tracker, ni le format `.cct` ne doivent être modifiés.
