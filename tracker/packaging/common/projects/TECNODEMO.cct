@@ -367,6 +367,7 @@ C-6 03 -- --- 00 --- 00 --- 00
 - Chip data:
 - Sample path: ../samples/909/BT0AADA.WAV
 - Sample pitch: 0
+- Sample speed: 100
 - Sample start: 0
 - Sample end: 255
 - Filter enabled: 1

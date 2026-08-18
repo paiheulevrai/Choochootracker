@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <errno.h>
 #include "project.h"
 #include "project_io_common.h"
 #include "synth/sample_voice.h"
@@ -924,14 +925,54 @@ int projectLoad(Project* p, const char* path) {
   projectFileError[0] = 0;
   resetPeekConsume();  // Ensure clean state
 
+  if (!path || !path[0]) {
+    snprintf(projectFileError, 40, "Invalid path");
+    return 1;
+  }
+
+#ifdef WEB_BUILD
+  /* Debug: announce load attempt and file size to stderr (visible in browser console) */
+  {
+    FILE* tf = fopen(path, "rb");
+    if (tf) {
+      fseek(tf, 0, SEEK_END);
+      long sz = ftell(tf);
+      fclose(tf);
+      fprintf(stderr, "projectLoad: opening '%s' (size=%ld)\n", path, sz);
+    } else {
+      fprintf(stderr, "projectLoad: opening '%s' (file not found)\n", path);
+    }
+  }
+#endif
+
   FILE* file = fopen(path, "rb");
   if (file == NULL) {
-    snprintf(projectFileError, 40, "Can't open file");
+    /* Create a short, safe path representation for the error buffer */
+    char shortPath[32];
+    size_t plen = strlen(path);
+    if (plen < sizeof(shortPath) - 1) {
+      strncpy(shortPath, path, sizeof(shortPath) - 1);
+      shortPath[sizeof(shortPath) - 1] = '\0';
+    } else {
+      /* Keep the tail of the path for readability */
+      strncpy(shortPath, path + plen - (sizeof(shortPath) - 5), sizeof(shortPath) - 5);
+      shortPath[0] = '.'; shortPath[1] = '.'; shortPath[2] = '.';
+      shortPath[sizeof(shortPath) - 1] = '\0';
+    }
+    const char* errstr = strerror(errno);
+    /* Truncate message if necessary - snprintf will handle truncation */
+    snprintf(projectFileError, 40, "Can't open %s: %s", shortPath, errstr ? errstr : "?");
+    /* Also emit to stderr for easier browser/emscripten console visibility */
+    fprintf(stderr, "projectLoad: fopen('%s') failed: %s\n", path, errstr ? errstr : "?");
     return 1;
   }
 
   int result = projectLoadInternal(file, p);
   fclose(file);
+  /* If successful, clear the error buffer so leftover sentinel messages aren't reported */
+  if (!result) projectFileError[0] = '\0';
+  /* Debug log: report result and any parsed error string */
+  fprintf(stderr, "projectLoad: result=%d error=\"%s\"\n", result, projectFileError);
   if (!result) projectLoadRelativeSamples(p, path);
   return result;
 }

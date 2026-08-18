@@ -217,6 +217,10 @@ void appSetup(void) {
         }
       }
     }
+    // Also ensure instrument 0 (common demo kick) is set to 100% if it's a sample
+    if (chipnomadState->project.instruments[0].type == InstrumentType::Sample) {
+      chipnomadState->project.instruments[0].chip.sample.speedPercent = 100;
+    }
   }
 #else
   // Native builds restore the user's auto-saved project.
