@@ -22,9 +22,9 @@ SDT overrides Detune, SMX overrides Mix, SCF overrides filter cutoff, and SRS
 overrides filter resonance for a step. Modulation targets are Volume, Pitch,
 Detune, Mix, Cutoff and Reso.
 
-## BYOWTBL
+## BYOWTBL / SR wavetable
 
-BYOWTBL is the dual wavetable counterpart to 2xSCWF. Each oscillator loads a
+BYOWTBL is the dual SR wavetable counterpart to 2xSCWF. Each oscillator loads a
 mono Serum-compatible or WaveEdit WAV containing consecutive single-cycle
 frames. `Pos A` and `Pos B` independently scan their tables from `00` to `FF`;
 the engine linearly interpolates both within a frame and between adjacent
@@ -115,7 +115,7 @@ Secondary screens appear above or below their parent:
 - Reverb and Delay surround Mixer.
 - Groove belongs to Phrase;
 - Instrument Pool and Modulation belong to Instrument;
-- Wavetable belongs to Table.
+- AY_WAVETABLE belongs to Table.
 
 The hierarchy is:
 
@@ -289,7 +289,7 @@ Each instrument has four modulation slots. A slot can use ADSR, AHD or LFO behav
 
 Tap a destination to open the categorized selector. Synth macro parameters are shown as `000-1023`; this is a normalized interface range mapped to the engine's internal resolution. Instrument and send filters cover 20 Hz to 20 kHz on an exponential control curve.
 
-Tables are small per-instrument sequences that can automate commands over time. Groove defines tick lengths used by phrase rows. Wavetables are used by compatible AY software oscillator modes. They do not apply to the Braids or Plaits wavetable engines.
+Tables are small per-instrument sequences that can automate commands over time. Groove defines tick lengths used by phrase rows. AY wavetables are used by compatible AY software oscillator modes. SR wavetables are loaded by BYOWTBL. Neither applies to the Braids or Plaits wavetable engines.
 
 ## 9. Tracker FX
 

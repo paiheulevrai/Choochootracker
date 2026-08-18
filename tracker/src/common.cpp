@@ -67,7 +67,7 @@ void initDefaultAppSettings(void) {
 #else
   appSettings.samplePath[0] = '\0';
 #endif
-  appSettings.wavetablePath[0] = '\0';
+  appSettings.ayWavetablePath[0] = '\0';
 }
 
 int* pSongRow;
@@ -143,7 +143,7 @@ int settingsSave(void) {
   fprintf(file, "fontPath: %s\n", appSettings.fontPath);
   fprintf(file, "fontFolderPath: %s\n", appSettings.fontFolderPath);
   fprintf(file, "samplePath: %s\n", appSettings.samplePath);
-  fprintf(file, "wavetablePath: %s\n", appSettings.wavetablePath);
+  fprintf(file, "ayWavetablePath: %s\n", appSettings.ayWavetablePath);
 
   fclose(file);
   return 0;
@@ -282,9 +282,13 @@ int settingsLoad(void) {
     } else if (strncmp(line, "samplePath: ", 12) == 0) {
       strncpy(appSettings.samplePath, line + 12, PATH_LENGTH);
       appSettings.samplePath[PATH_LENGTH] = 0;
+    } else if (strncmp(line, "ayWavetablePath: ", 17) == 0) {
+      strncpy(appSettings.ayWavetablePath, line + 17, PATH_LENGTH);
+      appSettings.ayWavetablePath[PATH_LENGTH] = 0;
     } else if (strncmp(line, "wavetablePath: ", 15) == 0) {
-      strncpy(appSettings.wavetablePath, line + 15, PATH_LENGTH);
-      appSettings.wavetablePath[PATH_LENGTH] = 0;
+      // Backwards compatibility with settings written before AY/SR separation.
+      strncpy(appSettings.ayWavetablePath, line + 15, PATH_LENGTH);
+      appSettings.ayWavetablePath[PATH_LENGTH] = 0;
     }
   }
 

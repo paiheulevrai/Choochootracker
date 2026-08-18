@@ -6,7 +6,7 @@
 #include "project.h"
 #include "project_io_common.h"
 #include "synth/sample_voice.h"
-#include "synth/wavetable_loader.h"
+#include "synth/sr_wavetable_loader.h"
 #include "utils.h"
 
 // Shared state
@@ -931,7 +931,7 @@ static void projectLoadRelativeSamples(Project* project, const char* projectPath
       char error[64];
       if (instrument->type == InstrumentType::BYOWTBL) {
         int index = sample == &instrument->chip.byowtbl.oscillator[1];
-        wavetableLoadWav(fullPath, sample, &instrument->chip.byowtbl.frameSize[index],
+        srWavetableLoadWav(fullPath, sample, &instrument->chip.byowtbl.frameSize[index],
                          &instrument->chip.byowtbl.tableFrames[index], error, sizeof(error));
       } else {
         sampleLoadWav16(fullPath, sample, error, sizeof(error));

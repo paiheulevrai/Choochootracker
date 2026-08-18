@@ -133,6 +133,10 @@ enum FX {
   fxSCF2, // Filter cutoff
   fxSRS2, // Filter resonance
 
+  // BYOWTBL FX (absolute)
+  fxBIA, // Table A index
+  fxBIB, // Table B index
+
   // Total count - must be last
   fxTotalCount
 };

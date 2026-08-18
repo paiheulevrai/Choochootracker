@@ -70,7 +70,7 @@ struct AppSettings {
   char fontPath[PATH_LENGTH + 1];
   char fontFolderPath[PATH_LENGTH + 1];
   char samplePath[PATH_LENGTH + 1];
-  char wavetablePath[PATH_LENGTH + 1];
+  char ayWavetablePath[PATH_LENGTH + 1];
 };
 
 extern AppSettings appSettings;

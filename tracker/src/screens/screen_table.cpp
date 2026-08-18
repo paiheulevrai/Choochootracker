@@ -341,7 +341,7 @@ static int inputScreenNavigation(int keys, int tapCount) {
     return 1;
   } else if (keys == (keyDown | keyShift)) {
     // Go to Wavetable screen
-    screenSetup(&screenWavetable, 0);
+    screenSetup(&screenAYWavetable, 0);
     return 1;
   } else if (keys == (keyLeft | keyOpt)) {
     // Previous table

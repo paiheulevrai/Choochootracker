@@ -683,12 +683,17 @@ static void updateSCWFVoices(ChipNomadState* state) {
     int mix = scwf->mix;
     int cutoff = scwf->filterCutoffHz;
     int resonance = scwf->filterResonance;
+    uint8_t frameIndex[2] = {byowtbl->frameIndex[0], byowtbl->frameIndex[1]};
     int pitchModulation = 0;
     float gain = instrument->volume / 255.0f;
     if (track->note.fx[fxSDT].isOn) detune = track->note.fx[fxSDT].fxValue;
     if (track->note.fx[fxSMX].isOn) mix = track->note.fx[fxSMX].fxValue;
     if (track->note.fx[fxSCF2].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxSCF2].fxValue);
     if (track->note.fx[fxSRS2].isOn) resonance = track->note.fx[fxSRS2].fxValue;
+    if (instrument->type == InstrumentType::BYOWTBL) {
+      if (track->note.fx[fxBIA].isOn) frameIndex[0] = track->note.fx[fxBIA].fxValue;
+      if (track->note.fx[fxBIB].isOn) frameIndex[1] = track->note.fx[fxBIB].fxValue;
+    }
     for (int i = 0; i < 4; ++i) {
       PlaybackModState* mod = &track->note.modulation[i];
       if (!mod->modulation) continue;
@@ -698,8 +703,16 @@ static void updateSCWFVoices(ChipNomadState* state) {
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
         case 3: detune += value; break;
         case 4: mix += value; break;
-        case 5: cutoff += playbackModScaleToRange(mod->outValue, 20000); break;
-        case 6: resonance += value; break;
+        case 5:
+          if (instrument->type == InstrumentType::BYOWTBL) frameIndex[0] = (uint8_t)clampInt(frameIndex[0] + value, 0, 255);
+          else cutoff += playbackModScaleToRange(mod->outValue, 20000);
+          break;
+        case 6:
+          if (instrument->type == InstrumentType::BYOWTBL) frameIndex[1] = (uint8_t)clampInt(frameIndex[1] + value, 0, 255);
+          else resonance += value;
+          break;
+        case 7: cutoff += playbackModScaleToRange(mod->outValue, 20000); break;
+        case 8: resonance += value; break;
       }
     }
     int cents = track->note.pitchFinal == EMPTY_VALUE_8 ? 6000 :
@@ -713,7 +726,7 @@ static void updateSCWFVoices(ChipNomadState* state) {
     voice->configure(scwf, (float)cents, gain, scwfDetuneCents((uint8_t)detune), (uint8_t)mix,
                      (uint16_t)cutoff, (uint8_t)resonance,
                      instrument->type == InstrumentType::BYOWTBL ? byowtbl->frameSize : NULL,
-                     instrument->type == InstrumentType::BYOWTBL ? byowtbl->frameIndex : NULL);
+                     instrument->type == InstrumentType::BYOWTBL ? frameIndex : NULL);
   }
 }
 

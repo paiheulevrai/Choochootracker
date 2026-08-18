@@ -90,7 +90,7 @@ extern const AppScreen screenInstrument;
 extern const AppScreen screenInstrumentPool;
 extern const AppScreen screenModulation;
 extern const AppScreen screenTable;
-extern const AppScreen screenWavetable;
+extern const AppScreen screenAYWavetable;
 extern const AppScreen screenExport;
 extern const AppScreen screenManage;
 extern const AppScreen screenSettings;

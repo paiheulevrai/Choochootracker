@@ -40,7 +40,7 @@ void drawScreenMap() {
     gfxPrint(38, smY, "M");
   } else if (currentScreen == &screenModulation) {
     gfxPrint(38, smY + 2, "P");
-  } else if (currentScreen == &screenTable || currentScreen == &screenWavetable) {
+  } else if (currentScreen == &screenTable || currentScreen == &screenAYWavetable) {
     gfxPrint(39, smY + 2, "W");
   }
 
@@ -68,7 +68,7 @@ void drawScreenMap() {
     gfxPrint(38, smY, "M");
   } else if (currentScreen == &screenTable) {
     gfxPrint(39, smY + 1, "T");
-  } else if (currentScreen == &screenWavetable) {
+  } else if (currentScreen == &screenAYWavetable) {
     gfxPrint(39, smY + 2, "W");
   } else if (currentScreen == &screenProject) {
     gfxPrint(35, smY, "P");
@@ -141,7 +141,7 @@ void screensInitAll(void) {
   screenChain.init();
   screenPhrase.init();
   screenTable.init();
-  screenWavetable.init();
+  screenAYWavetable.init();
   screenInstrument.init();
   screenGroove.init();
   resetCopyBuffers();

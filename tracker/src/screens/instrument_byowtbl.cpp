@@ -3,7 +3,7 @@
 #include "corelib/corelib_file.h"
 #include "file_browser.h"
 #include "synth/scwf_voice.h"
-#include "synth/wavetable_loader.h"
+#include "synth/sr_wavetable_loader.h"
 #include "audio_manager.h"
 #include "utils.h"
 
@@ -24,7 +24,7 @@ static void loaded(const char* path) {
   InstrumentBYOWTBL* table = &chipnomadState->project.instruments[cInstrument].chip.byowtbl;
   char error[64];
   audioManager.pause();
-  if (wavetableLoadWav(path, &table->oscillator[loadSlot], &table->frameSize[loadSlot],
+  if (srWavetableLoadWav(path, &table->oscillator[loadSlot], &table->frameSize[loadSlot],
                        &table->tableFrames[loadSlot], error, sizeof(error))) {
     screenMessage(MESSAGE_TIME * 3, "%s", error);
   } else {
@@ -93,7 +93,7 @@ static int input(int isKeyDown, int keys, int) {
   if (isKeyDown && keys == keyEdit) { buttonDown = 1; return 1; }
   if (!isKeyDown && !keys && buttonDown) {
     buttonDown = 0; loadSlot = row - 3;
-    fileBrowserSetup("LOAD WAVETABLE", ".wav", appSettings.samplePath, loaded, cancelled);
+    fileBrowserSetup("LOAD SR WAVETABLE", ".wav", appSettings.samplePath, loaded, cancelled);
     screenSetup(&screenFileBrowser, 0); return 1;
   }
   return 0;

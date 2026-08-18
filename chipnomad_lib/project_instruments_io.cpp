@@ -1,7 +1,7 @@
 #include "project.h"
 #include "project_io_common.h"
 #include "synth/sample_voice.h"
-#include "synth/wavetable_loader.h"
+#include "synth/sr_wavetable_loader.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -297,7 +297,7 @@ static int loadInstrumentBYOWTBL(FILE* file, Instrument* instrument) {
   for (int i = 0; i < 2; ++i) {
     if (!table->oscillator[i].path[0]) continue;
     char error[64];
-    if (wavetableLoadWav(table->oscillator[i].path, &table->oscillator[i],
+    if (srWavetableLoadWav(table->oscillator[i].path, &table->oscillator[i],
                          &table->frameSize[i], &table->tableFrames[i], error, sizeof(error))) return 1;
   }
   return 0;

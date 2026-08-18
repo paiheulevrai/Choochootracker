@@ -188,6 +188,11 @@ static const char* modNameSCWF(int modIndex) {
   return names[modIndex];
 }
 
+static const char* modNameBYOWTBL(int modIndex) {
+  static const char *names[] = {"Off", "Volume", "Pitch", "Detune", "Mix", "Index A", "Index B", "Cutoff", "Reso"};
+  return names[modIndex];
+}
+
 static int initSCWFInstrument(Instrument* instrument) {
   initCommon(instrument);
   instrument->type = InstrumentType::SCWF;
@@ -260,8 +265,8 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
       };
     case InstrumentType::BYOWTBL:
       return (InstrumentFunctions){
-        .modDestinationsCount = 6,
-        .modName = modNameSCWF,
+        .modDestinationsCount = 8,
+        .modName = modNameBYOWTBL,
         .init = initBYOWTBLInstrument,
         .free = freeBYOWTBLInstrument
       };
