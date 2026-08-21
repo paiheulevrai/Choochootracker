@@ -74,6 +74,33 @@ TEST_CASE("modulation destination limits match every engine's routing") {
   CHECK(instrumentModDestinationMax(InstrumentType::PlaitsAlt) == 26);
 }
 
+TEST_CASE("new instruments use audible synth defaults") {
+  Instrument instrument;
+  getInstrumentFunctions(InstrumentType::Braids).init(&instrument);
+  CHECK(instrument.volume == 255);
+  CHECK(instrument.chip.braids.attack == 0);
+  CHECK(instrument.chip.braids.decay == 0);
+  CHECK(instrument.chip.braids.sustain == 255);
+  CHECK(instrument.chip.braids.release == 0);
+  CHECK(instrument.chip.braids.filterCharacter == 2);
+  CHECK(instrument.chip.braids.filterCutoffHz == 20000);
+  CHECK(instrument.chip.braids.timbre == 16384);
+  CHECK(instrument.chip.braids.color == 16384);
+
+  getInstrumentFunctions(InstrumentType::Plaits).init(&instrument);
+  CHECK(instrument.chip.plaits.harmonics == 16384);
+  CHECK(instrument.chip.plaits.timbre == 16384);
+  CHECK(instrument.chip.plaits.morph == 16384);
+  CHECK(instrument.chip.plaits.decay == 0);
+  CHECK(instrument.chip.plaits.auxMix == 0);
+
+  getInstrumentFunctions(InstrumentType::Sample).init(&instrument);
+  CHECK(instrument.chip.sample.start == 0);
+  CHECK(instrument.chip.sample.end == 255);
+  CHECK(instrument.chip.sample.loopMode == 0);
+  CHECK(instrument.chip.sample.speedPercent == 100);
+}
+
 // instrumentIsEmpty tests
 
 TEST_CASE_FIXTURE(ProjectFixture, "instrumentIsEmpty true for none") {

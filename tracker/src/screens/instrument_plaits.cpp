@@ -140,6 +140,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     cycle8(&chipnomadState->project.instruments[cInstrument].chip.plaits.engine,
       keys == (keyEdit | keyRight) ? 1 : -1, 0, 23, 0);
     projectModified = 1;
+    screenFullRedraw(&screenInstrumentPlaits);
     engineButtonDown = 0;
     return 1;
   }

@@ -534,7 +534,7 @@ const char* helpFXDescription(enum FX fxIdx, uint8_t instrumentIdx) {
             switch (paramIdx - 1) {
               case 0: snprintf(buffer, bufferSize, "Mod %d Param 1 (relative)\nFLFO: Wave shape offset", modSlot + 1); break;
               case 1: snprintf(buffer, bufferSize, "Mod %d Param 2 (relative)\nFLFO: Trigger mode offset", modSlot + 1); break;
-              case 2: snprintf(buffer, bufferSize, "Mod %d Param 3 (relative)\nFLFO: Frequency offset (1-20000 Hz)", modSlot + 1); break;
+              case 2: snprintf(buffer, bufferSize, "Mod %d Param 3 (relative)\nFLFO: Frequency offset (1-8000 Hz)", modSlot + 1); break;
               case 3: snprintf(buffer, bufferSize, "Mod %d Param 4 (relative)\nFLFO: (unused)", modSlot + 1); break;
             }
             break;

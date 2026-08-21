@@ -32,6 +32,30 @@ void MasterEffects::process(float* reverbBus, float* delayBus, float* output,
                             size_t frames, const Project* project) {
   if (!project || !output) return;
 
+  if (delayBus && !delayLine_.empty()) {
+    size_t capacity = delayLine_.size() / 2;
+    float tickRate = project->tickRate > 0.0f ? project->tickRate : 50.0f;
+    size_t delaySamples = (size_t)(sampleRate_ * project->delayTicks / tickRate + 0.5f);
+    delaySamples = std::max<size_t>(1, std::min(delaySamples, capacity - 1));
+    float feedback = std::min<int>(project->delayFeedback, 95) / 100.0f;
+    float returnGain = project->perceptualEffects ? mixerGain(project->delayReturn) : project->delayReturn / 100.0f;
+    float reverbSend = std::min<int>(project->delayReverbSend, 100) / 100.0f;
+    for (size_t i = 0; i < frames; ++i) {
+      size_t read = (delayWrite_ + capacity - delaySamples) % capacity;
+      float wetL = lowpass(delayLine_[read * 2], project->delayFilterCutoffHz, delayFilterState_[0]);
+      float wetR = lowpass(delayLine_[read * 2 + 1], project->delayFilterCutoffHz, delayFilterState_[1]);
+      delayLine_[delayWrite_ * 2] = delayBus[i * 2] + wetR * feedback;
+      delayLine_[delayWrite_ * 2 + 1] = delayBus[i * 2 + 1] + wetL * feedback;
+      output[i * 2] += wetL * returnGain;
+      output[i * 2 + 1] += wetR * returnGain;
+      if (reverbBus) {
+        reverbBus[i * 2] += wetL * reverbSend;
+        reverbBus[i * 2 + 1] += wetR * reverbSend;
+      }
+      delayWrite_ = (delayWrite_ + 1) % capacity;
+    }
+  }
+
   if (reverbBus) {
     reverbFrames_.resize(frames);
     for (size_t i = 0; i < frames; ++i) {
@@ -57,21 +81,4 @@ void MasterEffects::process(float* reverbBus, float* delayBus, float* output,
     }
   }
 
-  if (!delayBus || delayLine_.empty()) return;
-  size_t capacity = delayLine_.size() / 2;
-  float tickRate = project->tickRate > 0.0f ? project->tickRate : 50.0f;
-  size_t delaySamples = (size_t)(sampleRate_ * project->delayTicks / tickRate + 0.5f);
-  delaySamples = std::max<size_t>(1, std::min(delaySamples, capacity - 1));
-  float feedback = std::min<int>(project->delayFeedback, 95) / 100.0f;
-  float returnGain = project->perceptualEffects ? mixerGain(project->delayReturn) : project->delayReturn / 100.0f;
-  for (size_t i = 0; i < frames; ++i) {
-    size_t read = (delayWrite_ + capacity - delaySamples) % capacity;
-    float wetL = lowpass(delayLine_[read * 2], project->delayFilterCutoffHz, delayFilterState_[0]);
-    float wetR = lowpass(delayLine_[read * 2 + 1], project->delayFilterCutoffHz, delayFilterState_[1]);
-    delayLine_[delayWrite_ * 2] = delayBus[i * 2] + wetR * feedback;
-    delayLine_[delayWrite_ * 2 + 1] = delayBus[i * 2 + 1] + wetL * feedback;
-    output[i * 2] += wetL * returnGain;
-    output[i * 2 + 1] += wetR * returnGain;
-    delayWrite_ = (delayWrite_ + 1) % capacity;
-  }
 }

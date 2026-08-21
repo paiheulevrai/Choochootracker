@@ -257,6 +257,7 @@ struct Project {
   uint8_t reverbDamping;
   uint16_t reverbFilterCutoffHz;
   uint8_t delayReturn;
+  uint8_t delayReverbSend;
   uint8_t delayTicks;
   uint8_t delayFeedback;
   uint16_t delayFilterCutoffHz;

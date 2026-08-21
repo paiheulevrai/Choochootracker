@@ -106,15 +106,15 @@ static const char* modNameBraids(int modIndex) {
 
 static void initVoicePostSettings(InstrumentVoicePostSettings* post) {
   post->filterEnabled = 1;
-  post->filterCharacter = 1;
+  post->filterCharacter = 2;
   post->filterMode = 0;
   post->filterSlope24dB = 0;
   post->filterCutoffHz = 20000;
   post->filterResonance = 0;
-  post->attack = 1;
+  post->attack = 0;
   post->decay = 0;
   post->sustain = 255;
-  post->release = 1;
+  post->release = 0;
   post->envelopeShape = 0x80;
 }
 

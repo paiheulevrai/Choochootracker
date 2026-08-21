@@ -8,6 +8,7 @@ struct SelectionItem {
   int value;
   const SelectionItem* children;
   int childCount;
+  const char* helper;
 };
 
 void selectionPopupSetup(const char* title, const SelectionItem* items,

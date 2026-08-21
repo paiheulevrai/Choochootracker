@@ -91,6 +91,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     cycle8(&chipnomadState->project.instruments[cInstrument].chip.braids.model,
       keys == (keyEdit | keyRight) ? 1 : -1, 0, 46, 0);
     projectModified = 1;
+    screenFullRedraw(&screenInstrumentBraids);
     modelButtonDown = 0;
     return 1;
   }

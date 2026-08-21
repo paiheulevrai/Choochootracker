@@ -73,6 +73,10 @@ static void fullRedraw() {
         item->value == currentValue ? '*' : ' ', item->label);
     }
   }
+  if (activePanel == 1 && itemIndex < category->childCount && category->children[itemIndex].helper) {
+    gfxSetFgColor(appSettings.colorScheme.textInfo);
+    gfxPrintf(0, 18, "%-40.40s", category->children[itemIndex].helper);
+  }
   gfxSetFgColor(appSettings.colorScheme.textInfo);
   gfxPrint(0, 19, "L/R PANEL U/D MOVE EDIT SELECT OPT EXIT");
 }

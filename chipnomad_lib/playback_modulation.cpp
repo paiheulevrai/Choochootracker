@@ -383,7 +383,7 @@ void playbackModNoteOff(PlaybackModState* state) {
 
 void playbackModNextAudio(PlaybackModState* state, float sampleRate) {
   if (!state->modulation || GET_TYPE(state) != ModulationType::FLFO || sampleRate <= 0.0f) return;
-  float frequency = powf(20000.0f, GET_P3(state) / 255.0f);
+  float frequency = powf(8000.0f, GET_P3(state) / 255.0f);
   float phase = state->phase;
   float value;
   switch (static_cast<LFOShape>(GET_P1(state))) {

@@ -157,6 +157,7 @@ void projectInit(Project* p) {
   p->reverbDamping = 160;
   p->reverbFilterCutoffHz = 16000;
   p->delayReturn = 100;
+  p->delayReverbSend = 0;
   p->delayTicks = 6;
   p->delayFeedback = 50;
   p->delayFilterCutoffHz = 12000;

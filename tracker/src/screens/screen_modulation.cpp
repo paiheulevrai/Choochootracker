@@ -48,6 +48,8 @@ static SelectionItem destinationCategories[3];
 static SelectionItem engineDestinations[32];
 static SelectionItem sendDestinations[2];
 static SelectionItem parameterDestinations[16];
+static char parameterLabels[16][20];
+static char parameterHelpers[16][40];
 static int editedModIndex;
 static int destinationButtonDown;
 
@@ -58,6 +60,20 @@ static void destinationSelected(int value) {
 }
 
 static void destinationCancelled() { screenSetup(&screenModulation, cInstrument); }
+
+static const char* modulationParameterName(ModulationType type, int parameter) {
+  static const char* adsr[] = {"Attack", "Decay", "Sustain", "Release"};
+  static const char* ahd[] = {"Attack", "Hold", "Decay", ""};
+  static const char* lfo[] = {"Shape", "Trigger", "Rate", ""};
+  static const char* slfo[] = {"Shape", "Trigger", "Ticks", "Multiplier"};
+  static const char* flfo[] = {"Shape", "Trigger", "Frequency", ""};
+  const char* const* names = lfo;
+  if (type == ModulationType::ADSR) names = adsr;
+  else if (type == ModulationType::AHD) names = ahd;
+  else if (type == ModulationType::SLFO) names = slfo;
+  else if (type == ModulationType::FLFO) names = flfo;
+  return names[parameter];
+}
 
 static void openDestinationPopup(int modIndex) {
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
@@ -71,7 +87,11 @@ static void openDestinationPopup(int modIndex) {
   sendDestinations[1] = {"DELAY SEND", firstGeneric + genericModDelaySend, NULL, 0};
   for (int i = 0; i < 16; ++i) {
     int destination = firstGeneric + genericModFirstParameter + i;
-    parameterDestinations[i] = {instrumentModDestinationName(instrument->type, destination), destination, NULL, 0};
+    int mod = i / 4;
+    const char* parameter = modulationParameterName(instrument->modulation[mod].type, i % 4);
+    snprintf(parameterLabels[i], sizeof(parameterLabels[i]), "M%d %s", mod + 1, parameter);
+    snprintf(parameterHelpers[i], sizeof(parameterHelpers[i]), "Mod %d target: %s", mod + 1, parameter);
+    parameterDestinations[i] = {parameterLabels[i], destination, NULL, 0, parameterHelpers[i]};
   }
   destinationCategories[0] = {"ENGINE", -1, engineDestinations, functions.modDestinationsCount + 1};
   destinationCategories[1] = {"FX SENDS", -1, sendDestinations, 2};
@@ -331,7 +351,7 @@ static void drawField(int col, int row, CellState state) {
         } else if (paramIdx == 1) {
           gfxPrint(valX, y, lfoTrigName(static_cast<LFOTrigger>(mod->p2)));
         } else if (paramIdx == 2) {
-          if (mod->type == ModulationType::FLFO) gfxPrintf(valX, y, "%5.0f", powf(20000.0f, mod->p3 / 255.0f));
+          if (mod->type == ModulationType::FLFO) gfxPrintf(valX, y, "%5.0f", powf(8000.0f, mod->p3 / 255.0f));
           else gfxPrint(valX, y, byteToHex(mod->p3));
         } else if (paramIdx == 3) {
           gfxPrint(valX, y, byteToHex(mod->p4));
@@ -414,7 +434,7 @@ static int onEdit(int col, int row, enum CellEditAction action) {
           handled = edit8noLast(action, &mod->p3, 16, 0, 255);
           if (handled) {
             if (mod->type == ModulationType::FLFO)
-              screenMessage(0, "Frequency %.0f Hz", powf(20000.0f, mod->p3 / 255.0f));
+              screenMessage(0, "Frequency %.0f Hz", powf(8000.0f, mod->p3 / 255.0f));
             else
               screenMessage(0, "Period %hhu ticks", mod->p3);
           }

@@ -41,8 +41,8 @@ static void drawStatic(void) {
     gfxPrint(0, 5, "Damping"); gfxPrint(0, 6, "Filter");
   } else {
     gfxPrint(0, 0, "PING-PONG DELAY");
-    gfxPrint(0, 3, "Return"); gfxPrint(0, 4, "Ticks");
-    gfxPrint(0, 5, "Feedback"); gfxPrint(0, 6, "Filter");
+    gfxPrint(0, 3, "Return"); gfxPrint(0, 4, "To Reverb");
+    gfxPrint(0, 5, "Ticks"); gfxPrint(0, 6, "Feedback"); gfxPrint(0, 7, "Filter");
   }
 }
 
@@ -53,8 +53,8 @@ static void drawCursor(int col, int row) {
     if (row == PROJECT_MAX_TRACKS) { gfxCursor(10, 12, 16); return; }
     if (col < 0 || col >= 5 || row < 0 || row >= PROJECT_MAX_TRACKS) return;
     gfxCursor(x[col], 3 + row, width[col]);
-  } else if (row >= 0 && row < 4) {
-    gfxCursor(12, 3 + row, row == 3 ? 8 : 4);
+  } else if (row >= 0 && row < (mixerPage == 2 ? 5 : 4)) {
+    gfxCursor(12, 3 + row, row == (mixerPage == 2 ? 4 : 3) ? 8 : 4);
   }
 }
 
@@ -86,9 +86,10 @@ static void drawField(int col, int row, CellState state) {
     else gfxPrintf(12, 6, "%u Hz", p->reverbFilterCutoffHz);
   } else {
     if (row == 0) gfxPrintf(12, 3, "%03d%%", p->delayReturn);
-    else if (row == 1) gfxPrintf(12, 4, "%02X", p->delayTicks);
-    else if (row == 2) gfxPrintf(12, 5, "%03d%%", p->delayFeedback);
-    else gfxPrintf(12, 6, "%u Hz", p->delayFilterCutoffHz);
+    else if (row == 1) gfxPrintf(12, 4, "%03d%%", p->delayReverbSend);
+    else if (row == 2) gfxPrintf(12, 5, "%02X", p->delayTicks);
+    else if (row == 3) gfxPrintf(12, 6, "%03d%%", p->delayFeedback);
+    else gfxPrintf(12, 7, "%u Hz", p->delayFilterCutoffHz);
   }
 }
 
@@ -123,7 +124,7 @@ static int onEdit(int col, int row, CellEditAction action) {
       if (col == 3) audioManager.toggleTrackMute(row); else audioManager.toggleTrackSolo(row);
       handled = 1;
     }
-  } else if (row >= 0 && row < 4) {
+  } else if (row >= 0 && row < (mixerPage == 2 ? 5 : 4)) {
     if (mixerPage == 1) {
       if (row == 0) handled = edit8noLast(action, &p->reverbReturn, 10, 0, 100);
       else if (row == 1) handled = edit8noLast(action, &p->reverbTime, 16, 0, 255);
@@ -131,8 +132,9 @@ static int onEdit(int col, int row, CellEditAction action) {
       else handled = editFilterCutoff(action, &p->reverbFilterCutoffHz);
     } else {
       if (row == 0) handled = edit8noLast(action, &p->delayReturn, 10, 0, 100);
-      else if (row == 1) handled = edit8noLast(action, &p->delayTicks, 4, 1, 255);
-      else if (row == 2) handled = edit8noLast(action, &p->delayFeedback, 10, 0, 95);
+      else if (row == 1) handled = edit8noLast(action, &p->delayReverbSend, 10, 0, 100);
+      else if (row == 2) handled = edit8noLast(action, &p->delayTicks, 4, 1, 255);
+      else if (row == 3) handled = edit8noLast(action, &p->delayFeedback, 10, 0, 95);
       else handled = editFilterCutoff(action, &p->delayFilterCutoffHz);
     }
   }
@@ -166,7 +168,7 @@ static void draw(void) {
 
 static void setPage(int page) {
   mixerPage = page;
-  screen.rows = page == 0 ? PROJECT_MAX_TRACKS + 1 : 4;
+  screen.rows = page == 0 ? PROJECT_MAX_TRACKS + 1 : (page == 2 ? 5 : 4);
   screen.cursorRow = 0;
   screen.cursorCol = 0;
   fullRedraw();

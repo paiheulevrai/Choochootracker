@@ -741,8 +741,14 @@ static int projectLoadInternal(FILE* file, Project* project) {
   if (line && sscanf(line, "- Reverb: %hhu,%hhu,%hhu,%hu", &p.reverbReturn, &p.reverbTime,
                      &p.reverbDamping, &p.reverbFilterCutoffHz) == 4) consumeLine(file);
   line = peekLine(file);
-  if (line && sscanf(line, "- Delay: %hhu,%hhu,%hhu,%hu", &p.delayReturn, &p.delayTicks,
-                     &p.delayFeedback, &p.delayFilterCutoffHz) == 4) consumeLine(file);
+  if (line && sscanf(line, "- Delay: %hhu,%hhu,%hhu,%hhu,%hu", &p.delayReturn, &p.delayReverbSend,
+                     &p.delayTicks, &p.delayFeedback, &p.delayFilterCutoffHz) == 5) {
+    consumeLine(file);
+  } else if (line && sscanf(line, "- Delay: %hhu,%hhu,%hhu,%hu", &p.delayReturn,
+                            &p.delayTicks, &p.delayFeedback, &p.delayFilterCutoffHz) == 4) {
+    p.delayReverbSend = 0;
+    consumeLine(file);
+  }
 
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
     if (p.trackReverbSend[i] > 100) p.trackReverbSend[i] = 100;
@@ -750,6 +756,7 @@ static int projectLoadInternal(FILE* file, Project* project) {
   }
   if (p.reverbReturn > 100) p.reverbReturn = 100;
   if (p.delayReturn > 100) p.delayReturn = 100;
+  if (p.delayReverbSend > 100) p.delayReverbSend = 100;
   if (p.delayFeedback > 95) p.delayFeedback = 95;
   if (p.delayTicks == 0) p.delayTicks = 1;
   if (p.reverbFilterCutoffHz < 20) p.reverbFilterCutoffHz = 20;
@@ -1165,8 +1172,8 @@ static int projectSaveInternal(FILE* file, Project* project) {
     project->trackDelaySend[4], project->trackDelaySend[5], project->trackDelaySend[6], project->trackDelaySend[7]);
   fprintf(file, "- Reverb: %hhu,%hhu,%hhu,%hu\n", project->reverbReturn, project->reverbTime,
     project->reverbDamping, project->reverbFilterCutoffHz);
-  fprintf(file, "- Delay: %hhu,%hhu,%hhu,%hu\n", project->delayReturn, project->delayTicks,
-    project->delayFeedback, project->delayFilterCutoffHz);
+  fprintf(file, "- Delay: %hhu,%hhu,%hhu,%hhu,%hu\n", project->delayReturn, project->delayReverbSend,
+    project->delayTicks, project->delayFeedback, project->delayFilterCutoffHz);
   fprintf(file, "- Linear pitch: %d\n", project->linearPitch);
   fprintf(file, "- Signed track speed: %d\n", project->signedTrackSpeed);
   fprintf(file, "- Perceptual effects: %d\n", project->perceptualEffects);
