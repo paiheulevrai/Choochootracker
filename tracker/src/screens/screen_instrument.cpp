@@ -339,7 +339,7 @@ void instrumentCommonDrawVoicePostStatic(int drawEnvelope) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(18, 7, "FILTER");
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  gfxPrint(18, 8, "Status");
+  gfxPrint(18, 8, "Type");
   gfxPrint(18, 9, "Mode");
   gfxPrint(18, 10, "Slope");
   gfxPrint(18, 11, "Cutoff");
@@ -381,7 +381,7 @@ int instrumentCommonDrawVoicePostField(int col, int row, CellState state,
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   gfxClearRect(26, row + 4, 8, 1);
   switch (row) {
-    case 4: gfxPrint(26, 8, post->filterEnabled ? "On" : "Off"); break;
+    case 4: { static const char* types[] = {"Off", "Clean", "Classic", "Aggro", "Acid"}; gfxPrint(26, 8, types[post->filterCharacter <= 4 ? post->filterCharacter : 1]); break; }
     case 5: { static const char* modes[] = {"LP", "BP", "HP"}; gfxPrint(26, 9, modes[post->filterMode <= 2 ? post->filterMode : 0]); break; }
     case 6: gfxPrint(26, 10, post->filterSlope24dB ? "24 dB" : "12 dB"); break;
     case 7: gfxPrintf(26, 11, "%u Hz", post->filterCutoffHz); break;
@@ -398,7 +398,11 @@ int instrumentCommonOnEditVoicePost(int col, int row, CellEditAction action,
   }
   if (!col) return 0;
   switch (row) {
-    case 4: return edit8noLast(action, &post->filterEnabled, 1, 0, 1);
+    case 4: {
+      int handled = edit8noLast(action, &post->filterCharacter, 1, 0, 4);
+      post->filterEnabled = post->filterCharacter != 0;
+      return handled;
+    }
     case 5: return edit8noLast(action, &post->filterMode, 1, 0, 2);
     case 6: return edit8noLast(action, &post->filterSlope24dB, 1, 0, 1);
     case 7: return editFilterCutoff(action, &post->filterCutoffHz);

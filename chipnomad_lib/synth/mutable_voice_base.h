@@ -52,9 +52,9 @@ class MutableVoiceBase {
     auxMix_ = auxMix;
     post_.setGain(gain);
   }
-  void setFilter(bool enabled, uint8_t mode, bool slope24dB,
+  void setFilter(bool enabled, uint8_t character, uint8_t mode, bool slope24dB,
                  float cutoffHz, float resonance) {
-    post_.setFilter(enabled, mode, slope24dB, cutoffHz, resonance);
+    post_.setFilter(enabled, character, mode, slope24dB, cutoffHz, resonance);
   }
   void setEnvelope(float attack, float decay, float sustain, float release,
                    uint8_t shape = 0x80) {

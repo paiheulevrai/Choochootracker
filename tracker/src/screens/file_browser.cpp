@@ -130,6 +130,33 @@ void fileBrowserSetup(const char* title, const char* extension, const char* star
     cancelCallback, NULL);
 }
 
+int fileBrowserGetAdjacentPath(const char* currentPath, const char* extension,
+  int direction, char* outputPath, int outputPathSize) {
+  const char* separator = strrchr(currentPath, PATH_SEPARATOR);
+  if (!separator || outputPathSize <= 0) return 0;
+  char directory[PATH_LENGTH + 1];
+  size_t directoryLength = separator - currentPath;
+  if (directoryLength >= sizeof(directory)) return 0;
+  memcpy(directory, currentPath, directoryLength);
+  directory[directoryLength] = 0;
+  int count = 0;
+  FileEntry* entries = fileListDirectory(directory, extension, &count);
+  if (!entries) return 0;
+  const char* current = separator + 1;
+  const char* selected = NULL;
+  for (int i = 0; i < count; ++i) {
+    if (entries[i].isDirectory) continue;
+    int comparison = strcmp(entries[i].name, current);
+    if ((direction > 0 && comparison > 0 && (!selected || strcmp(entries[i].name, selected) < 0)) ||
+        (direction < 0 && comparison < 0 && (!selected || strcmp(entries[i].name, selected) > 0))) selected = entries[i].name;
+  }
+  if (!selected) for (int i = 0; i < count; ++i) if (!entries[i].isDirectory &&
+    (!selected || (direction > 0 ? strcmp(entries[i].name, selected) < 0 : strcmp(entries[i].name, selected) > 0))) selected = entries[i].name;
+  if (selected) snprintf(outputPath, outputPathSize, "%s%s%s", directory, PATH_SEPARATOR_STR, selected);
+  free(entries);
+  return selected != NULL;
+}
+
 void fileBrowserSetupWithPreview(const char* title, const char* extension,
     const char* startPath, void (*fileCallback)(const char*),
     void (*cancelCallback)(void), void (*previewCallback)(const char*)) {

@@ -323,7 +323,10 @@ static void initModulations(PlaybackState* state, int trackIdx, uint8_t oldInstr
 
     // Check if this is an LFO with "free" trigger mode
     // LFO parameters: p1=shape, p2=trigger, p3=period
-    int isLFOFree = (mod->type == ModulationType::LFO && mod->p2 == static_cast<uint8_t>(LFOTrigger::free));
+    int isLFOFree = ((mod->type == ModulationType::LFO ||
+                      mod->type == ModulationType::SLFO ||
+                      mod->type == ModulationType::FLFO) &&
+                     mod->p2 == static_cast<uint8_t>(LFOTrigger::free));
 
     // Initialize modulation if:
     // 1. Instrument changed (always reinit), OR
@@ -633,7 +636,8 @@ static void processModulations(PlaybackState* state, int trackIdx) {
   for (int i = 0; i < 4; i++) {
     PlaybackModState* mod = &track->note.modulation[i];
     // Skip if modulation not initialized or destination == 0 (no destination)
-    if (!mod->modulation || mod->modulation->destination == 0) continue;
+    if (!mod->modulation || mod->modulation->destination == 0 ||
+        mod->modulation->type == ModulationType::FLFO) continue;
     playbackModNext(mod);
   }
 }

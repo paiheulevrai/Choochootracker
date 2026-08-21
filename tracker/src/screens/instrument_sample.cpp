@@ -125,39 +125,8 @@ static int onEdit(int col, int row, CellEditAction action) {
 
 static int loadAdjacentSample(int direction) {
   InstrumentSample* sample = &chipnomadState->project.instruments[cInstrument].chip.sample;
-  const char* separator = strrchr(sample->path, PATH_SEPARATOR);
-  if (!separator) return 0;
-  char directory[PROJECT_SAMPLE_PATH_LENGTH + 1];
-  size_t directoryLength = separator - sample->path;
-  if (directoryLength >= sizeof(directory)) return 0;
-  memcpy(directory, sample->path, directoryLength);
-  directory[directoryLength] = 0;
-  int count = 0;
-  FileEntry* entries = fileListDirectory(directory, ".wav", &count);
-  if (!entries) return 0;
-  const char* current = separator + 1;
-  const char* selected = NULL;
-  for (int i = 0; i < count; ++i) {
-    if (entries[i].isDirectory) continue;
-    int comparison = strcmp(entries[i].name, current);
-    if (direction > 0 && comparison > 0 &&
-        (!selected || strcmp(entries[i].name, selected) < 0)) selected = entries[i].name;
-    if (direction < 0 && comparison < 0 &&
-        (!selected || strcmp(entries[i].name, selected) > 0)) selected = entries[i].name;
-  }
-  if (!selected) {
-    for (int i = 0; i < count; ++i) {
-      if (entries[i].isDirectory) continue;
-      if (!selected || (direction > 0 ? strcmp(entries[i].name, selected) < 0
-                                      : strcmp(entries[i].name, selected) > 0)) {
-        selected = entries[i].name;
-      }
-    }
-  }
   char path[PROJECT_SAMPLE_PATH_LENGTH + 1];
-  if (selected) snprintf(path, sizeof(path), "%s%s%s", directory, PATH_SEPARATOR_STR, selected);
-  free(entries);
-  if (!selected) return 0;
+  if (!fileBrowserGetAdjacentPath(sample->path, ".wav", direction, path, sizeof(path))) return 0;
   onSampleLoaded(path);
   return 1;
 }

@@ -196,7 +196,11 @@ static int loadInstrumentAYSample(FILE* file, Instrument* instrument) {
 }
 
 static int loadVoicePostSetting(const char* line, InstrumentVoicePostSettings* post) {
-  if (strncmp(line, "- Filter enabled: ", 18) == 0) sscanf(line, "- Filter enabled: %hhu", &post->filterEnabled);
+  if (strncmp(line, "- Filter enabled: ", 18) == 0) {
+    sscanf(line, "- Filter enabled: %hhu", &post->filterEnabled);
+    if (!post->filterEnabled) post->filterCharacter = 0;
+  }
+  else if (strncmp(line, "- Filter character: ", 20) == 0) sscanf(line, "- Filter character: %hhu", &post->filterCharacter);
   else if (strncmp(line, "- Filter mode: ", 15) == 0) sscanf(line, "- Filter mode: %hhu", &post->filterMode);
   else if (strncmp(line, "- Filter slope: ", 16) == 0) sscanf(line, "- Filter slope: %hhu", &post->filterSlope24dB);
   else if (strncmp(line, "- Filter cutoff: ", 17) == 0) sscanf(line, "- Filter cutoff: %hu", &post->filterCutoffHz);
@@ -212,6 +216,7 @@ static int loadVoicePostSetting(const char* line, InstrumentVoicePostSettings* p
 
 static void saveVoicePostSettings(FILE* file, const InstrumentVoicePostSettings* post) {
   fprintf(file, "- Filter enabled: %hhu\n", post->filterEnabled);
+  fprintf(file, "- Filter character: %hhu\n", post->filterCharacter);
   fprintf(file, "- Filter mode: %hhu\n", post->filterMode);
   fprintf(file, "- Filter slope: %hhu\n", post->filterSlope24dB);
   fprintf(file, "- Filter cutoff: %hu\n", post->filterCutoffHz);

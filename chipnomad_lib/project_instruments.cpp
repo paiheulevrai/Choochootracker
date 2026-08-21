@@ -106,6 +106,7 @@ static const char* modNameBraids(int modIndex) {
 
 static void initVoicePostSettings(InstrumentVoicePostSettings* post) {
   post->filterEnabled = 1;
+  post->filterCharacter = 1;
   post->filterMode = 0;
   post->filterSlope24dB = 0;
   post->filterCutoffHz = 20000;

@@ -119,6 +119,11 @@ int edit8noLast(CellEditAction action, uint8_t* value, uint8_t bigStep, uint8_t 
   return 0;
 }
 
+void cycle8(uint8_t* value, int direction, uint8_t min, uint8_t max, int wrap) {
+  if (direction > 0) *value = *value < max ? *value + 1 : (wrap ? min : max);
+  else *value = *value > min ? *value - 1 : (wrap ? max : min);
+}
+
 int edit8noLimit(CellEditAction action, uint8_t* value, uint8_t* lastValue, uint8_t bigStep) {
   int handled = 0;
   int isNotMultiAction = !isMultiAction(action);

@@ -6,6 +6,7 @@
 #include "project_utils.h"
 #include "screen_instrument.h"
 #include "selection_popup.h"
+#include <math.h>
 #include <string.h>
 
 // Screen layout (20 rows):
@@ -140,6 +141,8 @@ static const char* modTypeName(ModulationType type) {
     case ModulationType::ADSR: return "ADSR";
     case ModulationType::AHD:  return "AHD ";
     case ModulationType::LFO:  return "LFO ";
+    case ModulationType::SLFO: return "SLFO";
+    case ModulationType::FLFO: return "FLFO";
     default:      return "?   ";
   }
 }
@@ -189,6 +192,17 @@ static const char* paramLabel(ModulationType type, int paramIdx) {
       if (paramIdx == 1) return "Trig";
       if (paramIdx == 2) return "Period";
       break;
+    case ModulationType::SLFO:
+      if (paramIdx == 0) return "Shape";
+      if (paramIdx == 1) return "Trig";
+      if (paramIdx == 2) return "Ticks";
+      if (paramIdx == 3) return "Mult";
+      break;
+    case ModulationType::FLFO:
+      if (paramIdx == 0) return "Shape";
+      if (paramIdx == 1) return "Trig";
+      if (paramIdx == 2) return "Freq";
+      break;
     default:
       break;
   }
@@ -201,6 +215,8 @@ static int paramCount(ModulationType type) {
     case ModulationType::ADSR: return 4;
     case ModulationType::AHD:  return 3;
     case ModulationType::LFO:  return 3;
+    case ModulationType::SLFO: return 4;
+    case ModulationType::FLFO: return 3;
     default:      return 0;
   }
 }
@@ -309,13 +325,16 @@ static void drawField(int col, int row, CellState state) {
       if (mod->type == ModulationType::AHD || mod->type == ModulationType::ADSR) {
         uint8_t* params = &mod->p1;
         gfxPrint(valX, y, byteToHex(params[paramIdx]));
-      } else if (mod->type == ModulationType::LFO) {
+      } else if (mod->type == ModulationType::LFO || mod->type == ModulationType::SLFO || mod->type == ModulationType::FLFO) {
         if (paramIdx == 0) {
           gfxPrint(valX, y, lfoShapeName(static_cast<LFOShape>(mod->p1)));
         } else if (paramIdx == 1) {
           gfxPrint(valX, y, lfoTrigName(static_cast<LFOTrigger>(mod->p2)));
         } else if (paramIdx == 2) {
-          gfxPrint(valX, y, byteToHex(mod->p3));
+          if (mod->type == ModulationType::FLFO) gfxPrintf(valX, y, "%5.0f", powf(20000.0f, mod->p3 / 255.0f));
+          else gfxPrint(valX, y, byteToHex(mod->p3));
+        } else if (paramIdx == 3) {
+          gfxPrint(valX, y, byteToHex(mod->p4));
         }
       }
       break;
@@ -340,8 +359,9 @@ static int onEdit(int col, int row, enum CellEditAction action) {
       if (oldType != type) {
         mod->p1 = 0;
         mod->p2 = 0;
-        mod->p3 = (mod->type == ModulationType::ADSR) ? 255 : 6;
-        mod->p4 = 0;
+        mod->p3 = (mod->type == ModulationType::ADSR) ? 255 :
+                  (mod->type == ModulationType::FLFO ? 0 : 6);
+        mod->p4 = mod->type == ModulationType::SLFO ? 1 : 0;
         screenFullRedraw(&screenData);
       }
       break;
@@ -383,7 +403,7 @@ static int onEdit(int col, int row, enum CellEditAction action) {
             screenMessage(0, "%s %hhu ticks", fullName, params[paramIdx]);
           }
         }
-      } else if (mod->type == ModulationType::LFO) {
+      } else if (mod->type == ModulationType::LFO || mod->type == ModulationType::SLFO || mod->type == ModulationType::FLFO) {
         if (paramIdx == 0) {
           handled = edit8noLast(action, &mod->p1, 1, 0, static_cast<uint8_t>(LFOShape::totalCount) - 1);
           // No hint for LFO shape - not adding value
@@ -393,8 +413,14 @@ static int onEdit(int col, int row, enum CellEditAction action) {
         } else if (paramIdx == 2) {
           handled = edit8noLast(action, &mod->p3, 16, 0, 255);
           if (handled) {
-            screenMessage(0, "Period %hhu ticks", mod->p3);
+            if (mod->type == ModulationType::FLFO)
+              screenMessage(0, "Frequency %.0f Hz", powf(20000.0f, mod->p3 / 255.0f));
+            else
+              screenMessage(0, "Period %hhu ticks", mod->p3);
           }
+        } else if (paramIdx == 3 && mod->type == ModulationType::SLFO) {
+          handled = edit8noLast(action, &mod->p4, 1, 1, 64);
+          if (handled) screenMessage(0, "%hhu x %hhu ticks", mod->p4, mod->p3);
         }
       }
       break;
@@ -419,8 +445,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     }
     if (isKeyDown && (keys == (keyEdit | keyLeft) || keys == (keyEdit | keyRight))) {
       int maximum = instrumentModDestinationMax(instrument->type);
-      if (keys == (keyEdit | keyRight)) mod->destination = mod->destination >= maximum ? 0 : mod->destination + 1;
-      else mod->destination = mod->destination == 0 ? maximum : mod->destination - 1;
+      cycle8(&mod->destination, keys == (keyEdit | keyRight) ? 1 : -1, 0, maximum, 1);
       destinationButtonDown = 0;
       projectModified = 1;
       drawField(screenData.cursorCol, screenData.cursorRow, CellState::focus);

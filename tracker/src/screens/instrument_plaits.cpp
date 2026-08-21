@@ -107,7 +107,7 @@ static int onEdit(int col, int row, CellEditAction action) {
     case 3:
       handled = edit8noLast(action, &p->engine, 1, 0, 23);
       break;
-    case 4: handled = !col ? editOscillatorParameter(action, &p->harmonics) : edit8noLast(action, &p->filterEnabled, 1, 0, 1); break;
+    case 4: handled = !col ? editOscillatorParameter(action, &p->harmonics) : instrumentCommonOnEditVoicePost(col, row, action, p); break;
     case 5: handled = !col ? editOscillatorParameter(action, &p->timbre) : edit8noLast(action, &p->filterMode, 1, 0, 2); break;
     case 6: handled = !col ? editOscillatorParameter(action, &p->morph) : edit8noLast(action, &p->filterSlope24dB, 1, 0, 1); break;
     case 7: handled = !col ? edit8noLast(action, &p->auxMix, 16, 0, 255) : editFilterCutoff(action, &p->filterCutoffHz); break;
@@ -137,8 +137,11 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   }
   if (isKeyDown && (keys == (keyEdit | keyLeft) ||
                     keys == (keyEdit | keyRight))) {
+    cycle8(&chipnomadState->project.instruments[cInstrument].chip.plaits.engine,
+      keys == (keyEdit | keyRight) ? 1 : -1, 0, 23, 0);
+    projectModified = 1;
     engineButtonDown = 0;
-    return 0;
+    return 1;
   }
   if (!isKeyDown && keys == 0 && engineButtonDown) {
     engineButtonDown = 0;

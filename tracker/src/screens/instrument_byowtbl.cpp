@@ -11,11 +11,18 @@
 
 static int loadSlot, buttonDown;
 
-static const char* shortFilename(const char* path) {
+static const char* shortFilename(const char* path, char* output) {
   const char* name = strrchr(path, PATH_SEPARATOR);
   name = name ? name + 1 : path;
-  size_t length = strlen(name);
-  return length > 7 ? name + length - 7 : name;
+  const char* extension = strrchr(name, '.');
+  size_t length = extension ? (size_t)(extension - name) : strlen(name);
+  if (length > 7) {
+    name += length - 7;
+    length = 7;
+  }
+  memcpy(output, name, length);
+  output[length] = 0;
+  return output;
 }
 
 static void cancelled(void) { screenSetup(&screenInstrument, cInstrument); }
@@ -28,6 +35,7 @@ static void loaded(const char* path) {
                        &table->tableFrames[loadSlot], error, sizeof(error))) {
     screenMessage(MESSAGE_TIME * 3, "%s", error);
   } else {
+    updatePathFromFile(appSettings.srWavetablePath, path);
     projectModified = 1;
     screenMessage(MESSAGE_TIME, "%u x %u frames", table->tableFrames[loadSlot], table->frameSize[loadSlot]);
   }
@@ -65,8 +73,9 @@ static void drawField(int col, int row, CellState state) {
   if (instrumentCommonDrawVoicePostField(col, row, state, table)) return;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   if (!col && row >= 3 && row <= 8) gfxClearRect(11, row + 5, 7, 1);
-  if (row == 3 && !col) gfxPrint(11, 8, table->oscillator[0].path[0] ? shortFilename(table->oscillator[0].path) : "Load");
-  else if (row == 4 && !col) gfxPrint(11, 9, table->oscillator[1].path[0] ? shortFilename(table->oscillator[1].path) : "Load");
+  char name[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
+  if (row == 3 && !col) gfxPrint(11, 8, table->oscillator[0].path[0] ? shortFilename(table->oscillator[0].path, name) : "Load");
+  else if (row == 4 && !col) gfxPrint(11, 9, table->oscillator[1].path[0] ? shortFilename(table->oscillator[1].path, name) : "Load");
   else if (row == 5 && !col) gfxPrint(11, 10, byteToHex(table->frameIndex[0]));
   else if (row == 6 && !col) gfxPrint(11, 11, byteToHex(table->frameIndex[1]));
   else if (row == 7 && !col) gfxPrintf(11, 12, "+%03d ct", scwfDetuneCents(table->detune));
@@ -90,10 +99,17 @@ static int edit(int col, int row, CellEditAction action) {
 static int input(int isKeyDown, int keys, int) {
   int row = screenInstrumentBYOWTBL.cursorRow;
   if ((row != 3 && row != 4) || screenInstrumentBYOWTBL.cursorCol) { buttonDown = 0; return 0; }
+  if (isKeyDown && (keys == (keyEdit | keyLeft) || keys == (keyEdit | keyRight))) {
+    InstrumentBYOWTBL* table = &chipnomadState->project.instruments[cInstrument].chip.byowtbl;
+    int direction = keys == (keyEdit | keyRight) ? 1 : -1;
+    char path[PROJECT_SAMPLE_PATH_LENGTH + 1];
+    if (fileBrowserGetAdjacentPath(table->oscillator[row - 3].path, ".wav", direction, path, sizeof(path))) { loadSlot = row - 3; loaded(path); }
+    return 1;
+  }
   if (isKeyDown && keys == keyEdit) { buttonDown = 1; return 1; }
   if (!isKeyDown && !keys && buttonDown) {
     buttonDown = 0; loadSlot = row - 3;
-    fileBrowserSetup("LOAD SR WAVETABLE", ".wav", appSettings.samplePath, loaded, cancelled);
+    fileBrowserSetup("LOAD SR WAVETABLE", ".wav", appSettings.srWavetablePath, loaded, cancelled);
     screenSetup(&screenFileBrowser, 0); return 1;
   }
   return 0;

@@ -86,6 +86,12 @@ int editFX(CellEditAction action, uint8_t* fx, uint8_t* lastValue, int isTable, 
 int editFXValue(CellEditAction action, uint8_t* fx, uint8_t* lastFX, int isTable, uint8_t instrumentIdx) {
   action = convertMultiAction(action);
 
+  if (fx[0] == fxSPD && !chipnomadState->project.signedTrackSpeed) {
+    int handled = edit8noLast(action, &fx[1], 1, 0, 0x10);
+    screenMessage(0, helpFXHint(fx, isTable, instrumentIdx));
+    return handled;
+  }
+
   uint8_t bigStep = 16;
   if (fx[0] == fxENT || fx[0] == fxTNN || fx[0] == fxENN || fx[0] == fxSFN) {
     // Note-setting FX: use octave size for big step

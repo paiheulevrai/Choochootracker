@@ -27,8 +27,12 @@ class BraidsVoice {
   void setGain(float gain);
   void setGlobalSettings(uint8_t bits, uint8_t drift, uint8_t signature,
                          uint32_t signatureSeed);
-  void setFilter(bool enabled, BraidsFilterMode mode, bool slope24dB,
+  void setFilter(bool enabled, uint8_t character, BraidsFilterMode mode, bool slope24dB,
                  float cutoffHz, float resonance);
+  void setFilter(bool enabled, BraidsFilterMode mode, bool slope24dB,
+                 float cutoffHz, float resonance) {
+    setFilter(enabled, 1, mode, slope24dB, cutoffHz, resonance);
+  }
   void setEnvelope(bool enabled, float attackSeconds, float decaySeconds,
                    float sustain, float releaseSeconds, uint8_t shape = 0x80);
   void noteOn();

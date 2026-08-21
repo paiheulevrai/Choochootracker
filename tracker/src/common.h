@@ -71,6 +71,8 @@ struct AppSettings {
   char fontFolderPath[PATH_LENGTH + 1];
   char samplePath[PATH_LENGTH + 1];
   char ayWavetablePath[PATH_LENGTH + 1];
+  char scwfPath[PATH_LENGTH + 1];
+  char srWavetablePath[PATH_LENGTH + 1];
 };
 
 extern AppSettings appSettings;
@@ -94,6 +96,7 @@ void resetKeyMappingToDefaults(void);
 
 // Utility functions
 void extractFilenameWithoutExtension(const char* path, char* output, int maxLength);
+void updatePathFromFile(char* destination, const char* path);
 const char* getAutosavePath(void);
 void clearNotePreview(void);
 

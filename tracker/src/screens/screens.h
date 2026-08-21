@@ -128,6 +128,7 @@ int edit16withLimit(CellEditAction action, uint16_t* value, uint16_t* lastValue,
 int edit8withLimit(CellEditAction action, uint8_t* value, uint8_t* lastValue, uint8_t bigStep, uint8_t max);
 int edit8noLimit(CellEditAction action, uint8_t* value, uint8_t* lastValue, uint8_t bigStep);
 int edit8noLast(CellEditAction action, uint8_t* value, uint8_t bigStep, uint8_t min, uint8_t max);
+void cycle8(uint8_t* value, int direction, uint8_t min, uint8_t max, int wrap);
 int editSigned16(CellEditAction action, int16_t* value, int16_t bigStep, int16_t min, int16_t max);
 int editSigned8(CellEditAction action, int8_t* value, int8_t bigStep, int8_t min, int8_t max);
 int edit16withMinMax(CellEditAction action, uint16_t* value, uint16_t bigStep, uint16_t min, uint16_t max);

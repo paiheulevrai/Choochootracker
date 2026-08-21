@@ -51,7 +51,7 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
   loopMode_ = loopMode > 2 ? 0 : loopMode;
   grainSize_ = (uint32_t)(outputSampleRate_ * 0.040f);
   grainHop_ = grainSize_ / 2;
-  post_.setFilter(sample_->filterEnabled != 0, sample_->filterMode,
+  post_.setFilter(sample_->filterEnabled != 0, sample_->filterCharacter, sample_->filterMode,
                   sample_->filterSlope24dB != 0, cutoffHz, resonance / 255.0f);
   post_.setEnvelope(true, envelopeTime(sample_->attack), envelopeTime(sample_->decay),
                     sample_->sustain / 255.0f, envelopeTime(sample_->release),

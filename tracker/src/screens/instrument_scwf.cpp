@@ -17,10 +17,17 @@ static const char* filename(const char* path) {
   return separator ? separator + 1 : path;
 }
 
-static const char* shortFilename(const char* path, size_t maxLength) {
+static const char* shortFilename(const char* path, char* output, size_t maxLength) {
   const char* name = filename(path);
-  size_t length = strlen(name);
-  return length > maxLength ? name + length - maxLength : name;
+  const char* extension = strrchr(name, '.');
+  size_t length = extension ? (size_t)(extension - name) : strlen(name);
+  if (length > maxLength) {
+    name += length - maxLength;
+    length = maxLength;
+  }
+  memcpy(output, name, length);
+  output[length] = 0;
+  return output;
 }
 
 static void cancelled(void) { screenSetup(&screenInstrument, cInstrument); }
@@ -37,6 +44,7 @@ static void loaded(const char* path) {
     scwf->oscillator[loadSlot].path[0] = 0;
     screenMessage(MESSAGE_TIME * 3, "2xSCWF needs mono WAV");
   } else {
+    updatePathFromFile(appSettings.scwfPath, path);
     projectModified = 1;
   }
   audioManager.resume();
@@ -72,8 +80,9 @@ static void drawField(int col, int row, CellState state) {
   if (instrumentCommonDrawVoicePostField(col, row, state, scwf)) return;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   if (!col && row >= 3 && row <= 6) gfxClearRect(11,row + 5,7,1);
-  if (row == 3 && !col) gfxPrint(11,8,scwf->oscillator[0].path[0] ? shortFilename(scwf->oscillator[0].path, 7) : "Load");
-  else if (row == 4 && !col) gfxPrint(11,9,scwf->oscillator[1].path[0] ? shortFilename(scwf->oscillator[1].path, 7) : "Load");
+  char name[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
+  if (row == 3 && !col) gfxPrint(11,8,scwf->oscillator[0].path[0] ? shortFilename(scwf->oscillator[0].path, name, 7) : "Load");
+  else if (row == 4 && !col) gfxPrint(11,9,scwf->oscillator[1].path[0] ? shortFilename(scwf->oscillator[1].path, name, 7) : "Load");
   else if (row == 5 && !col) {
     int cents = scwfDetuneCents(scwf->detune);
     if (cents <= 200) gfxPrintf(11,10,"+%03d ct", cents);
@@ -102,38 +111,16 @@ static int input(int isKeyDown, int keys, int) {
   if (isKeyDown && (keys == (keyEdit | keyLeft) || keys == (keyEdit | keyRight))) {
     InstrumentSCWF* scwf = &chipnomadState->project.instruments[cInstrument].chip.scwf;
     InstrumentSample* oscillator = &scwf->oscillator[row - 3];
-    const char* separator = strrchr(oscillator->path, PATH_SEPARATOR);
-    if (!separator) return 1;
-    char directory[PROJECT_SAMPLE_PATH_LENGTH + 1];
-    size_t directoryLength = separator - oscillator->path;
-    if (directoryLength >= sizeof(directory)) return 1;
-    memcpy(directory, oscillator->path, directoryLength);
-    directory[directoryLength] = 0;
-    int count = 0;
-    FileEntry* entries = fileListDirectory(directory, ".wav", &count);
-    if (!entries) return 1;
-    const char* current = separator + 1;
-    const char* selected = NULL;
     int direction = keys == (keyEdit | keyRight) ? 1 : -1;
-    for (int i = 0; i < count; ++i) {
-      if (entries[i].isDirectory) continue;
-      int comparison = strcmp(entries[i].name, current);
-      if ((direction > 0 && comparison > 0 && (!selected || strcmp(entries[i].name, selected) < 0)) ||
-          (direction < 0 && comparison < 0 && (!selected || strcmp(entries[i].name, selected) > 0))) selected = entries[i].name;
-    }
-    if (!selected) for (int i = 0; i < count; ++i) if (!entries[i].isDirectory &&
-        (!selected || (direction > 0 ? strcmp(entries[i].name, selected) < 0 : strcmp(entries[i].name, selected) > 0))) selected = entries[i].name;
     char path[PROJECT_SAMPLE_PATH_LENGTH + 1];
-    if (selected) snprintf(path, sizeof(path), "%s%s%s", directory, PATH_SEPARATOR_STR, selected);
-    free(entries);
-    if (selected) { loadSlot = row - 3; loaded(path); }
+    if (fileBrowserGetAdjacentPath(oscillator->path, ".wav", direction, path, sizeof(path))) { loadSlot = row - 3; loaded(path); }
     return 1;
   }
   if (isKeyDown && keys == keyEdit) { buttonDown = 1; return 1; }
   if (!isKeyDown && keys == 0 && buttonDown) {
     buttonDown = 0;
     loadSlot = row - 3;
-    fileBrowserSetup("LOAD SCWF OSC", ".wav", appSettings.samplePath, loaded, cancelled);
+    fileBrowserSetup("LOAD SCWF OSC", ".wav", appSettings.scwfPath, loaded, cancelled);
     screenSetup(&screenFileBrowser, 0);
     return 1;
   }

@@ -15,11 +15,15 @@ class VoicePostProcessor {
   void setGain(float gain) {
     gain_ = gain < 0.0f ? 0.0f : (gain > 1.0f ? 1.0f : gain);
   }
-  void setFilter(bool enabled, uint8_t mode, bool slope24dB,
+  void setFilter(bool enabled, uint8_t character, uint8_t mode, bool slope24dB,
                  float cutoffHz, float resonance) {
     if (resonance < 0.0f) resonance = 0.0f;
     if (resonance > 1.0f) resonance = 1.0f;
-    filter_.configure(enabled, mode, slope24dB, cutoffHz, resonance * resonance);
+    filter_.configure(enabled, character, mode, slope24dB, cutoffHz, resonance * resonance);
+  }
+  void setFilter(bool enabled, uint8_t mode, bool slope24dB,
+                 float cutoffHz, float resonance) {
+    setFilter(enabled, 1, mode, slope24dB, cutoffHz, resonance);
   }
   void setEnvelope(bool enabled, float attack, float decay, float sustain,
                    float release, uint8_t shape) {

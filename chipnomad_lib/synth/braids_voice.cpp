@@ -55,10 +55,10 @@ void BraidsVoice::setGain(float gain) {
   post_.setGain(gain);
 }
 
-void BraidsVoice::setFilter(bool enabled, BraidsFilterMode mode,
+void BraidsVoice::setFilter(bool enabled, uint8_t character, BraidsFilterMode mode,
                             bool slope24dB, float cutoffHz,
                             float resonance) {
-  post_.setFilter(enabled, static_cast<uint8_t>(mode), slope24dB, cutoffHz, resonance);
+  post_.setFilter(enabled, character, static_cast<uint8_t>(mode), slope24dB, cutoffHz, resonance);
 }
 
 void BraidsVoice::setEnvelope(bool enabled, float attackSeconds,

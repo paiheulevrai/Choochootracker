@@ -52,22 +52,31 @@ void initDefaultAppSettings(void) {
   appSettings.projectFilename[0] = '\0';
 #ifdef WEB_BUILD
   strncpy(appSettings.projectPath, "/user/projects", PATH_LENGTH);
-  appSettings.projectPath[PATH_LENGTH] = '\0';
-#else
-  appSettings.projectPath[0] = '\0';
-#endif
-  appSettings.pitchTablePath[0] = '\0';
-  appSettings.instrumentPath[0] = '\0';
-  appSettings.themePath[0] = '\0';
-  appSettings.fontPath[0] = '\0';
-  appSettings.fontFolderPath[0] = '\0';
-#ifdef WEB_BUILD
   strncpy(appSettings.samplePath, "/user/samples", PATH_LENGTH);
-  appSettings.samplePath[PATH_LENGTH] = '\0';
+  strncpy(appSettings.ayWavetablePath, "/AY_wavetables", PATH_LENGTH);
+  strncpy(appSettings.scwfPath, "/waveforms", PATH_LENGTH);
+  strncpy(appSettings.srWavetablePath, "/SR_wavetables", PATH_LENGTH);
 #else
-  appSettings.samplePath[0] = '\0';
+  strncpy(appSettings.projectPath, "projects", PATH_LENGTH);
+  strncpy(appSettings.samplePath, "samples", PATH_LENGTH);
+  strncpy(appSettings.ayWavetablePath, "AY_wavetables", PATH_LENGTH);
+  strncpy(appSettings.scwfPath, "waveforms", PATH_LENGTH);
+  strncpy(appSettings.srWavetablePath, "SR_wavetables", PATH_LENGTH);
 #endif
-  appSettings.ayWavetablePath[0] = '\0';
+  appSettings.projectPath[PATH_LENGTH] = '\0';
+  appSettings.samplePath[PATH_LENGTH] = '\0';
+  appSettings.ayWavetablePath[PATH_LENGTH] = '\0';
+  appSettings.scwfPath[PATH_LENGTH] = '\0';
+  appSettings.srWavetablePath[PATH_LENGTH] = '\0';
+  strncpy(appSettings.pitchTablePath, "pitch-tables", PATH_LENGTH);
+  strncpy(appSettings.instrumentPath, "instruments", PATH_LENGTH);
+  strncpy(appSettings.themePath, "themes", PATH_LENGTH);
+  strncpy(appSettings.fontFolderPath, "fonts", PATH_LENGTH);
+  appSettings.pitchTablePath[PATH_LENGTH] = '\0';
+  appSettings.instrumentPath[PATH_LENGTH] = '\0';
+  appSettings.themePath[PATH_LENGTH] = '\0';
+  appSettings.fontFolderPath[PATH_LENGTH] = '\0';
+  appSettings.fontPath[0] = '\0';
 }
 
 int* pSongRow;
@@ -144,6 +153,8 @@ int settingsSave(void) {
   fprintf(file, "fontFolderPath: %s\n", appSettings.fontFolderPath);
   fprintf(file, "samplePath: %s\n", appSettings.samplePath);
   fprintf(file, "ayWavetablePath: %s\n", appSettings.ayWavetablePath);
+  fprintf(file, "scwfPath: %s\n", appSettings.scwfPath);
+  fprintf(file, "srWavetablePath: %s\n", appSettings.srWavetablePath);
 
   fclose(file);
   return 0;
@@ -285,6 +296,12 @@ int settingsLoad(void) {
     } else if (strncmp(line, "ayWavetablePath: ", 17) == 0) {
       strncpy(appSettings.ayWavetablePath, line + 17, PATH_LENGTH);
       appSettings.ayWavetablePath[PATH_LENGTH] = 0;
+    } else if (strncmp(line, "scwfPath: ", 10) == 0) {
+      strncpy(appSettings.scwfPath, line + 10, PATH_LENGTH);
+      appSettings.scwfPath[PATH_LENGTH] = 0;
+    } else if (strncmp(line, "srWavetablePath: ", 17) == 0) {
+      strncpy(appSettings.srWavetablePath, line + 17, PATH_LENGTH);
+      appSettings.srWavetablePath[PATH_LENGTH] = 0;
     } else if (strncmp(line, "wavetablePath: ", 15) == 0) {
       // Backwards compatibility with settings written before AY/SR separation.
       strncpy(appSettings.ayWavetablePath, line + 15, PATH_LENGTH);
@@ -396,6 +413,15 @@ void extractFilenameWithoutExtension(const char* path, char* output, int maxLeng
   if (dot) {
     *dot = 0;
   }
+}
+
+void updatePathFromFile(char* destination, const char* path) {
+  const char* separator = strrchr(path, PATH_SEPARATOR);
+  if (!separator) return;
+  size_t length = separator - path;
+  if (length > PATH_LENGTH) length = PATH_LENGTH;
+  memcpy(destination, path, length);
+  destination[length] = 0;
 }
 
 void clearNotePreview(void) {

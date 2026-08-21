@@ -12,10 +12,11 @@ struct PlaybackModState {
   int16_t p3Offset;
   int16_t p4Offset;
   uint8_t step; // Internal mod step, e.g. AHD/ADSR step. 0xff - modulation is stopped
-  uint8_t counter; // Internal tick counter
+  uint16_t counter; // Internal tick counter
   int16_t data1;  // ADSR: From
   int16_t data2;  // ADSR: To
   int16_t outValue; // Read calculated value from this field (16-bit signed range)
+  float phase;
 
   // Cached values to detect changes that require reinitialization
   ModulationType cachedType;
@@ -24,6 +25,7 @@ struct PlaybackModState {
 
 void playbackModInit(PlaybackModState* state, Modulation* mod);
 void playbackModNext(PlaybackModState* state);
+void playbackModNextAudio(PlaybackModState* state, float sampleRate);
 void playbackModNoteOff(PlaybackModState* state);
 
 // Helper function to scale modulation output to a specific range

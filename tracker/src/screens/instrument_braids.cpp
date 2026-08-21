@@ -88,8 +88,11 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   }
   if (isKeyDown && (keys == (keyEdit | keyLeft) ||
                     keys == (keyEdit | keyRight))) {
+    cycle8(&chipnomadState->project.instruments[cInstrument].chip.braids.model,
+      keys == (keyEdit | keyRight) ? 1 : -1, 0, 46, 0);
+    projectModified = 1;
     modelButtonDown = 0;
-    return 0;
+    return 1;
   }
   if (!isKeyDown && keys == 0 && modelButtonDown) {
     modelButtonDown = 0;

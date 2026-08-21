@@ -164,7 +164,7 @@ static void handleAHDnoteOff(PlaybackModState* state) {
   // Do nothing - AHD is not affected by note off
 }
 
-static void handleLFO(PlaybackModState* state) {
+static void handleLFO(PlaybackModState* state, uint16_t period) {
   // LFO parameters:
   // p1: shape (0-7)
   // p2: trigger mode (0-3)
@@ -174,8 +174,6 @@ static void handleLFO(PlaybackModState* state) {
 
   LFOShape shape = static_cast<LFOShape>(GET_P1(state));
   LFOTrigger trigger = static_cast<LFOTrigger>(GET_P2(state));
-  uint8_t period = GET_P3(state);
-
   if (period == 0) {
     state->outValue = 0;
     return;
@@ -315,6 +313,7 @@ void playbackModInit(PlaybackModState* state, Modulation* mod) {
   state->data1 = 0;
   state->data2 = 0;
   state->outValue = 0;
+  state->phase = 0.0f;
 
   // Cache type and p2 (LFO trigger mode) for change detection
   state->cachedType = GET_TYPE(state);
@@ -354,7 +353,10 @@ void playbackModNext(PlaybackModState* state) {
       handleAHD(state);
       break;
     case ModulationType::LFO:
-      handleLFO(state);
+      handleLFO(state, GET_P3(state));
+      break;
+    case ModulationType::SLFO:
+      handleLFO(state, (uint16_t)GET_P3(state) * (GET_P4(state) ? GET_P4(state) : 1));
       break;
     default:
       state->outValue = 0;
@@ -371,11 +373,31 @@ void playbackModNoteOff(PlaybackModState* state) {
       handleAHDnoteOff(state);
       break;
     case ModulationType::LFO:
+    case ModulationType::SLFO:
       handleLFOnoteOff(state);
       break;
     default:
       break;
   }
+}
+
+void playbackModNextAudio(PlaybackModState* state, float sampleRate) {
+  if (!state->modulation || GET_TYPE(state) != ModulationType::FLFO || sampleRate <= 0.0f) return;
+  float frequency = powf(20000.0f, GET_P3(state) / 255.0f);
+  float phase = state->phase;
+  float value;
+  switch (static_cast<LFOShape>(GET_P1(state))) {
+    case LFOShape::sin: value = sinf(phase * 6.2831853f); break;
+    case LFOShape::square: value = phase < 0.5f ? 1.0f : -1.0f; break;
+    case LFOShape::rampDown: value = 1.0f - phase; break;
+    case LFOShape::rampUp: value = phase; break;
+    case LFOShape::uniTri: value = phase < 0.5f ? phase * 2.0f : 2.0f - phase * 2.0f; break;
+    case LFOShape::uniSin: value = (1.0f - cosf(phase * 6.2831853f)) * 0.5f; break;
+    default: value = phase < 0.25f ? phase * 4.0f : (phase < 0.75f ? 2.0f - phase * 4.0f : phase * 4.0f - 4.0f); break;
+  }
+  state->outValue = (int16_t)(value * MOD_MAX_RANGE_F * GET_AMOUNT(state) / 127.0f);
+  state->phase += frequency / sampleRate;
+  state->phase -= floorf(state->phase);
 }
 
 int16_t playbackModScaleToRange(int16_t modValue, int16_t maxAmplitude) {

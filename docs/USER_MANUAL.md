@@ -285,7 +285,7 @@ Unsupported WAV formats display a longer error message. Convert unusual files to
 
 ## 8. Modulation, Tables, Groove and Wavetables
 
-Each instrument has four modulation slots. A slot can use ADSR, AHD or LFO behavior and targets a destination offered by that engine. The signed `Amt` is relative to the target's current value: positive values raise it and negative values lower it. Engine-specific destinations include Braids Timbre/Color, Plaits Harmonic/Timbre/Morph/Main-Aux and Sample playback/filter parameters. Generic destinations can modulate the track's Reverb/Delay sends or one of the four parameters of another modulation slot. Cross-modulation uses the source's previous tick and cannot target itself.
+Each instrument has four modulation slots. A slot can use ADSR, AHD, LFO, SLFO or FLFO behavior and targets a destination offered by that engine. SLFO runs once per selected number of tracker ticks, multiplied up to 64 times; FLFO runs per audio sample from 1 Hz to 20 kHz. The signed `Amt` is relative to the target's current value: positive values raise it and negative values lower it. Engine-specific destinations include Braids Timbre/Color, Plaits Harmonic/Timbre/Morph/Main-Aux and Sample playback/filter parameters. Generic destinations can modulate the track's Reverb/Delay sends or one of the four parameters of another modulation slot. Cross-modulation uses the source's previous tick and cannot target itself.
 
 Tap a destination to open the categorized selector. Synth macro parameters are shown as `000-1023`; this is a normalized interface range mapped to the engine's internal resolution. Instrument and send filters cover 20 Hz to 20 kHz on an exponential control curve.
 
@@ -382,6 +382,8 @@ The value is interpreted as a signed 8-bit relative change (`01` adds one, `FF` 
 | ADSR | Attack | Decay | Sustain | Release |
 | AHD | Attack | Hold | Decay | Unused |
 | LFO | Shape | Trigger mode | Period | Unused |
+| SLFO | Shape | Trigger mode | Ticks | Multiplier |
+| FLFO | Shape | Trigger mode | Frequency (1 Hz-20 kHz) | Unused |
 
 ### Braids FX
 

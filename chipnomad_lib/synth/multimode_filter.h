@@ -6,7 +6,7 @@
 class MultimodeFilter {
  public:
   void init(float sampleRate);
-  void configure(bool enabled, uint8_t mode, bool slope24dB,
+  void configure(bool enabled, uint8_t character, uint8_t mode, bool slope24dB,
                  float cutoffHz, float resonance);
   void reset();
   float process(float input, int channel = 0);
@@ -16,11 +16,12 @@ class MultimodeFilter {
 
   float sampleRate_;
   bool enabled_;
-  uint8_t mode_;
+  uint8_t character_, mode_;
   bool slope24dB_;
   float g_, k_, a1_, a2_, a3_;
   float ic1eq_[2][2];
   float ic2eq_[2][2];
+  float driveState_[2];
 };
 
 float filterCutoffFromControl(uint8_t value);

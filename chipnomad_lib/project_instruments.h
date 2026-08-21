@@ -28,6 +28,8 @@ enum class ModulationType : uint8_t {
   ADSR = 0,
   AHD = 1,
   LFO = 2,
+  SLFO = 3,
+  FLFO = 4,
   totalCount,
 };
 
@@ -60,7 +62,7 @@ struct Modulation {
   uint8_t p1; // ADSR: A, AHD: A, LFO: Shape
   uint8_t p2; // ADSR: D, AHD: H, LFO: Trig
   uint8_t p3; // ADSR: S, AHD: D, LFO: Period
-  uint8_t p4; // ADSR: R, AHD: -, LFO: -
+  uint8_t p4; // ADSR: R, AHD: -, LFO: -, SLFO: multiplier
 };
 
 // AY Instruments
@@ -140,6 +142,7 @@ struct InstrumentAYSample {
 
 struct InstrumentVoicePostSettings {
   uint8_t filterEnabled;
+  uint8_t filterCharacter; // 0: off, 1: clean, 2: classic, 3: aggressive, 4: acid
   uint8_t filterMode;
   uint8_t filterSlope24dB;
   uint16_t filterCutoffHz;

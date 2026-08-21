@@ -20,6 +20,8 @@ static void updateSCWFVoices(ChipNomadState* state);
 static void updatePlaitsVoices(ChipNomadState* state);
 static void updatePlaitsAltVoices(ChipNomadState* state);
 static void applyVoiceEvents(ChipNomadState* state);
+static int hasAudioRateModulation(const ChipNomadState* state);
+static void updateAudioRateModulations(ChipNomadState* state);
 
 static void captureVoiceMonitor(ChipNomadState* state, int trackIdx,
                                 const float* samples, int frames,
@@ -63,6 +65,10 @@ static float mixerGain(uint8_t value) {
   return powf(10.0f, -60.0f * (100 - value) / 2000.0f);
 }
 
+static float phraseGain(const PlaybackTrackState* track, const Instrument* instrument) {
+  return instrument->volume * track->note.volume / (255.0f * 15.0f);
+}
+
 static float effectiveTrackSend(ChipNomadState* state, int trackIdx,
                                 bool reverb) {
   PlaybackTrackState* track = &state->playbackState.tracks[trackIdx];
@@ -77,7 +83,9 @@ static float effectiveTrackSend(ChipNomadState* state, int trackIdx,
         mod->modulation->destination);
       if (destination != (reverb ? genericModReverbSend : genericModDelaySend)) continue;
       int modulation = playbackModScaleToRange(mod->outValue, 100);
-      value = mod->modulation->type == ModulationType::LFO
+      value = (mod->modulation->type == ModulationType::LFO ||
+               mod->modulation->type == ModulationType::SLFO ||
+               mod->modulation->type == ModulationType::FLFO)
         ? value + modulation : modulation;
     }
   }
@@ -207,6 +215,31 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
   }
 }
 
+static int hasAudioRateModulation(const ChipNomadState* state) {
+  for (int trackIdx = 0; trackIdx < state->project.tracksCount; ++trackIdx) {
+    const PlaybackTrackState* track = &state->playbackState.tracks[trackIdx];
+    for (int i = 0; i < 4; ++i) {
+      const PlaybackModState* mod = &track->note.modulation[i];
+      if (mod->modulation && mod->modulation->type == ModulationType::FLFO &&
+          mod->modulation->destination != 0) return 1;
+    }
+  }
+  return 0;
+}
+
+static void updateAudioRateModulations(ChipNomadState* state) {
+  for (int trackIdx = 0; trackIdx < state->project.tracksCount; ++trackIdx) {
+    PlaybackTrackState* track = &state->playbackState.tracks[trackIdx];
+    for (int i = 0; i < 4; ++i)
+      playbackModNextAudio(&track->note.modulation[i], (float)state->sampleRate);
+  }
+  updateSampleVoices(state);
+  updateSCWFVoices(state);
+  updateBraidsVoices(state);
+  updatePlaitsVoices(state);
+  updatePlaitsAltVoices(state);
+}
+
 int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
   if (!state || !buffer || samples <= 0 || samples > INT_MAX / 2) return 0;
 
@@ -238,6 +271,10 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
 
     int samplesToRender = ((int)state->frameSampleCounter < samplesLeft) ?
     (int)state->frameSampleCounter : samplesLeft;
+    if (hasAudioRateModulation(state)) {
+      updateAudioRateModulations(state);
+      samplesToRender = 1;
+    }
     int bufferOffset = (samples - samplesLeft) * 2;
     for (int i = 0; i < state->project.tracksCount; ++i) state->voiceMonitors[i].active = 0;
 
@@ -613,11 +650,11 @@ static void updateSampleVoices(ChipNomadState* state) {
         : rootNote * 100;
       pitchCents += noteCents - rootCents;
     }
-    float gain = project->instruments[track->note.instrument].volume / 255.0f;
+    float gain = phraseGain(track, &project->instruments[track->note.instrument]);
     if (track->note.fx[fxSPT].isOn) pitchCents = (int8_t)track->note.fx[fxSPT].fxValue * 100 + track->note.fineOffset;
     if (track->note.fx[fxSST].isOn) start = track->note.fx[fxSST].fxValue;
     if (track->note.fx[fxSEN].isOn) end = track->note.fx[fxSEN].fxValue;
-    if (track->note.fx[fxSVL].isOn) gain = track->note.fx[fxSVL].fxValue / 255.0f;
+    if (track->note.fx[fxSVL].isOn) gain = track->note.fx[fxSVL].fxValue * track->note.volume / (255.0f * 15.0f);
     if (track->note.fx[fxSCF].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxSCF].fxValue);
     if (track->note.fx[fxSRS].isOn) resonance = track->note.fx[fxSRS].fxValue;
     if (track->note.fx[fxSSP].isOn) speedPercent = track->note.fx[fxSSP].fxValue * 500 / 255;
@@ -685,7 +722,7 @@ static void updateSCWFVoices(ChipNomadState* state) {
     int resonance = scwf->filterResonance;
     uint8_t frameIndex[2] = {byowtbl->frameIndex[0], byowtbl->frameIndex[1]};
     int pitchModulation = 0;
-    float gain = instrument->volume / 255.0f;
+    float gain = phraseGain(track, instrument);
     if (track->note.fx[fxSDT].isOn) detune = track->note.fx[fxSDT].fxValue;
     if (track->note.fx[fxSMX].isOn) mix = track->note.fx[fxSMX].fxValue;
     if (track->note.fx[fxSCF2].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxSCF2].fxValue);
@@ -699,7 +736,7 @@ static void updateSCWFVoices(ChipNomadState* state) {
       if (!mod->modulation) continue;
       int value = playbackModScaleToRange(mod->outValue, 255);
       switch (mod->modulation->destination) {
-        case 1: gain = mod->modulation->type == ModulationType::LFO ? gain + value / 255.0f : value / 255.0f; break;
+        case 1: gain = mod->modulation->type == ModulationType::LFO ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
         case 3: detune += value; break;
         case 4: mix += value; break;
@@ -751,7 +788,7 @@ static void updateBraidsVoices(ChipNomadState* state) {
     int resonance = instrument->filterResonance;
     int model = instrument->model;
     int pitchModulation = 0;
-    float gain = project->instruments[track->note.instrument].volume / 255.0f;
+    float gain = phraseGain(track, &project->instruments[track->note.instrument]);
 
     if (track->note.fx[fxBMD].isOn) {
       model = clampInt(track->note.fx[fxBMD].fxValue, 0,
@@ -769,7 +806,7 @@ static void updateBraidsVoices(ChipNomadState* state) {
         case 1: {
           int value = playbackModScaleToRange(mod->outValue, 255);
           gain = mod->modulation->type == ModulationType::LFO
-            ? gain + value / 255.0f : value / 255.0f;
+            ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f);
           break;
         }
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
@@ -790,6 +827,7 @@ static void updateBraidsVoices(ChipNomadState* state) {
     voice->setGain(gain);
     voice->setFilter(
       instrument->filterEnabled != 0,
+      instrument->filterCharacter,
       static_cast<BraidsFilterMode>(instrument->filterMode > 2 ? 0 : instrument->filterMode),
       instrument->filterSlope24dB != 0,
       cutoff,
@@ -831,7 +869,7 @@ static void updatePlaitsVoices(ChipNomadState* state) {
     int cutoff = p->filterCutoffHz;
     int resonance = p->filterResonance;
     int pitchModulation = 0;
-    float gain = project->instruments[track->note.instrument].volume / 255.0f;
+    float gain = phraseGain(track, &project->instruments[track->note.instrument]);
 
     if (track->note.fx[fxPMD].isOn) engine = track->note.fx[fxPMD].fxValue;
     if (track->note.fx[fxPHA].isOn) harmonics = track->note.fx[fxPHA].fxValue * 129;
@@ -846,7 +884,7 @@ static void updatePlaitsVoices(ChipNomadState* state) {
       if (!mod->modulation) continue;
       int value = playbackModScaleToRange(mod->outValue, 255);
       switch (mod->modulation->destination) {
-        case 1: gain = mod->modulation->type == ModulationType::LFO ? gain + value / 255.0f : value / 255.0f; break;
+        case 1: gain = mod->modulation->type == ModulationType::LFO ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
         case 3: harmonics += playbackModScaleToRange(mod->outValue, 16384); break;
         case 4: timbre += playbackModScaleToRange(mod->outValue, 16384); break;
@@ -873,7 +911,7 @@ static void updatePlaitsVoices(ChipNomadState* state) {
                      (uint16_t)morph, (uint8_t)auxMix, p->envelopeMode,
                      p->decay, p->sustain,
                      cents / 100.0f, gain);
-    voice->setFilter(p->filterEnabled != 0, p->filterMode, p->filterSlope24dB != 0,
+    voice->setFilter(p->filterEnabled != 0, p->filterCharacter, p->filterMode, p->filterSlope24dB != 0,
                      cutoff, resonance / 255.0f);
     voice->setEnvelope(envelopeTime(p->attack), envelopeTime(p->decay),
                        p->sustain / 255.0f, envelopeTime(p->release), p->envelopeShape);
@@ -896,7 +934,7 @@ static void updatePlaitsAltVoices(ChipNomadState* state) {
     int engine = p->engine, harmonics = p->harmonics, timbre = p->timbre;
     int morph = p->morph, auxMix = p->auxMix, cutoff = p->filterCutoffHz;
     int resonance = p->filterResonance, pitchModulation = 0;
-    float gain = project->instruments[track->note.instrument].volume / 255.0f;
+    float gain = phraseGain(track, &project->instruments[track->note.instrument]);
     if (track->note.fx[fxPMD].isOn) engine = track->note.fx[fxPMD].fxValue;
     if (track->note.fx[fxPHA].isOn) harmonics = track->note.fx[fxPHA].fxValue * 129;
     if (track->note.fx[fxPTM].isOn) timbre = track->note.fx[fxPTM].fxValue * 129;
@@ -909,7 +947,7 @@ static void updatePlaitsAltVoices(ChipNomadState* state) {
       if (!mod->modulation) continue;
       int value = playbackModScaleToRange(mod->outValue, 255);
       switch (mod->modulation->destination) {
-        case 1: gain = mod->modulation->type == ModulationType::LFO ? gain + value / 255.0f : value / 255.0f; break;
+        case 1: gain = mod->modulation->type == ModulationType::LFO ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
         case 3: harmonics += playbackModScaleToRange(mod->outValue, 16384); break;
         case 4: timbre += playbackModScaleToRange(mod->outValue, 16384); break;
@@ -930,7 +968,7 @@ static void updatePlaitsAltVoices(ChipNomadState* state) {
     voice->configure((uint8_t)engine, (uint16_t)harmonics, (uint16_t)timbre,
       (uint16_t)morph, (uint8_t)auxMix, p->envelopeMode, p->decay, p->sustain,
       cents / 100.0f, gain);
-    voice->setFilter(p->filterEnabled != 0, p->filterMode, p->filterSlope24dB != 0,
+    voice->setFilter(p->filterEnabled != 0, p->filterCharacter, p->filterMode, p->filterSlope24dB != 0,
       cutoff, resonance / 255.0f);
     voice->setEnvelope(envelopeTime(p->attack), envelopeTime(p->decay),
       p->sustain / 255.0f, envelopeTime(p->release), p->envelopeShape);

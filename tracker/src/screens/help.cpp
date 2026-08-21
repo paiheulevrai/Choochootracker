@@ -13,6 +13,8 @@ static const char* getModulationTypeName(ModulationType type) {
     case ModulationType::ADSR: return "ADSR";
     case ModulationType::AHD: return "AHD";
     case ModulationType::LFO: return "LFO";
+    case ModulationType::SLFO: return "SLFO";
+    case ModulationType::FLFO: return "FLFO";
     default: return "Unknown";
   }
 }
@@ -41,6 +43,22 @@ static const char* getModulationParamName(ModulationType type, int paramIdx) {
         case 0: return "Shape";
         case 1: return "Trigger";
         case 2: return "Period";
+        case 3: return "---";
+        default: return "Param";
+      }
+    case ModulationType::SLFO:
+      switch (paramIdx) {
+        case 0: return "Shape";
+        case 1: return "Trigger";
+        case 2: return "Ticks";
+        case 3: return "Multiplier";
+        default: return "Param";
+      }
+    case ModulationType::FLFO:
+      switch (paramIdx) {
+        case 0: return "Shape";
+        case 1: return "Trigger";
+        case 2: return "Frequency";
         case 3: return "---";
         default: return "Param";
       }
@@ -502,6 +520,22 @@ const char* helpFXDescription(enum FX fxIdx, uint8_t instrumentIdx) {
               case 1: snprintf(buffer, bufferSize, "Mod %d Param 2 (relative)\nLFO: Trigger mode offset", modSlot + 1); break;
               case 2: snprintf(buffer, bufferSize, "Mod %d Param 3 (relative)\nLFO: Period offset", modSlot + 1); break;
               case 3: snprintf(buffer, bufferSize, "Mod %d Param 4 (relative)\nLFO: (unused)", modSlot + 1); break;
+            }
+            break;
+          case ModulationType::SLFO:
+            switch (paramIdx - 1) {
+              case 0: snprintf(buffer, bufferSize, "Mod %d Param 1 (relative)\nSLFO: Wave shape offset", modSlot + 1); break;
+              case 1: snprintf(buffer, bufferSize, "Mod %d Param 2 (relative)\nSLFO: Trigger mode offset", modSlot + 1); break;
+              case 2: snprintf(buffer, bufferSize, "Mod %d Param 3 (relative)\nSLFO: Ticks per unit offset", modSlot + 1); break;
+              case 3: snprintf(buffer, bufferSize, "Mod %d Param 4 (relative)\nSLFO: Period multiplier offset", modSlot + 1); break;
+            }
+            break;
+          case ModulationType::FLFO:
+            switch (paramIdx - 1) {
+              case 0: snprintf(buffer, bufferSize, "Mod %d Param 1 (relative)\nFLFO: Wave shape offset", modSlot + 1); break;
+              case 1: snprintf(buffer, bufferSize, "Mod %d Param 2 (relative)\nFLFO: Trigger mode offset", modSlot + 1); break;
+              case 2: snprintf(buffer, bufferSize, "Mod %d Param 3 (relative)\nFLFO: Frequency offset (1-20000 Hz)", modSlot + 1); break;
+              case 3: snprintf(buffer, bufferSize, "Mod %d Param 4 (relative)\nFLFO: (unused)", modSlot + 1); break;
             }
             break;
           default:
