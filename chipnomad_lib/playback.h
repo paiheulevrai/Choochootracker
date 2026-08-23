@@ -118,6 +118,11 @@ struct PlaybackState {
   PlaybackChipState chips[PROJECT_MAX_CHIPS];
   uint8_t trackEnabled[PROJECT_MAX_TRACKS];
   LoopRange loopRange;
+  float liveStickAxes[4];
+  float liveStickVelocity[4];
+  float liveStickPrevious[4];
+  int16_t liveStickRate[PROJECT_MAX_INSTRUMENTS][4];
+  uint8_t liveStickWasPlaying;
 };
 
 // FX typedefs
@@ -264,5 +269,8 @@ void playbackClearLoopRange(PlaybackState* state);
  * @return 1 if all tracks have finished playing, 0 if any track is still active
  */
 int playbackNextFrame(struct ChipNomadState* state);
+void playbackUpdateLiveStickModulation(PlaybackState* state, const float axes[4]);
+int16_t playbackLiveStickOutput(const PlaybackState* state, uint8_t instrument,
+                                int slot, const Modulation* mod);
 
 #endif // __CHIPNOMAD_LIB__PLAYBACK_H__

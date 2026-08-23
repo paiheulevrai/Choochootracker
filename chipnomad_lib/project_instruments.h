@@ -30,6 +30,17 @@ enum class ModulationType : uint8_t {
   LFO = 2,
   SLFO = 3,
   FLFO = 4,
+  StickLinear = 5,
+  StickVelocity = 6,
+  StickRate = 7,
+  totalCount,
+};
+
+enum class StickAxis : uint8_t {
+  leftVertical = 0,
+  leftHorizontal = 1,
+  rightVertical = 2,
+  rightHorizontal = 3,
   totalCount,
 };
 
@@ -231,6 +242,8 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type);
 const char* instrumentModDestinationName(InstrumentType type, int destination);
 int instrumentModDestinationMax(InstrumentType type);
 int instrumentGenericModDestination(InstrumentType type, int destination);
+int modulationIsLiveStick(ModulationType type);
+int modulationIsAdditive(ModulationType type);
 
 enum GenericModDestination {
   genericModReverbSend = 0,

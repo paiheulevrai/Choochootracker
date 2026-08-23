@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "../../chipnomad_lib/playback_modulation.h"
+#include "../../chipnomad_lib/playback.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -1427,6 +1428,38 @@ TEST_CASE("test_LFO_UniSine_negative_amount_stays_unipolar") {
   int16_t peakValue = state.outValue;
   CHECK(peakValue >= -32385 - 200); CHECK(peakValue <= -32385 + 200);
   CHECK(peakValue < 0); // Should be negative
+}
+
+TEST_CASE("test_live_stick_modulation_sources_and_rate_reset") {
+  Project project;
+  projectInit(&project);
+  project.tracksCount = 1;
+  project.tickRate = 12.0f;
+
+  PlaybackState state;
+  playbackInit(&state, &project);
+  state.tracks[0].mode = PlaybackMode::song;
+
+  const float axes[4] = {0.5f, 0.0f, 0.0f, 0.0f};
+  playbackUpdateLiveStickModulation(&state, axes);
+
+  Modulation linear = {.type = ModulationType::StickLinear, .amount = 127, .p1 = 0};
+  CHECK(playbackLiveStickOutput(&state, 0, 0, &linear) == 16193);
+
+  Modulation velocity = {.type = ModulationType::StickVelocity, .amount = 127, .p1 = 0};
+  CHECK(playbackLiveStickOutput(&state, 0, 0, &velocity) == 32385);
+  playbackUpdateLiveStickModulation(&state, axes);
+  CHECK(playbackLiveStickOutput(&state, 0, 0, &velocity) == 0);
+
+  Modulation rate = {.type = ModulationType::StickRate, .amount = 127, .p1 = 0, .p2 = 0};
+  project.instruments[0].modulation[0] = rate;
+  playbackUpdateLiveStickModulation(&state, axes);
+  CHECK(state.liveStickRate[0][0] > 0);
+  CHECK(playbackLiveStickOutput(&state, 0, 0, &rate) == state.liveStickRate[0][0]);
+
+  state.tracks[0].mode = PlaybackMode::stopped;
+  playbackUpdateLiveStickModulation(&state, axes);
+  CHECK(state.liveStickRate[0][0] == 0);
 }
 
 // Tests are run automatically by doctest

@@ -10,6 +10,7 @@
 #include "synth/master_effects.h"
 #include <math.h>
 #include <limits.h>
+#include <atomic>
 #include <stdlib.h>
 #include <string.h>
 
@@ -22,6 +23,27 @@ static void updatePlaitsAltVoices(ChipNomadState* state);
 static void applyVoiceEvents(ChipNomadState* state);
 static int hasAudioRateModulation(const ChipNomadState* state);
 static void updateAudioRateModulations(ChipNomadState* state);
+
+static std::atomic<int32_t> liveStickAxes[4];
+
+static float deadzoneStickAxis(float value) {
+  const float deadzone = 0.05f;
+  if (value > 1.0f) value = 1.0f;
+  if (value < -1.0f) value = -1.0f;
+  float magnitude = fabsf(value);
+  if (magnitude <= deadzone) return 0.0f;
+  float normalized = (magnitude - deadzone) / (1.0f - deadzone);
+  return value < 0.0f ? -normalized : normalized;
+}
+
+void chipnomadSetLiveStickAxes(float leftVertical, float leftHorizontal,
+                               float rightVertical, float rightHorizontal) {
+  const float axes[4] = {leftVertical, leftHorizontal, rightVertical, rightHorizontal};
+  for (int i = 0; i < 4; ++i) {
+    liveStickAxes[i].store((int32_t)(deadzoneStickAxis(axes[i]) * 1000000.0f),
+                           std::memory_order_relaxed);
+  }
+}
 
 static void captureVoiceMonitor(ChipNomadState* state, int trackIdx,
                                 const float* samples, int frames,
@@ -83,7 +105,7 @@ static float effectiveTrackSend(ChipNomadState* state, int trackIdx,
         mod->modulation->destination);
       if (destination != (reverb ? genericModReverbSend : genericModDelaySend)) continue;
       int modulation = playbackModScaleToRange(mod->outValue, 100);
-      value = (mod->modulation->type == ModulationType::LFO ||
+      value = (modulationIsAdditive(mod->modulation->type) ||
                mod->modulation->type == ModulationType::SLFO ||
                mod->modulation->type == ModulationType::FLFO)
         ? value + modulation : modulation;
@@ -248,8 +270,13 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
 
   while (samplesLeft > 0 && !allTracksStopped) {
     if ((int)state->frameSampleCounter == 0) {
+      float axes[4];
+      for (int i = 0; i < 4; ++i)
+        axes[i] = liveStickAxes[i].load(std::memory_order_relaxed) / 1000000.0f;
+      playbackUpdateLiveStickModulation(&state->playbackState, axes);
       state->frameSampleCounter += state->sampleRate / state->project.tickRate;
       allTracksStopped = playbackNextFrame(state);
+      if (allTracksStopped) playbackUpdateLiveStickModulation(&state->playbackState, axes);
       updateSampleVoices(state);
       updateSCWFVoices(state);
       updateBraidsVoices(state);
@@ -736,7 +763,7 @@ static void updateSCWFVoices(ChipNomadState* state) {
       if (!mod->modulation) continue;
       int value = playbackModScaleToRange(mod->outValue, 255);
       switch (mod->modulation->destination) {
-        case 1: gain = mod->modulation->type == ModulationType::LFO ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
+        case 1: gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
         case 3: detune += value; break;
         case 4: mix += value; break;
@@ -805,7 +832,7 @@ static void updateBraidsVoices(ChipNomadState* state) {
       switch (mod->modulation->destination) {
         case 1: {
           int value = playbackModScaleToRange(mod->outValue, 255);
-          gain = mod->modulation->type == ModulationType::LFO
+          gain = modulationIsAdditive(mod->modulation->type)
             ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f);
           break;
         }
@@ -884,7 +911,7 @@ static void updatePlaitsVoices(ChipNomadState* state) {
       if (!mod->modulation) continue;
       int value = playbackModScaleToRange(mod->outValue, 255);
       switch (mod->modulation->destination) {
-        case 1: gain = mod->modulation->type == ModulationType::LFO ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
+        case 1: gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
         case 3: harmonics += playbackModScaleToRange(mod->outValue, 16384); break;
         case 4: timbre += playbackModScaleToRange(mod->outValue, 16384); break;
@@ -947,7 +974,7 @@ static void updatePlaitsAltVoices(ChipNomadState* state) {
       if (!mod->modulation) continue;
       int value = playbackModScaleToRange(mod->outValue, 255);
       switch (mod->modulation->destination) {
-        case 1: gain = mod->modulation->type == ModulationType::LFO ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
+        case 1: gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
         case 3: harmonics += playbackModScaleToRange(mod->outValue, 16384); break;
         case 4: timbre += playbackModScaleToRange(mod->outValue, 16384); break;

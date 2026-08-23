@@ -7,6 +7,7 @@ enum class MainLoopEvent {
   tick,
   keyDown,
   keyUp,
+  gamepadAxes,
   exit,
   sleep,
   wake,
@@ -18,6 +19,7 @@ struct MainLoopEventData {
   union {
     int value;
     InputCode input;
+    float axes[4];
   } data;
 };
 

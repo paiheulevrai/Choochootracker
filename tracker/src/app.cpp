@@ -376,6 +376,10 @@ void appOnEvent(MainLoopEventData eventData) {
 
     break;
   }
+  case MainLoopEvent::gamepadAxes:
+    chipnomadSetLiveStickAxes(eventData.data.axes[0], eventData.data.axes[1],
+                              eventData.data.axes[2], eventData.data.axes[3]);
+    break;
   case MainLoopEvent::tick:
     // Autosave
     if (++autosaveCounter >= AUTOSAVE_INTERVAL_FRAMES) {

@@ -15,6 +15,9 @@ static const char* getModulationTypeName(ModulationType type) {
     case ModulationType::LFO: return "LFO";
     case ModulationType::SLFO: return "SLFO";
     case ModulationType::FLFO: return "FLFO";
+    case ModulationType::StickLinear: return "STKLIN";
+    case ModulationType::StickVelocity: return "STKVEL";
+    case ModulationType::StickRate: return "STKRAT";
     default: return "Unknown";
   }
 }
@@ -62,6 +65,13 @@ static const char* getModulationParamName(ModulationType type, int paramIdx) {
         case 3: return "---";
         default: return "Param";
       }
+    case ModulationType::StickLinear:
+    case ModulationType::StickVelocity:
+      return paramIdx == 0 ? "Axis" : "---";
+    case ModulationType::StickRate:
+      if (paramIdx == 0) return "Axis";
+      if (paramIdx == 1) return "Time";
+      return "---";
     default:
       return "Param";
   }

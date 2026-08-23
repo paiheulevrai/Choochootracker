@@ -97,4 +97,7 @@ void chipnomadSetBraidsSettings(ChipNomadState* state, uint8_t bits,
                                uint8_t drift, uint8_t signature,
                                uint32_t signatureSeed);
 
+void chipnomadSetLiveStickAxes(float leftVertical, float leftHorizontal,
+                               float rightVertical, float rightHorizontal);
+
 #endif

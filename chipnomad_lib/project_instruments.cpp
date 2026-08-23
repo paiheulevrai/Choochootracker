@@ -19,6 +19,16 @@ static void freeCommon(Instrument* instrument) {
   memset(instrument, 0, sizeof(Instrument));
 }
 
+int modulationIsLiveStick(ModulationType type) {
+  return type == ModulationType::StickLinear ||
+         type == ModulationType::StickVelocity ||
+         type == ModulationType::StickRate;
+}
+
+int modulationIsAdditive(ModulationType type) {
+  return type == ModulationType::LFO || modulationIsLiveStick(type);
+}
+
 // Instrument type: None
 static const char* modNameNone(int modIndex) {
   return "Off";

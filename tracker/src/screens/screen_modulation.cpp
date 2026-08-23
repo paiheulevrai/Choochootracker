@@ -67,12 +67,25 @@ static const char* modulationParameterName(ModulationType type, int parameter) {
   static const char* lfo[] = {"Shape", "Trigger", "Rate", ""};
   static const char* slfo[] = {"Shape", "Trigger", "Ticks", "Multiplier"};
   static const char* flfo[] = {"Shape", "Trigger", "Frequency", ""};
+  static const char* stick[] = {"Axis", "", "", ""};
+  static const char* stickRate[] = {"Axis", "Time", "", ""};
   const char* const* names = lfo;
   if (type == ModulationType::ADSR) names = adsr;
   else if (type == ModulationType::AHD) names = ahd;
   else if (type == ModulationType::SLFO) names = slfo;
   else if (type == ModulationType::FLFO) names = flfo;
+  else if (type == ModulationType::StickLinear || type == ModulationType::StickVelocity) names = stick;
+  else if (type == ModulationType::StickRate) names = stickRate;
   return names[parameter];
+}
+
+static const char* stickAxisName(uint8_t axis) {
+  static const char* names[] = {"LVert ", "LHoriz", "RVert ", "RHoriz"};
+  return names[axis < static_cast<uint8_t>(StickAxis::totalCount) ? axis : 0];
+}
+
+static float stickRateSeconds(uint8_t value) {
+  return 0.25f * powf(32.0f, value / 255.0f);
 }
 
 static void openDestinationPopup(int modIndex) {
@@ -163,6 +176,9 @@ static const char* modTypeName(ModulationType type) {
     case ModulationType::LFO:  return "LFO ";
     case ModulationType::SLFO: return "SLFO";
     case ModulationType::FLFO: return "FLFO";
+    case ModulationType::StickLinear: return "STKLIN";
+    case ModulationType::StickVelocity: return "STKVEL";
+    case ModulationType::StickRate: return "STKRAT";
     default:      return "?   ";
   }
 }
@@ -223,6 +239,14 @@ static const char* paramLabel(ModulationType type, int paramIdx) {
       if (paramIdx == 1) return "Trig";
       if (paramIdx == 2) return "Freq";
       break;
+    case ModulationType::StickLinear:
+    case ModulationType::StickVelocity:
+      if (paramIdx == 0) return "Axis";
+      break;
+    case ModulationType::StickRate:
+      if (paramIdx == 0) return "Axis";
+      if (paramIdx == 1) return "Time";
+      break;
     default:
       break;
   }
@@ -237,6 +261,9 @@ static int paramCount(ModulationType type) {
     case ModulationType::LFO:  return 3;
     case ModulationType::SLFO: return 4;
     case ModulationType::FLFO: return 3;
+    case ModulationType::StickLinear:
+    case ModulationType::StickVelocity: return 1;
+    case ModulationType::StickRate: return 2;
     default:      return 0;
   }
 }
@@ -288,12 +315,15 @@ static void drawCursor(int col, int row) {
   Modulation* mod = &chipnomadState->project.instruments[cInstrument].modulation[modIdx];
 
   switch (modRow) {
-    case 0: gfxCursor(valX, y, 4); break; // Type
+    case 0: gfxCursor(valX, y, 6); break; // Type
     case 1: gfxCursor(valX, y, 8); break; // Dest
     case 2: gfxCursor(valX, y, 2); break; // Amt
     default:
-      if (mod->type == ModulationType::LFO && (modRow - 3) <= 1) {
-        gfxCursor(valX, y, 6); // LFO shape/trig names
+      if ((mod->type == ModulationType::LFO && (modRow - 3) <= 1) ||
+          ((mod->type == ModulationType::StickLinear || mod->type == ModulationType::StickVelocity ||
+            mod->type == ModulationType::StickRate) &&
+           (modRow == 3 || (mod->type == ModulationType::StickRate && modRow == 4)))) {
+        gfxCursor(valX, y, 6);
       } else {
         gfxCursor(valX, y, 2); // Hex values
       }
@@ -356,6 +386,9 @@ static void drawField(int col, int row, CellState state) {
         } else if (paramIdx == 3) {
           gfxPrint(valX, y, byteToHex(mod->p4));
         }
+      } else if (mod->type == ModulationType::StickLinear || mod->type == ModulationType::StickVelocity || mod->type == ModulationType::StickRate) {
+        if (paramIdx == 0) gfxPrint(valX, y, stickAxisName(mod->p1));
+        else if (paramIdx == 1 && mod->type == ModulationType::StickRate) gfxPrintf(valX, y, "%5.2fs", stickRateSeconds(mod->p2));
       }
       break;
     }
@@ -378,7 +411,7 @@ static int onEdit(int col, int row, enum CellEditAction action) {
       mod->type = static_cast<ModulationType>(type);
       if (oldType != type) {
         mod->p1 = 0;
-        mod->p2 = 0;
+        mod->p2 = mod->type == ModulationType::StickRate ? 153 : 0;
         mod->p3 = (mod->type == ModulationType::ADSR) ? 255 :
                   (mod->type == ModulationType::FLFO ? 0 : 6);
         mod->p4 = mod->type == ModulationType::SLFO ? 1 : 0;
@@ -441,6 +474,13 @@ static int onEdit(int col, int row, enum CellEditAction action) {
         } else if (paramIdx == 3 && mod->type == ModulationType::SLFO) {
           handled = edit8noLast(action, &mod->p4, 1, 1, 64);
           if (handled) screenMessage(0, "%hhu x %hhu ticks", mod->p4, mod->p3);
+        }
+      } else if (mod->type == ModulationType::StickLinear || mod->type == ModulationType::StickVelocity || mod->type == ModulationType::StickRate) {
+        if (paramIdx == 0) {
+          handled = edit8noLast(action, &mod->p1, 1, 0, static_cast<uint8_t>(StickAxis::totalCount) - 1);
+        } else if (paramIdx == 1 && mod->type == ModulationType::StickRate) {
+          handled = edit8noLast(action, &mod->p2, 16, 0, 255);
+          if (handled) screenMessage(0, "Rate time %.2f seconds", stickRateSeconds(mod->p2));
         }
       }
       break;

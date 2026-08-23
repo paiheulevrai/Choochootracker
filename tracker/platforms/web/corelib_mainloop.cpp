@@ -61,6 +61,10 @@ static void webLoopFrame(void* userdata) {
     }
   }
 
+  eventData.type = MainLoopEvent::gamepadAxes;
+  for (int axis = 0; axis < 4; ++axis) eventData.data.axes[axis] = 0.0f;
+  context->onEvent(eventData);
+
   eventData.type = MainLoopEvent::tick;
   eventData.data.value = 0;
   context->onEvent(eventData);

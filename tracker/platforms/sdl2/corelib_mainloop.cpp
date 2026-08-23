@@ -234,6 +234,18 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 #endif
     }
 
+#ifdef GAMEPAD_SUPPORT
+    eventData.type = MainLoopEvent::gamepadAxes;
+    for (int axis = 0; axis < 4; ++axis) eventData.data.axes[axis] = 0.0f;
+    if (gameController && SDL_GameControllerGetAttached(gameController)) {
+      eventData.data.axes[0] = -SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_LEFTY) / 32767.0f;
+      eventData.data.axes[1] = SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_LEFTX) / 32767.0f;
+      eventData.data.axes[2] = -SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_RIGHTY) / 32767.0f;
+      eventData.data.axes[3] = SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_RIGHTX) / 32767.0f;
+    }
+    onEvent(eventData);
+#endif
+
 #ifdef MOBILE_LIFECYCLE
     if (wakeRedrawFrames > 0) {
       eventData.type = MainLoopEvent::fullRedraw;
