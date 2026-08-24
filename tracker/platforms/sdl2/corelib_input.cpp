@@ -77,6 +77,8 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyOpt[0] = (InputCode){InputDeviceType::keyboard, (layout == LAYOUT_QWERTZ) ? SDLK_y : BTN_B};
   appSettings.keyMapping.keyPlay[0] = (InputCode){InputDeviceType::keyboard, BTN_START};
   appSettings.keyMapping.keyShift[0] = (InputCode){InputDeviceType::keyboard, BTN_SELECT};
+  appSettings.keyMapping.keyMotionRecord[0] = (InputCode){InputDeviceType::keyboard, BTN_R2};
+  appSettings.keyMapping.keyMotionErase[0] = (InputCode){InputDeviceType::keyboard, BTN_L2};
   appSettings.keyMapping.keyEdit[0] = (InputCode){InputDeviceType::keyboard, BTN_A};
 
 #if defined(DESKTOP_BUILD) || defined(ANDROID_BUILD)
@@ -89,6 +91,8 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyOpt[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_B};
   appSettings.keyMapping.keyPlay[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_START};
   appSettings.keyMapping.keyShift[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_BACK};
+  appSettings.keyMapping.keyMotionRecord[1] = (InputCode){InputDeviceType::none, 0};
+  appSettings.keyMapping.keyMotionErase[1] = (InputCode){InputDeviceType::none, 0};
 #else
   // PortMaster: keyboard only
   appSettings.keyMapping.keyUp[1] = (InputCode){InputDeviceType::none, 0};
@@ -99,6 +103,8 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyOpt[1] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyPlay[1] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyShift[1] = (InputCode){InputDeviceType::none, 0};
+  appSettings.keyMapping.keyMotionRecord[1] = (InputCode){InputDeviceType::none, 0};
+  appSettings.keyMapping.keyMotionErase[1] = (InputCode){InputDeviceType::none, 0};
 #endif
 
   // Slot 2 empty for all platforms
@@ -110,6 +116,8 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyOpt[2] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyPlay[2] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyShift[2] = (InputCode){InputDeviceType::none, 0};
+  appSettings.keyMapping.keyMotionRecord[2] = (InputCode){InputDeviceType::none, 0};
+  appSettings.keyMapping.keyMotionErase[2] = (InputCode){InputDeviceType::none, 0};
 }
 
 const char* inputGetKeyName(InputCode input) {

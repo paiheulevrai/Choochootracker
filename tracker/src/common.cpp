@@ -30,6 +30,7 @@ void initDefaultAppSettings(void) {
     (uint32_t)(uintptr_t)&appSettings;
   if (!appSettings.braidsSignatureSeed) appSettings.braidsSignatureSeed = 1;
   appSettings.pitchConflictWarning = 0;
+  appSettings.quickHelpReleaseSeen = 0;
 
   // Zero out key mapping (platform-specific defaults applied later)
   memset(&appSettings.keyMapping, 0, sizeof(KeyMapping));
@@ -112,6 +113,7 @@ int settingsSave(void) {
   fprintf(file, "braidsSignature: %d\n", appSettings.braidsSignature);
   fprintf(file, "braidsSignatureSeed: %u\n", appSettings.braidsSignatureSeed);
   fprintf(file, "pitchConflictWarning: %d\n", appSettings.pitchConflictWarning);
+  fprintf(file, "quickHelpReleaseSeen: %d\n", appSettings.quickHelpReleaseSeen);
 
   // Save key mapping codes
   fprintf(file, "keyUp: %d,%d,%d\n", appSettings.keyMapping.keyUp[0].code, appSettings.keyMapping.keyUp[1].code, appSettings.keyMapping.keyUp[2].code);
@@ -122,6 +124,8 @@ int settingsSave(void) {
   fprintf(file, "keyOpt: %d,%d,%d\n", appSettings.keyMapping.keyOpt[0].code, appSettings.keyMapping.keyOpt[1].code, appSettings.keyMapping.keyOpt[2].code);
   fprintf(file, "keyPlay: %d,%d,%d\n", appSettings.keyMapping.keyPlay[0].code, appSettings.keyMapping.keyPlay[1].code, appSettings.keyMapping.keyPlay[2].code);
   fprintf(file, "keyShift: %d,%d,%d\n", appSettings.keyMapping.keyShift[0].code, appSettings.keyMapping.keyShift[1].code, appSettings.keyMapping.keyShift[2].code);
+  fprintf(file, "keyMotionRecord: %d,%d,%d\n", appSettings.keyMapping.keyMotionRecord[0].code, appSettings.keyMapping.keyMotionRecord[1].code, appSettings.keyMapping.keyMotionRecord[2].code);
+  fprintf(file, "keyMotionErase: %d,%d,%d\n", appSettings.keyMapping.keyMotionErase[0].code, appSettings.keyMapping.keyMotionErase[1].code, appSettings.keyMapping.keyMotionErase[2].code);
 
   // Save key mapping device types
   fprintf(file, "keyUpType: %d,%d,%d\n", appSettings.keyMapping.keyUp[0].deviceType, appSettings.keyMapping.keyUp[1].deviceType, appSettings.keyMapping.keyUp[2].deviceType);
@@ -132,6 +136,8 @@ int settingsSave(void) {
   fprintf(file, "keyOptType: %d,%d,%d\n", appSettings.keyMapping.keyOpt[0].deviceType, appSettings.keyMapping.keyOpt[1].deviceType, appSettings.keyMapping.keyOpt[2].deviceType);
   fprintf(file, "keyPlayType: %d,%d,%d\n", appSettings.keyMapping.keyPlay[0].deviceType, appSettings.keyMapping.keyPlay[1].deviceType, appSettings.keyMapping.keyPlay[2].deviceType);
   fprintf(file, "keyShiftType: %d,%d,%d\n", appSettings.keyMapping.keyShift[0].deviceType, appSettings.keyMapping.keyShift[1].deviceType, appSettings.keyMapping.keyShift[2].deviceType);
+  fprintf(file, "keyMotionRecordType: %d,%d,%d\n", appSettings.keyMapping.keyMotionRecord[0].deviceType, appSettings.keyMapping.keyMotionRecord[1].deviceType, appSettings.keyMapping.keyMotionRecord[2].deviceType);
+  fprintf(file, "keyMotionEraseType: %d,%d,%d\n", appSettings.keyMapping.keyMotionErase[0].deviceType, appSettings.keyMapping.keyMotionErase[1].deviceType, appSettings.keyMapping.keyMotionErase[2].deviceType);
 
   fprintf(file, "colorBackground: 0x%06x\n", appSettings.colorScheme.background);
   fprintf(file, "colorTextEmpty: 0x%06x\n", appSettings.colorScheme.textEmpty);
@@ -214,6 +220,8 @@ int settingsLoad(void) {
       sscanf(line + 21, "%u", &appSettings.braidsSignatureSeed);
     } else if (strncmp(line, "pitchConflictWarning: ", 22) == 0) {
       sscanf(line + 22, "%d", &appSettings.pitchConflictWarning);
+    } else if (strncmp(line, "quickHelpReleaseSeen: ", 22) == 0) {
+      sscanf(line + 22, "%d", &appSettings.quickHelpReleaseSeen);
     } else if (strncmp(line, "keyUp: ", 7) == 0) {
       sscanf(line + 7, "%d,%d,%d", &appSettings.keyMapping.keyUp[0].code, &appSettings.keyMapping.keyUp[1].code, &appSettings.keyMapping.keyUp[2].code);
     } else if (strncmp(line, "keyDown: ", 9) == 0) {
@@ -230,6 +238,10 @@ int settingsLoad(void) {
       sscanf(line + 9, "%d,%d,%d", &appSettings.keyMapping.keyPlay[0].code, &appSettings.keyMapping.keyPlay[1].code, &appSettings.keyMapping.keyPlay[2].code);
     } else if (strncmp(line, "keyShift: ", 10) == 0) {
       sscanf(line + 10, "%d,%d,%d", &appSettings.keyMapping.keyShift[0].code, &appSettings.keyMapping.keyShift[1].code, &appSettings.keyMapping.keyShift[2].code);
+    } else if (strncmp(line, "keyMotionRecord: ", 17) == 0) {
+      sscanf(line + 17, "%d,%d,%d", &appSettings.keyMapping.keyMotionRecord[0].code, &appSettings.keyMapping.keyMotionRecord[1].code, &appSettings.keyMapping.keyMotionRecord[2].code);
+    } else if (strncmp(line, "keyMotionErase: ", 16) == 0) {
+      sscanf(line + 16, "%d,%d,%d", &appSettings.keyMapping.keyMotionErase[0].code, &appSettings.keyMapping.keyMotionErase[1].code, &appSettings.keyMapping.keyMotionErase[2].code);
     } else if (strncmp(line, "keyUpType: ", 11) == 0) {
       sscanf(line + 11, "%d,%d,%d", (int *)&appSettings.keyMapping.keyUp[0].deviceType, (int *)&appSettings.keyMapping.keyUp[1].deviceType, (int *)&appSettings.keyMapping.keyUp[2].deviceType);
     } else if (strncmp(line, "keyDownType: ", 13) == 0) {
@@ -246,6 +258,10 @@ int settingsLoad(void) {
       sscanf(line + 13, "%d,%d,%d", (int *)&appSettings.keyMapping.keyPlay[0].deviceType, (int *)&appSettings.keyMapping.keyPlay[1].deviceType, (int *)&appSettings.keyMapping.keyPlay[2].deviceType);
     } else if (strncmp(line, "keyShiftType: ", 14) == 0) {
       sscanf(line + 14, "%d,%d,%d", (int *)&appSettings.keyMapping.keyShift[0].deviceType, (int *)&appSettings.keyMapping.keyShift[1].deviceType, (int *)&appSettings.keyMapping.keyShift[2].deviceType);
+    } else if (strncmp(line, "keyMotionRecordType: ", 21) == 0) {
+      sscanf(line + 21, "%d,%d,%d", (int *)&appSettings.keyMapping.keyMotionRecord[0].deviceType, (int *)&appSettings.keyMapping.keyMotionRecord[1].deviceType, (int *)&appSettings.keyMapping.keyMotionRecord[2].deviceType);
+    } else if (strncmp(line, "keyMotionEraseType: ", 20) == 0) {
+      sscanf(line + 20, "%d,%d,%d", (int *)&appSettings.keyMapping.keyMotionErase[0].deviceType, (int *)&appSettings.keyMapping.keyMotionErase[1].deviceType, (int *)&appSettings.keyMapping.keyMotionErase[2].deviceType);
     } else if (strncmp(line, "colorBackground: ", 17) == 0) {
       sscanf(line + 17, "0x%x", &appSettings.colorScheme.background);
     } else if (strncmp(line, "colorTextEmpty: ", 16) == 0) {

@@ -21,7 +21,7 @@ static InputCode pendingCapture = {InputDeviceType::none, 0};
 static void fullRedraw(void);
 
 static const char* buttonNames[] = {
-  "Up", "Down", "Left", "Right", "Edit (A)", "Opt (B)", "Play", "Shift"
+  "Up", "Down", "Left", "Right", "Edit (A)", "Opt (B)", "Play", "Shift", "Motion rec", "Motion del"
 };
 
 static InputCode* getKeySlot(int row, int col) {
@@ -34,6 +34,8 @@ static InputCode* getKeySlot(int row, int col) {
     case 5: return &appSettings.keyMapping.keyOpt[col];
     case 6: return &appSettings.keyMapping.keyPlay[col];
     case 7: return &appSettings.keyMapping.keyShift[col];
+    case 8: return &appSettings.keyMapping.keyMotionRecord[col];
+    case 9: return &appSettings.keyMapping.keyMotionErase[col];
   }
   return NULL;
 }
@@ -55,7 +57,7 @@ static void onRawInput(InputCode input, int isDown) {
 }
 
 static int getColumnCount(int row) {
-  if (row < 8) return 3;
+  if (row < 10) return 3;
   return 1;
 }
 
@@ -64,32 +66,32 @@ static void drawStatic(void) {
   gfxPrint(0, 0, "Key Mapping");
 
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 10; i++) {
     gfxPrint(0, i + 2, buttonNames[i]);
   }
 
   if (inputRawCallback) {
     gfxSetFgColor(appSettings.colorScheme.textValue);
-    gfxPrint(0, 14, "Press any key...");
+    gfxPrint(0, 16, "Press any key...");
   } else {
     gfxSetFgColor(appSettings.colorScheme.textInfo);
-    gfxPrint(0, 14, "Tap unmapped key 5x");
-    gfxPrint(0, 15, "to reset defaults");
+    gfxPrint(0, 16, "Tap unmapped key 5x");
+    gfxPrint(0, 17, "to reset defaults");
   }
 }
 
 static void drawCursor(int col, int row) {
-  if (row < 8) {
+  if (row < 10) {
     InputCode* slot = getKeySlot(row, col);
     int width = slot ? strlen(inputGetKeyName(*slot)) : 3;
     gfxCursor(11 + col * 8, row + 2, width);
-  } else if (row == 8) {
-    gfxCursor(0, 11, 4);
+  } else if (row == 10) {
+    gfxCursor(0, 13, 4);
   }
 }
 
 static void drawField(int col, int row, CellState state) {
-  if (row < 8) {
+  if (row < 10) {
     gfxClearRect(11 + col * 8, row + 2, 7, 1);
     InputCode* slot = getKeySlot(row, col);
     if (slot) {
@@ -107,9 +109,9 @@ static void drawField(int col, int row, CellState state) {
       trimmed[7] = '\0';
       gfxPrint(11 + col * 8, row + 2, trimmed);
     }
-  } else if (row == 8) {
+  } else if (row == 10) {
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(0, 11, "Done");
+    gfxPrint(0, 13, "Done");
   }
 }
 
@@ -120,7 +122,7 @@ static void drawColHeader(int col, CellState state) {
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
-  if (row < 8) {
+  if (row < 10) {
     if (action == CellEditAction::tap) {
       captureRow = row;
       captureCol = col;
@@ -136,7 +138,7 @@ static int onEdit(int col, int row, CellEditAction action) {
       }
       return 1;
     }
-  } else if (row == 8 && action == CellEditAction::tap) {
+  } else if (row == 10 && action == CellEditAction::tap) {
     settingsSave();
     screenSetup(&screenSettings, 0);
     return 1;
@@ -146,7 +148,7 @@ static int onEdit(int col, int row, CellEditAction action) {
 }
 
 static ScreenData screenKeyMappingData = {
-  .rows = 9,
+  .rows = 11,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,
@@ -190,7 +192,7 @@ static void applyPendingCapture(void) {
     InputCode previous = *slot;
 
     // Find conflicting slot and swap
-    for (int row = 0; row < 8; row++) {
+    for (int row = 0; row < 10; row++) {
       for (int col = 0; col < 3; col++) {
         if (row == captureRow && col == captureCol) continue;
         InputCode* other = getKeySlot(row, col);

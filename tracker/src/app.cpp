@@ -11,6 +11,7 @@
 #include "waveform_display.h"
 #include "corelib_input.h"
 #include "corelib_keymap.h"
+#include "screens/screen_quick_help.h"
 
 #ifdef WEB_BUILD
 #include <emscripten/emscripten.h>
@@ -33,13 +34,19 @@ static int tapCount;
 static int keyRepeatCount;
 static int motionRecordHeld;
 static int motionEraseHeld;
+static int quickHelpSelectHeld;
+static int quickHelpSelectAlone;
 
 static int isMotionRecordTrigger(InputCode input) {
-  return input.deviceType == InputDeviceType::keyboard && input.code == BTN_R2;
+  for (int i = 0; i < 3; i++)
+    if (appSettings.keyMapping.keyMotionRecord[i].deviceType == input.deviceType && appSettings.keyMapping.keyMotionRecord[i].code == input.code) return 1;
+  return 0;
 }
 
 static int isMotionEraseTrigger(InputCode input) {
-  return input.deviceType == InputDeviceType::keyboard && input.code == BTN_L2;
+  for (int i = 0; i < 3; i++)
+    if (appSettings.keyMapping.keyMotionErase[i].deviceType == input.deviceType && appSettings.keyMapping.keyMotionErase[i].code == input.code) return 1;
+  return 0;
 }
 
 static void updateMotionRecordMode(void) {
@@ -184,6 +191,10 @@ void appSetup(void) {
   if (appSettings.keyMapping.keyUp[0].deviceType == InputDeviceType::none) {
     inputInitDefaultKeyMapping();
   }
+  if (appSettings.keyMapping.keyMotionRecord[0].deviceType == InputDeviceType::none) {
+    appSettings.keyMapping.keyMotionRecord[0] = (InputCode){InputDeviceType::keyboard, BTN_R2};
+    appSettings.keyMapping.keyMotionErase[0] = (InputCode){InputDeviceType::keyboard, BTN_L2};
+  }
 
   // Keyboard input reset
   pressedButtons = 0;
@@ -193,6 +204,8 @@ void appSetup(void) {
   keyRepeatCount = 0;
   motionRecordHeld = 0;
   motionEraseHeld = 0;
+  quickHelpSelectHeld = 0;
+  quickHelpSelectAlone = 0;
   updateMotionRecordMode();
 
   // Clear screen
@@ -336,18 +349,21 @@ void appOnEvent(MainLoopEventData eventData) {
   switch (eventData.type) {
   case MainLoopEvent::keyDown: {
     int value = inputCodeToKey(eventData.data.input);
+    int rawInputActive = inputRawCallback != NULL;
 
     // Call raw input callback if set (for key mapping screen)
     if (inputRawCallback) {
       inputRawCallback(eventData.data.input, 1);
     }
 
-    if (isMotionRecordTrigger(eventData.data.input)) {
+    if (quickHelpSelectHeld && !rawInputActive && value != keyShift) quickHelpSelectAlone = 0;
+
+    if (!rawInputActive && isMotionRecordTrigger(eventData.data.input)) {
       motionRecordHeld = 1;
       updateMotionRecordMode();
       break;
     }
-    if (isMotionEraseTrigger(eventData.data.input)) {
+    if (!rawInputActive && isMotionEraseTrigger(eventData.data.input)) {
       motionEraseHeld = 1;
       updateMotionRecordMode();
       break;
@@ -361,6 +377,13 @@ void appOnEvent(MainLoopEventData eventData) {
     // Ignore duplicate downs. SDL keyboard repeat is filtered by the platform
     // loop, but this also protects tap detection from duplicate device events.
     if (pressedButtons & value) break;
+
+    if (!rawInputActive && value == keyShift && pressedButtons == 0) {
+      quickHelpSelectHeld = 1;
+      quickHelpSelectAlone = 1;
+    } else if (quickHelpSelectHeld) {
+      quickHelpSelectAlone = 0;
+    }
 
     pressedButtons |= value;
 
@@ -394,18 +417,19 @@ void appOnEvent(MainLoopEventData eventData) {
   }
   case MainLoopEvent::keyUp: {
     int value = inputCodeToKey(eventData.data.input);
+    int rawInputActive = inputRawCallback != NULL;
 
     // Call raw input callback if set (for key mapping screen)
     if (inputRawCallback) {
       inputRawCallback(eventData.data.input, 0);
     }
 
-    if (isMotionRecordTrigger(eventData.data.input)) {
+    if (!rawInputActive && isMotionRecordTrigger(eventData.data.input)) {
       motionRecordHeld = 0;
       updateMotionRecordMode();
       break;
     }
-    if (isMotionEraseTrigger(eventData.data.input)) {
+    if (!rawInputActive && isMotionEraseTrigger(eventData.data.input)) {
       motionEraseHeld = 0;
       updateMotionRecordMode();
       break;
@@ -416,6 +440,13 @@ void appOnEvent(MainLoopEventData eventData) {
     pressedButtons &= ~value;
 
     appInput(0, pressedButtons, 0);
+
+    if (!rawInputActive && value == keyShift && quickHelpSelectHeld &&
+        quickHelpSelectAlone && pressedButtons == 0 && appSettings.quickHelpReleaseSeen < 5) {
+      appSettings.quickHelpReleaseSeen++;
+      screenQuickHelpOpen(currentScreen);
+    }
+    if (value == keyShift) quickHelpSelectHeld = 0;
 
     if (pressedButtons == 0) {
       // Clean untimed screen message when all keys are released

@@ -31,7 +31,7 @@ struct ColorScheme {
   int warning;
 };
 
-// Key mapping: 8 buttons × 3 keys each
+// Key mapping: 10 buttons × 3 keys each
 struct KeyMapping {
   InputCode keyUp[3];
   InputCode keyDown[3];
@@ -41,6 +41,8 @@ struct KeyMapping {
   InputCode keyOpt[3];
   InputCode keyPlay[3];
   InputCode keyShift[3];
+  InputCode keyMotionRecord[3];
+  InputCode keyMotionErase[3];
 };
 
 struct AppSettings {
@@ -59,6 +61,7 @@ struct AppSettings {
   int braidsSignature;
   uint32_t braidsSignatureSeed;
   int pitchConflictWarning;
+  int quickHelpReleaseSeen;
   KeyMapping keyMapping;
   ColorScheme colorScheme;
   char themeName[THEME_NAME_LENGTH + 1];

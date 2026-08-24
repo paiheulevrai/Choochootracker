@@ -99,6 +99,7 @@ extern const AppScreen screenSelectionPopup;
 int screenMixerGetPage(void);
 extern const AppScreen screenColorTheme;
 extern const AppScreen screenKeyMapping;
+extern const AppScreen screenQuickHelp;
 
 extern const AppScreen* currentScreen;
 

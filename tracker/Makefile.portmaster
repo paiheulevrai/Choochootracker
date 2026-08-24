@@ -7,10 +7,18 @@ LIBS = $(COMMON_LIBS) platforms/sdl2
 CXX = aarch64-linux-gnu-g++
 STRIP = aarch64-linux-gnu-strip
 PKG_CONFIG ?= pkg-config
-PKG_CONFIG_LIBDIR ?= /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+PKG_CONFIG_SYSROOT_DIR ?=
+ifeq ($(strip $(PKG_CONFIG_LIBDIR)),)
+PKG_CONFIG_LIBDIR = $(if $(PKG_CONFIG_SYSROOT_DIR),$(PKG_CONFIG_SYSROOT_DIR)/usr/lib/aarch64-linux-gnu/pkgconfig:$(PKG_CONFIG_SYSROOT_DIR)/usr/share/pkgconfig,/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig)
+endif
 
+ifneq ($(strip $(PKG_CONFIG_SYSROOT_DIR)),)
+SDL_CFLAGS := -I$(PKG_CONFIG_SYSROOT_DIR)/usr/include -I$(PKG_CONFIG_SYSROOT_DIR)/usr/include/aarch64-linux-gnu
+SDL_LIBS := -L$(PKG_CONFIG_SYSROOT_DIR)/usr/lib/aarch64-linux-gnu -lSDL2 -Wl,--allow-shlib-undefined
+else
 SDL_CFLAGS := $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --cflags sdl2)
 SDL_LIBS := $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --libs sdl2)
+endif
 CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SDL_CFLAGS) -DPORTMASTER_BUILD -DGAMEPAD_SUPPORT
 TARGET = $(BUILD)/choochootracker.aarch64
 OUTPUT = -o $(TARGET)

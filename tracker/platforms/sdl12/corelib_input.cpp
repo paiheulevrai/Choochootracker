@@ -12,10 +12,14 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyOpt[0] = (InputCode){InputDeviceType::keyboard, BTN_B};
   appSettings.keyMapping.keyPlay[0] = (InputCode){InputDeviceType::keyboard, BTN_START};
   appSettings.keyMapping.keyShift[0] = (InputCode){InputDeviceType::keyboard, BTN_SELECT};
+  appSettings.keyMapping.keyMotionRecord[0] = (InputCode){InputDeviceType::keyboard, BTN_R2};
+  appSettings.keyMapping.keyMotionErase[0] = (InputCode){InputDeviceType::keyboard, BTN_L2};
 
   // Alternate mappings
   appSettings.keyMapping.keyOpt[1] = (InputCode){InputDeviceType::keyboard, BTN_Y};
   appSettings.keyMapping.keyShift[1] = (InputCode){InputDeviceType::keyboard, BTN_R1};
+  appSettings.keyMapping.keyMotionRecord[1] = (InputCode){InputDeviceType::none, 0};
+  appSettings.keyMapping.keyMotionErase[1] = (InputCode){InputDeviceType::none, 0};
 
   // Clear remaining slots
   appSettings.keyMapping.keyUp[1] = (InputCode){InputDeviceType::none, 0};
@@ -33,6 +37,8 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyOpt[2] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyPlay[2] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyShift[2] = (InputCode){InputDeviceType::none, 0};
+  appSettings.keyMapping.keyMotionRecord[2] = (InputCode){InputDeviceType::none, 0};
+  appSettings.keyMapping.keyMotionErase[2] = (InputCode){InputDeviceType::none, 0};
 }
 
 const char* inputGetKeyName(InputCode input) {
