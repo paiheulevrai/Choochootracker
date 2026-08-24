@@ -17,20 +17,16 @@ OUTPUT = -o $(TARGET)
 
 object_for = $(BUILD)/obj/$(subst ../,up/,$(basename $(1))).o
 OBJECTS := $(foreach source,$(SOURCES),$(call object_for,$(source)))
-HEADERS := $(sort $(shell find $(LIBS) -name '*.h' -print 2>/dev/null))
-HEADER_STAMP = $(BUILD)/obj/.headers
-
-$(HEADER_STAMP): $(HEADERS)
-	@mkdir -p $(dir $@)
-	@touch $@
+DEPS := $(OBJECTS:.o=.d)
 
 define compile_source
-$(call object_for,$(1)): $(1) $(HEADER_STAMP) Makefile.portmaster Makefile.common
+$(call object_for,$(1)): $(1) Makefile.portmaster Makefile.common
 	@mkdir -p $$(dir $$@)
-	@$(CXX) $(CFLAGS) -c $$< -o $$@
+	@$(CXX) $(CFLAGS) -MMD -MP -c $$< -o $$@
 endef
 
 $(foreach source,$(SOURCES),$(eval $(call compile_source,$(source))))
+-include $(DEPS)
 
 PACKAGE_ROOT = $(BUILD)/package
 PORT_DIR = $(PACKAGE_ROOT)/choochootracker
