@@ -23,6 +23,31 @@ TEST_CASE("Plaits renders all engines with finite output") {
   delete voice;
 }
 
+TEST_CASE("Trace 6-OP FM output through the tracker wrapper") {
+  for (int engine = 2; engine <= 4; ++engine) {
+    PlaitsVoice voice;
+    std::vector<float> output(96000);
+    voice.init(96000.0f);
+    voice.configure(engine, 16384, 16384, 16384, 0, 0, 255, 255, 60.0f, 1.0f);
+    voice.noteOn();
+    voice.render(output.data(), output.size());
+    double firstBlock = 0.0, first100ms = 0.0, tail = 0.0;
+    for (size_t i = 0; i < output.size(); ++i) {
+      const double sample = std::abs(output[i]);
+      if (i < 4096) firstBlock += sample;
+      if (i < 9600) first100ms += sample;
+      if (i >= 9600) tail += sample;
+    }
+    CAPTURE(engine);
+    CAPTURE(firstBlock);
+    CAPTURE(first100ms);
+    CAPTURE(tail);
+    CHECK(firstBlock > 0.01);
+    CHECK(first100ms > 0.01);
+    CHECK(tail > 10.0);
+  }
+}
+
 TEST_CASE("Plaits envelope routings produce finite audio") {
   PlaitsVoice voice;
   std::vector<float> output(4096);

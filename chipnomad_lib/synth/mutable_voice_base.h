@@ -31,7 +31,7 @@ class MutableVoiceBase {
     sourcePhase_ = 1.0f;
     previousSource_ = currentSource_ = 0.0f;
     auxMix_ = 0;
-    active_ = gate_ = triggerPending_ = false;
+    active_ = gate_ = triggerPending_ = retriggerPending_ = false;
     envelopeMode_ = 0;
     quietSamples_ = 0;
     post_.init(outputSampleRate_);
@@ -61,8 +61,9 @@ class MutableVoiceBase {
     post_.setEnvelope(envelopeMode_ == 2, attack, decay, sustain, release, shape);
   }
   void noteOn() {
+    retriggerPending_ = gate_;
     active_ = gate_ = true;
-    triggerPending_ = true;
+    triggerPending_ = false;
     quietSamples_ = 0;
     if (envelopeMode_ == 2) post_.noteOn();
   }
@@ -72,7 +73,7 @@ class MutableVoiceBase {
     if (envelopeMode_ == 2) post_.noteOff();
   }
   void kill() {
-    active_ = gate_ = triggerPending_ = false;
+    active_ = gate_ = triggerPending_ = retriggerPending_ = false;
     modulations_.trigger = 0.0f;
     post_.kill();
     quietSamples_ = 0;
@@ -111,7 +112,10 @@ class MutableVoiceBase {
  private:
   void renderBlock() {
     modulations_.note = 0.0f;
-    modulations_.trigger = triggerPending_ ? 1.0f : 0.0f;
+    // Mutable's patched trigger is a gate. A repeated note needs one low
+    // block before the gate rises again, otherwise Plaits cannot see its edge.
+    modulations_.trigger = retriggerPending_ ? 0.0f : (gate_ ? 1.0f : 0.0f);
+    retriggerPending_ = false;
     triggerPending_ = false;
     modulations_.level = 1.0f;
     voice_.Render(patch_, modulations_, frames_, kBlockSize);
@@ -135,7 +139,7 @@ class MutableVoiceBase {
   float outputSampleRate_;
   float sourcePhase_, previousSource_, currentSource_;
   uint8_t auxMix_;
-  bool active_, gate_, triggerPending_;
+  bool active_, gate_, triggerPending_, retriggerPending_;
   uint8_t envelopeMode_;
   uint32_t quietSamples_;
   VoicePostProcessor<PlaitsEnvelope> post_;

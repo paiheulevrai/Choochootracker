@@ -1,4 +1,6 @@
 build
+tracker/measurements/
+results/
 .tmp/
 inspirations/
 releases/

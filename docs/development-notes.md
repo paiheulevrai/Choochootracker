@@ -42,12 +42,22 @@
 
 - Plaits runs its original voice at 48 kHz and is linearly resampled into the 96 kHz master mix. Each tracker track owns one monophonic `PlaitsVoice` and a 16 KiB work allocator.
 - The 24 engine indices and Main/Aux blend are stored in the instrument. Plaits-specific FX are filtered by instrument type in the existing FX lanes.
-- Plaits has two envelope routings. `TRIG` matches TRIG patched/LEVEL unpatched and reuses the envelope row's D/S storage as LPG decay/color. `VCA` holds LEVEL open and applies the ADSR after the Mutable voice. Each note produces a one-block trigger pulse so adjacent tracker notes retrigger the Mutable envelope. VCA retriggers attack from the current level instead of resetting to zero, avoiding an amplitude discontinuity. Legacy `LEVEL` values load as `VCA`.
+- Plaits has two envelope routings. `TRIG` matches TRIG patched/LEVEL unpatched and reuses the envelope row's D/S storage as LPG decay/color. `VCA` holds LEVEL open and applies the ADSR after the Mutable voice. In `TRIG`, the wrapper now holds the Mutable gate high for the note duration; a repeated tracker note inserts one low block before returning high, preserving its rising-edge retrigger. VCA retriggers attack from the current level instead of resetting to zero, avoiding an amplitude discontinuity. Legacy `LEVEL` values load as `VCA`.
 - The Plaits wrapper passes pitch once to the Mutable voice; the previous integration also repeated it through the modulation input. A one-octave frequency-ratio test guards this path.
 - Reverb and Delay are shared master effects. Tracks accumulate post-fader send buses; each effect is processed once per callback, not once per track.
 - The Clouds reverb delay lengths and memory were scaled for 96 kHz. The ping-pong delay derives its sample delay from project tick rate and delay ticks.
 - `PRO` uses `00-64` as 0-100%, `MOD AB` uses a per-track phrase visit count, and conditions on one row are ANDed. `SPD` uses a rational phase accumulator and persists until replaced.
 - The scheduler advances at most one row per audio tick. High `SPD` multipliers therefore need hardware and musical validation with short grooves.
+
+## Synth level calibration
+
+- The reproducible measurement flow is documented in [`scripts/README_MEASURE.md`](../scripts/README_MEASURE.md). It renders 30 macro settings at two notes for each Braids, Plaits and Plaits-Alt model, plus a 90% PCM sine reference. Generated WAVs and reports are intentionally ignored by Git.
+- Loudness is not a single per-family constant. Sustained oscillators, internally enveloped physical models and percussion have different crest factors; use trimmed median RMS to compare typical level, then cap any proposed gain using the 95th-percentile peak with at least 1 dB headroom.
+- Never derive a global gain from the raw family median: a family can contain models already near full scale while its median is pulled down by short or quiet models. Percussive models are diagnostic-only for this purpose.
+- A shared Plaits integration bug previously emitted only a one-block trigger instead of holding the Mutable gate high. This prematurely released gate-dependent models, most visibly the 6-OP FM banks (`2`-`4`), and explains their near-silent console behaviour. The wrapper now maintains the gate and emits a one-block low transition only to retrigger an already-held note. Re-render all Plaits and Plaits-Alt models after this change before assigning compensation.
+- The same caution applies to internally articulated Plaits-Alt engines, including Reed Pipe (`10`), Shakers (`12`) and Claps (`13`): their short or self-shaped output should not be mistaken for a normalization target.
+- Reed Pipe exposes a quieter bore pickup on OUT and a deliberately amplified reed-flow signal on AUX. Its default `auxMix = 0` is a sound-design choice; do not hide that character difference behind automatic normalization.
+- The three Plaits 6-OP entries share the upstream `SixOpEngine` and factory DX7 banks. OUT and AUX are identical for this engine; inspection found no tracker-specific routing or bank-loading attenuation. Any remaining low-level issue must be verified on hardware in `TRIG/LPG` before changing engine gain.
 
 ## Shared instrument controls
 

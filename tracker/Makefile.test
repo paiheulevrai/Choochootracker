@@ -17,6 +17,7 @@ INCLUDES = -I. -Isrc -Isrc/corelib -Isrc/screens -Isrc/import -Itests/mocks -Iex
 
 # Test executable
 TEST_EXECUTABLE = $(BUILD_DIR)/run_tests$(if $(filter Windows_NT,$(OS)),.exe,)
+MEASURE_EXECUTABLE = $(BUILD_DIR)/render_engine_measurements$(if $(filter Windows_NT,$(OS)),.exe,)
 
 # Test source files - automatically discover all test_*.cpp except excluded ones
 TEST_SOURCES_ALL = $(wildcard tests/test_*.cpp)
@@ -68,11 +69,14 @@ COMMON_SOURCES = $(CHIPNOMAD_LIB_SOURCES) $(TRACKER_SRC_SOURCES)
 
 # All sources
 ALL_SOURCES = $(TEST_SOURCES) $(COMMON_SOURCES) $(MOCK_SOURCES)
+MEASURE_SOURCES = tests/render_engine_measurements.cpp $(COMMON_SOURCES) $(MOCK_SOURCES)
+ALL_COMPILE_SOURCES = $(sort $(ALL_SOURCES) $(MEASURE_SOURCES))
 
 # Compile each translation unit separately so -j can use every core and
 # unchanged files stay cached between test runs.
 object_for = $(BUILD_DIR)/obj/$(subst ../,up/,$(basename $(1))).o
 OBJECTS := $(foreach source,$(ALL_SOURCES),$(call object_for,$(source)))
+MEASURE_OBJECTS := $(foreach source,$(MEASURE_SOURCES),$(call object_for,$(source)))
 DEPS := $(OBJECTS:.o=.d)
 
 define compile_source
@@ -81,7 +85,7 @@ $(call object_for,$(1)): $(1) Makefile.test
 	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $$< -o $$@
 endef
 
-$(foreach source,$(ALL_SOURCES),$(eval $(call compile_source,$(source))))
+$(foreach source,$(ALL_COMPILE_SOURCES),$(eval $(call compile_source,$(source))))
 -include $(DEPS)
 
 # Default target: build and run all tests
@@ -97,6 +101,15 @@ $(TEST_EXECUTABLE): $(OBJECTS)
 	@echo "Linking test executable..."
 	@$(CXX) $(OBJECTS) $(LDFLAGS) -o $(TEST_EXECUTABLE)
 	@echo "Built: $(TEST_EXECUTABLE)"
+
+$(MEASURE_EXECUTABLE): $(MEASURE_OBJECTS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Linking measurement renderer..."
+	@$(CXX) $(MEASURE_OBJECTS) $(LDFLAGS) -o $(MEASURE_EXECUTABLE)
+
+.PHONY: measurements
+measurements: $(MEASURE_EXECUTABLE)
+	@$(MEASURE_EXECUTABLE)
 
 # Clean build artifacts
 clean:
@@ -121,4 +134,4 @@ help:
 	@echo "  $(TEST_EXECUTABLE) --success              Show successful assertions"
 	@echo "  $(TEST_EXECUTABLE) --help                 See all doctest options"
 
-.PHONY: all build clean help debug
+.PHONY: all build clean help debug measurements
