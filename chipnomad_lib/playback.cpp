@@ -79,6 +79,10 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   track->pendingGrooveIdx = 0;
   track->speedRatio = state->p->signedTrackSpeed ? 0 : 9;
   track->speedPhase = 0;
+  track->slewTicks = 0;
+  for (int i = 0; i < fxTotalCount; ++i) track->slewTarget[i] = -1;
+  memset(track->slewCurrent, 0, sizeof(track->slewCurrent));
+  memset(track->slewRemaining, 0, sizeof(track->slewRemaining));
   memset(track->conditionVisits, 0, sizeof(track->conditionVisits));
   track->conditionRandom = 0x6d2b79f5u ^ (uint32_t)(trackIdx + 1) * 0x9e3779b9u;
   track->conditionPhrase = EMPTY_VALUE_16;
@@ -366,6 +370,8 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     if (fxType == fxSPD && (p->signedTrackSpeed || fxValue <= 0x10)) {
       track->speedRatio = fxValue;
       track->speedPhase = 0;
+    } else if (fxType == fxSLE) {
+      track->slewTicks = fxValue;
     } else if (!skipDelCheck && (fxType == fxDEL && fxValue != 0)) {
       initFX(state, trackIdx, phraseRow->fx[i], NULL, -1);
       return;
@@ -430,7 +436,7 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
 
   // Read new FX
   for (int i = 0; i < 3; i++) {
-    if (phraseRow->fx[i][0] != fxDEL) {
+    if (phraseRow->fx[i][0] != fxDEL && phraseRow->fx[i][0] != fxSLE) {
       initFX(state, trackIdx, phraseRow->fx[i], NULL, -1);
     }
   }
@@ -613,7 +619,7 @@ static void resetLiveStickRate(PlaybackState* state) {
   memset(state->liveStickRate, 0, sizeof(state->liveStickRate));
 }
 
-void playbackUpdateLiveStickModulation(PlaybackState* state, const float axes[4]) {
+void playbackUpdateLiveStickModulation(PlaybackState* state, const float axes[4], int enabled) {
   int playing = playbackIsPlaying(state);
   if (playing != state->liveStickWasPlaying) {
     resetLiveStickRate(state);
@@ -625,6 +631,12 @@ void playbackUpdateLiveStickModulation(PlaybackState* state, const float axes[4]
     if (value > 1.0f) value = 1.0f;
     if (value < -1.0f) value = -1.0f;
     state->liveStickAxes[axis] = value;
+  }
+
+  if (!enabled) {
+    memset(state->liveStickAxes, 0, sizeof(state->liveStickAxes));
+    resetLiveStickRate(state);
+    return;
   }
 
   if (!playing) return;

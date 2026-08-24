@@ -34,12 +34,19 @@ static int tapCount;
 static int keyRepeatCount;
 static int motionRecordHeld;
 static int motionEraseHeld;
+static int motionLiveHeld;
 static int quickHelpSelectHeld;
 static int quickHelpSelectAlone;
 
 static int isMotionRecordTrigger(InputCode input) {
   for (int i = 0; i < 3; i++)
     if (appSettings.keyMapping.keyMotionRecord[i].deviceType == input.deviceType && appSettings.keyMapping.keyMotionRecord[i].code == input.code) return 1;
+  return 0;
+}
+
+static int isMotionLiveTrigger(InputCode input) {
+  for (int i = 0; i < 3; i++)
+    if (appSettings.keyMapping.keyMotionLive[i].deviceType == input.deviceType && appSettings.keyMapping.keyMotionLive[i].code == input.code) return 1;
   return 0;
 }
 
@@ -51,6 +58,7 @@ static int isMotionEraseTrigger(InputCode input) {
 
 static void updateMotionRecordMode(void) {
   chipnomadSetMotionRecordMode(motionRecordHeld, motionEraseHeld);
+  chipnomadSetLiveStickEnabled(motionLiveHeld || motionRecordHeld || motionEraseHeld);
 }
 
 /**
@@ -191,9 +199,13 @@ void appSetup(void) {
   if (appSettings.keyMapping.keyUp[0].deviceType == InputDeviceType::none) {
     inputInitDefaultKeyMapping();
   }
-  if (appSettings.keyMapping.keyMotionRecord[0].deviceType == InputDeviceType::none) {
-    appSettings.keyMapping.keyMotionRecord[0] = (InputCode){InputDeviceType::keyboard, BTN_R2};
-    appSettings.keyMapping.keyMotionErase[0] = (InputCode){InputDeviceType::keyboard, BTN_L2};
+  if (appSettings.keyMapping.keyMotionLive[0].deviceType == InputDeviceType::none) {
+    appSettings.keyMapping.keyMotionLive[0] = (InputCode){InputDeviceType::keyboard, BTN_L1};
+    if (appSettings.keyMapping.keyMotionRecord[0].deviceType == InputDeviceType::none ||
+        (appSettings.keyMapping.keyMotionRecord[0].code == BTN_R2 && appSettings.keyMapping.keyMotionErase[0].code == BTN_L2)) {
+      appSettings.keyMapping.keyMotionRecord[0] = (InputCode){InputDeviceType::keyboard, BTN_L2};
+      appSettings.keyMapping.keyMotionErase[0] = (InputCode){InputDeviceType::keyboard, BTN_R2};
+    }
   }
 
   // Keyboard input reset
@@ -204,6 +216,7 @@ void appSetup(void) {
   keyRepeatCount = 0;
   motionRecordHeld = 0;
   motionEraseHeld = 0;
+  motionLiveHeld = 0;
   quickHelpSelectHeld = 0;
   quickHelpSelectAlone = 0;
   updateMotionRecordMode();
@@ -332,6 +345,11 @@ void appDraw(void) {
   } else if (motionRecordHeld) {
     gfxSetFgColor(chipnomadGetMotionRecordOverflow() ? cs.warning : cs.textTitles);
     gfxPrint(39, 19, chipnomadGetMotionRecordOverflow() ? "!" : "*");
+  } else if (motionLiveHeld) {
+    gfxSetFgColor(cs.textTitles);
+    gfxPrint(39, 19, "~");
+  } else {
+    gfxPrint(39, 19, " ");
   }
 }
 
@@ -360,6 +378,11 @@ void appOnEvent(MainLoopEventData eventData) {
 
     if (!rawInputActive && isMotionRecordTrigger(eventData.data.input)) {
       motionRecordHeld = 1;
+      updateMotionRecordMode();
+      break;
+    }
+    if (!rawInputActive && isMotionLiveTrigger(eventData.data.input)) {
+      motionLiveHeld = 1;
       updateMotionRecordMode();
       break;
     }
@@ -426,6 +449,11 @@ void appOnEvent(MainLoopEventData eventData) {
 
     if (!rawInputActive && isMotionRecordTrigger(eventData.data.input)) {
       motionRecordHeld = 0;
+      updateMotionRecordMode();
+      break;
+    }
+    if (!rawInputActive && isMotionLiveTrigger(eventData.data.input)) {
+      motionLiveHeld = 0;
       updateMotionRecordMode();
       break;
     }

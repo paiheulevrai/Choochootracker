@@ -57,7 +57,7 @@
 - A shared Plaits integration bug previously emitted only a one-block trigger instead of holding the Mutable gate high. This prematurely released gate-dependent models, most visibly the 6-OP FM banks (`2`-`4`), and explains their near-silent console behaviour. The wrapper now maintains the gate and emits a one-block low transition only to retrigger an already-held note. Re-render all Plaits and Plaits-Alt models after this change before assigning compensation.
 - The same caution applies to internally articulated Plaits-Alt engines, including Reed Pipe (`10`), Shakers (`12`) and Claps (`13`): their short or self-shaped output should not be mistaken for a normalization target.
 - Reed Pipe exposes a quieter bore pickup on OUT and a deliberately amplified reed-flow signal on AUX. Its default `auxMix = 0` is a sound-design choice; do not hide that character difference behind automatic normalization.
-- The three Plaits 6-OP entries share the upstream `SixOpEngine` and factory DX7 banks. OUT and AUX are identical for this engine; inspection found no tracker-specific routing or bank-loading attenuation. Any remaining low-level issue must be verified on hardware in `TRIG/LPG` before changing engine gain.
+- The three Plaits 6-OP entries share the upstream `SixOpEngine` and factory DX7 banks. The integration fix has been validated on hardware: the FM engines now sound normally in `TRIG/LPG`, with no gain compensation change required.
 
 ## Shared instrument controls
 
@@ -96,7 +96,8 @@ References: [PortMaster build environments](https://portmaster.games/build-envir
 - Instrument FX lifetime and Sample playback boundaries/filter stability are covered by tests.
 - The current suite contains 161 passing test cases and 149,328 assertions.
 - The Windows executable compiles and survives an SDL dummy audio/video smoke test.
-- The remaining hardware question is whether eight simultaneous Plaits voices plus Reverb and Delay hold 96 kHz without underruns on the RG353V.
+- Audio export has been validated on the target console.
+- Eight simultaneous Plaits voices plus Reverb and Delay hold 96 kHz on the RG353V without underruns.
 - The ARM64 binary and PortMaster ZIP build successfully under WSL2. They still need to run on the RG353V.
 
 ## WebAssembly notes

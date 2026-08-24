@@ -325,6 +325,7 @@ FX have a three-letter command and a hexadecimal value. The in-app help panel gi
 | `PRO` | `00-64` | Evaluates an absolute trigger probability from 0 to 100%. |
 | `MOD` | `AB` | Triggers on pass A of a B-pass cycle. |
 | `SPD` | `00-10` | Selects a persistent per-track clock ratio; see the speed table below. |
+| `SLE` | `00-FF` ticks | Sets persistent per-track glide time for continuous engine FX. `00` is immediate. The setting resets to `00` when playback stops. |
 
 Only one instance of each FX type runs on a track, regardless of which FX column introduced it. Phrase FX override auxiliary-table FX, which override instrument-table FX. Triggering a new instrument resets active FX; a note with no instrument lets compatible FX continue or restart. Most continuous FX stop with `00`; table selectors stop with `FF`.
 

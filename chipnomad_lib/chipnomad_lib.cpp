@@ -26,7 +26,9 @@ static void updateAudioRateModulations(ChipNomadState* state);
 static void motionRecordFrame(ChipNomadState* state);
 
 static std::atomic<int32_t> liveStickAxes[4];
+static std::atomic<int> liveStickEnabled;
 static std::atomic<int> motionRecordMode;
+static std::atomic<int> motionRecordRateReset;
 static std::atomic<int> motionRecordDirty;
 static std::atomic<int> motionRecordOverflow;
 static int16_t motionRecordLast[PROJECT_MAX_TRACKS][fxTotalCount];
@@ -42,6 +44,28 @@ static float deadzoneStickAxis(float value) {
   return value < 0.0f ? -normalized : normalized;
 }
 
+static int slewEngineFX(PlaybackTrackState* track, FX fx, int target) {
+  int index = (int)fx;
+  if (track->slewTarget[index] < 0) {
+    track->slewCurrent[index] = target;
+    track->slewTarget[index] = target;
+  } else if (track->slewTarget[index] != target) {
+    track->slewTarget[index] = target;
+    track->slewRemaining[index] = track->slewTicks;
+  }
+  if (!track->slewTicks) {
+    track->slewCurrent[index] = target;
+    track->slewRemaining[index] = 0;
+  } else if (track->slewRemaining[index]) {
+    int distance = target - track->slewCurrent[index];
+    int step = distance / track->slewRemaining[index];
+    if (!step && distance) step = distance < 0 ? -1 : 1;
+    track->slewCurrent[index] += step;
+    track->slewRemaining[index]--;
+  }
+  return track->slewCurrent[index];
+}
+
 void chipnomadSetLiveStickAxes(float leftVertical, float leftHorizontal,
                                float rightVertical, float rightHorizontal) {
   const float axes[4] = {leftVertical, leftHorizontal, rightVertical, rightHorizontal};
@@ -51,8 +75,14 @@ void chipnomadSetLiveStickAxes(float leftVertical, float leftHorizontal,
   }
 }
 
+void chipnomadSetLiveStickEnabled(int enabled) {
+  liveStickEnabled.store(enabled ? 1 : 0, std::memory_order_relaxed);
+}
+
 void chipnomadSetMotionRecordMode(int record, int erase) {
-  motionRecordMode.store(erase ? 2 : record ? 1 : 0, std::memory_order_relaxed);
+  int mode = erase ? 2 : record ? 1 : 0;
+  int previousMode = motionRecordMode.exchange(mode, std::memory_order_relaxed);
+  if (previousMode == 1 && mode != 1) motionRecordRateReset.store(1, std::memory_order_relaxed);
   if (!record && !erase) motionRecordOverflow.store(0, std::memory_order_relaxed);
 }
 
@@ -107,7 +137,30 @@ static PhraseRow* motionPhraseRow(ChipNomadState* state, int trackIdx) {
   return &project->phrases[phrase].rows[track->phraseRow];
 }
 
+static void rebaseMotionRecordRate(ChipNomadState* state) {
+  for (int trackIdx = 0; trackIdx < state->project.tracksCount; ++trackIdx) {
+    PlaybackTrackState* track = &state->playbackState.tracks[trackIdx];
+    if (track->note.instrument == EMPTY_VALUE_8) continue;
+    Instrument* instrument = &state->project.instruments[track->note.instrument];
+    for (int slot = 0; slot < 4; ++slot) {
+      PlaybackModState* modulation = &track->note.modulation[slot];
+      if (!modulation->modulation || modulation->modulation->type != ModulationType::StickRate) continue;
+      FX fx;
+      int base, range;
+      if (!motionDestinationFX(instrument, track, modulation->modulation->destination, &fx, &base, &range)) continue;
+      int delta = playbackModScaleToRange(modulation->outValue, range);
+      if (range == 16384) delta /= 129;
+      track->note.fx[fx].isOn = 1;
+      track->note.fx[fx].fxValue = clampInt(base + delta, 0, 255);
+      state->playbackState.liveStickRate[track->note.instrument][slot] = 0;
+      modulation->outValue = 0;
+    }
+  }
+}
+
 static void motionRecordFrame(ChipNomadState* state) {
+  if (motionRecordRateReset.exchange(0, std::memory_order_relaxed))
+    rebaseMotionRecordRate(state);
   int mode = motionRecordMode.load(std::memory_order_relaxed);
   if (mode != motionRecordLastMode) {
     resetMotionRecordLast();
@@ -404,11 +457,13 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
       float axes[4];
       for (int i = 0; i < 4; ++i)
         axes[i] = liveStickAxes[i].load(std::memory_order_relaxed) / 1000000.0f;
-      playbackUpdateLiveStickModulation(&state->playbackState, axes);
+      int enabled = liveStickEnabled.load(std::memory_order_relaxed);
+      if (!enabled && motionRecordRateReset.load(std::memory_order_relaxed)) enabled = 1;
+      playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
       state->frameSampleCounter += state->sampleRate / state->project.tickRate;
       allTracksStopped = playbackNextFrame(state);
       motionRecordFrame(state);
-      if (allTracksStopped) playbackUpdateLiveStickModulation(&state->playbackState, axes);
+      if (allTracksStopped) playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
       updateSampleVoices(state);
       updateSCWFVoices(state);
       updateBraidsVoices(state);
@@ -953,10 +1008,10 @@ static void updateBraidsVoices(ChipNomadState* state) {
       model = clampInt(track->note.fx[fxBMD].fxValue, 0,
         braids::MACRO_OSC_SHAPE_LAST_ACCESSIBLE_FROM_META);
     }
-    if (track->note.fx[fxBTM].isOn) timbre = track->note.fx[fxBTM].fxValue * 129;
-    if (track->note.fx[fxBCL].isOn) color = track->note.fx[fxBCL].fxValue * 129;
-    if (track->note.fx[fxBCF].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxBCF].fxValue);
-    if (track->note.fx[fxBRS].isOn) resonance = track->note.fx[fxBRS].fxValue;
+    if (track->note.fx[fxBTM].isOn) timbre = slewEngineFX(track, fxBTM, track->note.fx[fxBTM].fxValue) * 129;
+    if (track->note.fx[fxBCL].isOn) color = slewEngineFX(track, fxBCL, track->note.fx[fxBCL].fxValue) * 129;
+    if (track->note.fx[fxBCF].isOn) cutoff = instrumentFXCutoff(slewEngineFX(track, fxBCF, track->note.fx[fxBCF].fxValue));
+    if (track->note.fx[fxBRS].isOn) resonance = slewEngineFX(track, fxBRS, track->note.fx[fxBRS].fxValue);
 
     for (int i = 0; i < 4; i++) {
       PlaybackModState* mod = &track->note.modulation[i];
@@ -1031,12 +1086,12 @@ static void updatePlaitsVoices(ChipNomadState* state) {
     float gain = phraseGain(track, &project->instruments[track->note.instrument]);
 
     if (track->note.fx[fxPMD].isOn) engine = track->note.fx[fxPMD].fxValue;
-    if (track->note.fx[fxPHA].isOn) harmonics = track->note.fx[fxPHA].fxValue * 129;
-    if (track->note.fx[fxPTM].isOn) timbre = track->note.fx[fxPTM].fxValue * 129;
-    if (track->note.fx[fxPMO].isOn) morph = track->note.fx[fxPMO].fxValue * 129;
-    if (track->note.fx[fxPAX].isOn) auxMix = track->note.fx[fxPAX].fxValue;
-    if (track->note.fx[fxPCF].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxPCF].fxValue);
-    if (track->note.fx[fxPRS].isOn) resonance = track->note.fx[fxPRS].fxValue;
+    if (track->note.fx[fxPHA].isOn) harmonics = slewEngineFX(track, fxPHA, track->note.fx[fxPHA].fxValue) * 129;
+    if (track->note.fx[fxPTM].isOn) timbre = slewEngineFX(track, fxPTM, track->note.fx[fxPTM].fxValue) * 129;
+    if (track->note.fx[fxPMO].isOn) morph = slewEngineFX(track, fxPMO, track->note.fx[fxPMO].fxValue) * 129;
+    if (track->note.fx[fxPAX].isOn) auxMix = slewEngineFX(track, fxPAX, track->note.fx[fxPAX].fxValue);
+    if (track->note.fx[fxPCF].isOn) cutoff = instrumentFXCutoff(slewEngineFX(track, fxPCF, track->note.fx[fxPCF].fxValue));
+    if (track->note.fx[fxPRS].isOn) resonance = slewEngineFX(track, fxPRS, track->note.fx[fxPRS].fxValue);
 
     for (int i = 0; i < 4; ++i) {
       PlaybackModState* mod = &track->note.modulation[i];
@@ -1095,12 +1150,12 @@ static void updatePlaitsAltVoices(ChipNomadState* state) {
     int resonance = p->filterResonance, pitchModulation = 0;
     float gain = phraseGain(track, &project->instruments[track->note.instrument]);
     if (track->note.fx[fxPMD].isOn) engine = track->note.fx[fxPMD].fxValue;
-    if (track->note.fx[fxPHA].isOn) harmonics = track->note.fx[fxPHA].fxValue * 129;
-    if (track->note.fx[fxPTM].isOn) timbre = track->note.fx[fxPTM].fxValue * 129;
-    if (track->note.fx[fxPMO].isOn) morph = track->note.fx[fxPMO].fxValue * 129;
-    if (track->note.fx[fxPAX].isOn) auxMix = track->note.fx[fxPAX].fxValue;
-    if (track->note.fx[fxPCF].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxPCF].fxValue);
-    if (track->note.fx[fxPRS].isOn) resonance = track->note.fx[fxPRS].fxValue;
+    if (track->note.fx[fxPHA].isOn) harmonics = slewEngineFX(track, fxPHA, track->note.fx[fxPHA].fxValue) * 129;
+    if (track->note.fx[fxPTM].isOn) timbre = slewEngineFX(track, fxPTM, track->note.fx[fxPTM].fxValue) * 129;
+    if (track->note.fx[fxPMO].isOn) morph = slewEngineFX(track, fxPMO, track->note.fx[fxPMO].fxValue) * 129;
+    if (track->note.fx[fxPAX].isOn) auxMix = slewEngineFX(track, fxPAX, track->note.fx[fxPAX].fxValue);
+    if (track->note.fx[fxPCF].isOn) cutoff = instrumentFXCutoff(slewEngineFX(track, fxPCF, track->note.fx[fxPCF].fxValue));
+    if (track->note.fx[fxPRS].isOn) resonance = slewEngineFX(track, fxPRS, track->note.fx[fxPRS].fxValue);
     for (int i = 0; i < 4; ++i) {
       PlaybackModState* mod = &track->note.modulation[i];
       if (!mod->modulation) continue;

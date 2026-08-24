@@ -124,6 +124,7 @@ int settingsSave(void) {
   fprintf(file, "keyOpt: %d,%d,%d\n", appSettings.keyMapping.keyOpt[0].code, appSettings.keyMapping.keyOpt[1].code, appSettings.keyMapping.keyOpt[2].code);
   fprintf(file, "keyPlay: %d,%d,%d\n", appSettings.keyMapping.keyPlay[0].code, appSettings.keyMapping.keyPlay[1].code, appSettings.keyMapping.keyPlay[2].code);
   fprintf(file, "keyShift: %d,%d,%d\n", appSettings.keyMapping.keyShift[0].code, appSettings.keyMapping.keyShift[1].code, appSettings.keyMapping.keyShift[2].code);
+  fprintf(file, "keyMotionLive: %d,%d,%d\n", appSettings.keyMapping.keyMotionLive[0].code, appSettings.keyMapping.keyMotionLive[1].code, appSettings.keyMapping.keyMotionLive[2].code);
   fprintf(file, "keyMotionRecord: %d,%d,%d\n", appSettings.keyMapping.keyMotionRecord[0].code, appSettings.keyMapping.keyMotionRecord[1].code, appSettings.keyMapping.keyMotionRecord[2].code);
   fprintf(file, "keyMotionErase: %d,%d,%d\n", appSettings.keyMapping.keyMotionErase[0].code, appSettings.keyMapping.keyMotionErase[1].code, appSettings.keyMapping.keyMotionErase[2].code);
 
@@ -136,6 +137,7 @@ int settingsSave(void) {
   fprintf(file, "keyOptType: %d,%d,%d\n", appSettings.keyMapping.keyOpt[0].deviceType, appSettings.keyMapping.keyOpt[1].deviceType, appSettings.keyMapping.keyOpt[2].deviceType);
   fprintf(file, "keyPlayType: %d,%d,%d\n", appSettings.keyMapping.keyPlay[0].deviceType, appSettings.keyMapping.keyPlay[1].deviceType, appSettings.keyMapping.keyPlay[2].deviceType);
   fprintf(file, "keyShiftType: %d,%d,%d\n", appSettings.keyMapping.keyShift[0].deviceType, appSettings.keyMapping.keyShift[1].deviceType, appSettings.keyMapping.keyShift[2].deviceType);
+  fprintf(file, "keyMotionLiveType: %d,%d,%d\n", appSettings.keyMapping.keyMotionLive[0].deviceType, appSettings.keyMapping.keyMotionLive[1].deviceType, appSettings.keyMapping.keyMotionLive[2].deviceType);
   fprintf(file, "keyMotionRecordType: %d,%d,%d\n", appSettings.keyMapping.keyMotionRecord[0].deviceType, appSettings.keyMapping.keyMotionRecord[1].deviceType, appSettings.keyMapping.keyMotionRecord[2].deviceType);
   fprintf(file, "keyMotionEraseType: %d,%d,%d\n", appSettings.keyMapping.keyMotionErase[0].deviceType, appSettings.keyMapping.keyMotionErase[1].deviceType, appSettings.keyMapping.keyMotionErase[2].deviceType);
 
@@ -238,6 +240,8 @@ int settingsLoad(void) {
       sscanf(line + 9, "%d,%d,%d", &appSettings.keyMapping.keyPlay[0].code, &appSettings.keyMapping.keyPlay[1].code, &appSettings.keyMapping.keyPlay[2].code);
     } else if (strncmp(line, "keyShift: ", 10) == 0) {
       sscanf(line + 10, "%d,%d,%d", &appSettings.keyMapping.keyShift[0].code, &appSettings.keyMapping.keyShift[1].code, &appSettings.keyMapping.keyShift[2].code);
+    } else if (strncmp(line, "keyMotionLive: ", 15) == 0) {
+      sscanf(line + 15, "%d,%d,%d", &appSettings.keyMapping.keyMotionLive[0].code, &appSettings.keyMapping.keyMotionLive[1].code, &appSettings.keyMapping.keyMotionLive[2].code);
     } else if (strncmp(line, "keyMotionRecord: ", 17) == 0) {
       sscanf(line + 17, "%d,%d,%d", &appSettings.keyMapping.keyMotionRecord[0].code, &appSettings.keyMapping.keyMotionRecord[1].code, &appSettings.keyMapping.keyMotionRecord[2].code);
     } else if (strncmp(line, "keyMotionErase: ", 16) == 0) {
@@ -258,6 +262,8 @@ int settingsLoad(void) {
       sscanf(line + 13, "%d,%d,%d", (int *)&appSettings.keyMapping.keyPlay[0].deviceType, (int *)&appSettings.keyMapping.keyPlay[1].deviceType, (int *)&appSettings.keyMapping.keyPlay[2].deviceType);
     } else if (strncmp(line, "keyShiftType: ", 14) == 0) {
       sscanf(line + 14, "%d,%d,%d", (int *)&appSettings.keyMapping.keyShift[0].deviceType, (int *)&appSettings.keyMapping.keyShift[1].deviceType, (int *)&appSettings.keyMapping.keyShift[2].deviceType);
+    } else if (strncmp(line, "keyMotionLiveType: ", 19) == 0) {
+      sscanf(line + 19, "%d,%d,%d", (int *)&appSettings.keyMapping.keyMotionLive[0].deviceType, (int *)&appSettings.keyMapping.keyMotionLive[1].deviceType, (int *)&appSettings.keyMapping.keyMotionLive[2].deviceType);
     } else if (strncmp(line, "keyMotionRecordType: ", 21) == 0) {
       sscanf(line + 21, "%d,%d,%d", (int *)&appSettings.keyMapping.keyMotionRecord[0].deviceType, (int *)&appSettings.keyMapping.keyMotionRecord[1].deviceType, (int *)&appSettings.keyMapping.keyMotionRecord[2].deviceType);
     } else if (strncmp(line, "keyMotionEraseType: ", 20) == 0) {

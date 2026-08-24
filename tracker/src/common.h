@@ -41,6 +41,7 @@ struct KeyMapping {
   InputCode keyOpt[3];
   InputCode keyPlay[3];
   InputCode keyShift[3];
+  InputCode keyMotionLive[3];
   InputCode keyMotionRecord[3];
   InputCode keyMotionErase[3];
 };

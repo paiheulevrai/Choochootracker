@@ -81,6 +81,10 @@ struct PlaybackTrackState {
   // Persistent sequencer FX state
   uint8_t speedRatio;
   uint32_t speedPhase;
+  uint8_t slewTicks;
+  int16_t slewCurrent[fxTotalCount];
+  int16_t slewTarget[fxTotalCount];
+  uint8_t slewRemaining[fxTotalCount];
   uint32_t conditionVisits[16];
   uint32_t conditionRandom;
   uint16_t conditionPhrase;
@@ -267,7 +271,7 @@ void playbackClearLoopRange(PlaybackState* state);
  * @return 1 if all tracks have finished playing, 0 if any track is still active
  */
 int playbackNextFrame(struct ChipNomadState* state);
-void playbackUpdateLiveStickModulation(PlaybackState* state, const float axes[4]);
+void playbackUpdateLiveStickModulation(PlaybackState* state, const float axes[4], int enabled);
 int16_t playbackLiveStickOutput(const PlaybackState* state, uint8_t instrument,
                                 int slot, const Modulation* mod);
 

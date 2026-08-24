@@ -353,6 +353,7 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     case fxPRO: snprintf(buffer, bufferSize, "Probability %hhu%%", fx[1] > 100 ? 100 : fx[1]); break;
     case fxMOD: snprintf(buffer, bufferSize, "Modulo %hhu:%hhu", fx[1] >> 4, fx[1] & 15); break;
     case fxSPD: snprintf(buffer, bufferSize, "Track clock mode %02hX", fx[1]); break;
+    case fxSLE: snprintf(buffer, bufferSize, "Engine FX slew %hhu ticks", fx[1]); break;
     case fxPMD: snprintf(buffer, bufferSize, "Plaits engine %hhu", fx[1]); break;
     case fxPHA: snprintf(buffer, bufferSize, "Plaits harmonics %hhu", fx[1]); break;
     case fxPTM: snprintf(buffer, bufferSize, "Plaits timbre %hhu", fx[1]); break;
@@ -468,6 +469,7 @@ static void initFxHelpText() {
   fxHelpText[fxPRO] = "Probability\n00-64 = 0-100 percent\nConditions on a row use AND";
   fxHelpText[fxMOD] = "Modulo condition\nAB triggers pass A of B\nExample 34 = 3:4";
   fxHelpText[fxSPD] = "Track playback speed\n00=x1, 01=x2, FF=/2\nPersists until next SPD";
+  fxHelpText[fxSLE] = "Engine FX Slew\n00 immediate; higher values\nglide continuous engine FX";
   fxHelpText[fxPMD] = "Plaits Engine FX\n00-17 selects 24 engines\nuntil the next note trigger";
   fxHelpText[fxPHA] = "Plaits Harmonics FX\nOverrides harmonics until\nthe next note trigger";
   fxHelpText[fxPTM] = "Plaits Timbre FX\nOverrides timbre until\nthe next note trigger";

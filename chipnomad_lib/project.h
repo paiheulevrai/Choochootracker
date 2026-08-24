@@ -137,6 +137,9 @@ enum FX {
   fxBIA, // Table A index
   fxBIB, // Table B index
 
+  // Persistent per-track engine parameter glide. Appended to preserve project FX IDs.
+  fxSLE,
+
   // Total count - must be last
   fxTotalCount
 };

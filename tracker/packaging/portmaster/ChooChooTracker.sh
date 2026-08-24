@@ -19,6 +19,7 @@ get_controls
 GAMEDIR="/$directory/ports/choochootracker"
 CONFDIR="$GAMEDIR/conf"
 mkdir -p "$CONFDIR"
+mkdir -p "$CONFDIR/.choochootracker"
 cd "$GAMEDIR" || exit 1
 
 > "$GAMEDIR/log.txt" && exec > >(tee "$GAMEDIR/log.txt") 2>&1

@@ -1441,19 +1441,23 @@ TEST_CASE("test_live_stick_modulation_sources_and_rate_reset") {
   state.tracks[0].mode = PlaybackMode::song;
 
   const float axes[4] = {0.5f, 0.0f, 0.0f, 0.0f};
-  playbackUpdateLiveStickModulation(&state, axes);
+  playbackUpdateLiveStickModulation(&state, axes, 1);
 
   Modulation linear = {.type = ModulationType::StickLinear, .amount = 127, .p1 = 0};
   CHECK(playbackLiveStickOutput(&state, 0, 0, &linear) == 16193);
 
   Modulation rate = {.type = ModulationType::StickRate, .amount = 127, .p1 = 0, .p2 = 12};
   project.instruments[0].modulation[0] = rate;
-  playbackUpdateLiveStickModulation(&state, axes);
+  playbackUpdateLiveStickModulation(&state, axes, 1);
   CHECK(state.liveStickRate[0][0] > 0);
   CHECK(playbackLiveStickOutput(&state, 0, 0, &rate) == state.liveStickRate[0][0]);
 
+  playbackUpdateLiveStickModulation(&state, axes, 0);
+  CHECK(state.liveStickRate[0][0] == 0);
+  CHECK(playbackLiveStickOutput(&state, 0, 0, &linear) == 0);
+
   state.tracks[0].mode = PlaybackMode::stopped;
-  playbackUpdateLiveStickModulation(&state, axes);
+  playbackUpdateLiveStickModulation(&state, axes, 1);
   CHECK(state.liveStickRate[0][0] == 0);
 }
 
