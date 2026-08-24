@@ -16,3 +16,8 @@ up = up
 down = down
 left = left
 right = right
+
+right_analog_up = "
+right_analog_down = "
+right_analog_left = "
+right_analog_right = "

@@ -1446,12 +1446,7 @@ TEST_CASE("test_live_stick_modulation_sources_and_rate_reset") {
   Modulation linear = {.type = ModulationType::StickLinear, .amount = 127, .p1 = 0};
   CHECK(playbackLiveStickOutput(&state, 0, 0, &linear) == 16193);
 
-  Modulation velocity = {.type = ModulationType::StickVelocity, .amount = 127, .p1 = 0};
-  CHECK(playbackLiveStickOutput(&state, 0, 0, &velocity) == 32385);
-  playbackUpdateLiveStickModulation(&state, axes);
-  CHECK(playbackLiveStickOutput(&state, 0, 0, &velocity) == 0);
-
-  Modulation rate = {.type = ModulationType::StickRate, .amount = 127, .p1 = 0, .p2 = 0};
+  Modulation rate = {.type = ModulationType::StickRate, .amount = 127, .p1 = 0, .p2 = 12};
   project.instruments[0].modulation[0] = rate;
   playbackUpdateLiveStickModulation(&state, axes);
   CHECK(state.liveStickRate[0][0] > 0);

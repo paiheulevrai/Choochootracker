@@ -31,7 +31,7 @@ enum class ModulationType : uint8_t {
   SLFO = 3,
   FLFO = 4,
   StickLinear = 5,
-  StickVelocity = 6,
+  StickVelocity = 6, // Legacy project value, no longer exposed.
   StickRate = 7,
   totalCount,
 };

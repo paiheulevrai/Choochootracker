@@ -625,16 +625,10 @@ void playbackUpdateLiveStickModulation(PlaybackState* state, const float axes[4]
     if (value > 1.0f) value = 1.0f;
     if (value < -1.0f) value = -1.0f;
     state->liveStickAxes[axis] = value;
-    state->liveStickVelocity[axis] = playing && state->p->tickRate > 0.0f
-      ? (value - state->liveStickPrevious[axis]) * state->p->tickRate : 0.0f;
-    if (state->liveStickVelocity[axis] > 1.0f) state->liveStickVelocity[axis] = 1.0f;
-    if (state->liveStickVelocity[axis] < -1.0f) state->liveStickVelocity[axis] = -1.0f;
-    state->liveStickPrevious[axis] = value;
   }
 
-  if (!playing || state->p->tickRate <= 0.0f) return;
+  if (!playing) return;
 
-  const float dt = 1.0f / state->p->tickRate;
   for (int instrument = 0; instrument < PROJECT_MAX_INSTRUMENTS; ++instrument) {
     for (int slot = 0; slot < 4; ++slot) {
       const Modulation* mod = &state->p->instruments[instrument].modulation[slot];
@@ -643,8 +637,8 @@ void playbackUpdateLiveStickModulation(PlaybackState* state, const float axes[4]
         continue;
       }
       int axis = mod->p1 < static_cast<uint8_t>(StickAxis::totalCount) ? mod->p1 : 0;
-      float seconds = 0.25f * powf(32.0f, mod->p2 / 255.0f);
-      float delta = state->liveStickAxes[axis] * mod->amount * 255.0f * dt / seconds;
+      int ticks = mod->p2 ? mod->p2 : 1;
+      float delta = state->liveStickAxes[axis] * mod->amount * 255.0f / ticks;
       int value = (int)state->liveStickRate[instrument][slot] + (int)roundf(delta);
       state->liveStickRate[instrument][slot] = (int16_t)clampInt(value, -32385, 32385);
     }
@@ -655,9 +649,7 @@ int16_t playbackLiveStickOutput(const PlaybackState* state, uint8_t instrument,
                                 int slot, const Modulation* mod) {
   int axis = mod->p1 < static_cast<uint8_t>(StickAxis::totalCount) ? mod->p1 : 0;
   if (mod->type == ModulationType::StickRate) return state->liveStickRate[instrument][slot];
-  float source = mod->type == ModulationType::StickVelocity
-    ? state->liveStickVelocity[axis] : state->liveStickAxes[axis];
-  int value = (int)roundf(source * mod->amount * 255.0f);
+  int value = (int)roundf(state->liveStickAxes[axis] * mod->amount * 255.0f);
   return (int16_t)clampInt(value, -32385, 32385);
 }
 
@@ -916,8 +908,6 @@ static int skipZeroGrooveRows(PlaybackState* state, int trackIdx) {
 void playbackInit(PlaybackState* state, Project* project) {
   state->p = project;
   memset(state->liveStickAxes, 0, sizeof(state->liveStickAxes));
-  memset(state->liveStickVelocity, 0, sizeof(state->liveStickVelocity));
-  memset(state->liveStickPrevious, 0, sizeof(state->liveStickPrevious));
   resetLiveStickRate(state);
   state->liveStickWasPlaying = 0;
 

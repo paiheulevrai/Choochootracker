@@ -23,8 +23,14 @@ static void updatePlaitsAltVoices(ChipNomadState* state);
 static void applyVoiceEvents(ChipNomadState* state);
 static int hasAudioRateModulation(const ChipNomadState* state);
 static void updateAudioRateModulations(ChipNomadState* state);
+static void motionRecordFrame(ChipNomadState* state);
 
 static std::atomic<int32_t> liveStickAxes[4];
+static std::atomic<int> motionRecordMode;
+static std::atomic<int> motionRecordDirty;
+static std::atomic<int> motionRecordOverflow;
+static int16_t motionRecordLast[PROJECT_MAX_TRACKS][fxTotalCount];
+static int motionRecordLastMode = -1;
 
 static float deadzoneStickAxis(float value) {
   const float deadzone = 0.05f;
@@ -42,6 +48,131 @@ void chipnomadSetLiveStickAxes(float leftVertical, float leftHorizontal,
   for (int i = 0; i < 4; ++i) {
     liveStickAxes[i].store((int32_t)(deadzoneStickAxis(axes[i]) * 1000000.0f),
                            std::memory_order_relaxed);
+  }
+}
+
+void chipnomadSetMotionRecordMode(int record, int erase) {
+  motionRecordMode.store(erase ? 2 : record ? 1 : 0, std::memory_order_relaxed);
+  if (!record && !erase) motionRecordOverflow.store(0, std::memory_order_relaxed);
+}
+
+int chipnomadConsumeMotionRecordDirty(void) {
+  return motionRecordDirty.exchange(0, std::memory_order_relaxed);
+}
+
+int chipnomadGetMotionRecordOverflow(void) {
+  return motionRecordOverflow.load(std::memory_order_relaxed);
+}
+
+static void resetMotionRecordLast(void) {
+  for (int track = 0; track < PROJECT_MAX_TRACKS; ++track)
+    for (int fx = 0; fx < fxTotalCount; ++fx)
+      motionRecordLast[track][fx] = -1;
+}
+
+static int motionDestinationFX(const Instrument* instrument, const PlaybackTrackState* track,
+                               int destination, FX* fx, int* base, int* range) {
+  switch (instrument->type) {
+    case InstrumentType::Braids:
+      if (destination == 3) { *fx = fxBTM; *base = (instrument->chip.braids.timbre + 64) / 129; *range = 16384; }
+      else if (destination == 4) { *fx = fxBCL; *base = (instrument->chip.braids.color + 64) / 129; *range = 16384; }
+      else return 0;
+      break;
+    case InstrumentType::Plaits:
+    case InstrumentType::PlaitsAlt:
+      if (destination == 3) { *fx = fxPHA; *base = (instrument->chip.plaits.harmonics + 64) / 129; *range = 16384; }
+      else if (destination == 4) { *fx = fxPTM; *base = (instrument->chip.plaits.timbre + 64) / 129; *range = 16384; }
+      else if (destination == 5) { *fx = fxPMO; *base = (instrument->chip.plaits.morph + 64) / 129; *range = 16384; }
+      else if (destination == 6) { *fx = fxPAX; *base = instrument->chip.plaits.auxMix; *range = 255; }
+      else return 0;
+      break;
+    default:
+      return 0;
+  }
+  if (track->note.fx[*fx].isOn) *base = track->note.fx[*fx].fxValue;
+  return 1;
+}
+
+static PhraseRow* motionPhraseRow(ChipNomadState* state, int trackIdx) {
+  PlaybackTrackState* track = &state->playbackState.tracks[trackIdx];
+  Project* project = &state->project;
+  if (track->mode == PlaybackMode::stopped || track->mode == PlaybackMode::phraseRow ||
+      track->songRow < 0 || track->songRow >= PROJECT_MAX_LENGTH ||
+      track->chainRow < 0 || track->chainRow >= PROJECT_MAX_LENGTH ||
+      track->phraseRow < 0 || track->phraseRow >= 16) return NULL;
+  uint16_t chain = project->song[track->songRow][trackIdx];
+  if (chain == EMPTY_VALUE_16 || chain >= PROJECT_MAX_CHAINS) return NULL;
+  uint16_t phrase = project->chains[chain].rows[track->chainRow].phrase;
+  if (phrase == EMPTY_VALUE_16 || phrase >= PROJECT_MAX_PHRASES) return NULL;
+  return &project->phrases[phrase].rows[track->phraseRow];
+}
+
+static void motionRecordFrame(ChipNomadState* state) {
+  int mode = motionRecordMode.load(std::memory_order_relaxed);
+  if (mode != motionRecordLastMode) {
+    resetMotionRecordLast();
+    motionRecordLastMode = mode;
+  }
+  motionRecordOverflow.store(0, std::memory_order_relaxed);
+  if (!mode) return;
+
+  for (int trackIdx = 0; trackIdx < state->project.tracksCount; ++trackIdx) {
+    PlaybackTrackState* track = &state->playbackState.tracks[trackIdx];
+    if (track->note.instrument == EMPTY_VALUE_8) continue;
+    PhraseRow* row = motionPhraseRow(state, trackIdx);
+    if (!row) continue;
+    Instrument* instrument = &state->project.instruments[track->note.instrument];
+
+    FX targets[4];
+    int values[4];
+    int targetCount = 0;
+    for (int slot = 0; slot < 4; ++slot) {
+      PlaybackModState* modulation = &track->note.modulation[slot];
+      if (!modulation->modulation || !modulationIsLiveStick(modulation->modulation->type)) continue;
+      FX fx;
+      int base, range;
+      if (!motionDestinationFX(instrument, track, modulation->modulation->destination, &fx, &base, &range)) continue;
+      int target = -1;
+      for (int i = 0; i < targetCount; ++i) if (targets[i] == fx) target = i;
+      int delta = playbackModScaleToRange(modulation->outValue, range);
+      if (range == 16384) delta = delta / 129;
+      if (target < 0) {
+        target = targetCount++;
+        targets[target] = fx;
+        values[target] = base;
+      }
+      values[target] += delta;
+    }
+
+    for (int target = 0; target < targetCount; ++target) {
+      FX fx = targets[target];
+      int value = clampInt(values[target], 0, 255);
+      int column = -1;
+      for (int i = 2; i >= 0; --i) if (row->fx[i][0] == fx) { column = i; break; }
+      if (mode == 2) {
+        if (column >= 0) {
+          row->fx[column][0] = EMPTY_VALUE_8;
+          row->fx[column][1] = 0;
+          motionRecordLast[trackIdx][fx] = -1;
+          motionRecordDirty.store(1, std::memory_order_relaxed);
+        }
+        continue;
+      }
+      if (column < 0 && motionRecordLast[trackIdx][fx] == value) continue;
+      if (column < 0) {
+        for (int i = 2; i >= 0; --i) if (row->fx[i][0] == EMPTY_VALUE_8) { column = i; break; }
+      }
+      if (column < 0) {
+        motionRecordOverflow.store(1, std::memory_order_relaxed);
+        continue;
+      }
+      if (row->fx[column][0] != fx || row->fx[column][1] != value) {
+        row->fx[column][0] = fx;
+        row->fx[column][1] = (uint8_t)value;
+        motionRecordDirty.store(1, std::memory_order_relaxed);
+      }
+      motionRecordLast[trackIdx][fx] = (int16_t)value;
+    }
   }
 }
 
@@ -276,6 +407,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
       playbackUpdateLiveStickModulation(&state->playbackState, axes);
       state->frameSampleCounter += state->sampleRate / state->project.tickRate;
       allTracksStopped = playbackNextFrame(state);
+      motionRecordFrame(state);
       if (allTracksStopped) playbackUpdateLiveStickModulation(&state->playbackState, axes);
       updateSampleVoices(state);
       updateSCWFVoices(state);

@@ -119,8 +119,6 @@ struct PlaybackState {
   uint8_t trackEnabled[PROJECT_MAX_TRACKS];
   LoopRange loopRange;
   float liveStickAxes[4];
-  float liveStickVelocity[4];
-  float liveStickPrevious[4];
   int16_t liveStickRate[PROJECT_MAX_INSTRUMENTS][4];
   uint8_t liveStickWasPlaying;
 };

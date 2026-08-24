@@ -99,5 +99,8 @@ void chipnomadSetBraidsSettings(ChipNomadState* state, uint8_t bits,
 
 void chipnomadSetLiveStickAxes(float leftVertical, float leftHorizontal,
                                float rightVertical, float rightHorizontal);
+void chipnomadSetMotionRecordMode(int record, int erase);
+int chipnomadConsumeMotionRecordDirty(void);
+int chipnomadGetMotionRecordOverflow(void);
 
 #endif

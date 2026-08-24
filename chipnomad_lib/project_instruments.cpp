@@ -21,7 +21,6 @@ static void freeCommon(Instrument* instrument) {
 
 int modulationIsLiveStick(ModulationType type) {
   return type == ModulationType::StickLinear ||
-         type == ModulationType::StickVelocity ||
          type == ModulationType::StickRate;
 }
 

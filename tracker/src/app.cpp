@@ -10,6 +10,7 @@
 #include "project_utils.h"
 #include "waveform_display.h"
 #include "corelib_input.h"
+#include "corelib_keymap.h"
 
 #ifdef WEB_BUILD
 #include <emscripten/emscripten.h>
@@ -30,6 +31,20 @@ static int tapButton;
 static int tapCount;
 /** Frame counter for key repeats */
 static int keyRepeatCount;
+static int motionRecordHeld;
+static int motionEraseHeld;
+
+static int isMotionRecordTrigger(InputCode input) {
+  return input.deviceType == InputDeviceType::keyboard && input.code == BTN_R2;
+}
+
+static int isMotionEraseTrigger(InputCode input) {
+  return input.deviceType == InputDeviceType::keyboard && input.code == BTN_L2;
+}
+
+static void updateMotionRecordMode(void) {
+  chipnomadSetMotionRecordMode(motionRecordHeld, motionEraseHeld);
+}
 
 /**
 * @brief Convert InputCode to Key enum value
@@ -176,6 +191,9 @@ void appSetup(void) {
   tapButton = 0;
   tapCount = 0;
   keyRepeatCount = 0;
+  motionRecordHeld = 0;
+  motionEraseHeld = 0;
+  updateMotionRecordMode();
 
   // Clear screen
   gfxSetBgColor(appSettings.colorScheme.background);
@@ -294,6 +312,14 @@ void appDraw(void) {
       (noteStr[0] == '-' ? cs.textEmpty : cs.textValue));
       gfxPrint(37, 3 + c, noteStr);
   }
+
+  if (motionEraseHeld) {
+    gfxSetFgColor(cs.warning);
+    gfxPrint(39, 19, "x");
+  } else if (motionRecordHeld) {
+    gfxSetFgColor(chipnomadGetMotionRecordOverflow() ? cs.warning : cs.textTitles);
+    gfxPrint(39, 19, chipnomadGetMotionRecordOverflow() ? "!" : "*");
+  }
 }
 
 /**
@@ -314,6 +340,17 @@ void appOnEvent(MainLoopEventData eventData) {
     // Call raw input callback if set (for key mapping screen)
     if (inputRawCallback) {
       inputRawCallback(eventData.data.input, 1);
+    }
+
+    if (isMotionRecordTrigger(eventData.data.input)) {
+      motionRecordHeld = 1;
+      updateMotionRecordMode();
+      break;
+    }
+    if (isMotionEraseTrigger(eventData.data.input)) {
+      motionEraseHeld = 1;
+      updateMotionRecordMode();
+      break;
     }
 
     // PortMaster may expose the same physical control through gptokeyb and
@@ -363,6 +400,17 @@ void appOnEvent(MainLoopEventData eventData) {
       inputRawCallback(eventData.data.input, 0);
     }
 
+    if (isMotionRecordTrigger(eventData.data.input)) {
+      motionRecordHeld = 0;
+      updateMotionRecordMode();
+      break;
+    }
+    if (isMotionEraseTrigger(eventData.data.input)) {
+      motionEraseHeld = 0;
+      updateMotionRecordMode();
+      break;
+    }
+
     if (value == keyUnmapped && currentScreen != &screenKeyMapping) break;
 
     pressedButtons &= ~value;
@@ -381,6 +429,10 @@ void appOnEvent(MainLoopEventData eventData) {
                               eventData.data.axes[2], eventData.data.axes[3]);
     break;
   case MainLoopEvent::tick:
+    if (chipnomadConsumeMotionRecordDirty()) {
+      projectModified = 1;
+      if (currentScreen == &screenPhrase) currentScreen->fullRedraw();
+    }
     // Autosave
     if (++autosaveCounter >= AUTOSAVE_INTERVAL_FRAMES) {
       autosaveCounter = 0;
