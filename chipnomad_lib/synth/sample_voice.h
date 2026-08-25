@@ -12,7 +12,8 @@ class SampleVoice {
   void init(float outputSampleRate);
   void configure(const InstrumentSample* sample, float pitchCents, float gain,
                  float speedPercent, uint8_t start, uint8_t end, uint8_t loopMode, uint16_t cutoffHz,
-                 uint8_t resonance);
+                 uint8_t resonance, int attack = -1, int decay = -1, int sustain = -1,
+                 int release = -1, int envelopeShape = -1);
   void noteOn();
   void noteOff();
   void kill();

@@ -140,6 +140,9 @@ enum FX {
   // Persistent per-track engine parameter glide. Appended to preserve project FX IDs.
   fxSLE,
 
+  // Per-track sends and unified voice-post envelope controls.
+  fxRSN, fxDSN, fxEAT, fxEDC, fxESU, fxERL, fxESH, fxTDC, fxTCL,
+
   // Total count - must be last
   fxTotalCount
 };

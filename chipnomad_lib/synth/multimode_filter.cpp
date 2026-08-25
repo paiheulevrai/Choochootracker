@@ -23,6 +23,7 @@ void MultimodeFilter::configure(bool enabled, uint8_t character, uint8_t mode, b
   if (cutoffHz > sampleRate_ * 0.45f) cutoffHz = sampleRate_ * 0.45f;
   if (resonance < 0.0f) resonance = 0.0f;
   if (resonance > 1.0f) resonance = 1.0f;
+  resonance *= resonance;
   g_ = tanf(3.14159265358979323846f * cutoffHz / sampleRate_);
   float characterResonance = character_ == 2 ? resonance * 0.7f : resonance;
   k_ = 1.0f / (0.5f + characterResonance * 19.5f);

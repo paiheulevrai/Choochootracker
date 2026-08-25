@@ -44,10 +44,12 @@
 #define ROW_TOTAL 14
 #define ROWS_PER_MOD 7
 
-static SelectionItem destinationCategories[3];
+static SelectionItem destinationCategories[5];
 static SelectionItem engineDestinations[32];
 static SelectionItem sendDestinations[2];
 static SelectionItem parameterDestinations[16];
+static SelectionItem envelopeDestinations[5];
+static SelectionItem triggerDestinations[2];
 static char parameterLabels[16][20];
 static char parameterHelpers[16][40];
 static int editedModIndex;
@@ -102,10 +104,25 @@ static void openDestinationPopup(int modIndex) {
     snprintf(parameterHelpers[i], sizeof(parameterHelpers[i]), "Mod %d target: %s", mod + 1, parameter);
     parameterDestinations[i] = {parameterLabels[i], destination, NULL, 0, parameterHelpers[i]};
   }
-  destinationCategories[0] = {"ENGINE", -1, engineDestinations, functions.modDestinationsCount + 1};
-  destinationCategories[1] = {"FX SENDS", -1, sendDestinations, 2};
-  destinationCategories[2] = {"MODULATORS", -1, parameterDestinations, 16};
-  selectionPopupSetup("DESTINATION", destinationCategories, 3,
+  static const char* envelopeNames[] = {"ATTACK", "DECAY", "SUSTAIN", "RELEASE", "SHAPE"};
+  static const char* triggerNames[] = {"DECAY", "COLOR"};
+  for (int i = 0; i < 5; ++i)
+    envelopeDestinations[i] = {envelopeNames[i], firstGeneric + genericModEnvelopeAttack + i, NULL, 0};
+  for (int i = 0; i < 2; ++i)
+    triggerDestinations[i] = {triggerNames[i], firstGeneric + genericModTriggerDecay + i, NULL, 0};
+
+  int categoryCount = 0;
+  destinationCategories[categoryCount++] = {"ENGINE", -1, engineDestinations, functions.modDestinationsCount + 1};
+  destinationCategories[categoryCount++] = {"FX SENDS", -1, sendDestinations, 2};
+  destinationCategories[categoryCount++] = {"MODULATORS", -1, parameterDestinations, 16};
+  if (instrument->type == InstrumentType::Braids || instrument->type == InstrumentType::Plaits ||
+      instrument->type == InstrumentType::PlaitsAlt || instrument->type == InstrumentType::Sample ||
+      instrument->type == InstrumentType::SCWF || instrument->type == InstrumentType::BYOWTBL) {
+    destinationCategories[categoryCount++] = {"ADSR", -1, envelopeDestinations, 5};
+    if (instrument->type == InstrumentType::Plaits || instrument->type == InstrumentType::PlaitsAlt)
+      destinationCategories[categoryCount++] = {"TRIGGER", -1, triggerDestinations, 2};
+  }
+  selectionPopupSetup("DESTINATION", destinationCategories, categoryCount,
     instrument->modulation[modIndex].destination, destinationSelected,
     destinationCancelled);
   screenSetup(&screenSelectionPopup, 0);
@@ -405,12 +422,13 @@ static int onEdit(int col, int row, enum CellEditAction action) {
                               : static_cast<uint8_t>(ModulationType::StickLinear);
       }
       mod->type = static_cast<ModulationType>(type);
-      if (oldType != type) {
+      if (oldType != type && !(modulationIsLiveStick(static_cast<ModulationType>(oldType)) &&
+                               modulationIsLiveStick(mod->type))) {
         mod->p1 = 0;
         mod->p2 = mod->type == ModulationType::StickRate ? 24 : 0;
         mod->p3 = (mod->type == ModulationType::ADSR) ? 255 :
-                  (mod->type == ModulationType::FLFO ? 0 : 6);
-        mod->p4 = mod->type == ModulationType::SLFO ? 1 : 0;
+                  (mod->type == ModulationType::FLFO ? 0 : (mod->type == ModulationType::SLFO ? 24 : 6));
+        mod->p4 = mod->type == ModulationType::SLFO ? 4 : 0;
         screenFullRedraw(&screenData);
       }
       break;

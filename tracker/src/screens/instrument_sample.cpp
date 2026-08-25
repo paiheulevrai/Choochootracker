@@ -9,6 +9,8 @@
 #include <string.h>
 
 static int sampleButtonDown;
+static constexpr int sourceValueX = 9;
+static constexpr int sourceValueWidth = 7;
 
 static void onSampleCancelled(void) {
   audioManager.stopSamplePreview();
@@ -70,8 +72,8 @@ static void drawStatic(void) {
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   if (instrumentCommonDrawVoicePostCursor(col, row)) return;
-  else if (row == 3) gfxCursor(11,6,28);
-  else gfxCursor(col ? 26 : 11,row+4,col?8:7);
+  else if (row == 3) gfxCursor(sourceValueX,6,sourceValueWidth);
+  else gfxCursor(col ? 26 : sourceValueX,row+4,col?8:sourceValueWidth);
 }
 
 static const char* sampleFilename(const char* path) {
@@ -90,14 +92,14 @@ static void drawField(int col, int row, CellState state) {
   InstrumentSample* sample = &chipnomadState->project.instruments[cInstrument].chip.sample;
   if (instrumentCommonDrawVoicePostField(col, row, state, sample)) return;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  if (row == 3) gfxClearRect(11,6,29,1); else gfxClearRect(col?26:11,row+4,col?8:7,1);
+  if (row == 3) gfxClearRect(sourceValueX,6,sourceValueWidth,1); else gfxClearRect(col?26:sourceValueX,row+4,col?8:sourceValueWidth,1);
   switch (row) {
-    case 3: gfxPrint(11,6,sample->path[0] ? shortSampleFilename(sample->path, 28) : "Load"); break;
-    case 4: if(!col) gfxPrintf(11,8,"%+d st",sample->pitch); break;
-    case 5: if(!col) gfxPrint(11,9,byteToHex(sample->start)); break;
-    case 6: if(!col) gfxPrint(11,10,byteToHex(sample->end)); break;
-    case 7: if(!col) { static const char* m[]={"Off","Loop","Ping"}; gfxPrint(11,11,m[sample->loopMode<=2?sample->loopMode:0]); } break;
-    case 8: if(!col) gfxPrintf(11,12,"%03u%%",sample->speedPercent); break;
+    case 3: gfxPrint(sourceValueX,6,sample->path[0] ? shortSampleFilename(sample->path, 7) : "Load"); break;
+    case 4: if(!col) gfxPrintf(sourceValueX,8,"%+d st",sample->pitch); break;
+    case 5: if(!col) gfxPrint(sourceValueX,9,byteToHex(sample->start)); break;
+    case 6: if(!col) gfxPrint(sourceValueX,10,byteToHex(sample->end)); break;
+    case 7: if(!col) { static const char* m[]={"Off","Loop","Ping"}; gfxPrint(sourceValueX,11,m[sample->loopMode<=2?sample->loopMode:0]); } break;
+    case 8: if(!col) gfxPrintf(sourceValueX,12,"%03u%%",sample->speedPercent); break;
   }
 }
 

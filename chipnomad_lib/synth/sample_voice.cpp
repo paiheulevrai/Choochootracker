@@ -31,7 +31,8 @@ void SampleVoice::init(float outputSampleRate) {
 
 void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
                             float gain, float speedPercent, uint8_t start, uint8_t end, uint8_t loopMode,
-                            uint16_t cutoffHz, uint8_t resonance) {
+                            uint16_t cutoffHz, uint8_t resonance, int attack, int decay,
+                            int sustain, int release, int envelopeShape) {
   sample_ = sample;
   post_.setGain(gain);
   if (!sample_ || !sample_->data || sample_->frameCount == 0) return;
@@ -53,9 +54,11 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
   grainHop_ = grainSize_ / 2;
   post_.setFilter(sample_->filterEnabled != 0, sample_->filterCharacter, sample_->filterMode,
                   sample_->filterSlope24dB != 0, cutoffHz, resonance / 255.0f);
-  post_.setEnvelope(true, envelopeTime(sample_->attack), envelopeTime(sample_->decay),
-                    sample_->sustain / 255.0f, envelopeTime(sample_->release),
-                    sample_->envelopeShape);
+  post_.setEnvelope(true, envelopeTime(attack < 0 ? sample_->attack : attack),
+                    envelopeTime(decay < 0 ? sample_->decay : decay),
+                    (sustain < 0 ? sample_->sustain : sustain) / 255.0f,
+                    envelopeTime(release < 0 ? sample_->release : release),
+                    envelopeShape < 0 ? sample_->envelopeShape : envelopeShape);
 }
 
 void SampleVoice::noteOn() {

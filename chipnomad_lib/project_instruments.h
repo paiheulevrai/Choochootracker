@@ -250,6 +250,14 @@ enum GenericModDestination {
   genericModDelaySend,
   genericModFirstParameter,
   genericModDestinationCount = genericModFirstParameter + 16,
+  genericModEnvelopeAttack = genericModDestinationCount,
+  genericModEnvelopeDecay,
+  genericModEnvelopeSustain,
+  genericModEnvelopeRelease,
+  genericModEnvelopeShape,
+  genericModTriggerDecay,
+  genericModTriggerColor,
+  genericModTotalCount,
 };
 
 #endif // __CHIPNOMAD_LIB__PROJECT_INSTRUMENTS_H__

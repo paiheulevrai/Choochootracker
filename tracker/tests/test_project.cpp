@@ -68,10 +68,20 @@ TEST_CASE("modulation destination limits match every engine's routing") {
   CHECK(instrumentModDestinationMax(InstrumentType::AY1) == 22);
   CHECK(instrumentModDestinationMax(InstrumentType::AY2) == 28);
   CHECK(instrumentModDestinationMax(InstrumentType::AYSample) == 24);
-  CHECK(instrumentModDestinationMax(InstrumentType::Braids) == 24);
-  CHECK(instrumentModDestinationMax(InstrumentType::Sample) == 26);
-  CHECK(instrumentModDestinationMax(InstrumentType::Plaits) == 26);
-  CHECK(instrumentModDestinationMax(InstrumentType::PlaitsAlt) == 26);
+  CHECK(instrumentModDestinationMax(InstrumentType::Braids) == 31);
+  CHECK(instrumentModDestinationMax(InstrumentType::Sample) == 33);
+  CHECK(instrumentModDestinationMax(InstrumentType::SCWF) == 31);
+  CHECK(instrumentModDestinationMax(InstrumentType::BYOWTBL) == 33);
+  CHECK(instrumentModDestinationMax(InstrumentType::Plaits) == 33);
+  CHECK(instrumentModDestinationMax(InstrumentType::PlaitsAlt) == 33);
+}
+
+TEST_CASE("voice-post modulation destinations keep their labels") {
+  static const char* labels[] = {"ADSR A", "ADSR D", "ADSR S", "ADSR R", "ADSR Shape", "Trig D", "Trig C"};
+  int firstGeneric = getInstrumentFunctions(InstrumentType::Plaits).modDestinationsCount + 1;
+  for (int i = 0; i < genericModTotalCount - genericModEnvelopeAttack; ++i)
+    CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Plaits,
+      firstGeneric + genericModEnvelopeAttack + i), labels[i]) == 0);
 }
 
 TEST_CASE("new instruments use audible synth defaults") {

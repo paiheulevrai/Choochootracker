@@ -19,6 +19,7 @@ static int captureCol = 0;
 static CaptureState captureState = STATE_NAVIGATION;
 static InputCode pendingCapture = {InputDeviceType::none, 0};
 static void fullRedraw(void);
+static void applyPendingCapture(void);
 
 static const char* buttonNames[] = {
   "Up", "Down", "Left", "Right", "Edit (A)", "Opt (B)", "Play", "Shift", "Stick live", "Motion rec", "Motion del"
@@ -42,19 +43,27 @@ static InputCode* getKeySlot(int row, int col) {
 }
 
 static void onRawInput(InputCode input, int isDown) {
-  if (!isDown) return;
+  if (!isDown) {
+    if (captureState == STATE_CAPTURE_DONE &&
+        input.deviceType == pendingCapture.deviceType && input.code == pendingCapture.code) {
+      applyPendingCapture();
+      captureState = STATE_NAVIGATION;
+      inputRawCallback = NULL;
+      fullRedraw();
+    }
+    return;
+  }
+  if (captureState != STATE_CAPTURING) return;
 
   // Logical buttons (e.g. touch vpad) are not remappable
   if (input.deviceType == InputDeviceType::logical) {
-    inputRawCallback = NULL;
+    pendingCapture = input;
     captureState = STATE_CAPTURE_DONE;
     return;
   }
 
   pendingCapture = input;
-  inputRawCallback = NULL;
   captureState = STATE_CAPTURE_DONE;
-  fullRedraw();
 }
 
 static int getColumnCount(int row) {
@@ -210,14 +219,7 @@ static void applyPendingCapture(void) {
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
   if (captureState == STATE_CAPTURING) return 1;
-  if (captureState == STATE_CAPTURE_DONE) {
-    if (!isKeyDown) {
-      applyPendingCapture();
-      captureState = STATE_NAVIGATION;
-      fullRedraw();
-    }
-    return 1;
-  }
+  if (captureState == STATE_CAPTURE_DONE) return 1;
 
   // 5 taps on any unmapped key resets to defaults
   if (isKeyDown && keys == keyUnmapped && tapCount >= 5) {

@@ -310,18 +310,23 @@ static const char* genericModName(int index) {
     "M1 P1", "M1 P2", "M1 P3", "M1 P4",
     "M2 P1", "M2 P2", "M2 P3", "M2 P4",
     "M3 P1", "M3 P2", "M3 P3", "M3 P4",
-    "M4 P1", "M4 P2", "M4 P3", "M4 P4"
+    "M4 P1", "M4 P2", "M4 P3", "M4 P4",
+    "ADSR A", "ADSR D", "ADSR S", "ADSR R", "ADSR Shape", "Trig D", "Trig C"
   };
-  return index >= 0 && index < genericModDestinationCount ? names[index] : "Misc";
+  return index >= 0 && index < genericModTotalCount ? names[index] : "Misc";
 }
 
 int instrumentGenericModDestination(InstrumentType type, int destination) {
   int index = destination - getInstrumentFunctions(type).modDestinationsCount - 1;
-  return index >= 0 && index < genericModDestinationCount ? index : -1;
+  return index >= 0 && index < genericModTotalCount ? index : -1;
 }
 
 int instrumentModDestinationMax(InstrumentType type) {
-  return getInstrumentFunctions(type).modDestinationsCount + genericModDestinationCount;
+  int genericCount = (type == InstrumentType::Braids || type == InstrumentType::Plaits ||
+                      type == InstrumentType::PlaitsAlt || type == InstrumentType::Sample ||
+                      type == InstrumentType::SCWF || type == InstrumentType::BYOWTBL)
+    ? genericModTotalCount : genericModDestinationCount;
+  return getInstrumentFunctions(type).modDestinationsCount + genericCount;
 }
 
 const char* instrumentModDestinationName(InstrumentType type, int destination) {

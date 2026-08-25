@@ -10,6 +10,8 @@
 #include <string.h>
 
 static int loadSlot, buttonDown;
+static constexpr int sourceValueX = 9;
+static constexpr int sourceValueWidth = 7;
 
 static const char* shortFilename(const char* path, char* output) {
   const char* name = strrchr(path, PATH_SEPARATOR);
@@ -63,7 +65,7 @@ static void drawStatic(void) {
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   if (instrumentCommonDrawVoicePostCursor(col, row)) return;
-  if (!col && row >= 3 && row <= 8) gfxCursor(11, row + 5, 7);
+  if (!col && row >= 3 && row <= 8) gfxCursor(sourceValueX, row + 5, sourceValueWidth);
   else gfxCursor(26, row + 4, 8);
 }
 
@@ -72,14 +74,14 @@ static void drawField(int col, int row, CellState state) {
   InstrumentBYOWTBL* table = &chipnomadState->project.instruments[cInstrument].chip.byowtbl;
   if (instrumentCommonDrawVoicePostField(col, row, state, table)) return;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  if (!col && row >= 3 && row <= 8) gfxClearRect(11, row + 5, 7, 1);
+  if (!col && row >= 3 && row <= 8) gfxClearRect(sourceValueX, row + 5, sourceValueWidth, 1);
   char name[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
-  if (row == 3 && !col) gfxPrint(11, 8, table->oscillator[0].path[0] ? shortFilename(table->oscillator[0].path, name) : "Load");
-  else if (row == 4 && !col) gfxPrint(11, 9, table->oscillator[1].path[0] ? shortFilename(table->oscillator[1].path, name) : "Load");
-  else if (row == 5 && !col) gfxPrint(11, 10, byteToHex(table->frameIndex[0]));
-  else if (row == 6 && !col) gfxPrint(11, 11, byteToHex(table->frameIndex[1]));
-  else if (row == 7 && !col) gfxPrintf(11, 12, "+%03d ct", scwfDetuneCents(table->detune));
-  else if (row == 8 && !col) gfxPrint(11, 13, byteToHex(table->mix));
+  if (row == 3 && !col) gfxPrint(sourceValueX, 8, table->oscillator[0].path[0] ? shortFilename(table->oscillator[0].path, name) : "Load");
+  else if (row == 4 && !col) gfxPrint(sourceValueX, 9, table->oscillator[1].path[0] ? shortFilename(table->oscillator[1].path, name) : "Load");
+  else if (row == 5 && !col) gfxPrint(sourceValueX, 10, byteToHex(table->frameIndex[0]));
+  else if (row == 6 && !col) gfxPrint(sourceValueX, 11, byteToHex(table->frameIndex[1]));
+  else if (row == 7 && !col) gfxPrintf(sourceValueX, 12, "+%03d ct", scwfDetuneCents(table->detune));
+  else if (row == 8 && !col) gfxPrint(sourceValueX, 13, byteToHex(table->mix));
 }
 
 static int edit(int col, int row, CellEditAction action) {

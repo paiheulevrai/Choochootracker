@@ -64,6 +64,7 @@ static void resetNoteFX(PlaybackState* state, int trackIdx) {
 
 static void resetInstrumentFX(PlaybackTrackState* track) {
   for (int i = fxBMD; i <= fxPRS; i++) track->note.fx[i].isOn = 0;
+  for (int i = fxRSN; i <= fxTCL; i++) track->note.fx[i].isOn = 0;
 }
 
 static void resetTrack(PlaybackState* state, int trackIdx) {
@@ -677,7 +678,7 @@ static void processModulations(PlaybackState* state, int trackIdx) {
     PlaybackModState* mod = &track->note.modulation[source];
     if (!mod->modulation) continue;
     int generic = instrumentGenericModDestination(type, mod->modulation->destination);
-    if (generic < genericModFirstParameter) continue;
+    if (generic < genericModFirstParameter || generic >= genericModDestinationCount) continue;
     int parameter = generic - genericModFirstParameter;
     int target = parameter / 4;
     int targetParameter = parameter % 4;

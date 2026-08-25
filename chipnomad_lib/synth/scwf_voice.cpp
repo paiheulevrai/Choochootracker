@@ -35,7 +35,8 @@ void SCWFVoice::init(float outputSampleRate) {
 void SCWFVoice::configure(const InstrumentSCWF* instrument, float pitchCents,
                           float gain, int detuneCents, uint8_t mix,
                           uint16_t cutoffHz, uint8_t resonance,
-                          const uint16_t* frameSize, const uint8_t* frameIndex) {
+                          const uint16_t* frameSize, const uint8_t* frameIndex,
+                          int attack, int decay, int sustain, int release, int envelopeShape) {
   instrument_ = instrument;
   post_.setGain(gain);
   mix_ = mix / 255.0f;
@@ -58,9 +59,11 @@ void SCWFVoice::configure(const InstrumentSCWF* instrument, float pitchCents,
   }
   post_.setFilter(instrument_->filterEnabled != 0, instrument_->filterCharacter, instrument_->filterMode,
                   instrument_->filterSlope24dB != 0, cutoffHz, resonance / 255.0f);
-  post_.setEnvelope(true, scwfEnvelopeTime(instrument_->attack),
-                    scwfEnvelopeTime(instrument_->decay), instrument_->sustain / 255.0f,
-                    scwfEnvelopeTime(instrument_->release), instrument_->envelopeShape);
+  post_.setEnvelope(true, scwfEnvelopeTime(attack < 0 ? instrument_->attack : attack),
+                    scwfEnvelopeTime(decay < 0 ? instrument_->decay : decay),
+                    (sustain < 0 ? instrument_->sustain : sustain) / 255.0f,
+                    scwfEnvelopeTime(release < 0 ? instrument_->release : release),
+                    envelopeShape < 0 ? instrument_->envelopeShape : envelopeShape);
 }
 
 void SCWFVoice::noteOn() {

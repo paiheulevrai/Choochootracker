@@ -77,7 +77,7 @@ static void drawField(int col, int row, CellState state) {
     gfxPrint(32, 3 + row, chipnomadState->trackClipping[row] ? "!" : " ");
     return;
   }
-  if (row < 0 || row >= 4) return;
+  if (row < 0 || row >= (mixerPage == 2 ? 5 : 4)) return;
   Project* p = &chipnomadState->project;
   if (mixerPage == 1) {
     if (row == 0) gfxPrintf(12, 3, "%03d%%", p->reverbReturn);

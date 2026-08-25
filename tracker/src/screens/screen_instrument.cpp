@@ -127,6 +127,19 @@ static void onInstrumentCancelled(void) {
 
 static void drawRowHeader(int row, CellState state);
 static void drawColHeader(int col, CellState state);
+static ScreenData* instrumentScreen(void);
+
+static InstrumentVoicePostSettings* voicePostSettings(Instrument* instrument, InstrumentType type) {
+  switch (type) {
+    case InstrumentType::Braids: return &instrument->chip.braids;
+    case InstrumentType::Plaits:
+    case InstrumentType::PlaitsAlt: return &instrument->chip.plaits;
+    case InstrumentType::Sample: return &instrument->chip.sample;
+    case InstrumentType::SCWF: return &instrument->chip.scwf;
+    case InstrumentType::BYOWTBL: return &instrument->chip.byowtbl;
+    default: return NULL;
+  }
+}
 
 static void setInstrumentType(InstrumentType newType) {
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
@@ -135,9 +148,17 @@ static void setInstrumentType(InstrumentType newType) {
     screenSetup(&screenInstrument, cInstrument);
     return;
   }
+  InstrumentVoicePostSettings savedPost;
+  InstrumentVoicePostSettings* oldPost = voicePostSettings(instrument, oldType);
+  int preservePost = oldPost != NULL;
+  if (preservePost) savedPost = *oldPost;
   getInstrumentFunctions(oldType).free(instrument);
   instrument->type = newType;
   getInstrumentFunctions(newType).init(instrument);
+  InstrumentVoicePostSettings* newPost = voicePostSettings(instrument, newType);
+  if (preservePost && newPost) *newPost = savedPost;
+  ScreenData* screen = instrumentScreen();
+  screen->cursorRow = screen->cursorCol = screen->topRow = 0;
   projectModified = 1;
   screenSetup(&screenInstrument, cInstrument);
 }

@@ -11,6 +11,8 @@
 
 static int loadSlot;
 static int buttonDown;
+static constexpr int sourceValueX = 9;
+static constexpr int sourceValueWidth = 7;
 
 static const char* filename(const char* path) {
   const char* separator = strrchr(path, PATH_SEPARATOR);
@@ -70,8 +72,8 @@ static void drawStatic(void) {
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   if (instrumentCommonDrawVoicePostCursor(col, row)) return;
-  if (!col && row >= 3 && row <= 6) gfxCursor(11,row + 5,7);
-  else gfxCursor(col ? 26 : 11,row + 4,col ? 8 : 7);
+  if (!col && row >= 3 && row <= 6) gfxCursor(sourceValueX,row + 5,sourceValueWidth);
+  else gfxCursor(col ? 26 : sourceValueX,row + 4,col ? 8 : sourceValueWidth);
 }
 
 static void drawField(int col, int row, CellState state) {
@@ -79,15 +81,15 @@ static void drawField(int col, int row, CellState state) {
   InstrumentSCWF* scwf = &chipnomadState->project.instruments[cInstrument].chip.scwf;
   if (instrumentCommonDrawVoicePostField(col, row, state, scwf)) return;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  if (!col && row >= 3 && row <= 6) gfxClearRect(11,row + 5,7,1);
+  if (!col && row >= 3 && row <= 6) gfxClearRect(sourceValueX,row + 5,sourceValueWidth,1);
   char name[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
-  if (row == 3 && !col) gfxPrint(11,8,scwf->oscillator[0].path[0] ? shortFilename(scwf->oscillator[0].path, name, 7) : "Load");
-  else if (row == 4 && !col) gfxPrint(11,9,scwf->oscillator[1].path[0] ? shortFilename(scwf->oscillator[1].path, name, 7) : "Load");
+  if (row == 3 && !col) gfxPrint(sourceValueX,8,scwf->oscillator[0].path[0] ? shortFilename(scwf->oscillator[0].path, name, 7) : "Load");
+  else if (row == 4 && !col) gfxPrint(sourceValueX,9,scwf->oscillator[1].path[0] ? shortFilename(scwf->oscillator[1].path, name, 7) : "Load");
   else if (row == 5 && !col) {
     int cents = scwfDetuneCents(scwf->detune);
-    if (cents <= 200) gfxPrintf(11,10,"+%03d ct", cents);
-    else gfxPrintf(11,10,"+%02d st", cents / 100);
-  } else if (row == 6 && !col) gfxPrint(11,11,byteToHex(scwf->mix));
+    if (cents <= 200) gfxPrintf(sourceValueX,10,"+%03d ct", cents);
+    else gfxPrintf(sourceValueX,10,"+%02d st", cents / 100);
+  } else if (row == 6 && !col) gfxPrint(sourceValueX,11,byteToHex(scwf->mix));
 }
 
 static int edit(int col, int row, CellEditAction action) {

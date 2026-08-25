@@ -19,6 +19,15 @@ FXName fxNamesSequencer[] = {
 };
 int fxSequencerCount = sizeof(fxNamesSequencer) / sizeof(FXName);
 
+FXName fxNamesTrack[] = {{fxRSN, "RSN"}, {fxDSN, "DSN"}};
+int fxTrackCount = sizeof(fxNamesTrack) / sizeof(FXName);
+
+FXName fxNamesEnvelope[] = {
+  {fxEAT, "EAT"}, {fxEDC, "EDC"}, {fxESU, "ESU"}, {fxERL, "ERL"}, {fxESH, "ESH"},
+  {fxTDC, "TDC"}, {fxTCL, "TCL"}
+};
+int fxEnvelopeCount = sizeof(fxNamesEnvelope) / sizeof(FXName);
+
 // Modulation FX
 FXName fxNamesModulation[] = {
   {fxM1A, "M1A"}, {fxM11, "M11"}, {fxM12, "M12"}, {fxM13, "M13"}, {fxM14, "M14"},
@@ -96,6 +105,8 @@ int fxPlaitsCount = sizeof(fxNamesPlaits) / sizeof(FXName);
 // FX Groups array. FX counts are filled in fillFXNames()
 FXGroup fxGroups[] = {
   {"Sequencer FX", fxNamesSequencer, 0, 8, InstrumentType::none},
+  {"Track FX", fxNamesTrack, 0, 2, InstrumentType::none},
+  {"ADSR / Trigger FX", fxNamesEnvelope, 0, 7, InstrumentType::none},
   {"Modulation FX", fxNamesModulation, 0, 5, InstrumentType::none},
   {"AY Classic FX", fxNamesAY1, 0, 8, InstrumentType::AY1},
   {"AY Plus FX", fxNamesAY2, 0, 8, InstrumentType::AY2},
@@ -119,16 +130,18 @@ void fillFXNames() {
 
   // Fill counts in fxGroups array
   fxGroups[0].count = fxSequencerCount;
-  fxGroups[1].count = fxModulationCount;
-  fxGroups[2].count = fxAY1Count;
-  fxGroups[3].count = fxAY2Count;
-  fxGroups[4].count = fxAYSampleCount;
-  fxGroups[5].count = fxBraidsCount;
-  fxGroups[6].count = fxSampleCount;
-  fxGroups[7].count = fxSCWFCount;
-  fxGroups[8].count = fxBYOWTBLCount;
-  fxGroups[9].count = fxPlaitsCount;
-  fxGroups[10].count = fxPlaitsCount;
+  fxGroups[1].count = fxTrackCount;
+  fxGroups[2].count = fxEnvelopeCount;
+  fxGroups[3].count = fxModulationCount;
+  fxGroups[4].count = fxAY1Count;
+  fxGroups[5].count = fxAY2Count;
+  fxGroups[6].count = fxAYSampleCount;
+  fxGroups[7].count = fxBraidsCount;
+  fxGroups[8].count = fxSampleCount;
+  fxGroups[9].count = fxSCWFCount;
+  fxGroups[10].count = fxBYOWTBLCount;
+  fxGroups[11].count = fxPlaitsCount;
+  fxGroups[12].count = fxPlaitsCount;
 
   // Fill FX names from all groups
   for (int g = 0; g < fxGroupCount; g++) {
@@ -158,7 +171,7 @@ void projectInit(Project* p) {
   p->reverbFilterCutoffHz = 16000;
   p->delayReturn = 100;
   p->delayReverbSend = 0;
-  p->delayTicks = 6;
+  p->delayTicks = 9;
   p->delayFeedback = 50;
   p->delayFilterCutoffHz = 12000;
 

@@ -62,6 +62,10 @@ static void drawCursor(int col, int row) {
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
   if ((row != 9 || p->envelopeMode != 0) &&
       instrumentCommonDrawVoicePostCursor(col, row)) return;
+  if (row == 9) {
+    gfxCursor(7 + col * 5, 14, 2);
+    return;
+  }
   else if (row == 3) gfxCursor(11, 6, 28);
   else gfxCursor(col ? 26 : 11, row + 4, col ? 8 : 7);
 }
