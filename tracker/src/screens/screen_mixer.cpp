@@ -54,7 +54,9 @@ static void drawCursor(int col, int row) {
     if (col < 0 || col >= 5 || row < 0 || row >= PROJECT_MAX_TRACKS) return;
     gfxCursor(x[col], 3 + row, width[col]);
   } else if (row >= 0 && row < (mixerPage == 2 ? 5 : 4)) {
-    gfxCursor(12, 3 + row, row == (mixerPage == 2 ? 4 : 3) ? 8 : 4);
+    int width = row == (mixerPage == 2 ? 4 : 3) ? 8 : 4;
+    if (mixerPage == 2 && row == 2) width = 2;
+    gfxCursor(12, 3 + row, width);
   }
 }
 

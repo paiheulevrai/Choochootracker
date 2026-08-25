@@ -112,7 +112,7 @@ void settingsDrawCursor(int col, int row) {
   } else if (row == 10 && col == 0) {
     gfxCursor(0, 13, 16);
   } else if (row == 11 && col == 0) {
-    gfxCursor(0, 17, 14);
+    gfxCursor(0, 17, 19);
   }
 }
 

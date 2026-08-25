@@ -185,8 +185,8 @@ static int getModRow(int row) {
 static const char* modTypeName(ModulationType type) {
   switch (type) {
     case ModulationType::ADSR: return "ADSR";
-    case ModulationType::AHD:  return "AHD ";
-    case ModulationType::LFO:  return "LFO ";
+    case ModulationType::AHD:  return "AHD";
+    case ModulationType::LFO:  return "LFO";
     case ModulationType::SLFO: return "SLFO";
     case ModulationType::FLFO: return "FLFO";
     case ModulationType::StickLinear: return "STKLIN";
@@ -325,14 +325,21 @@ static void drawCursor(int col, int row) {
   Modulation* mod = &chipnomadState->project.instruments[cInstrument].modulation[modIdx];
 
   switch (modRow) {
-    case 0: gfxCursor(valX, y, 6); break; // Type
-    case 1: gfxCursor(valX, y, 8); break; // Dest
+    case 0: gfxCursor(valX, y, strlen(modTypeName(mod->type))); break;
+    case 1: {
+      Instrument* inst = &chipnomadState->project.instruments[cInstrument];
+      gfxCursor(valX, y, strlen(instrumentModDestinationName(inst->type, mod->destination)));
+      break;
+    }
     case 2: gfxCursor(valX, y, 2); break; // Amt
     default:
       if ((mod->type == ModulationType::LFO && (modRow - 3) <= 1) ||
+          (mod->type == ModulationType::FLFO && modRow == 5) ||
           ((mod->type == ModulationType::StickLinear || mod->type == ModulationType::StickRate) &&
-           (modRow == 3 || (mod->type == ModulationType::StickRate && modRow == 4)))) {
+           modRow == 3)) {
         gfxCursor(valX, y, 6);
+      } else if (mod->type == ModulationType::StickRate && modRow == 4) {
+        gfxCursor(valX, y, 3);
       } else {
         gfxCursor(valX, y, 2); // Hex values
       }
@@ -429,8 +436,8 @@ static int onEdit(int col, int row, enum CellEditAction action) {
         mod->p3 = (mod->type == ModulationType::ADSR) ? 255 :
                   (mod->type == ModulationType::FLFO ? 0 : (mod->type == ModulationType::SLFO ? 24 : 6));
         mod->p4 = mod->type == ModulationType::SLFO ? 4 : 0;
-        screenFullRedraw(&screenData);
       }
+      if (oldType != type) screenFullRedraw(&screenData);
       break;
     }
     case 1: { // Destination
