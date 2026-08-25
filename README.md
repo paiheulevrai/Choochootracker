@@ -48,13 +48,16 @@ It should work on any Portmaster capable system, and should also compile on Andr
 - Dual single cycle waveform oscillator: with mix & detune
 - Dual wavetable oscillator: bring your own Serum wavetables !
 - Multimode LP/HP/BP 12/24dB filter for all new synth/sample engines
+- Several filter flavours inspired 
 - Per-track volume, mute, solo, Reverb send, and Delay send
 - Mutable Instruments Clouds meme lush reverb
 - Tick-synchronized filtered ping-pong delay
 - Three tracker FX columns per row
 - Added tracker FX inspired by Elektron and Nerdseq: Probability, modulo conditions, and per-track invididual playback speed
 - Synth engines parameters can be set by TrackFX, kinda like P-locks.
-- 4x mod sources per track: ADSR, AHD, LFO. Modulations can target modulations.
+- 4x mod sources per track: ADSR, AHD, LFO and sticks. Modulations can target modulations.
+- 3 LFO types: normal, slow tempo sync'd (can be very slow) and fast LFO for audio rate modulations
+- Joystick modulation can be live recorded as trackFX 
 - Tracker tables, grooves, chains, and songs
 
 ## One tracker, very different voices
