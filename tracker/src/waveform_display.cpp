@@ -2,9 +2,13 @@
 #include "corelib_gfx.h"
 #include "chipnomad_lib.h"
 #include "playback_chips.h"
+#include "synth/braids_voice.h"
+#include "synth/plaits_voice.h"
+#include "synth/plaits_alt_voice.h"
 #include "common.h"
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include <functional>
 
 #define ENVELOPE_DIM_BRIGHTNESS 160
@@ -132,7 +136,7 @@ static Bitmap* drawVoiceWaveform(int trackIdx) {
   memset(bitmap->data, 0, bitmap->widthPixels * bitmap->heightPixels);
   int previousY = charH / 2;
   for (int x = 0; x < charW; ++x) {
-    int sampleIdx = charW > 1 ? (x * 63) / (charW - 1) : 0;
+    int sampleIdx = charW > 1 ? (x * (VOICE_MONITOR_SAMPLES - 1)) / (charW - 1) : 0;
     float sample = monitor->samples[sampleIdx];
     if (sample > 1.0f) sample = 1.0f;
     if (sample < -1.0f) sample = -1.0f;
@@ -305,6 +309,127 @@ void renderSamplePreview(Bitmap* bitmap, uint8_t* sampleData, uint16_t startSamp
   if (!bitmap || !sampleData || startSample >= endSample) return;
 
   renderWaveformPreview(bitmap, sampleData + startSample, endSample - startSample, nullptr);
+}
+
+void renderPCM16Preview(Bitmap* bitmap, const int16_t* sampleData, uint32_t startFrame,
+                        uint32_t endFrame, uint8_t channels) {
+  if (bitmap) gfxBitmapClear(bitmap);
+  if (!bitmap || !sampleData || startFrame >= endFrame || !channels) return;
+  const uint32_t frames = endFrame - startFrame;
+  const int width = bitmap->widthPixels, height = bitmap->heightPixels;
+  for (int x = 0; x < width; ++x) {
+    uint32_t first = startFrame + (uint64_t)x * frames / width;
+    uint32_t last = startFrame + (uint64_t)(x + 1) * frames / width;
+    if (last <= first) last = first + 1;
+    if (last > endFrame) last = endFrame;
+    int16_t low = 32767, high = -32768;
+    for (uint32_t frame = first; frame < last; ++frame) {
+      int16_t value = sampleData[frame * channels];
+      if (value < low) low = value;
+      if (value > high) high = value;
+    }
+    int top = (int)(((int64_t)32767 - high) * (height - 1) / 65535);
+    int bottom = (int)(((int64_t)32767 - low) * (height - 1) / 65535);
+    for (int y = top; y <= bottom; ++y) bitmap->data[y * width + x] = 255;
+  }
+}
+
+void renderSCWFPreview(Bitmap* bitmap, const InstrumentSCWF* instrument,
+                       const uint16_t* frameSize, const uint8_t* frameIndex) {
+  if (bitmap) gfxBitmapClear(bitmap);
+  if (!bitmap || !instrument) return;
+  const int width = bitmap->widthPixels, height = bitmap->heightPixels;
+  int detuneCents = 0;
+  if (instrument->detune) {
+    detuneCents = instrument->detune <= 127
+      ? (int)(powf(200.0f, (instrument->detune - 1) / 126.0f) + 0.5f)
+      : (instrument->detune - 125) * 100;
+  }
+  const float detuneRatio = powf(2.0f, detuneCents / 1200.0f);
+  int previousY = height / 2;
+  for (int x = 0; x < width; ++x) {
+    const float phase = width > 1 ? (float)x * 3.0f / (width - 1) : 0.0f;
+    float mix = 0.0f;
+    for (int osc = 0; osc < 2; ++osc) {
+      const InstrumentSample& source = instrument->oscillator[osc];
+      uint32_t cycle = frameSize && frameSize[osc] ? frameSize[osc] : source.frameCount;
+      if (!source.data || !cycle || cycle > source.frameCount) continue;
+      uint32_t tables = source.frameCount / cycle;
+      float position = frameIndex && tables > 1 ? frameIndex[osc] * (tables - 1) / 255.0f : 0.0f;
+      uint32_t table = (uint32_t)position;
+      float blend = position - table;
+      float oscillatorPhase = osc ? phase * detuneRatio : phase;
+      uint32_t sample = (uint32_t)(oscillatorPhase * cycle) % cycle;
+      float value = source.data[(table * cycle + sample) * source.channels] / 32768.0f;
+      if (blend && table + 1 < tables) {
+        float next = source.data[((table + 1) * cycle + sample) * source.channels] / 32768.0f;
+        value += (next - value) * blend;
+      }
+      mix += value * (osc ? instrument->mix / 255.0f : 1.0f - instrument->mix / 255.0f);
+    }
+    int y = (height - 1) / 2 - (int)(mix * (height - 1) / 2.0f);
+    if (y < 0) y = 0;
+    if (y >= height) y = height - 1;
+    int from = previousY < y ? previousY : y, to = previousY > y ? previousY : y;
+    for (int row = from; row <= to; ++row) bitmap->data[row * width + x] = 255;
+    previousY = y;
+  }
+}
+
+void renderFloatPreview(Bitmap* bitmap, const float* samples, uint32_t count) {
+  if (bitmap) gfxBitmapClear(bitmap);
+  if (!bitmap || !samples || !count) return;
+  const int width = bitmap->widthPixels, height = bitmap->heightPixels;
+  float peak = 0.001f;
+  for (size_t i = 0; i < count; ++i) if (fabsf(samples[i]) > peak) peak = fabsf(samples[i]);
+  size_t start = 0;
+  while (start + 1 < count && fabsf(samples[start]) < peak * 0.02f) ++start;
+  const size_t visible = count - start;
+  int previousY = height / 2;
+  for (int x = 0; x < width; ++x) {
+    size_t sample = start + (width > 1 ? (size_t)x * (visible - 1) / (width - 1) : 0);
+    float value = samples[sample] / peak;
+    int y = (height - 1) / 2 - (int)(value * (height - 1) / 2.0f);
+    if (y < 0) y = 0;
+    if (y >= height) y = height - 1;
+    int from = previousY < y ? previousY : y, to = previousY > y ? previousY : y;
+    for (int row = from; row <= to; ++row) bitmap->data[row * width + x] = 255;
+    previousY = y;
+  }
+}
+
+void renderBraidsPreview(Bitmap* bitmap, const InstrumentBraids* instrument) {
+  if (!instrument) { if (bitmap) gfxBitmapClear(bitmap); return; }
+  float samples[768];
+  BraidsVoice voice;
+  voice.init();
+  voice.setModel(instrument->model);
+  voice.setPitch(72 << 7);
+  voice.setParameters(instrument->timbre, instrument->color);
+  voice.setGain(1.0f);
+  voice.strike();
+  voice.render(samples, sizeof(samples) / sizeof(samples[0]));
+  renderFloatPreview(bitmap, samples, sizeof(samples) / sizeof(samples[0]));
+}
+
+template <typename Voice>
+static void renderPlaitsPreviewVoice(Bitmap* bitmap, const InstrumentPlaits* instrument) {
+  float samples[768];
+  Voice voice;
+  voice.init();
+  voice.configure(instrument->engine, instrument->harmonics, instrument->timbre,
+                  instrument->morph, instrument->auxMix, instrument->envelopeMode,
+                  instrument->decay, instrument->sustain, 72.0f, 1.0f);
+  voice.setEnvelope(0.0f, 0.0f, 1.0f, 0.0f);
+  voice.noteOn();
+  voice.render(samples, sizeof(samples) / sizeof(samples[0]));
+  renderFloatPreview(bitmap, samples, sizeof(samples) / sizeof(samples[0]));
+}
+
+void renderPlaitsPreview(Bitmap* bitmap, const InstrumentPlaits* instrument, int alt) {
+  if (!instrument) { if (bitmap) gfxBitmapClear(bitmap); return; }
+  if (alt) renderPlaitsPreviewVoice<PlaitsAltVoice>(bitmap, instrument);
+  else renderPlaitsPreviewVoice<PlaitsVoice>(bitmap, instrument);
 }
 
 void renderAYWavetablePreview(Bitmap* bitmap, uint8_t* wavetable, int isYM) {

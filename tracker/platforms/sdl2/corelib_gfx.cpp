@@ -457,9 +457,6 @@ void gfxDrawBitmap(Bitmap* bitmap, int col, int row) {
   uint8_t fgR = (fgColor >> 16) & 0xFF;
   uint8_t fgG = (fgColor >> 8) & 0xFF;
   uint8_t fgB = fgColor & 0xFF;
-  uint8_t bgR = (bgColor >> 16) & 0xFF;
-  uint8_t bgG = (bgColor >> 8) & 0xFF;
-  uint8_t bgB = bgColor & 0xFF;
 
   // Lock texture and update pixels
   void* pixels;
@@ -470,12 +467,7 @@ void gfxDrawBitmap(Bitmap* bitmap, int col, int row) {
     for (int y = 0; y < bitmap->heightPixels; y++) {
       for (int x = 0; x < bitmap->widthPixels; x++) {
         uint8_t alpha = bitmap->data[y * bitmap->widthPixels + x];
-        uint8_t r = bgR + ((fgR - bgR) * alpha) / 255;
-        uint8_t g = bgG + ((fgG - bgG) * alpha) / 255;
-        uint8_t b = bgB + ((fgB - bgB) * alpha) / 255;
-
-        // RGBA8888 format
-        pixelData[y * (pitch / 4) + x] = (r << 24) | (g << 16) | (b << 8) | 0xFF;
+        pixelData[y * (pitch / 4) + x] = (fgR << 24) | (fgG << 16) | (fgB << 8) | alpha;
       }
     }
 

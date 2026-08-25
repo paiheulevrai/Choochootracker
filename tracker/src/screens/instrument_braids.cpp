@@ -2,8 +2,17 @@
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "model_catalog.h"
+#include "waveform_display.h"
 
 static int modelButtonDown;
+static Bitmap* previewBitmap;
+
+static void drawPreview(const InstrumentBraids* braids) {
+  if (!previewBitmap) previewBitmap = gfxBitmapCreate(32, 3);
+  renderBraidsPreview(previewBitmap, braids);
+  gfxSetFgColor(appSettings.colorScheme.textInfo);
+  gfxDrawBitmap(previewBitmap, 0, 16);
+}
 
 static void selectModel(int value) {
   chipnomadState->project.instruments[cInstrument].chip.braids.model = (uint8_t)value;
@@ -35,6 +44,7 @@ static void drawStatic(void) {
   gfxPrint(0,8,"Timbre");
   gfxPrint(0,9,"Color");
   instrumentCommonDrawVoicePostStatic(1);
+  drawPreview(&chipnomadState->project.instruments[cInstrument].chip.braids);
 }
 
 static void drawCursor(int col, int row) {
@@ -73,7 +83,7 @@ static int onEdit(int col, int row, CellEditAction action) {
     case 4: handled = !col ? editOscillatorParameter(action,&b->timbre) : 0; break;
     case 5: handled = !col ? editOscillatorParameter(action,&b->color) : 0; break;
   }
-  if (handled) projectModified = 1;
+  if (handled) { projectModified = 1; screenFullRedraw(&screenInstrumentBraids); }
   return handled;
 }
 

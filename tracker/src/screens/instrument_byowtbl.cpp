@@ -6,12 +6,21 @@
 #include "synth/sr_wavetable_loader.h"
 #include "audio_manager.h"
 #include "utils.h"
+#include "waveform_display.h"
 
 #include <string.h>
 
 static int loadSlot, buttonDown;
 static constexpr int sourceValueX = 9;
 static constexpr int sourceValueWidth = 7;
+static Bitmap* previewBitmap;
+
+static void drawPreview(const InstrumentBYOWTBL* table) {
+  if (!previewBitmap) previewBitmap = gfxBitmapCreate(32, 3);
+  renderSCWFPreview(previewBitmap, table, table->frameSize, table->frameIndex);
+  gfxSetFgColor(appSettings.colorScheme.textInfo);
+  gfxDrawBitmap(previewBitmap, 0, 16);
+}
 
 static const char* shortFilename(const char* path, char* output) {
   const char* name = strrchr(path, PATH_SEPARATOR);
@@ -60,6 +69,7 @@ static void drawStatic(void) {
   gfxPrint(0, 10, "Pos A"); gfxPrint(0, 11, "Pos B");
   gfxPrint(0, 12, "Detune"); gfxPrint(0, 13, "Mix");
   instrumentCommonDrawVoicePostStatic(1);
+  drawPreview(&chipnomadState->project.instruments[cInstrument].chip.byowtbl);
 }
 
 static void drawCursor(int col, int row) {
@@ -94,7 +104,7 @@ static int edit(int col, int row, CellEditAction action) {
     else if (row == 7) handled = edit8noLast(action, &table->detune, 1, 0, SCWF_DETUNE_MAX);
     else if (row == 8) handled = edit8noLast(action, &table->mix, 8, 0, 255);
   }
-  if (handled) projectModified = 1;
+  if (handled) { projectModified = 1; screenFullRedraw(&screenInstrumentBYOWTBL); }
   return handled;
 }
 

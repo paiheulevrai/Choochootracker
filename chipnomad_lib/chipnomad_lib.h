@@ -12,8 +12,10 @@ class SCWFVoice;
 class PlaitsVoice;
 class PlaitsAltVoice;
 
+constexpr int VOICE_MONITOR_SAMPLES = 256;
+
 struct VoiceMonitor {
-  float samples[64];
+  float samples[VOICE_MONITOR_SAMPLES];
   float envelope;
   uint8_t active;
 };

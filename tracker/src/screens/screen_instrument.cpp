@@ -6,6 +6,7 @@
 #include "chipnomad_lib.h"
 #include "project_utils.h"
 #include "screen_instrument.h"
+#include "waveform_display.h"
 #include "copy_paste.h"
 #include "file_browser.h"
 #include "import_vts.h"
@@ -20,6 +21,8 @@ int cInstrument = 0;
 static int isCharEdit = 0;
 static int typeButtonDown = 0;
 static Bitmap* envelopePreviewBitmap = NULL;
+static Bitmap* livePreviewBitmap = NULL;
+static int livePreviewWasActive = 0;
 
 static const SelectionItem instrumentTypeChip[] = {
   {"AY Classic", (int)InstrumentType::AY1, NULL, 0},
@@ -132,11 +135,11 @@ static ScreenData* instrumentScreen(void);
 static InstrumentVoicePostSettings* voicePostSettings(Instrument* instrument, InstrumentType type) {
   switch (type) {
     case InstrumentType::Braids: return &instrument->chip.braids;
-    case InstrumentType::Plaits:
-    case InstrumentType::PlaitsAlt: return &instrument->chip.plaits;
     case InstrumentType::Sample: return &instrument->chip.sample;
     case InstrumentType::SCWF: return &instrument->chip.scwf;
     case InstrumentType::BYOWTBL: return &instrument->chip.byowtbl;
+    case InstrumentType::Plaits:
+    case InstrumentType::PlaitsAlt: return &instrument->chip.plaits;
     default: return NULL;
   }
 }
@@ -148,15 +151,21 @@ static void setInstrumentType(InstrumentType newType) {
     screenSetup(&screenInstrument, cInstrument);
     return;
   }
-  InstrumentVoicePostSettings savedPost;
+  InstrumentVoicePostSettings savedEnvelope = {};
   InstrumentVoicePostSettings* oldPost = voicePostSettings(instrument, oldType);
-  int preservePost = oldPost != NULL;
-  if (preservePost) savedPost = *oldPost;
+  int preserveEnvelope = oldPost && (oldPost->attack || oldPost->decay || oldPost->sustain || oldPost->release);
+  if (preserveEnvelope) savedEnvelope = *oldPost;
   getInstrumentFunctions(oldType).free(instrument);
   instrument->type = newType;
   getInstrumentFunctions(newType).init(instrument);
-  InstrumentVoicePostSettings* newPost = voicePostSettings(instrument, newType);
-  if (preservePost && newPost) *newPost = savedPost;
+  if (preserveEnvelope) {
+    InstrumentVoicePostSettings* post = voicePostSettings(instrument, newType);
+    if (post) {
+      post->attack = savedEnvelope.attack; post->decay = savedEnvelope.decay;
+      post->sustain = savedEnvelope.sustain; post->release = savedEnvelope.release;
+      post->envelopeShape = savedEnvelope.envelopeShape;
+    }
+  }
   ScreenData* screen = instrumentScreen();
   screen->cursorRow = screen->cursorCol = screen->topRow = 0;
   projectModified = 1;
@@ -261,6 +270,7 @@ static void fullRedraw(void) {
 }
 
 static void draw(void) {
+  instrumentCommonDrawLivePreview();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -415,7 +425,9 @@ int instrumentCommonOnEditVoicePost(int col, int row, CellEditAction action,
                                      InstrumentVoicePostSettings* post) {
   if (row == 9) {
     uint8_t* values[] = {&post->attack, &post->decay, &post->sustain, &post->release, &post->envelopeShape};
-    return edit8noLast(action, values[col], 16, 0, 255);
+    int handled = edit8noLast(action, values[col], 16, 0, 255);
+    if (handled) currentScreen->fullRedraw();
+    return handled;
   }
   if (!col) return 0;
   switch (row) {
@@ -471,6 +483,33 @@ void instrumentCommonDrawEnvelopePreview(uint8_t attack, uint8_t decay, uint8_t 
   drawEnvelopePreviewSegment(bitmap, releaseStart, sustainLevel, width, 0.0f, shape);
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxDrawBitmap(bitmap, 6, 15);
+}
+
+void instrumentCommonDrawLivePreview(void) {
+  int track = *pSongTrack;
+  int active = track >= 0 && track < chipnomadState->project.tracksCount &&
+    chipnomadState->playbackState.tracks[track].note.instrument == cInstrument &&
+    chipnomadState->voiceMonitors[track].active;
+  if (!active) {
+    if (livePreviewWasActive) currentScreen->fullRedraw();
+    livePreviewWasActive = 0;
+    return;
+  }
+  if (!livePreviewBitmap) livePreviewBitmap = gfxBitmapCreate(32, 3);
+  gfxClearRect(0, 16, 32, 3);
+  renderFloatPreview(livePreviewBitmap, chipnomadState->voiceMonitors[track].samples,
+                     VOICE_MONITOR_SAMPLES);
+  gfxSetFgColor(appSettings.colorScheme.textInfo);
+  gfxDrawBitmap(livePreviewBitmap, 0, 16);
+  Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
+  InstrumentVoicePostSettings* post = voicePostSettings(instrument, instrument->type);
+  if (post && ((instrument->type != InstrumentType::Plaits &&
+                instrument->type != InstrumentType::PlaitsAlt) ||
+               instrument->chip.plaits.envelopeMode != 0)) {
+    instrumentCommonDrawEnvelopePreview(post->attack, post->decay, post->sustain,
+                                        post->release, post->envelopeShape);
+  }
+  livePreviewWasActive = 1;
 }
 
 int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {

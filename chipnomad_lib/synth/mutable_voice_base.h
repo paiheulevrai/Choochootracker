@@ -63,7 +63,7 @@ class MutableVoiceBase {
   void noteOn() {
     retriggerPending_ = gate_;
     active_ = gate_ = true;
-    triggerPending_ = false;
+    triggerPending_ = !retriggerPending_;
     quietSamples_ = 0;
     if (envelopeMode_ == 2) post_.noteOn();
   }
@@ -112,11 +112,18 @@ class MutableVoiceBase {
  private:
   void renderBlock() {
     modulations_.note = 0.0f;
-    // Mutable's patched trigger is a gate. A repeated note needs one low
-    // block before the gate rises again, otherwise Plaits cannot see its edge.
-    modulations_.trigger = retriggerPending_ ? 0.0f : (gate_ ? 1.0f : 0.0f);
-    retriggerPending_ = false;
-    triggerPending_ = false;
+    // Six-op FM needs a gate for its amp envelopes. Other Plaits engines use
+    // a trigger pulse; holding that pulse high turns physical models into
+    // sustained voices.
+    const bool gateDriven = patch_.engine >= 2 && patch_.engine <= 4;
+    if (retriggerPending_) {
+      modulations_.trigger = 0.0f;
+      retriggerPending_ = false;
+      triggerPending_ = true;
+    } else {
+      modulations_.trigger = gateDriven && gate_ ? 1.0f : (triggerPending_ ? 1.0f : 0.0f);
+      triggerPending_ = false;
+    }
     modulations_.level = 1.0f;
     voice_.Render(patch_, modulations_, frames_, kBlockSize);
     blockPosition_ = 0;

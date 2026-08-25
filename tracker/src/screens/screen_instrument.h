@@ -10,6 +10,7 @@ void instrumentCommonDrawStatic(void);
 void instrumentCommonDrawCursor(int col, int row);
 void instrumentCommonDrawField(int col, int row, CellState state);
 void instrumentCommonDrawEnvelopePreview(uint8_t attack, uint8_t decay, uint8_t sustain, uint8_t release, uint8_t shape);
+void instrumentCommonDrawLivePreview(void);
 int instrumentCommonOnEdit(int col, int row, CellEditAction action);
 void instrumentCommonDrawVoicePostStatic(int drawEnvelope);
 int instrumentCommonDrawVoicePostCursor(int col, int row);

@@ -2,11 +2,25 @@
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "model_catalog.h"
+#include "waveform_display.h"
 
 static int engineButtonDown;
+static Bitmap* previewBitmap;
+static bool isAlt(void);
+
+static void drawPreview(const InstrumentPlaits* plaits) {
+  if (!previewBitmap) previewBitmap = gfxBitmapCreate(32, 3);
+  renderPlaitsPreview(previewBitmap, plaits, isAlt());
+  gfxSetFgColor(appSettings.colorScheme.textInfo);
+  gfxDrawBitmap(previewBitmap, 0, 16);
+}
 
 static bool isAlt(void) {
   return chipnomadState->project.instruments[cInstrument].type == InstrumentType::PlaitsAlt;
+}
+
+static bool lpgControlsActive(const InstrumentPlaits* p) {
+  return isAlt() || !((p->engine >= 2 && p->engine <= 4) || p->engine >= 19);
 }
 
 static void selectEngine(int value) {
@@ -49,10 +63,11 @@ static void drawStatic(void) {
   gfxPrint(0, 12, "Env Mode");
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
   instrumentCommonDrawVoicePostStatic(p->envelopeMode != 0);
+  drawPreview(p);
   if (p->envelopeMode == 0) {
-    gfxSetFgColor(appSettings.colorScheme.textTitles);
-    gfxPrint(0, 14, "LPG");
-    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxSetFgColor(lpgControlsActive(p) ? appSettings.colorScheme.textTitles : appSettings.colorScheme.textInfo);
+    gfxPrint(0, 14, lpgControlsActive(p) ? "LPG" : "LPG N/A");
+    gfxSetFgColor(lpgControlsActive(p) ? appSettings.colorScheme.textDefault : appSettings.colorScheme.textInfo);
     gfxPrint(6, 14, "D"); gfxPrint(11, 14, "C");
   }
 }
@@ -63,6 +78,7 @@ static void drawCursor(int col, int row) {
   if ((row != 9 || p->envelopeMode != 0) &&
       instrumentCommonDrawVoicePostCursor(col, row)) return;
   if (row == 9) {
+    if (p->envelopeMode == 0 && !lpgControlsActive(p)) return;
     gfxCursor(7 + col * 5, 14, 2);
     return;
   }
@@ -77,6 +93,11 @@ static void drawField(int col, int row, CellState state) {
       instrumentCommonDrawVoicePostField(col, row, state, p)) return;
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   if (row == 9) {
+    if (p->envelopeMode == 0 && !lpgControlsActive(p)) {
+      gfxSetFgColor(appSettings.colorScheme.textInfo);
+      gfxPrint(7 + col * 5, 14, "--");
+      return;
+    }
     uint8_t values[] = {p->attack, p->decay, p->sustain, p->release, p->envelopeShape};
     uint8_t value = p->envelopeMode == 0 ? values[col + 1] : values[col];
     gfxPrint(col == 4 ? 35 : 7 + col * 5, 14, byteToHex(value));
@@ -121,12 +142,13 @@ static int onEdit(int col, int row, CellEditAction action) {
       if (handled) { p->envelopeMode = mode == 0 ? 0 : 2; screenSetup(&screenInstrument, cInstrument); }
     } else handled = edit8noLast(action, &p->filterResonance, 16, 0, 255); break;
     case 9: {
+      if (p->envelopeMode == 0 && !lpgControlsActive(p)) break;
       uint8_t* values[] = {&p->attack, &p->decay, &p->sustain, &p->release, &p->envelopeShape};
       handled = edit8noLast(action, values[p->envelopeMode == 0 ? col + 1 : col], 16, 0, 255);
       break;
     }
   }
-  if (handled) projectModified = 1;
+  if (handled) { projectModified = 1; screenFullRedraw(&screenInstrumentPlaits); }
   return handled;
 }
 

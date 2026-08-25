@@ -5,12 +5,30 @@
 #include "synth/sample_voice.h"
 #include "utils.h"
 #include "audio_manager.h"
+#include "waveform_display.h"
 
 #include <string.h>
 
 static int sampleButtonDown;
 static constexpr int sourceValueX = 9;
 static constexpr int sourceValueWidth = 7;
+static constexpr int previewRow = 16, previewWidth = 32, previewHeight = 3;
+static Bitmap* samplePreviewBitmap;
+
+static void updateSamplePreview(const InstrumentSample* sample) {
+  if (!samplePreviewBitmap) samplePreviewBitmap = gfxBitmapCreate(previewWidth, previewHeight);
+  uint32_t start = sample->frameCount ? (uint64_t)sample->start * (sample->frameCount - 1) / 255 : 0;
+  uint32_t end = sample->end == 255 ? sample->frameCount :
+    (uint64_t)(sample->end + 1) * sample->frameCount / 256;
+  if (start > end) { uint32_t swap = start; start = end; end = swap + 1; }
+  renderPCM16Preview(samplePreviewBitmap, sample->data, start, end, sample->channels);
+}
+
+static void drawSamplePreview(void) {
+  if (!samplePreviewBitmap) return;
+  gfxSetFgColor(appSettings.colorScheme.textInfo);
+  gfxDrawBitmap(samplePreviewBitmap, 0, previewRow);
+}
 
 static void onSampleCancelled(void) {
   audioManager.stopSamplePreview();
@@ -67,6 +85,9 @@ static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textDefault);
   gfxPrint(0,8,"Pitch"); gfxPrint(0,9,"Start"); gfxPrint(0,10,"End"); gfxPrint(0,11,"Loop"); gfxPrint(0,12,"Speed");
   instrumentCommonDrawVoicePostStatic(1);
+  InstrumentSample* sample = &chipnomadState->project.instruments[cInstrument].chip.sample;
+  updateSamplePreview(sample);
+  drawSamplePreview();
 }
 
 static void drawCursor(int col, int row) {
@@ -122,6 +143,10 @@ static int onEdit(int col, int row, CellEditAction action) {
     case 8: handled=!col?edit16withMinMax(action,&sample->speedPercent,25,0,500):0; break;
   }
   if (handled) projectModified = 1;
+  if (handled && !col && (row == 5 || row == 6)) {
+    updateSamplePreview(sample);
+    screenFullRedraw(&screenInstrumentSample);
+  }
   return handled;
 }
 

@@ -109,6 +109,22 @@ TEST_CASE("new instruments use audible synth defaults") {
   CHECK(instrument.chip.sample.end == 255);
   CHECK(instrument.chip.sample.loopMode == 0);
   CHECK(instrument.chip.sample.speedPercent == 100);
+
+  const InstrumentType voiceTypes[] = {InstrumentType::Braids, InstrumentType::Sample,
+    InstrumentType::SCWF, InstrumentType::BYOWTBL, InstrumentType::Plaits, InstrumentType::PlaitsAlt};
+  for (InstrumentType type : voiceTypes) {
+    getInstrumentFunctions(type).init(&instrument);
+    const InstrumentVoicePostSettings* post = type == InstrumentType::Braids ?
+      static_cast<const InstrumentVoicePostSettings*>(&instrument.chip.braids) :
+      type == InstrumentType::Sample ? static_cast<const InstrumentVoicePostSettings*>(&instrument.chip.sample) :
+      type == InstrumentType::SCWF ? static_cast<const InstrumentVoicePostSettings*>(&instrument.chip.scwf) :
+      type == InstrumentType::BYOWTBL ? static_cast<const InstrumentVoicePostSettings*>(&instrument.chip.byowtbl) :
+      static_cast<const InstrumentVoicePostSettings*>(&instrument.chip.plaits);
+    CHECK(post->sustain == 255);
+    CHECK(post->filterEnabled == 1);
+    CHECK(post->filterCharacter == 2);
+    CHECK(post->filterCutoffHz == 20000);
+  }
 }
 
 // instrumentIsEmpty tests

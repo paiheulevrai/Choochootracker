@@ -324,6 +324,7 @@ void appDraw(void) {
     // Draw waveform between track number and note
     gfxSetFgColor(cs.textInfo);
     Bitmap* waveformBitmap = waveformDisplayGetBitmap(c);
+    gfxClearRect(36, 3 + c, 1, 1);
     if (waveformBitmap) {
       gfxDrawBitmap(waveformBitmap, 36, 3 + c);
     }

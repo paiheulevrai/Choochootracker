@@ -190,8 +190,8 @@ static void captureVoiceMonitor(ChipNomadState* state, int trackIdx,
                                 const float* samples, int frames,
                                 int channels, float envelope) {
   VoiceMonitor* monitor = &state->voiceMonitors[trackIdx];
-  for (int i = 0; i < 64; ++i) {
-    int frame = frames > 1 ? (i * (frames - 1)) / 63 : 0;
+  for (int i = 0; i < VOICE_MONITOR_SAMPLES; ++i) {
+    int frame = frames > 1 ? (i * (frames - 1)) / (VOICE_MONITOR_SAMPLES - 1) : 0;
     monitor->samples[i] = samples[frame * channels];
   }
   monitor->envelope = envelope;

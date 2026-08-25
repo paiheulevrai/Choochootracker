@@ -381,6 +381,7 @@ void gfxDrawBitmap(Bitmap* bitmap, int col, int row) {
   for (int y = 0; y < bitmap->heightPixels; y++) {
     for (int x = 0; x < bitmap->widthPixels; x++) {
       uint8_t alpha = bitmap->data[y * bitmap->widthPixels + x];
+      if (!alpha) continue;
       uint8_t r = bgR + ((fgR - bgR) * alpha) / 255;
       uint8_t g = bgG + ((fgG - bgG) * alpha) / 255;
       uint8_t b = bgB + ((fgB - bgB) * alpha) / 255;
@@ -396,6 +397,7 @@ void gfxDrawBitmap(Bitmap* bitmap, int col, int row) {
   for (int y = 0; y < bitmap->heightPixels; y++) {
     for (int x = 0; x < bitmap->widthPixels; x++) {
       uint8_t alpha = bitmap->data[y * bitmap->widthPixels + x];
+      if (!alpha) continue;
       uint8_t r = bgR + ((fgR - bgR) * alpha) / 255;
       uint8_t g = bgG + ((fgG - bgG) * alpha) / 255;
       uint8_t b = bgB + ((fgB - bgB) * alpha) / 255;
