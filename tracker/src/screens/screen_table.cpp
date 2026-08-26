@@ -201,8 +201,8 @@ static void draw(void) {
   gfxClearRect(21, 3, 1, 16);
   gfxClearRect(27, 3, 1, 16);
 
-  PlaybackTrackState* track = &chipnomadState->playbackState.tracks[*pSongTrack];
-  struct PlaybackTableState* pTable = NULL;
+  const PlaybackTrackState* track = &chipnomadGetPlaybackStatus(chipnomadState)->tracks[*pSongTrack];
+  const PlaybackTableState* pTable = NULL;
   if (track->mode != PlaybackMode::stopped) {
     int instrumentTableIdx = track->note.instrumentTable.tableIdx;
     int auxTableIdx = track->note.auxTable.tableIdx;

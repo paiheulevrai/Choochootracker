@@ -41,7 +41,7 @@ int projectLoadFromPath(const char* path) {
     appSettings.projectPath[0] = '\0';
   }
 
-  playbackStop(&chipnomadState->playbackState);
+  chipnomadQueuePlaybackStop(chipnomadState);
 
   // Check file extension to determine loader
   const char* ext = strrchr(path, '.');
@@ -65,7 +65,7 @@ int projectLoadFromPath(const char* path) {
 
   if (loadResult == 0) {
     projectModified = 0; // Clear modified flag after loading
-    pendingReinitChips = 1;
+    audioManager.reinitializeChips();
 
     // Store filename without extension
     extractFilenameWithoutExtension(path, appSettings.projectFilename, FILENAME_LENGTH + 1);
@@ -75,7 +75,7 @@ int projectLoadFromPath(const char* path) {
     // Clear FX states for all tracks
     // TODO: Make it a cleaner solution and have it somewhere in chipnomad_lib
     for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
-      memset(&chipnomadState->playbackState.tracks[i].note.fx, 0, sizeof(chipnomadState->playbackState.tracks[i].note.fx));
+      chipnomadQueuePlaybackClearTrackFX(chipnomadState, i);
     }
   } else {
     screenMessage(MESSAGE_TIME, "%s", projectFileError);
@@ -365,7 +365,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
     handled = edit8noLast(action, &chipnomadState->project.linearPitch, 1, 0, 1);
     if (handled) {
       projectModified = 1;
-      playbackStop(&chipnomadState->playbackState);
+      chipnomadQueuePlaybackStop(chipnomadState);
       reinitializePitchTable(&chipnomadState->project);
     }
   } else if (row == 5) {

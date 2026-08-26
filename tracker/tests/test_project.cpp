@@ -84,6 +84,41 @@ TEST_CASE("voice-post modulation destinations keep their labels") {
       firstGeneric + genericModEnvelopeAttack + i), labels[i]) == 0);
 }
 
+TEST_CASE("instrument catalogue covers every family and its routable motion FX") {
+  for (int rawType = 0; rawType < (int)InstrumentType::totalCount; ++rawType) {
+    InstrumentType type = (InstrumentType)rawType;
+    const InstrumentDefinition* definition = getInstrumentDefinition(type);
+    REQUIRE(definition->uiName[0] != 0);
+    // AYSample retains one legacy reserved destination in its serialized
+    // numeric range; only declared destinations are exposed by the UI.
+    REQUIRE(definition->destinationCount <= getInstrumentFunctions(type).modDestinationsCount + 1);
+    for (int destination = 0; destination < definition->destinationCount; ++destination) {
+      const InstrumentModDestination* metadata = instrumentModDestination(type, destination);
+      REQUIRE(metadata != nullptr);
+      CHECK(std::strcmp(metadata->name, instrumentModDestinationName(type, destination)) == 0);
+      if (metadata->fx != instrumentNoFX) CHECK(instrumentFXAvailable(type, metadata->fx));
+    }
+    for (int fx = 0; fx < definition->fxCount; ++fx)
+      CHECK(instrumentFXAvailable(type, definition->fxList[fx].fx));
+  }
+
+  Instrument instrument;
+  uint8_t fx; int base, range; InstrumentMotionValue value;
+  getInstrumentFunctions(InstrumentType::Sample).init(&instrument);
+  CHECK(instrumentMotionDestination(&instrument, 3, &fx, &base, &range, &value));
+  CHECK(fx == fxSST); CHECK(base == 0); CHECK(range == 255);
+  CHECK(instrumentMotionDestination(&instrument, 5, &fx, &base, &range, &value));
+  CHECK(fx == fxSSP); CHECK(base == 100); CHECK(range == 500);
+  CHECK(instrumentMotionDestination(&instrument, 7, &fx, &base, &range, &value));
+  CHECK(fx == fxSCF); CHECK(value == InstrumentMotionValue::cutoff);
+  getInstrumentFunctions(InstrumentType::SCWF).init(&instrument);
+  CHECK(instrumentMotionDestination(&instrument, 3, &fx, &base, &range, &value));
+  CHECK(fx == fxSDT);
+  getInstrumentFunctions(InstrumentType::BYOWTBL).init(&instrument);
+  CHECK(instrumentMotionDestination(&instrument, 5, &fx, &base, &range, &value));
+  CHECK(fx == fxBIA);
+}
+
 TEST_CASE("new instruments use audible synth defaults") {
   Instrument instrument;
   getInstrumentFunctions(InstrumentType::Braids).init(&instrument);

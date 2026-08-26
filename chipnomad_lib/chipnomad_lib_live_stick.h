@@ -6,8 +6,7 @@ int chipnomadLiveStickIsEnabled(void);
 int chipnomadMotionTakeRateReset(void);
 int chipnomadMotionRateResetPending(void);
 int chipnomadMotionMode(void);
-void chipnomadMotionClearOverflow(void);
-void chipnomadMotionSetDirty(void);
 void chipnomadMotionSetOverflow(void);
+int chipnomadMotionPushEvent(const MotionRecordEvent& event);
 
 #endif

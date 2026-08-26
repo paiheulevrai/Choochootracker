@@ -1,6 +1,7 @@
 #include <string.h>
 #include "project_instruments.h"
 #include "project.h"
+#include "synth/multimode_filter.h"
 
 // Convention: the first modulation destination should be volume
 
@@ -228,80 +229,97 @@ static int freeBYOWTBLInstrument(Instrument* instrument) {
   return freeSCWFInstrument(instrument);
 }
 
-// Get function pointers for instrument type
+// The one source of truth for family metadata.  Values are accessed through
+// typed code below; no union member is addressed by an offset.
+#define D(n, f, r, v) {n, (uint8_t)(f), r, v}
+#define N D("Off", instrumentNoFX, 0, InstrumentMotionValue::raw)
+static const InstrumentModDestination destNone[] = {N};
+static const InstrumentModDestination destAY1[] = {N, D("Volume", instrumentNoFX, 255, InstrumentMotionValue::raw), D("Pitch", instrumentNoFX, 0, InstrumentMotionValue::raw), D("Noise", instrumentNoFX, 0, InstrumentMotionValue::raw), D("EnvPrd", instrumentNoFX, 0, InstrumentMotionValue::raw)};
+static const InstrumentModDestination destAY2[] = {N, D("Volume", instrumentNoFX,255,InstrumentMotionValue::raw), D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw), D("TonePit",instrumentNoFX,0,InstrumentMotionValue::raw), D("Noise",instrumentNoFX,0,InstrumentMotionValue::raw), D("EnvPit",instrumentNoFX,0,InstrumentMotionValue::raw), D("SoftPit",instrumentNoFX,0,InstrumentMotionValue::raw), D("FMDepth",instrumentNoFX,0,InstrumentMotionValue::raw), D("PulseW",instrumentNoFX,0,InstrumentMotionValue::raw), D("PulseL",instrumentNoFX,0,InstrumentMotionValue::raw), D("WavIdx",instrumentNoFX,0,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destAYSample[] = {N, D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw), D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw), D("SmplPit",instrumentNoFX,0,InstrumentMotionValue::raw), D("TonePit",instrumentNoFX,0,InstrumentMotionValue::raw), D("Noise",instrumentNoFX,0,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destBraids[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Timbre",fxBTM,16384,InstrumentMotionValue::raw),D("Color",fxBCL,16384,InstrumentMotionValue::raw),D("Cutoff",fxBCF,20000,InstrumentMotionValue::cutoff),D("Reso",fxBRS,255,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destSample[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Start",fxSST,255,InstrumentMotionValue::raw),D("End",fxSEN,255,InstrumentMotionValue::raw),D("Speed",fxSSP,500,InstrumentMotionValue::speed),D("Loop",fxSLP,2,InstrumentMotionValue::raw),D("Cutoff",fxSCF,20000,InstrumentMotionValue::cutoff),D("Reso",fxSRS,255,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destPlaits[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Harmonic",fxPHA,16384,InstrumentMotionValue::raw),D("Timbre",fxPTM,16384,InstrumentMotionValue::raw),D("Morph",fxPMO,16384,InstrumentMotionValue::raw),D("AuxMix",fxPAX,255,InstrumentMotionValue::raw),D("Cutoff",fxPCF,20000,InstrumentMotionValue::cutoff),D("Reso",fxPRS,255,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destSCWF[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Detune",fxSDT,255,InstrumentMotionValue::raw),D("Mix",fxSMX,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF2,20000,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destBYOWTBL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Detune",fxSDT,255,InstrumentMotionValue::raw),D("Mix",fxSMX,255,InstrumentMotionValue::raw),D("Index A",fxBIA,255,InstrumentMotionValue::raw),D("Index B",fxBIB,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF2,20000,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
+#undef N
+#undef D
+#define F(f, n) {(uint8_t)(f), n}
+static const InstrumentFX fxAY1[]={F(fxAYM,"AYM"),F(fxNOI,"NOI"),F(fxNOA,"NOA"),F(fxERT,"ERT"),F(fxEAU,"EAU"),F(fxEVB,"EVB"),F(fxEBN,"EBN"),F(fxESL,"ESL"),F(fxENT,"ENT"),F(fxEPT,"EPT"),F(fxEPL,"EPL"),F(fxEPH,"EPH")};
+static const InstrumentFX fxAY2[]={F(fxAYM,"AYM"),F(fxNOI,"NOI"),F(fxNOA,"NOA"),F(fxTNN,"TNN"),F(fxTNP,"TNP"),F(fxTNF,"TNF"),F(fxTRT,"TRT"),F(fxEAU,"EAU"),F(fxENN,"ENN"),F(fxENP,"ENP"),F(fxENF,"ENF"),F(fxERT,"ERT"),F(fxSFT,"SFT"),F(fxSFN,"SFN"),F(fxSFP,"SFP"),F(fxSFF,"SFF"),F(fxSRT,"SRT"),F(fxSFM,"SFM"),F(fxPWM,"PWM"),F(fxSPL,"SPL"),F(fxSWT,"SWT")};
+static const InstrumentFX fxAYSample[]={F(fxAYM,"AYM"),F(fxNOI,"NOI"),F(fxNOA,"NOA"),F(fxTNN,"TNN"),F(fxTNP,"TNP"),F(fxTNF,"TNF"),F(fxTRT,"TRT"),F(fxSFN,"SFN"),F(fxSFP,"SFP"),F(fxSFF,"SFF"),F(fxSMS,"SMS")};
+static const InstrumentFX fxBraids[]={F(fxBMD,"BMD"),F(fxBTM,"BTM"),F(fxBCL,"BCL"),F(fxBCF,"BCF"),F(fxBRS,"BRS")};
+static const InstrumentFX fxSample[]={F(fxSPT,"SPT"),F(fxSST,"SST"),F(fxSEN,"SEN"),F(fxSVL,"SVL"),F(fxSCF,"SCF"),F(fxSRS,"SRS"),F(fxSSP,"SSP"),F(fxSLP,"SLP")};
+static const InstrumentFX fxSCWF[]={F(fxSDT,"SDT"),F(fxSMX,"SMX"),F(fxSCF2,"SCF"),F(fxSRS2,"SRS")};
+static const InstrumentFX fxBYOWTBL[]={F(fxSDT,"SDT"),F(fxSMX,"SMX"),F(fxBIA,"BIA"),F(fxBIB,"BIB"),F(fxSCF2,"SCF"),F(fxSRS2,"SRS")};
+static const InstrumentFX fxPlaits[]={F(fxPMD,"PMD"),F(fxPHA,"PHA"),F(fxPTM,"PTM"),F(fxPMO,"PMO"),F(fxPAX,"PAX"),F(fxPCF,"PCF"),F(fxPRS,"PRS")};
+#undef F
+#define COUNT(a) (uint8_t)(sizeof(a) / sizeof((a)[0]))
+static const InstrumentDefinition instrumentDefinitions[] = {
+  {"None",InstrumentCategory::none,InstrumentScreenKind::none,destNone,COUNT(destNone),NULL,0,{0,modNameNone,initNoneInstrument,freeNoneInstrument,0,0}},
+  {"AY Classic",InstrumentCategory::chip,InstrumentScreenKind::ay1,destAY1,COUNT(destAY1),fxAY1,COUNT(fxAY1),{4,modNameAY1,initAY1Instrument,freeAY1Instrument,0,0}},
+  {"AY Plus",InstrumentCategory::chip,InstrumentScreenKind::ay2,destAY2,COUNT(destAY2),fxAY2,COUNT(fxAY2),{10,modNameAY2,initAY2Instrument,freeAY2Instrument,0,0}},
+  {"AY Sample",InstrumentCategory::chip,InstrumentScreenKind::aySample,destAYSample,COUNT(destAYSample),fxAYSample,COUNT(fxAYSample),{6,modNameAYSample,initAYSampleInstrument,freeAYSampleInstrument,0,0}},
+  {"Braids",InstrumentCategory::synth,InstrumentScreenKind::braids,destBraids,COUNT(destBraids),fxBraids,COUNT(fxBraids),{6,modNameBraids,initBraidsInstrument,freeBraidsInstrument,1,0}},
+  {"PCM Sample",InstrumentCategory::sample,InstrumentScreenKind::sample,destSample,COUNT(destSample),fxSample,COUNT(fxSample),{8,modNameSample,initSampleInstrument,freeSampleInstrument,1,0}},
+  {"Plaits",InstrumentCategory::synth,InstrumentScreenKind::plaits,destPlaits,COUNT(destPlaits),fxPlaits,COUNT(fxPlaits),{8,modNamePlaits,initPlaitsInstrument,freePlaitsInstrument,1,1}},
+  {"Plaits-Alt",InstrumentCategory::synth,InstrumentScreenKind::plaits,destPlaits,COUNT(destPlaits),fxPlaits,COUNT(fxPlaits),{8,modNamePlaits,initPlaitsAltInstrument,freePlaitsInstrument,1,1}},
+  {"2xSCWF",InstrumentCategory::sample,InstrumentScreenKind::scwf,destSCWF,COUNT(destSCWF),fxSCWF,COUNT(fxSCWF),{6,modNameSCWF,initSCWFInstrument,freeSCWFInstrument,1,0}},
+  {"BYOWTBL",InstrumentCategory::sample,InstrumentScreenKind::byowtbl,destBYOWTBL,COUNT(destBYOWTBL),fxBYOWTBL,COUNT(fxBYOWTBL),{8,modNameBYOWTBL,initBYOWTBLInstrument,freeBYOWTBLInstrument,1,0}},
+};
+#undef COUNT
+
 InstrumentFunctions getInstrumentFunctions(InstrumentType type) {
-  switch (type) {
-    case InstrumentType::AY1:
-      return (InstrumentFunctions){
-        .modDestinationsCount = 4,
-        .modName = modNameAY1,
-        .init = initAY1Instrument,
-        .free = freeAY1Instrument
-      };
-    case InstrumentType::AY2:
-      return (InstrumentFunctions){
-        .modDestinationsCount = 10,
-        .modName = modNameAY2,
-        .init = initAY2Instrument,
-        .free = freeAY2Instrument
-      };
-    case InstrumentType::AYSample:
-      return (InstrumentFunctions){
-        .modDestinationsCount = 6,
-        .modName = modNameAYSample,
-        .init = initAYSampleInstrument,
-        .free = freeAYSampleInstrument
-      };
-    case InstrumentType::Braids:
-      return (InstrumentFunctions){
-        .modDestinationsCount = 6,
-        .modName = modNameBraids,
-        .init = initBraidsInstrument,
-        .free = freeBraidsInstrument
-      };
-    case InstrumentType::Sample:
-      return (InstrumentFunctions){
-        .modDestinationsCount = 8,
-        .modName = modNameSample,
-        .init = initSampleInstrument,
-        .free = freeSampleInstrument
-      };
-    case InstrumentType::SCWF:
-      return (InstrumentFunctions){
-        .modDestinationsCount = 6,
-        .modName = modNameSCWF,
-        .init = initSCWFInstrument,
-        .free = freeSCWFInstrument
-      };
-    case InstrumentType::BYOWTBL:
-      return (InstrumentFunctions){
-        .modDestinationsCount = 8,
-        .modName = modNameBYOWTBL,
-        .init = initBYOWTBLInstrument,
-        .free = freeBYOWTBLInstrument
-      };
+  return getInstrumentDefinition(type)->functions;
+}
+
+const InstrumentDefinition* getInstrumentDefinition(InstrumentType type) {
+  int index = (int)type;
+  if (index < 0 || index >= (int)InstrumentType::totalCount) index = 0;
+  return &instrumentDefinitions[index];
+}
+
+const InstrumentModDestination* instrumentModDestination(InstrumentType type, int destination) {
+  const InstrumentDefinition* definition = getInstrumentDefinition(type);
+  return destination >= 0 && destination < definition->destinationCount ? &definition->destinations[destination] : NULL;
+}
+
+int instrumentFXAvailable(InstrumentType type, uint8_t fx) {
+  const InstrumentDefinition* definition = getInstrumentDefinition(type);
+  for (int i = 0; i < definition->fxCount; ++i) if (definition->fxList[i].fx == fx) return 1;
+  return 0;
+}
+
+InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument) {
+  switch (instrument->type) {
+    case InstrumentType::Braids: return &instrument->chip.braids;
+    case InstrumentType::Sample: return &instrument->chip.sample;
+    case InstrumentType::SCWF: return &instrument->chip.scwf;
+    case InstrumentType::BYOWTBL: return &instrument->chip.byowtbl;
     case InstrumentType::Plaits:
-      return (InstrumentFunctions){
-        .modDestinationsCount = 8,
-        .modName = modNamePlaits,
-        .init = initPlaitsInstrument,
-        .free = freePlaitsInstrument
-      };
-    case InstrumentType::PlaitsAlt:
-      return (InstrumentFunctions){
-        .modDestinationsCount = 8,
-        .modName = modNamePlaits,
-        .init = initPlaitsAltInstrument,
-        .free = freePlaitsInstrument
-      };
-    default:
-      return (InstrumentFunctions){
-        .modDestinationsCount = 0,
-        .modName = modNameNone,
-        .init = initNoneInstrument,
-        .free = freeNoneInstrument
-      };
+    case InstrumentType::PlaitsAlt: return &instrument->chip.plaits;
+    default: return NULL;
   }
+}
+
+int instrumentMotionDestination(const Instrument* instrument, int destination, uint8_t* fx, int* base, int* range, InstrumentMotionValue* value) {
+  const InstrumentModDestination* definition = instrumentModDestination(instrument->type, destination);
+  if (!definition || definition->fx == instrumentNoFX) return 0;
+  *fx = definition->fx; *range = definition->range; *value = definition->value;
+  switch (instrument->type) {
+    case InstrumentType::Braids:
+      *base = destination == 3 ? (instrument->chip.braids.timbre + 64) / 129 : destination == 4 ? (instrument->chip.braids.color + 64) / 129 : destination == 5 ? instrument->chip.braids.filterCutoffHz : instrument->chip.braids.filterResonance; break;
+    case InstrumentType::Plaits: case InstrumentType::PlaitsAlt:
+      *base = destination == 3 ? (instrument->chip.plaits.harmonics + 64) / 129 : destination == 4 ? (instrument->chip.plaits.timbre + 64) / 129 : destination == 5 ? (instrument->chip.plaits.morph + 64) / 129 : destination == 6 ? instrument->chip.plaits.auxMix : destination == 7 ? instrument->chip.plaits.filterCutoffHz : instrument->chip.plaits.filterResonance; break;
+    case InstrumentType::Sample:
+      *base = destination == 3 ? instrument->chip.sample.start : destination == 4 ? instrument->chip.sample.end : destination == 5 ? instrument->chip.sample.speedPercent : destination == 6 ? instrument->chip.sample.loopMode : destination == 7 ? instrument->chip.sample.filterCutoffHz : instrument->chip.sample.filterResonance; break;
+    case InstrumentType::SCWF:
+      *base = destination == 3 ? instrument->chip.scwf.detune : destination == 4 ? instrument->chip.scwf.mix : destination == 5 ? instrument->chip.scwf.filterCutoffHz : instrument->chip.scwf.filterResonance; break;
+    case InstrumentType::BYOWTBL:
+      *base = destination == 3 ? instrument->chip.byowtbl.detune : destination == 4 ? instrument->chip.byowtbl.mix : destination == 5 ? instrument->chip.byowtbl.frameIndex[0] : destination == 6 ? instrument->chip.byowtbl.frameIndex[1] : destination == 7 ? instrument->chip.byowtbl.filterCutoffHz : instrument->chip.byowtbl.filterResonance; break;
+    default: return 0;
+  }
+  return 1;
 }
 
 static const char* genericModName(int index) {
@@ -322,17 +340,13 @@ int instrumentGenericModDestination(InstrumentType type, int destination) {
 }
 
 int instrumentModDestinationMax(InstrumentType type) {
-  int genericCount = (type == InstrumentType::Braids || type == InstrumentType::Plaits ||
-                      type == InstrumentType::PlaitsAlt || type == InstrumentType::Sample ||
-                      type == InstrumentType::SCWF || type == InstrumentType::BYOWTBL)
-    ? genericModTotalCount : genericModDestinationCount;
-  return getInstrumentFunctions(type).modDestinationsCount + genericCount;
+  InstrumentFunctions functions = getInstrumentFunctions(type);
+  int genericCount = functions.supportsVoicePost ? genericModTotalCount : genericModDestinationCount;
+  return functions.modDestinationsCount + genericCount;
 }
 
 const char* instrumentModDestinationName(InstrumentType type, int destination) {
-  InstrumentFunctions functions = getInstrumentFunctions(type);
-  if (destination >= 0 && destination <= functions.modDestinationsCount) {
-    return functions.modName(destination);
-  }
+  const InstrumentModDestination* definition = instrumentModDestination(type, destination);
+  if (definition) return definition->name;
   return genericModName(instrumentGenericModDestination(type, destination));
 }

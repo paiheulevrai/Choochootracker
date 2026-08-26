@@ -18,9 +18,8 @@ static InstrumentSample samplePreview;
 static float* floatBuffer;
 static float* samplePreviewBuffer;
 
-int pendingReinitChips = 0;
-
 static void updatePlaybackMuteFlags(void) {
+  uint8_t trackEnabled[PROJECT_MAX_TRACKS];
   // Check if any tracks are solo
   int hasSolo = 0;
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
@@ -33,12 +32,13 @@ static void updatePlaybackMuteFlags(void) {
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
     if (hasSolo) {
       // Solo mode: only solo tracks are enabled
-      chipnomadState->playbackState.trackEnabled[i] = (audioManager.trackStates[i] == TRACK_SOLO) ? 1 : 0;
+      trackEnabled[i] = (audioManager.trackStates[i] == TRACK_SOLO) ? 1 : 0;
     } else {
       // Mute mode: muted tracks are disabled, others enabled
-      chipnomadState->playbackState.trackEnabled[i] = (audioManager.trackStates[i] == TRACK_MUTED) ? 0 : 1;
+      trackEnabled[i] = (audioManager.trackStates[i] == TRACK_MUTED) ? 0 : 1;
     }
   }
+  chipnomadQueueTrackEnabled(chipnomadState, trackEnabled);
 }
 
 static void audioCallback(int16_t* buffer, int stereoSamples) {
@@ -46,13 +46,9 @@ static void audioCallback(int16_t* buffer, int stereoSamples) {
 
   if (stereoSamples <= 0 || stereoSamples > aBufferSize ||
       !floatBuffer || !samplePreviewBuffer) {
+    if (stereoSamples > aBufferSize) chipnomadSetRenderBufferOverflow(chipnomadState);
     memset(buffer, 0, stereoSamples > 0 ? stereoSamples * 2 * sizeof(*buffer) : 0);
     return;
-  }
-
-  if (pendingReinitChips) {
-    chipnomadInitChips(chipnomadState, aSampleRate, NULL);
-    pendingReinitChips = 0;
   }
 
   if (chipnomadRender(chipnomadState, floatBuffer, stereoSamples) != stereoSamples) {
@@ -99,6 +95,13 @@ static int start(int sampleRate, int bufferSize) {
     samplePreviewBuffer = NULL;
     return 1;
   }
+  if (chipnomadReserveRenderBuffers(chipnomadState, bufferSize)) {
+    free(floatBuffer);
+    free(samplePreviewBuffer);
+    floatBuffer = NULL;
+    samplePreviewBuffer = NULL;
+    return 1;
+  }
 
   if (audioSetup(audioCallback, sampleRate, bufferSize)) {
     free(floatBuffer);
@@ -123,6 +126,12 @@ static void pause(void) {
 
 static void resume(void) {
   audioPause(0);
+}
+
+static void reinitializeChips(void) {
+  pause();
+  chipnomadInitChips(chipnomadState, aSampleRate, NULL);
+  resume();
 }
 
 static void stop() {
@@ -208,6 +217,7 @@ struct AudioManager audioManager = {
   .start = start,
   .pause = pause,
   .resume = resume,
+  .reinitializeChips = reinitializeChips,
   .stop = stop,
   .toggleTrackMute = toggleTrackMute,
   .toggleTrackSolo = toggleTrackSolo,

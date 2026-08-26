@@ -34,7 +34,7 @@
 - `Sample` is separate from the legacy `AYSample` instrument and bypasses the AY DAC.
 - It loads PCM8 or PCM16 mono/stereo WAV files into RAM, converts PCM8 to signed PCM16, and renders interpolated stereo audio directly into the floating-point mixer.
 - Instrument controls are pitch, start, end, common instrument volume, ADSR and an LP/BP/HP filter with 12/24 dB slopes, cutoff and resonance.
-- Playback is one-shot. Looping and streaming are intentionally not implemented yet.
+- Playback supports off, loop and ping-pong loop modes. Streaming is not implemented; PCM data is loaded into RAM.
 - Project save/load preserves the sample path and controls. Paths are not portable yet: copying WAV files into a project `samples/` directory and storing relative paths remains required.
 - The file browser previews the selected WAV with Play. Edit + Left/Right on the Sample screen selects the previous or next WAV in the same folder.
 

@@ -21,6 +21,7 @@ static InstrumentType getCurrentInstrumentType() {
 }
 
 static bool isFXAvailable(enum FX fx, InstrumentType instrumentType) {
+  if (instrumentType != InstrumentType::none && instrumentFXAvailable(instrumentType, (uint8_t)fx)) return true;
   for (int groupIdx = 0; groupIdx < fxGroupCount; groupIdx++) {
     FXGroup* group = &fxGroups[groupIdx];
     if (group->instType != InstrumentType::none && group->instType != instrumentType) continue;

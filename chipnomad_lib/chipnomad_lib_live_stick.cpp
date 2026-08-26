@@ -8,8 +8,12 @@ static std::atomic<int32_t> liveStickAxes[4];
 static std::atomic<int> liveStickEnabled;
 static std::atomic<int> motionRecordMode;
 static std::atomic<int> motionRecordRateReset;
-static std::atomic<int> motionRecordDirty;
 static std::atomic<int> motionRecordOverflow;
+static std::atomic<unsigned int> motionRecordDropped;
+static constexpr unsigned int kMotionQueueCapacity = 256;
+static MotionRecordEvent motionQueue[kMotionQueueCapacity];
+static std::atomic<unsigned int> motionQueueHead;
+static std::atomic<unsigned int> motionQueueTail;
 
 static float deadzoneStickAxis(float value) {
   const float deadzone = 0.05f;
@@ -34,16 +38,37 @@ void chipnomadSetMotionRecordMode(int record, int erase) {
   int mode = erase ? 2 : record ? 1 : 0;
   int previousMode = motionRecordMode.exchange(mode, std::memory_order_relaxed);
   if (previousMode == 1 && mode != 1) motionRecordRateReset.store(1, std::memory_order_relaxed);
-  if (!record && !erase) motionRecordOverflow.store(0, std::memory_order_relaxed);
+  if (!record && !erase) {
+    motionRecordOverflow.store(0, std::memory_order_relaxed);
+    motionRecordDropped.store(0, std::memory_order_relaxed);
+  }
 }
 
-int chipnomadConsumeMotionRecordDirty(void) { return motionRecordDirty.exchange(0, std::memory_order_relaxed); }
+int chipnomadConsumeMotionRecordEvent(MotionRecordEvent* event) {
+  if (!event) return 0;
+  unsigned int tail = motionQueueTail.load(std::memory_order_relaxed);
+  if (tail == motionQueueHead.load(std::memory_order_acquire)) return 0;
+  *event = motionQueue[tail];
+  motionQueueTail.store((tail + 1) % kMotionQueueCapacity, std::memory_order_release);
+  return 1;
+}
 int chipnomadGetMotionRecordOverflow(void) { return motionRecordOverflow.load(std::memory_order_relaxed); }
+unsigned int chipnomadGetMotionRecordDroppedCount(void) { return motionRecordDropped.load(std::memory_order_relaxed); }
+void chipnomadSetMotionRecordOverflow(void) {
+  motionRecordDropped.fetch_add(1, std::memory_order_relaxed);
+  motionRecordOverflow.store(1, std::memory_order_relaxed);
+}
 float chipnomadLiveStickAxis(int axis) { return liveStickAxes[axis].load(std::memory_order_relaxed) / 1000000.0f; }
 int chipnomadLiveStickIsEnabled(void) { return liveStickEnabled.load(std::memory_order_relaxed); }
 int chipnomadMotionTakeRateReset(void) { return motionRecordRateReset.exchange(0, std::memory_order_relaxed); }
 int chipnomadMotionRateResetPending(void) { return motionRecordRateReset.load(std::memory_order_relaxed); }
 int chipnomadMotionMode(void) { return motionRecordMode.load(std::memory_order_relaxed); }
-void chipnomadMotionClearOverflow(void) { motionRecordOverflow.store(0, std::memory_order_relaxed); }
-void chipnomadMotionSetDirty(void) { motionRecordDirty.store(1, std::memory_order_relaxed); }
-void chipnomadMotionSetOverflow(void) { motionRecordOverflow.store(1, std::memory_order_relaxed); }
+void chipnomadMotionSetOverflow(void) { chipnomadSetMotionRecordOverflow(); }
+int chipnomadMotionPushEvent(const MotionRecordEvent& event) {
+  unsigned int head = motionQueueHead.load(std::memory_order_relaxed);
+  unsigned int next = (head + 1) % kMotionQueueCapacity;
+  if (next == motionQueueTail.load(std::memory_order_acquire)) return 0;
+  motionQueue[head] = event;
+  motionQueueHead.store(next, std::memory_order_release);
+  return 1;
+}

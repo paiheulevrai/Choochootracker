@@ -91,27 +91,21 @@ int edit8noLast(CellEditAction action, uint8_t* value, uint8_t bigStep, uint8_t 
   switch (action) {
     case CellEditAction::tap:
       return 1;
-      break;
     case CellEditAction::clear:
       *value = min;
       return 1;
-      break;
     case CellEditAction::increase:
       if (*value < max) *value += 1;
       return 1;
-      break;
     case CellEditAction::decrease:
       if (*value > min) *value -= 1;
       return 1;
-      break;
     case CellEditAction::increaseBig:
       *value = *value > max - bigStep ? max : *value + bigStep;
       return 1;
-      break;
     case CellEditAction::decreaseBig:
       *value = *value < bigStep + min ? min : *value - bigStep;
       return 1;
-      break;
     default:
       break;
   }

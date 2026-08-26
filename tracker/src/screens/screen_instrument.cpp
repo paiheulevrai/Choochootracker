@@ -24,20 +24,20 @@ static Bitmap* envelopePreviewBitmap = NULL;
 static Bitmap* livePreviewBitmap = NULL;
 static int livePreviewWasActive = 0;
 
-static const SelectionItem instrumentTypeChip[] = {
-  {"AY Classic", (int)InstrumentType::AY1, NULL, 0},
-  {"AY Plus", (int)InstrumentType::AY2, NULL, 0},
-  {"AY Sample", (int)InstrumentType::AYSample, NULL, 0},
+static SelectionItem instrumentTypeChip[] = {
+  {NULL, (int)InstrumentType::AY1, NULL, 0},
+  {NULL, (int)InstrumentType::AY2, NULL, 0},
+  {NULL, (int)InstrumentType::AYSample, NULL, 0},
 };
-static const SelectionItem instrumentTypeSynth[] = {
-  {"Braids", (int)InstrumentType::Braids, NULL, 0},
-  {"Plaits", (int)InstrumentType::Plaits, NULL, 0},
-  {"Plaits-Alt", (int)InstrumentType::PlaitsAlt, NULL, 0},
+static SelectionItem instrumentTypeSynth[] = {
+  {NULL, (int)InstrumentType::Braids, NULL, 0},
+  {NULL, (int)InstrumentType::Plaits, NULL, 0},
+  {NULL, (int)InstrumentType::PlaitsAlt, NULL, 0},
 };
-static const SelectionItem instrumentTypeSample[] = {
-  {"PCM Sample", (int)InstrumentType::Sample, NULL, 0},
-  {"2xSCWF", (int)InstrumentType::SCWF, NULL, 0},
-  {"BYOWTBL", (int)InstrumentType::BYOWTBL, NULL, 0},
+static SelectionItem instrumentTypeSample[] = {
+  {NULL, (int)InstrumentType::Sample, NULL, 0},
+  {NULL, (int)InstrumentType::SCWF, NULL, 0},
+  {NULL, (int)InstrumentType::BYOWTBL, NULL, 0},
 };
 static const SelectionItem instrumentTypeCategories[] = {
   {"CHIP", -1, instrumentTypeChip, 3},
@@ -133,15 +133,8 @@ static void drawColHeader(int col, CellState state);
 static ScreenData* instrumentScreen(void);
 
 static InstrumentVoicePostSettings* voicePostSettings(Instrument* instrument, InstrumentType type) {
-  switch (type) {
-    case InstrumentType::Braids: return &instrument->chip.braids;
-    case InstrumentType::Sample: return &instrument->chip.sample;
-    case InstrumentType::SCWF: return &instrument->chip.scwf;
-    case InstrumentType::BYOWTBL: return &instrument->chip.byowtbl;
-    case InstrumentType::Plaits:
-    case InstrumentType::PlaitsAlt: return &instrument->chip.plaits;
-    default: return NULL;
-  }
+  (void)type;
+  return instrumentVoicePostSettings(instrument);
 }
 
 static void setInstrumentType(InstrumentType newType) {
@@ -232,19 +225,13 @@ static ScreenData screenInstrumentNone = {
 };
 
 static ScreenData* instrumentScreen(void) {
-  ScreenData* data = &screenInstrumentNone;
-  switch (chipnomadState->project.instruments[cInstrument].type) {
-    case InstrumentType::AY1:         data = &screenInstrumentAY; break;
-    case InstrumentType::AY2:         data = &screenInstrumentAY2; break;
-    case InstrumentType::AYSample:    data = &screenInstrumentAYSample; break;
-    case InstrumentType::Braids:      data = &screenInstrumentBraids; break;
-    case InstrumentType::Sample:      data = &screenInstrumentSample; break;
-    case InstrumentType::SCWF:        data = &screenInstrumentSCWF; break;
-    case InstrumentType::BYOWTBL:     data = &screenInstrumentBYOWTBL; break;
-    case InstrumentType::Plaits:      data = &screenInstrumentPlaits; break;
-    case InstrumentType::PlaitsAlt:   data = &screenInstrumentPlaits; break;
-    default: break;
-  }
+  static ScreenData* const screens[] = {
+    &screenInstrumentNone, &screenInstrumentAY, &screenInstrumentAY2,
+    &screenInstrumentAYSample, &screenInstrumentBraids, &screenInstrumentSample,
+    &screenInstrumentSCWF, &screenInstrumentBYOWTBL, &screenInstrumentPlaits,
+  };
+  InstrumentScreenKind kind = getInstrumentDefinition(chipnomadState->project.instruments[cInstrument].type)->screen;
+  ScreenData* data = screens[(int)kind];
   data->drawRowHeader = drawRowHeader;
   data->drawColHeader = drawColHeader;
   return data;
@@ -255,6 +242,10 @@ static void init(void) {
   typeButtonDown = 0;
   screenInstrumentNone.cursorRow = 0;
   screenInstrumentNone.cursorCol = 0;
+  SelectionItem* groups[] = {instrumentTypeChip, instrumentTypeSample, instrumentTypeSynth};
+  for (int group = 0; group < 3; ++group)
+    for (int item = 0; item < 3; ++item)
+      groups[group][item].label = getInstrumentDefinition((InstrumentType)groups[group][item].value)->uiName;
 }
 
 static void setup(int input) {
@@ -488,7 +479,7 @@ void instrumentCommonDrawEnvelopePreview(uint8_t attack, uint8_t decay, uint8_t 
 void instrumentCommonDrawLivePreview(void) {
   int track = *pSongTrack;
   int active = track >= 0 && track < chipnomadState->project.tracksCount &&
-    chipnomadState->playbackState.tracks[track].note.instrument == cInstrument &&
+    chipnomadGetPlaybackStatus(chipnomadState)->tracks[track].note.instrument == cInstrument &&
     chipnomadState->voiceMonitors[track].active;
   if (!active) {
     if (livePreviewWasActive) currentScreen->fullRedraw();
@@ -587,7 +578,7 @@ static int inputScreenNavigation(int keys, int tapCount) {
     // To the previous instrument
     if (cInstrument != 0) {
       cInstrument--;
-      playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
+      chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
       fullRedraw();
     }
     return 1;
@@ -595,7 +586,7 @@ static int inputScreenNavigation(int keys, int tapCount) {
     // To the next instrument
     if (cInstrument != PROJECT_MAX_INSTRUMENTS - 1) {
       cInstrument++;
-      playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
+      chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
       fullRedraw();
     }
     return 1;
@@ -603,21 +594,21 @@ static int inputScreenNavigation(int keys, int tapCount) {
     // +16 instruments
     cInstrument += 16;
     if (cInstrument >= PROJECT_MAX_INSTRUMENTS) cInstrument = PROJECT_MAX_INSTRUMENTS - 1;
-    playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
+    chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
     fullRedraw();
     return 1;
   } else if (keys == (keyOpt | keyDown)) {
     // -16 instruments
     cInstrument -= 16;
     if (cInstrument < 0) cInstrument = 0;
-    playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
+    chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
     fullRedraw();
     return 1;
   } else if (keys == (keyEdit | keyPlay)) {
     // Preview instrument
-    if (!instrumentIsEmpty(&chipnomadState->project, cInstrument) && !playbackIsPlaying(&chipnomadState->playbackState)) {
+    if (!instrumentIsEmpty(&chipnomadState->project, cInstrument) && !chipnomadGetPlaybackStatus(chipnomadState)->isPlaying) {
       uint8_t note = instrumentFirstNote(&chipnomadState->project, cInstrument);
-      playbackPreviewNote(&chipnomadState->playbackState, *pSongTrack, note, cInstrument);
+      chipnomadQueuePlaybackPreviewNote(chipnomadState, *pSongTrack, note, cInstrument);
     }
     return 1;
   } else if (keys == (keyShift | keyOpt)) {
@@ -637,7 +628,7 @@ static int inputScreenNavigation(int keys, int tapCount) {
 static int onInput(int isKeyDown, int keys, int tapCount) {
   // Stop preview when keys are released
   if (keys == 0) {
-    playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
+    chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
   }
 
   if (isCharEdit) {

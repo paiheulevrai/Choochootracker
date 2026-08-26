@@ -236,9 +236,49 @@ struct InstrumentFunctions {
   const char* (*modName)(int modIndex);
   int (*init)(Instrument* instrument);
   int (*free)(Instrument* instrument);
+  uint8_t supportsVoicePost;
+  uint8_t supportsTrigger;
+};
+
+// This is metadata, not an audio abstraction: renderers keep their typed
+// paths while screens, validation and motion routing share this one catalogue.
+enum class InstrumentCategory : uint8_t { none, chip, sample, synth };
+enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits };
+enum class InstrumentMotionValue : uint8_t { raw, speed, cutoff };
+
+static constexpr uint8_t instrumentNoFX = 0xff;
+
+struct InstrumentModDestination {
+  const char* name;
+  uint8_t fx;                 // FX enum value, or instrumentNoFX.
+  uint16_t range;             // Native modulation range.
+  InstrumentMotionValue value;
+};
+
+struct InstrumentFX {
+  uint8_t fx;                 // FX enum value (kept byte-sized to avoid a project.h cycle).
+  const char* name;
+};
+
+struct InstrumentDefinition {
+  const char* uiName;
+  InstrumentCategory category;
+  InstrumentScreenKind screen;
+  const InstrumentModDestination* destinations;
+  uint8_t destinationCount;
+  const InstrumentFX* fxList;
+  uint8_t fxCount;
+  InstrumentFunctions functions;
 };
 
 InstrumentFunctions getInstrumentFunctions(InstrumentType type);
+const InstrumentDefinition* getInstrumentDefinition(InstrumentType type);
+const InstrumentModDestination* instrumentModDestination(InstrumentType type, int destination);
+int instrumentMotionDestination(const Instrument* instrument, int destination,
+                                uint8_t* fx, int* base, int* range,
+                                InstrumentMotionValue* value);
+int instrumentFXAvailable(InstrumentType type, uint8_t fx);
+InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument);
 const char* instrumentModDestinationName(InstrumentType type, int destination);
 int instrumentModDestinationMax(InstrumentType type);
 int instrumentGenericModDestination(InstrumentType type, int destination);

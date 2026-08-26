@@ -14,6 +14,7 @@ struct AudioManager {
   int (*start)(int sampleRate, int audioBufferSize);
   void (*pause)(void);
   void (*resume)(void);
+  void (*reinitializeChips)(void);
   void (*stop)();
   void (*toggleTrackMute)(int trackIdx);
   void (*toggleTrackSolo)(int trackIdx);
@@ -25,8 +26,6 @@ struct AudioManager {
 
 // Singleton AudioManager struct
 extern AudioManager audioManager;
-
-extern int pendingReinitChips;
 
 // Track state constants
 #define TRACK_NORMAL 0

@@ -5,6 +5,7 @@
 #include "utils.h"
 
 FXName fxNames[256];
+static FXName instrumentGroupNames[(int)InstrumentType::totalCount][fxTotalCount];
 
 // FX Names organized by groups (in the order as they appear in FX select screen)
 
@@ -37,86 +38,21 @@ FXName fxNamesModulation[] = {
 };
 int fxModulationCount = sizeof(fxNamesModulation) / sizeof(FXName);
 
-// AY1 FX
-FXName fxNamesAY1[] = {
-  {fxAYM, "AYM"}, {fxNOI, "NOI"}, {fxNOA, "NOA"}, {fxERT, "ERT"}, {fxEAU, "EAU"},
-  {fxEVB, "EVB"}, {fxEBN, "EBN"}, {fxESL, "ESL"}, {fxENT, "ENT"}, {fxEPT, "EPT"},
-  {fxEPL, "EPL"}, {fxEPH, "EPH"},
-};
-int fxAY1Count = sizeof(fxNamesAY1) / sizeof(FXName);
-
-// AY2 FX
-FXName fxNamesAY2[] = {
-  // Mixer and noise
-  {fxAYM, "AYM"}, {fxNOI, "NOI"}, {fxNOA, "NOA"},
-  // Tone
-  {fxTNN, "TNN"}, {fxTNP, "TNP"}, {fxTNF, "TNF"}, {fxTRT, "TRT"},
-  // Envelope
-  {fxEAU, "EAU"}, {fxENN, "ENN"}, {fxENP, "ENP"}, {fxENF, "ENF"}, {fxERT, "ERT"},
-  // Software osc
-  {fxSFT, "SFT"}, {fxSFN, "SFN"}, {fxSFP, "SFP"}, {fxSFF, "SFF"}, {fxSRT, "SRT"},
-  {fxSFM, "SFM"}, {fxPWM, "PWM"}, {fxSPL, "SPL"}, {fxSWT, "SWT"},
-};
-int fxAY2Count = sizeof(fxNamesAY2) / sizeof(FXName);
-
-// AYSample FX
-FXName fxNamesAYSample[] = {
-  // Mixer and noise
-  {fxAYM, "AYM"}, {fxNOI, "NOI"}, {fxNOA, "NOA"},
-  // Tone
-  {fxTNN, "TNN"}, {fxTNP, "TNP"}, {fxTNF, "TNF"}, {fxTRT, "TRT"},
-  // Software osc (unified with AY2)
-  {fxSFN, "SFN"}, {fxSFP, "SFP"}, {fxSFF, "SFF"},
-  // Sample-specific
-  {fxSMS, "SMS"},
-};
-int fxAYSampleCount = sizeof(fxNamesAYSample) / sizeof(FXName);
-
-FXName fxNamesBraids[] = {
-  {fxBMD, "BMD"}, {fxBTM, "BTM"}, {fxBCL, "BCL"},
-  {fxBCF, "BCF"}, {fxBRS, "BRS"},
-};
-int fxBraidsCount = sizeof(fxNamesBraids) / sizeof(FXName);
-
-FXName fxNamesSample[] = {
-  {fxSPT, "SPT"}, {fxSST, "SST"}, {fxSEN, "SEN"},
-  {fxSVL, "SVL"}, {fxSCF, "SCF"}, {fxSRS, "SRS"},
-  {fxSSP, "SSP"}, {fxSLP, "SLP"},
-};
-int fxSampleCount = sizeof(fxNamesSample) / sizeof(FXName);
-
-FXName fxNamesSCWF[] = {
-  {fxSDT, "SDT"}, {fxSMX, "SMX"}, {fxSCF2, "SCF"}, {fxSRS2, "SRS"},
-};
-int fxSCWFCount = sizeof(fxNamesSCWF) / sizeof(FXName);
-
-FXName fxNamesBYOWTBL[] = {
-  {fxSDT, "SDT"}, {fxSMX, "SMX"}, {fxBIA, "BIA"}, {fxBIB, "BIB"},
-  {fxSCF2, "SCF"}, {fxSRS2, "SRS"},
-};
-int fxBYOWTBLCount = sizeof(fxNamesBYOWTBL) / sizeof(FXName);
-
-FXName fxNamesPlaits[] = {
-  {fxPMD, "PMD"}, {fxPHA, "PHA"}, {fxPTM, "PTM"}, {fxPMO, "PMO"},
-  {fxPAX, "PAX"}, {fxPCF, "PCF"}, {fxPRS, "PRS"},
-};
-int fxPlaitsCount = sizeof(fxNamesPlaits) / sizeof(FXName);
-
 // FX Groups array. FX counts are filled in fillFXNames()
 FXGroup fxGroups[] = {
   {"Sequencer FX", fxNamesSequencer, 0, 8, InstrumentType::none},
   {"Track FX", fxNamesTrack, 0, 2, InstrumentType::none},
   {"ADSR / Trigger FX", fxNamesEnvelope, 0, 7, InstrumentType::none},
   {"Modulation FX", fxNamesModulation, 0, 5, InstrumentType::none},
-  {"AY Classic FX", fxNamesAY1, 0, 8, InstrumentType::AY1},
-  {"AY Plus FX", fxNamesAY2, 0, 8, InstrumentType::AY2},
-  {"AYSample FX", fxNamesAYSample, 0, 8, InstrumentType::AYSample},
-  {"Braids FX", fxNamesBraids, 0, 5, InstrumentType::Braids},
-  {"Sample FX", fxNamesSample, 0, 6, InstrumentType::Sample},
-  {"2xSCWF FX", fxNamesSCWF, 0, 4, InstrumentType::SCWF},
-  {"BYOWTBL FX", fxNamesBYOWTBL, 0, 6, InstrumentType::BYOWTBL},
-  {"Plaits FX", fxNamesPlaits, 0, 7, InstrumentType::Plaits},
-  {"Plaits-Alt FX", fxNamesPlaits, 0, 7, InstrumentType::PlaitsAlt},
+  {"AY Classic FX", NULL, 0, 8, InstrumentType::AY1},
+  {"AY Plus FX", NULL, 0, 8, InstrumentType::AY2},
+  {"AYSample FX", NULL, 0, 8, InstrumentType::AYSample},
+  {"Braids FX", NULL, 0, 5, InstrumentType::Braids},
+  {"Sample FX", NULL, 0, 6, InstrumentType::Sample},
+  {"2xSCWF FX", NULL, 0, 4, InstrumentType::SCWF},
+  {"BYOWTBL FX", NULL, 0, 6, InstrumentType::BYOWTBL},
+  {"Plaits FX", NULL, 0, 7, InstrumentType::Plaits},
+  {"Plaits-Alt FX", NULL, 0, 7, InstrumentType::PlaitsAlt},
 };
 int fxGroupCount = sizeof(fxGroups) / sizeof(FXGroup);
 
@@ -133,15 +69,20 @@ void fillFXNames() {
   fxGroups[1].count = fxTrackCount;
   fxGroups[2].count = fxEnvelopeCount;
   fxGroups[3].count = fxModulationCount;
-  fxGroups[4].count = fxAY1Count;
-  fxGroups[5].count = fxAY2Count;
-  fxGroups[6].count = fxAYSampleCount;
-  fxGroups[7].count = fxBraidsCount;
-  fxGroups[8].count = fxSampleCount;
-  fxGroups[9].count = fxSCWFCount;
-  fxGroups[10].count = fxBYOWTBLCount;
-  fxGroups[11].count = fxPlaitsCount;
-  fxGroups[12].count = fxPlaitsCount;
+  // Instrument groups are materialized from the declarative catalogue.  The
+  // editor still receives its established FXName view, without duplicating
+  // family availability or labels here.
+  for (int group = 4; group < fxGroupCount; ++group) {
+    InstrumentType type = fxGroups[group].instType;
+    const InstrumentDefinition* definition = getInstrumentDefinition(type);
+    FXName* names = instrumentGroupNames[(int)type];
+    fxGroups[group].fxList = names;
+    fxGroups[group].count = definition->fxCount;
+    for (int i = 0; i < definition->fxCount; ++i) {
+      names[i].fx = (FX)definition->fxList[i].fx;
+      strcpy(names[i].name, definition->fxList[i].name);
+    }
+  }
 
   // Fill FX names from all groups
   for (int g = 0; g < fxGroupCount; g++) {

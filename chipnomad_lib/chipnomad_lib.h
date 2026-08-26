@@ -11,6 +11,7 @@ class SampleVoice;
 class SCWFVoice;
 class PlaitsVoice;
 class PlaitsAltVoice;
+class AudioCommandQueue;
 
 constexpr int VOICE_MONITOR_SAMPLES = 256;
 
@@ -18,6 +19,22 @@ struct VoiceMonitor {
   float samples[VOICE_MONITOR_SAMPLES];
   float envelope;
   uint8_t active;
+};
+
+struct MotionRecordEvent {
+  uint16_t phrase;
+  uint8_t row;
+  uint8_t fx;
+  uint8_t value;
+  uint8_t erase;
+};
+
+// UI-facing copy of the audio state.  The callback never exposes its mutable
+// PlaybackState to the UI.
+struct PlaybackStatus {
+  PlaybackTrackState tracks[PROJECT_MAX_TRACKS];
+  uint8_t trackEnabled[PROJECT_MAX_TRACKS];
+  uint8_t isPlaying;
 };
 class MasterEffects;
 
@@ -34,7 +51,11 @@ typedef SoundChip* (*ChipFactory)(int chipIndex, int sampleRate, ChipSetup setup
 * ChipNomad state encapsulating all library state
 */
 struct ChipNomadState {
+  // The UI is the sole writer of project. The audio callback only reads
+  // audioProject after a tick-boundary snapshot handoff.
   Project project;
+  // UI owns project; the audio callback reads only audioProject.
+  Project audioProject;
   PlaybackState playbackState;
   SoundChip* chips[PROJECT_MAX_CHIPS];
   int sampleRate;
@@ -55,6 +76,8 @@ struct ChipNomadState {
   PlaitsAltVoice* plaitsAltVoices[PROJECT_MAX_TRACKS];
   VoiceMonitor voiceMonitors[PROJECT_MAX_TRACKS];
   MasterEffects* masterEffects;
+  AudioCommandQueue* audioCommands;
+  PlaybackStatus uiPlaybackStatus;
 };
 
 /**
@@ -76,6 +99,27 @@ void chipnomadDestroy(ChipNomadState* state);
 * @param factory Chip factory function, or NULL to use default implementations
 */
 void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory factory);
+
+// Reserve render buffers before starting the audio device. Rendering never
+// grows these buffers, so this must be called again after reconfiguration.
+int chipnomadReserveRenderBuffers(ChipNomadState* state, int frames);
+int chipnomadQueueTrackEnabled(ChipNomadState* state, const uint8_t enabled[PROJECT_MAX_TRACKS]);
+int chipnomadQueueProjectRefresh(ChipNomadState* state);
+void chipnomadQueuePlaybackStop(ChipNomadState* state);
+int chipnomadQueuePlaybackStartSong(ChipNomadState* state, int songRow, int chainRow, int loop);
+int chipnomadQueuePlaybackStartChain(ChipNomadState* state, int trackIdx, int songRow, int chainRow, int loop);
+int chipnomadQueuePlaybackStartPhrase(ChipNomadState* state, int trackIdx, int songRow, int chainRow, int loop);
+int chipnomadQueuePlaybackStartPhraseRow(ChipNomadState* state, int trackIdx, const PhraseRow* row);
+int chipnomadQueuePlaybackQueuePhrase(ChipNomadState* state, int trackIdx, int songRow, int chainRow);
+int chipnomadQueuePlaybackPreviewNote(ChipNomadState* state, int trackIdx, uint8_t note, uint8_t instrument);
+int chipnomadQueuePlaybackStopPreview(ChipNomadState* state, int trackIdx);
+int chipnomadQueuePlaybackClearTrackFX(ChipNomadState* state, int trackIdx);
+void chipnomadQueueLoopRange(ChipNomadState* state, LoopRange range);
+void chipnomadQueueClearLoopRange(ChipNomadState* state);
+const PlaybackStatus* chipnomadGetPlaybackStatus(ChipNomadState* state);
+int chipnomadGetCommandOverflow(ChipNomadState* state);
+int chipnomadGetRenderBufferOverflow(ChipNomadState* state);
+void chipnomadSetRenderBufferOverflow(ChipNomadState* state);
 
 /**
 * Render audio with automatic tick rate handling
@@ -103,7 +147,9 @@ void chipnomadSetLiveStickAxes(float leftVertical, float leftHorizontal,
                                float rightVertical, float rightHorizontal);
 void chipnomadSetLiveStickEnabled(int enabled);
 void chipnomadSetMotionRecordMode(int record, int erase);
-int chipnomadConsumeMotionRecordDirty(void);
+int chipnomadConsumeMotionRecordEvent(MotionRecordEvent* event);
 int chipnomadGetMotionRecordOverflow(void);
+unsigned int chipnomadGetMotionRecordDroppedCount(void);
+void chipnomadSetMotionRecordOverflow(void);
 
 #endif

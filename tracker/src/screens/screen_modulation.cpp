@@ -115,11 +115,9 @@ static void openDestinationPopup(int modIndex) {
   destinationCategories[categoryCount++] = {"ENGINE", -1, engineDestinations, functions.modDestinationsCount + 1};
   destinationCategories[categoryCount++] = {"FX SENDS", -1, sendDestinations, 2};
   destinationCategories[categoryCount++] = {"MODULATORS", -1, parameterDestinations, 16};
-  if (instrument->type == InstrumentType::Braids || instrument->type == InstrumentType::Plaits ||
-      instrument->type == InstrumentType::PlaitsAlt || instrument->type == InstrumentType::Sample ||
-      instrument->type == InstrumentType::SCWF || instrument->type == InstrumentType::BYOWTBL) {
+  if (functions.supportsVoicePost) {
     destinationCategories[categoryCount++] = {"ADSR", -1, envelopeDestinations, 5};
-    if (instrument->type == InstrumentType::Plaits || instrument->type == InstrumentType::PlaitsAlt)
+    if (functions.supportsTrigger)
       destinationCategories[categoryCount++] = {"TRIGGER", -1, triggerDestinations, 2};
   }
   selectionPopupSetup("DESTINATION", destinationCategories, categoryCount,
@@ -541,7 +539,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     destinationButtonDown = 0;
   }
   if (keys == 0) {
-    playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
+    chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
   }
 
   if (keys == (keyDown | keyShift)) {
@@ -551,33 +549,33 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   } else if (keys == (keyOpt | keyLeft)) {
     if (cInstrument != 0) {
       cInstrument--;
-      playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
+      chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
       fullRedraw();
     }
     return 1;
   } else if (keys == (keyOpt | keyRight)) {
     if (cInstrument != PROJECT_MAX_INSTRUMENTS - 1) {
       cInstrument++;
-      playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
+      chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
       fullRedraw();
     }
     return 1;
   } else if (keys == (keyOpt | keyUp)) {
     cInstrument += 16;
     if (cInstrument >= PROJECT_MAX_INSTRUMENTS) cInstrument = PROJECT_MAX_INSTRUMENTS - 1;
-    playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
+    chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
     fullRedraw();
     return 1;
   } else if (keys == (keyOpt | keyDown)) {
     cInstrument -= 16;
     if (cInstrument < 0) cInstrument = 0;
-    playbackStopPreview(&chipnomadState->playbackState, *pSongTrack);
+    chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
     fullRedraw();
     return 1;
   } else if (keys == (keyEdit | keyPlay)) {
-    if (!instrumentIsEmpty(&chipnomadState->project, cInstrument) && !playbackIsPlaying(&chipnomadState->playbackState)) {
+    if (!instrumentIsEmpty(&chipnomadState->project, cInstrument) && !chipnomadGetPlaybackStatus(chipnomadState)->isPlaying) {
       uint8_t note = instrumentFirstNote(&chipnomadState->project, cInstrument);
-      playbackPreviewNote(&chipnomadState->playbackState, *pSongTrack, note, cInstrument);
+      chipnomadQueuePlaybackPreviewNote(chipnomadState, *pSongTrack, note, cInstrument);
     }
     return 1;
   }

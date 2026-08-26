@@ -152,7 +152,7 @@ static Bitmap* drawVoiceWaveform(int trackIdx) {
 }
 
 Bitmap* waveformDisplayGetBitmap(int trackIdx) {
-  PlaybackTrackState* track = &chipnomadState->playbackState.tracks[trackIdx];
+  const PlaybackTrackState* track = &chipnomadGetPlaybackStatus(chipnomadState)->tracks[trackIdx];
 
   if (track->note.instrument != EMPTY_VALUE_8) {
     InstrumentType type = chipnomadState->project.instruments[track->note.instrument].type;

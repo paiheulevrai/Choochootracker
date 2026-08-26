@@ -112,7 +112,7 @@ static int onEdit(int col, int row, CellEditAction action) {
           strncat(summary, change, sizeof(summary) - strlen(summary) - 1);
           chipnomadState->project.trackVolume[i] = autoMixPreview[i];
         }
-        playbackStartSong(&chipnomadState->playbackState, 0, 0, 1);
+        chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1);
         confirmSetup(summary, applyAutoMix, cancelAutoMix);
         screenSetup(&screenConfirm, 0);
       }

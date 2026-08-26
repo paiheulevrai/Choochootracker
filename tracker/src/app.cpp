@@ -37,6 +37,30 @@ static int motionEraseHeld;
 static int motionLiveHeld;
 static int quickHelpSelectHeld;
 static int quickHelpSelectAlone;
+static int audioProjectDirty;
+
+static int applyMotionRecordEvent(const MotionRecordEvent& event) {
+  if (event.phrase >= PROJECT_MAX_PHRASES || event.row >= 16 || event.fx >= fxTotalCount) return 0;
+  PhraseRow* row = &chipnomadState->project.phrases[event.phrase].rows[event.row];
+  int column = -1;
+  for (int i = 2; i >= 0; --i) if (row->fx[i][0] == event.fx) { column = i; break; }
+  if (event.erase) {
+    if (column < 0) return 0;
+    row->fx[column][0] = EMPTY_VALUE_8;
+    row->fx[column][1] = 0;
+    return 1;
+  }
+  if (column < 0)
+    for (int i = 2; i >= 0; --i) if (row->fx[i][0] == EMPTY_VALUE_8) { column = i; break; }
+  if (column < 0) {
+    chipnomadSetMotionRecordOverflow();
+    return 0;
+  }
+  if (row->fx[column][0] == event.fx && row->fx[column][1] == event.value) return 0;
+  row->fx[column][0] = event.fx;
+  row->fx[column][1] = event.value;
+  return 1;
+}
 
 static int isMotionRecordTrigger(InputCode input) {
   for (int i = 0; i < 3; i++)
@@ -92,9 +116,9 @@ static int inputCodeToKey(InputCode input) {
 static void applyLoopRange(void) {
   LoopRange range = screenGetLoopRange(currentScreen);
   if (range.enabled) {
-    playbackSetLoopRange(&chipnomadState->playbackState, range);
+    chipnomadQueueLoopRange(chipnomadState, range);
   } else {
-    playbackClearLoopRange(&chipnomadState->playbackState);
+    chipnomadQueueClearLoopRange(chipnomadState);
   }
 }
 
@@ -108,7 +132,8 @@ static void applyLoopRange(void) {
 static int inputPlayback(int keys, int tapCount) {
   if (!chipnomadState) return 0;
 
-  int isPlaying = playbackIsPlaying(&chipnomadState->playbackState);
+  const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
+  int isPlaying = playback->isPlaying;
   ScreenPlaybackLevel playbackLevel = screenGetPlaybackLevel(currentScreen);
 
   // Play song/chain/phrase depending on the screen's playback level
@@ -117,19 +142,19 @@ static int inputPlayback(int keys, int tapCount) {
       return 0; // This screen doesn't support playback
     }
 
-    playbackStop(&chipnomadState->playbackState);
+    chipnomadQueuePlaybackStop(chipnomadState);
     LoopRange range = screenGetLoopRange(currentScreen);
 
     if (playbackLevel == ScreenPlaybackLevel::song) {
       int startRow = range.enabled ? range.startSongRow : *pSongRow;
-      playbackStartSong(&chipnomadState->playbackState, startRow, 0, 1);
+      chipnomadQueuePlaybackStartSong(chipnomadState, startRow, 0, 1);
       applyLoopRange();
     } else if (playbackLevel == ScreenPlaybackLevel::chain) {
       int startRow = range.enabled ? range.startChainRow : *pChainRow;
-      playbackStartChain(&chipnomadState->playbackState, *pSongTrack, *pSongRow, startRow, 1);
+      chipnomadQueuePlaybackStartChain(chipnomadState, *pSongTrack, *pSongRow, startRow, 1);
       applyLoopRange();
     } else if (playbackLevel == ScreenPlaybackLevel::phrase) {
-      playbackStartPhrase(&chipnomadState->playbackState, *pSongTrack, *pSongRow, *pChainRow, 1);
+      chipnomadQueuePlaybackStartPhrase(chipnomadState, *pSongTrack, *pSongRow, *pChainRow, 1);
       applyLoopRange();
     }
     return 1;
@@ -140,23 +165,23 @@ static int inputPlayback(int keys, int tapCount) {
       return 0; // This screen doesn't support playback
     }
 
-    playbackStop(&chipnomadState->playbackState);
+    chipnomadQueuePlaybackStop(chipnomadState);
     LoopRange range = screenGetLoopRange(currentScreen);
 
     if (playbackLevel == ScreenPlaybackLevel::song) {
       int startRow = range.enabled ? range.startSongRow : *pSongRow;
-      playbackStartSong(&chipnomadState->playbackState, startRow, 0, 1);
+      chipnomadQueuePlaybackStartSong(chipnomadState, startRow, 0, 1);
       applyLoopRange();
     } else if (playbackLevel == ScreenPlaybackLevel::chain || playbackLevel == ScreenPlaybackLevel::phrase) {
       int startChainRow = range.enabled ? range.startChainRow : *pChainRow;
-      playbackStartSong(&chipnomadState->playbackState, *pSongRow, startChainRow, 1);
+      chipnomadQueuePlaybackStartSong(chipnomadState, *pSongRow, startChainRow, 1);
       applyLoopRange();
     }
     return 1;
   }
   // Stop playback
   else if (isPlaying && keys == keyPlay) {
-    playbackStop(&chipnomadState->playbackState);
+    chipnomadQueuePlaybackStop(chipnomadState);
     return 1;
   }
   return 0;
@@ -171,8 +196,8 @@ static int inputPlayback(int keys, int tapCount) {
 */
 static void appInput(int isKeyDown, int keys, int tapCount) {
   // Stop phrase row and preview
-  if (chipnomadState->playbackState.tracks[*pSongTrack].mode == PlaybackMode::phraseRow && keys == 0) {
-    playbackStop(&chipnomadState->playbackState);
+  if (chipnomadGetPlaybackStatus(chipnomadState)->tracks[*pSongTrack].mode == PlaybackMode::phraseRow && keys == 0) {
+    chipnomadQueuePlaybackStop(chipnomadState);
   }
   // Let screen handle input first, then try global playback if not handled
   if (!currentScreen->onInput(isKeyDown, keys, tapCount)) {
@@ -180,6 +205,8 @@ static void appInput(int isKeyDown, int keys, int tapCount) {
       inputPlayback(keys, tapCount);
     }
   }
+  // The UI owns Project. Coalesce edits into one snapshot for the next audio tick.
+  if (isKeyDown) audioProjectDirty = 1;
 }
 
 
@@ -329,7 +356,7 @@ void appDraw(void) {
       gfxDrawBitmap(waveformBitmap, 36, 3 + c);
     }
 
-    uint8_t note = chipnomadState->playbackState.tracks[c].note.pitchFinal;
+    uint8_t note = chipnomadGetPlaybackStatus(chipnomadState)->tracks[c].note.pitchFinal;
     const char* noteStr = noteName(&chipnomadState->project, note);
 
     // Use warning color if track warning is active
@@ -340,12 +367,14 @@ void appDraw(void) {
       gfxPrint(37, 3 + c, noteStr);
   }
 
+  int realtimeOverflow = chipnomadGetMotionRecordOverflow() ||
+    chipnomadGetCommandOverflow(chipnomadState) || chipnomadGetRenderBufferOverflow(chipnomadState);
   if (motionEraseHeld) {
     gfxSetFgColor(cs.warning);
     gfxPrint(39, 19, "x");
   } else if (motionRecordHeld) {
-    gfxSetFgColor(chipnomadGetMotionRecordOverflow() ? cs.warning : cs.textTitles);
-    gfxPrint(39, 19, chipnomadGetMotionRecordOverflow() ? "!" : "*");
+    gfxSetFgColor(realtimeOverflow ? cs.warning : cs.textTitles);
+    gfxPrint(39, 19, realtimeOverflow ? "!" : "*");
   } else if (motionLiveHeld) {
     gfxSetFgColor(cs.textTitles);
     gfxPrint(39, 19, "~");
@@ -488,11 +517,17 @@ void appOnEvent(MainLoopEventData eventData) {
     chipnomadSetLiveStickAxes(eventData.data.axes[0], eventData.data.axes[1],
                               eventData.data.axes[2], eventData.data.axes[3]);
     break;
-  case MainLoopEvent::tick:
-    if (chipnomadConsumeMotionRecordDirty()) {
+  case MainLoopEvent::tick: {
+    int motionRecordChanged = 0;
+    MotionRecordEvent motionRecordEvent;
+    while (chipnomadConsumeMotionRecordEvent(&motionRecordEvent))
+      motionRecordChanged |= applyMotionRecordEvent(motionRecordEvent);
+    if (motionRecordChanged) {
       projectModified = 1;
+      audioProjectDirty = 1;
       if (currentScreen == &screenPhrase) currentScreen->fullRedraw();
     }
+    if (audioProjectDirty && chipnomadQueueProjectRefresh(chipnomadState)) audioProjectDirty = 0;
     // Autosave
     if (++autosaveCounter >= AUTOSAVE_INTERVAL_FRAMES) {
       autosaveCounter = 0;
@@ -524,6 +559,7 @@ void appOnEvent(MainLoopEventData eventData) {
       }
     }
     break;
+  }
   case MainLoopEvent::exit:
     // Auto-save the current project and settings on exit
     projectSave(&chipnomadState->project, getAutosavePath());
@@ -534,7 +570,7 @@ void appOnEvent(MainLoopEventData eventData) {
     audioManager.pause();
     if (chipnomadState) {
       // Stop playback to avoid state issues
-      playbackStop(&chipnomadState->playbackState);
+      chipnomadQueuePlaybackStop(chipnomadState);
       // Auto-save project
       projectSave(&chipnomadState->project, getAutosavePath());
     }

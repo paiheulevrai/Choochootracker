@@ -65,6 +65,82 @@ struct PlaybackFixture {
   }
 };
 
+TEST_CASE("track enable commands apply on the audio tick") {
+  PlaybackFixture fixture;
+  uint8_t enabled[PROJECT_MAX_TRACKS];
+  memset(enabled, 1, sizeof(enabled));
+  enabled[0] = 0;
+  REQUIRE(chipnomadQueueTrackEnabled(fixture.state, enabled));
+
+  float buffer[2] = {};
+  chipnomadRender(fixture.state, buffer, 1);
+
+  CHECK(fixture.state->playbackState.trackEnabled[0] == 0);
+}
+
+TEST_CASE("project refresh applies on the audio tick") {
+  PlaybackFixture fixture;
+  fixture.state->project.trackVolume[0] = 23;
+  REQUIRE(chipnomadQueueProjectRefresh(fixture.state));
+
+  float buffer[2] = {};
+  chipnomadRender(fixture.state, buffer, 1);
+
+  CHECK(fixture.state->audioProject.trackVolume[0] == 23);
+}
+
+TEST_CASE("latest project snapshot wins before the audio tick") {
+  PlaybackFixture fixture;
+  fixture.state->project.trackVolume[0] = 23;
+  REQUIRE(chipnomadQueueProjectRefresh(fixture.state));
+  fixture.state->project.trackVolume[0] = 71;
+  REQUIRE(chipnomadQueueProjectRefresh(fixture.state));
+
+  float buffer[2] = {};
+  chipnomadRender(fixture.state, buffer, 1);
+
+  CHECK(fixture.state->audioProject.trackVolume[0] == 71);
+}
+
+TEST_CASE("transport commands apply after the project snapshot") {
+  PlaybackFixture fixture;
+  fixture.state->project.song[0][0] = EMPTY_VALUE_16;
+  REQUIRE(chipnomadQueueProjectRefresh(fixture.state));
+  REQUIRE(chipnomadQueuePlaybackStartSong(fixture.state, 0, 0, 1));
+
+  float buffer[2] = {};
+  chipnomadRender(fixture.state, buffer, 1);
+
+  CHECK(fixture.state->playbackState.p == &fixture.state->audioProject);
+}
+
+TEST_CASE("transport queue reports overflow without touching playback") {
+  PlaybackFixture fixture;
+  for (int i = 0; i < 63; ++i)
+    REQUIRE(chipnomadQueuePlaybackPreviewNote(fixture.state, 0, 48, 0));
+  CHECK_FALSE(chipnomadQueuePlaybackPreviewNote(fixture.state, 0, 48, 0));
+  CHECK(chipnomadGetCommandOverflow(fixture.state));
+}
+
+TEST_CASE("oversize render is rejected without growing buffers") {
+  PlaybackFixture fixture;
+  float buffer[2] = {};
+  fixture.state->frameSampleCounter = (float)(fixture.state->mixBufferSize / 2 + 1);
+  CHECK(chipnomadRender(fixture.state, buffer, fixture.state->mixBufferSize / 2 + 1) == 0);
+  CHECK(chipnomadGetRenderBufferOverflow(fixture.state));
+}
+
+TEST_CASE("playback stop command applies on the audio tick") {
+  PlaybackFixture fixture;
+  playbackStartSong(&fixture.state->playbackState, 0, 0, 1);
+  chipnomadQueuePlaybackStop(fixture.state);
+
+  float buffer[2] = {};
+  chipnomadRender(fixture.state, buffer, 1);
+
+  CHECK_FALSE(playbackIsPlaying(&fixture.state->playbackState));
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "playback init all tracks stopped") {
   CHECK_FALSE(playbackIsPlaying(&state->playbackState));
 }
@@ -230,6 +306,7 @@ TEST_CASE_FIXTURE(PlaybackFixture, "ADSR volume envelope ranges") {
 
 TEST_CASE_FIXTURE(PlaybackFixture, "Braids instrument renders through a tracker track") {
   getInstrumentFunctions(InstrumentType::Braids).init(&state->project.instruments[0]);
+  REQUIRE(chipnomadQueueProjectRefresh(state));
   playbackPreviewNote(&state->playbackState, 0, 60, 0);
 
   float buffer[2048];
@@ -250,6 +327,7 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Braids instrument renders through a tracker 
 
 TEST_CASE_FIXTURE(PlaybackFixture, "Plaits instrument renders and receives note off") {
   getInstrumentFunctions(InstrumentType::Plaits).init(&state->project.instruments[0]);
+  REQUIRE(chipnomadQueueProjectRefresh(state));
   playbackPreviewNote(&state->playbackState, 0, 60, 0);
 
   float buffer[2048];

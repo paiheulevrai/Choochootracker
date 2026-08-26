@@ -60,7 +60,11 @@ These directories are references only. Working code belongs in the fork so local
 
 ## What comes from ChipNomad
 
-ChipNomad already separates sequencing from audio generation. The sequencer advances on each tick, then `chipnomadRender()` asks each engine for an audio block and mixes the results into a floating-point stereo buffer.
+ChipNomad separates sequencing from audio generation. The UI owns the editable
+project while the audio callback renders an execution snapshot. Edits are
+published through fixed slots and adopted at the next tick; transport commands
+use a fixed queue. `chipnomadRender()` then asks each engine for an audio block
+and mixes the results into a floating-point stereo buffer without allocating.
 
 The original base provides:
 
