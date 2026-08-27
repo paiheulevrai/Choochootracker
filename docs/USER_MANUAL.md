@@ -235,7 +235,7 @@ The model popup contains every model exactly once:
 
 **aChChid** is a monophonic acid bass engine based on Open303. `Square` and `Saw` use its native TB-303 oscillator, filter, envelope and accent behavior. `Braids` replaces only the oscillator, then continues through the same 303 filter and amplifier path; it exposes Model, Timbre and Color instead of Fine tune. aChChid does not use ChooChoo's unified post-filter or ADSR.
 
-An `F` in the note volume column triggers accent. `ASL` makes that note slide from the preceding pitch without retriggering the 303 envelope; `ASL 00` is a 60 ms glide. Notes without `ASL` always retrigger.
+An `F` in the note volume column triggers accent. `ASL` makes that note slide from the preceding pitch without retriggering the 303 envelope; `ASL 00` is a 60 ms glide. Notes without `ASL` always retrigger. Its modulation destinations include Decay and Accent, plus Timbre and Color in Braids wave mode.
 
 ### Plaits
 
@@ -425,6 +425,13 @@ The value is interpreted as a signed 8-bit relative change (`01` adds one, `FF` 
 | FX | Value | Meaning |
 |---|---|---|
 | `ASL` | `00-FF` | Slide to the note without retriggering. `00` is 60 ms; higher values extend the glide. |
+| `ADC` | `00-FF` | Decay override: 200 ms to 2 s. |
+| `AAC` | `00-FF` | Accent amount: none to maximum. |
+| `ATM` | `00-FF` | Braids Timbre override; active only in Braids wave mode. |
+| `ACL` | `00-FF` | Braids Color override; active only in Braids wave mode. |
+| `ACF` | `00-FF` | Exponential 303 filter cutoff, 20 Hz to 20 kHz. |
+| `ARS` | `00-FF` | 303 filter resonance, none to maximum. |
+| `AEM` | `00-FF` | 303 filter envelope modulation, none to maximum. |
 
 ### Plaits FX
 

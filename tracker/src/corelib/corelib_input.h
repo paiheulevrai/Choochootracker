@@ -27,6 +27,11 @@ enum Key {
   keyUnmapped = 0x400,
 };
 
+enum GamepadInputCode {
+  gamepadTriggerLeft = 0x1000,
+  gamepadTriggerRight,
+};
+
 // Initialize default key mappings based on platform/keyboard layout
 void inputInitDefaultKeyMapping(void);
 

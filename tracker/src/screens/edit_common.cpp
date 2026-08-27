@@ -10,6 +10,22 @@ CellEditAction convertMultiAction(CellEditAction action) {
   return action;
 }
 
+PopupEditInput popupEditInput(int isKeyDown, int keys, int* buttonDown) {
+  if (isKeyDown && keys == keyEdit) {
+    *buttonDown = 1;
+    return PopupEditInput::hold;
+  }
+  if (isKeyDown && (keys == (keyEdit | keyLeft) || keys == (keyEdit | keyRight))) {
+    *buttonDown = 0;
+    return PopupEditInput::cycle;
+  }
+  if (!isKeyDown && keys == 0 && *buttonDown) {
+    *buttonDown = 0;
+    return PopupEditInput::open;
+  }
+  return PopupEditInput::none;
+}
+
 int isMultiAction(CellEditAction action) {
   return action == CellEditAction::multiIncrease || action == CellEditAction::multiDecrease || action == CellEditAction::multiIncreaseBig || action == CellEditAction::multiDecreaseBig;
 }

@@ -518,20 +518,16 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   if (getModRow(screenData.cursorRow) == 1) {
     Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
     Modulation* mod = &instrument->modulation[getModIndex(screenData.cursorCol, screenData.cursorRow)];
-    if (isKeyDown && keys == keyEdit) {
-      destinationButtonDown = 1;
-      return 1;
-    }
-    if (isKeyDown && (keys == (keyEdit | keyLeft) || keys == (keyEdit | keyRight))) {
+    PopupEditInput input = popupEditInput(isKeyDown, keys, &destinationButtonDown);
+    if (input == PopupEditInput::cycle) {
       int maximum = instrumentModDestinationMax(instrument->type);
       cycle8(&mod->destination, keys == (keyEdit | keyRight) ? 1 : -1, 0, maximum, 1);
-      destinationButtonDown = 0;
       projectModified = 1;
       drawField(screenData.cursorCol, screenData.cursorRow, CellState::focus);
       return 1;
     }
-    if (!isKeyDown && keys == 0 && destinationButtonDown) {
-      destinationButtonDown = 0;
+    if (input == PopupEditInput::hold) return 1;
+    if (input == PopupEditInput::open) {
       openDestinationPopup(getModIndex(screenData.cursorCol, screenData.cursorRow));
       return 1;
     }

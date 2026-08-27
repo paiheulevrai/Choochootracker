@@ -263,7 +263,7 @@ static const InstrumentModDestination destSample[] = {N,D("Volume",instrumentNoF
 static const InstrumentModDestination destPlaits[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Harmonic",fxPHA,16384,InstrumentMotionValue::raw),D("Timbre",fxPTM,16384,InstrumentMotionValue::raw),D("Morph",fxPMO,16384,InstrumentMotionValue::raw),D("AuxMix",fxPAX,255,InstrumentMotionValue::raw),D("Cutoff",fxPCF,20000,InstrumentMotionValue::cutoff),D("Reso",fxPRS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destSCWF[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Detune",fxSDT,255,InstrumentMotionValue::raw),D("Mix",fxSMX,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF2,20000,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destBYOWTBL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Detune",fxSDT,255,InstrumentMotionValue::raw),D("Mix",fxSMX,255,InstrumentMotionValue::raw),D("Index A",fxBIA,255,InstrumentMotionValue::raw),D("Index B",fxBIB,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF2,20000,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
-static const InstrumentModDestination destAChChid[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Cutoff",instrumentNoFX,20000,InstrumentMotionValue::cutoff),D("Reso",instrumentNoFX,100,InstrumentMotionValue::raw),D("EnvMod",instrumentNoFX,100,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destAChChid[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Cutoff",fxACF,20000,InstrumentMotionValue::cutoff),D("Reso",fxARS,255,InstrumentMotionValue::raw),D("EnvMod",fxAEM,255,InstrumentMotionValue::raw),D("Decay",fxADC,255,InstrumentMotionValue::raw),D("Accent",fxAAC,255,InstrumentMotionValue::raw),D("Timbre",fxATM,16384,InstrumentMotionValue::raw),D("Color",fxACL,16384,InstrumentMotionValue::raw)};
 #undef N
 #undef D
 #define F(f, n) {(uint8_t)(f), n}
@@ -275,7 +275,7 @@ static const InstrumentFX fxSample[]={F(fxSPT,"SPT"),F(fxSST,"SST"),F(fxSEN,"SEN
 static const InstrumentFX fxSCWF[]={F(fxSDT,"SDT"),F(fxSMX,"SMX"),F(fxSCF2,"SCF"),F(fxSRS2,"SRS")};
 static const InstrumentFX fxBYOWTBL[]={F(fxSDT,"SDT"),F(fxSMX,"SMX"),F(fxBIA,"BIA"),F(fxBIB,"BIB"),F(fxSCF2,"SCF"),F(fxSRS2,"SRS")};
 static const InstrumentFX fxPlaits[]={F(fxPMD,"PMD"),F(fxPHA,"PHA"),F(fxPTM,"PTM"),F(fxPMO,"PMO"),F(fxPAX,"PAX"),F(fxPCF,"PCF"),F(fxPRS,"PRS")};
-static const InstrumentFX fxAChChid[]={F(fxASL,"ASL")};
+static const InstrumentFX fxAChChid[]={F(fxASL,"ASL"),F(fxADC,"ADC"),F(fxAAC,"AAC"),F(fxATM,"ATM"),F(fxACL,"ACL"),F(fxACF,"ACF"),F(fxARS,"ARS"),F(fxAEM,"AEM")};
 #undef F
 #define COUNT(a) (uint8_t)(sizeof(a) / sizeof((a)[0]))
 static const InstrumentDefinition instrumentDefinitions[] = {
@@ -341,6 +341,8 @@ int instrumentMotionDestination(const Instrument* instrument, int destination, u
       *base = destination == 3 ? instrument->chip.scwf.detune : destination == 4 ? instrument->chip.scwf.mix : destination == 5 ? instrument->chip.scwf.filterCutoffHz : instrument->chip.scwf.filterResonance; break;
     case InstrumentType::BYOWTBL:
       *base = destination == 3 ? instrument->chip.byowtbl.detune : destination == 4 ? instrument->chip.byowtbl.mix : destination == 5 ? instrument->chip.byowtbl.frameIndex[0] : destination == 6 ? instrument->chip.byowtbl.frameIndex[1] : destination == 7 ? instrument->chip.byowtbl.filterCutoffHz : instrument->chip.byowtbl.filterResonance; break;
+    case InstrumentType::AChChid:
+      *base = destination == 3 ? instrument->chip.achchid.cutoff : destination == 4 ? instrument->chip.achchid.resonance * 255 / 100 : destination == 5 ? instrument->chip.achchid.envMod * 255 / 100 : destination == 6 ? instrument->chip.achchid.decay * 255 / 2000 : destination == 7 ? instrument->chip.achchid.accent * 255 / 100 : destination == 8 ? (instrument->chip.achchid.timbre + 64) / 129 : (instrument->chip.achchid.color + 64) / 129; break;
     default: return 0;
   }
   return 1;

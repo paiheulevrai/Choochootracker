@@ -92,21 +92,16 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     modelButtonDown = 0;
     return 0;
   }
-  if (isKeyDown && keys == keyEdit) {
-    modelButtonDown = 1;
-    return 1;
-  }
-  if (isKeyDown && (keys == (keyEdit | keyLeft) ||
-                    keys == (keyEdit | keyRight))) {
+  PopupEditInput input = popupEditInput(isKeyDown, keys, &modelButtonDown);
+  if (input == PopupEditInput::cycle) {
     cycle8(&chipnomadState->project.instruments[cInstrument].chip.braids.model,
       keys == (keyEdit | keyRight) ? 1 : -1, 0, 46, 0);
     projectModified = 1;
     screenFullRedraw(&screenInstrumentBraids);
-    modelButtonDown = 0;
     return 1;
   }
-  if (!isKeyDown && keys == 0 && modelButtonDown) {
-    modelButtonDown = 0;
+  if (input == PopupEditInput::hold) return 1;
+  if (input == PopupEditInput::open) {
     openModelSelection();
     return 1;
   }

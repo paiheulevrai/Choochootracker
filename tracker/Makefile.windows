@@ -14,7 +14,7 @@ OUTPUT_EXT = .exe
 SDL_CFLAGS := $(filter-out -Dmain=SDL_main,$(shell sdl2-config --cflags))
 SDL_LIBS := $(shell sdl2-config --libs)
 
-XTRA_CFLAGS = $(SDL_CFLAGS) -DDESKTOP_BUILD -D__USE_MINGW_ANSI_STDIO=1
+XTRA_CFLAGS = $(SDL_CFLAGS) -DDESKTOP_BUILD -DGAMEPAD_SUPPORT -D__USE_MINGW_ANSI_STDIO=1
 XTRA_LIBS = $(SDL_LIBS) -static-libgcc -static-libstdc++
 WINDOWS_CFLAGS = $(filter-out -flto,$(COMMON_CFLAGS))
 CFLAGS = $(WINDOWS_CFLAGS) $(INCLUDES) $(XTRA_CFLAGS)

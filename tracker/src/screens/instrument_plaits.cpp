@@ -157,21 +157,16 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     engineButtonDown = 0;
     return 0;
   }
-  if (isKeyDown && keys == keyEdit) {
-    engineButtonDown = 1;
-    return 1;
-  }
-  if (isKeyDown && (keys == (keyEdit | keyLeft) ||
-                    keys == (keyEdit | keyRight))) {
+  PopupEditInput input = popupEditInput(isKeyDown, keys, &engineButtonDown);
+  if (input == PopupEditInput::cycle) {
     cycle8(&chipnomadState->project.instruments[cInstrument].chip.plaits.engine,
       keys == (keyEdit | keyRight) ? 1 : -1, 0, 23, 0);
     projectModified = 1;
     screenFullRedraw(&screenInstrumentPlaits);
-    engineButtonDown = 0;
     return 1;
   }
-  if (!isKeyDown && keys == 0 && engineButtonDown) {
-    engineButtonDown = 0;
+  if (input == PopupEditInput::hold) return 1;
+  if (input == PopupEditInput::open) {
     openEngineSelection();
     return 1;
   }

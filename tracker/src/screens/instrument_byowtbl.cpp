@@ -111,16 +111,17 @@ static int edit(int col, int row, CellEditAction action) {
 static int input(int isKeyDown, int keys, int) {
   int row = screenInstrumentBYOWTBL.cursorRow;
   if ((row != 3 && row != 4) || screenInstrumentBYOWTBL.cursorCol) { buttonDown = 0; return 0; }
-  if (isKeyDown && (keys == (keyEdit | keyLeft) || keys == (keyEdit | keyRight))) {
+  PopupEditInput input = popupEditInput(isKeyDown, keys, &buttonDown);
+  if (input == PopupEditInput::cycle) {
     InstrumentBYOWTBL* table = &chipnomadState->project.instruments[cInstrument].chip.byowtbl;
     int direction = keys == (keyEdit | keyRight) ? 1 : -1;
     char path[PROJECT_SAMPLE_PATH_LENGTH + 1];
     if (fileBrowserGetAdjacentPath(table->oscillator[row - 3].path, ".wav", direction, path, sizeof(path))) { loadSlot = row - 3; loaded(path); }
     return 1;
   }
-  if (isKeyDown && keys == keyEdit) { buttonDown = 1; return 1; }
-  if (!isKeyDown && !keys && buttonDown) {
-    buttonDown = 0; loadSlot = row - 3;
+  if (input == PopupEditInput::hold) return 1;
+  if (input == PopupEditInput::open) {
+    loadSlot = row - 3;
     fileBrowserSetup("LOAD SR WAVETABLE", ".wav", appSettings.srWavetablePath, loaded, cancelled);
     screenSetup(&screenFileBrowser, 0); return 1;
   }

@@ -27,6 +27,7 @@ static void applyVoiceEvents(ChipNomadState* state);
 static int hasAudioRateModulation(const ChipNomadState* state);
 static void updateAudioRateModulations(ChipNomadState* state);
 static void motionRecordFrame(ChipNomadState* state);
+static int instrumentFXCutoff(uint8_t value);
 
 class AudioCommandQueue {
  public:
@@ -247,7 +248,10 @@ static int motionDestinationFX(const Instrument* instrument, const PlaybackTrack
   uint8_t rawFX;
   if (!instrumentMotionDestination(instrument, destination, &rawFX, base, range, value)) return 0;
   *fx = (FX)rawFX;
-  if (track->note.fx[*fx].isOn) *base = track->note.fx[*fx].fxValue;
+  if (track->note.fx[*fx].isOn)
+    *base = *value == InstrumentMotionValue::cutoff
+      ? (int)instrumentFXCutoff(track->note.fx[*fx].fxValue)
+      : track->note.fx[*fx].fxValue;
   return 1;
 }
 
@@ -1137,22 +1141,36 @@ static void updateAChChidVoices(ChipNomadState* state) {
     }
     InstrumentAChChid* a = &project->instruments[track->note.instrument].chip.achchid;
     int cutoff = a->cutoff, resonance = a->resonance, envMod = a->envMod;
+    int decay = a->decay, accent = a->accent;
+    int timbre = a->timbre, color = a->color;
     float gain = phraseGain(track, &project->instruments[track->note.instrument]);
+    if (track->note.fx[fxACF].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxACF].fxValue);
+    if (track->note.fx[fxARS].isOn) resonance = track->note.fx[fxARS].fxValue * 100 / 255;
+    if (track->note.fx[fxAEM].isOn) envMod = track->note.fx[fxAEM].fxValue * 100 / 255;
+    if (track->note.fx[fxADC].isOn) decay = 200 + track->note.fx[fxADC].fxValue * 1800 / 255;
+    if (track->note.fx[fxAAC].isOn) accent = track->note.fx[fxAAC].fxValue * 100 / 255;
+    if (a->wave == AChChidWave::braids) {
+      timbre = slewEngineFX(track, fxATM, track->note.fx[fxATM].isOn ? track->note.fx[fxATM].fxValue : timbre / 129) * 129;
+      color = slewEngineFX(track, fxACL, track->note.fx[fxACL].isOn ? track->note.fx[fxACL].fxValue : color / 129) * 129;
+    }
     for (int i = 0; i < 4; ++i) {
       PlaybackModState* mod = &track->note.modulation[i];
       if (!mod->modulation) continue;
-      int value = playbackModScaleToRange(mod->outValue, mod->modulation->destination == 3 ? 20000 : 100);
       switch (mod->modulation->destination) {
-        case 1: gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value / 255.0f; break;
-        case 3: cutoff += value; break;
-        case 4: resonance += value; break;
-        case 5: envMod += value; break;
+        case 1: { int value = playbackModScaleToRange(mod->outValue, 255); gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value / 255.0f; break; }
+        case 3: cutoff += playbackModScaleToRange(mod->outValue, 20000); break;
+        case 4: resonance += playbackModScaleToRange(mod->outValue, 100); break;
+        case 5: envMod += playbackModScaleToRange(mod->outValue, 100); break;
+        case 6: decay += playbackModScaleToRange(mod->outValue, 1800); break;
+        case 7: accent += playbackModScaleToRange(mod->outValue, 100); break;
+        case 8: if (a->wave == AChChidWave::braids) timbre += playbackModScaleToRange(mod->outValue, 16384); break;
+        case 9: if (a->wave == AChChidWave::braids) color += playbackModScaleToRange(mod->outValue, 16384); break;
       }
     }
-    voice->configure((uint8_t)a->wave, a->fineTune, a->model, a->timbre, a->color,
+    voice->configure((uint8_t)a->wave, a->fineTune, a->model, (uint16_t)clampInt(timbre, 0, 32767), (uint16_t)clampInt(color, 0, 32767),
       (uint16_t)clampInt(cutoff, 200, 20000), (uint8_t)clampInt(resonance, 0, 100),
-      (uint8_t)clampInt(envMod, 0, 100), (uint16_t)clampInt(a->decay, 200, 2000),
-      a->accent, gain < 0.0f ? 0.0f : gain);
+      (uint8_t)clampInt(envMod, 0, 100), (uint16_t)clampInt(decay, 200, 2000),
+      (uint8_t)clampInt(accent, 0, 100), gain < 0.0f ? 0.0f : gain);
   }
 }
 

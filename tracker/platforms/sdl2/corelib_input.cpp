@@ -93,8 +93,8 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyPlay[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_START};
   appSettings.keyMapping.keyShift[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_BACK};
   appSettings.keyMapping.keyMotionLive[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER};
-  appSettings.keyMapping.keyMotionRecord[1] = (InputCode){InputDeviceType::none, 0};
-  appSettings.keyMapping.keyMotionErase[1] = (InputCode){InputDeviceType::none, 0};
+  appSettings.keyMapping.keyMotionRecord[1] = (InputCode){InputDeviceType::gamepad, gamepadTriggerLeft};
+  appSettings.keyMapping.keyMotionErase[1] = (InputCode){InputDeviceType::gamepad, gamepadTriggerRight};
 #else
   // PortMaster: keyboard only
   appSettings.keyMapping.keyUp[1] = (InputCode){InputDeviceType::none, 0};
@@ -141,6 +141,8 @@ const char* inputGetKeyName(InputCode input) {
       case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return "PadDown";
       case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return "PadLeft";
       case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return "PadRght";
+      case gamepadTriggerLeft: return "Pad L2";
+      case gamepadTriggerRight: return "Pad R2";
       default: return "Pad ?";
     }
   }

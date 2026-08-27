@@ -65,7 +65,7 @@ static void resetNoteFX(PlaybackState* state, int trackIdx) {
 static void resetInstrumentFX(PlaybackTrackState* track) {
   for (int i = fxBMD; i <= fxPRS; i++) track->note.fx[i].isOn = 0;
   for (int i = fxRSN; i <= fxTCL; i++) track->note.fx[i].isOn = 0;
-  track->note.fx[fxASL].isOn = 0;
+  for (int i = fxASL; i <= fxAEM; ++i) track->note.fx[i].isOn = 0;
 }
 
 static void resetTrack(PlaybackState* state, int trackIdx) {

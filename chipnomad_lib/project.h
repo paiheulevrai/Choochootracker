@@ -145,6 +145,13 @@ enum FX {
 
   // aChChid FX. Appended to preserve project FX IDs.
   fxASL,
+  fxADC, // Decay
+  fxAAC, // Accent
+  fxATM, // Braids timbre
+  fxACL, // Braids color
+  fxACF, // 303 filter cutoff
+  fxARS, // 303 filter resonance
+  fxAEM, // 303 envelope modulation
 
   // Total count - must be last
   fxTotalCount

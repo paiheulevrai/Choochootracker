@@ -39,6 +39,13 @@ enum class ScreenPlaybackLevel : int {
   phrase,
 };
 
+enum class PopupEditInput : int {
+  none,
+  hold,
+  cycle,
+  open,
+};
+
 struct AppScreen {
   void (*init)(void);
   void (*setup)(int input);
@@ -142,6 +149,7 @@ int applyTableRotation(int tableIdx, int startRow, int endRow, int direction);
 int applySongMoveDown(int startCol, int startRow, int endCol, int endRow);
 int applySongMoveUp(int startCol, int startRow, int endCol, int endRow);
 CellEditAction convertMultiAction(CellEditAction action);
+PopupEditInput popupEditInput(int isKeyDown, int keys, int* buttonDown);
 
 // Character edit
 int editCharacter(CellEditAction action, char* str, int idx, int maxLen);

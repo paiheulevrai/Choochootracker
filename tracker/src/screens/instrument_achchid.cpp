@@ -53,5 +53,15 @@ static int onEdit(int col,int row,CellEditAction action) {
   else if(col && row==7) ok=edit8noLast(action,&a->accent,5,0,100);
   if(ok){projectModified=1;screenFullRedraw(&screenInstrumentAChChid);} return ok;
 }
-static int onInput(int down,int keys,int taps) { if(screenInstrumentAChChid.cursorRow!=4||screenInstrumentAChChid.cursorCol||!isBraids()){modelButtonDown=0;return 0;} if(down&&keys==keyEdit){modelButtonDown=1;return 1;} if(!down&&keys==0&&modelButtonDown){modelButtonDown=0;openModel();return 1;} return 0; }
+static int onInput(int down,int keys,int taps) {
+  if(screenInstrumentAChChid.cursorRow!=4||screenInstrumentAChChid.cursorCol||!isBraids()){modelButtonDown=0;return 0;}
+  PopupEditInput input=popupEditInput(down,keys,&modelButtonDown);
+  if(input==PopupEditInput::cycle) {
+    cycle8(&instrument()->model,keys==(keyEdit|keyRight)?1:-1,0,46,0);
+    projectModified=1; screenFullRedraw(&screenInstrumentAChChid); return 1;
+  }
+  if(input==PopupEditInput::hold) return 1;
+  if(input==PopupEditInput::open){openModel();return 1;}
+  return 0;
+}
 ScreenData screenInstrumentAChChid={.rows=8,.cursorRow=0,.cursorCol=0,.topRow=0,.selectMode=-1,.playbackLevel=ScreenPlaybackLevel::none,.getColumnCount=columns,.drawStatic=drawStatic,.drawCursor=drawCursor,.drawSelection=NULL,.drawRowHeader=NULL,.drawColHeader=NULL,.drawField=drawField,.onEdit=onEdit,.onInput=onInput,.onRawInput=NULL,.isCellValid=isCellValid,.getLoopRange=NULL};

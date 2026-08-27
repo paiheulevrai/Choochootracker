@@ -11,6 +11,7 @@
 #ifdef GAMEPAD_SUPPORT
 // Gamepad support
 static SDL_GameController* gameController = NULL;
+static int gamepadTriggerDown[2] = {};
 
 static void initGamepad(void) {
 #ifdef TOUCH_INPUT
@@ -238,10 +239,33 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     eventData.type = MainLoopEvent::gamepadAxes;
     for (int axis = 0; axis < 4; ++axis) eventData.data.axes[axis] = 0.0f;
     if (gameController && SDL_GameControllerGetAttached(gameController)) {
+      int triggers[] = {
+        SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16384,
+        SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16384,
+      };
+      for (int trigger = 0; trigger < 2; ++trigger) {
+        if (triggers[trigger] != gamepadTriggerDown[trigger]) {
+          eventData.type = triggers[trigger] ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
+          eventData.data.input = (InputCode){InputDeviceType::gamepad, gamepadTriggerLeft + trigger};
+          onEvent(eventData);
+          gamepadTriggerDown[trigger] = triggers[trigger];
+        }
+      }
+      eventData.type = MainLoopEvent::gamepadAxes;
       eventData.data.axes[0] = -SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_LEFTY) / 32767.0f;
       eventData.data.axes[1] = SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_LEFTX) / 32767.0f;
       eventData.data.axes[2] = -SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_RIGHTY) / 32767.0f;
       eventData.data.axes[3] = SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_RIGHTX) / 32767.0f;
+    }
+    else {
+      for (int trigger = 0; trigger < 2; ++trigger) {
+        if (!gamepadTriggerDown[trigger]) continue;
+        eventData.type = MainLoopEvent::keyUp;
+        eventData.data.input = (InputCode){InputDeviceType::gamepad, gamepadTriggerLeft + trigger};
+        onEvent(eventData);
+        gamepadTriggerDown[trigger] = 0;
+      }
+      eventData.type = MainLoopEvent::gamepadAxes;
     }
     onEvent(eventData);
 #endif

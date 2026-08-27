@@ -163,20 +163,15 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     sampleButtonDown = 0;
     return 0;
   }
-  if (isKeyDown && keys == keyEdit) {
-    sampleButtonDown = 1;
-    return 1;
-  }
-  if (isKeyDown && keys == (keyEdit | keyLeft)) {
-    sampleButtonDown = 0;
+  PopupEditInput input = popupEditInput(isKeyDown, keys, &sampleButtonDown);
+  if (input == PopupEditInput::cycle && keys == (keyEdit | keyLeft)) {
     return loadAdjacentSample(-1);
   }
-  if (isKeyDown && keys == (keyEdit | keyRight)) {
-    sampleButtonDown = 0;
+  if (input == PopupEditInput::cycle && keys == (keyEdit | keyRight)) {
     return loadAdjacentSample(1);
   }
-  if (!isKeyDown && keys == 0 && sampleButtonDown) {
-    sampleButtonDown = 0;
+  if (input == PopupEditInput::hold) return 1;
+  if (input == PopupEditInput::open) {
     fileBrowserSetupWithPreview("LOAD PCM SAMPLE", ".wav", appSettings.samplePath,
       onSampleLoaded, onSampleCancelled, onSamplePreview);
     screenSetup(&screenFileBrowser, 0);

@@ -179,16 +179,12 @@ static int instrumentTypePopupInput(int isKeyDown, int keys, ScreenData* screen)
     typeButtonDown = 0;
     return 0;
   }
-  if (isKeyDown && keys == keyEdit) {
-    typeButtonDown = 1;
-    return 1;
-  }
-  if (isKeyDown && (keys == (keyEdit | keyLeft) || keys == (keyEdit | keyRight))) {
-    typeButtonDown = 0;
+  PopupEditInput input = popupEditInput(isKeyDown, keys, &typeButtonDown);
+  if (input == PopupEditInput::hold) return 1;
+  if (input == PopupEditInput::cycle) {
     return 0;
   }
-  if (!isKeyDown && keys == 0 && typeButtonDown) {
-    typeButtonDown = 0;
+  if (input == PopupEditInput::open) {
     selectionPopupSetup("INSTRUMENT TYPE", instrumentTypeCategories, 3,
       (int)chipnomadState->project.instruments[cInstrument].type,
       selectInstrumentType, cancelInstrumentTypeSelection);

@@ -502,6 +502,13 @@ static void initFxHelpText() {
   fxHelpText[fxPCF] = "Plaits Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
   fxHelpText[fxPRS] = "Plaits Resonance FX\nOverrides resonance until\nthe next note trigger";
   fxHelpText[fxASL] = "aChChid Slide FX\nSlides without retrigger\n00 = 60 ms";
+  fxHelpText[fxADC] = "aChChid Decay FX\n00 = 200 ms; FF = 2 s\nuntil the next note trigger";
+  fxHelpText[fxAAC] = "aChChid Accent FX\n00 = no accent; FF = max\nuntil the next note trigger";
+  fxHelpText[fxATM] = "aChChid Braids Timbre FX\nOnly in Braids wave mode\nuntil the next note trigger";
+  fxHelpText[fxACL] = "aChChid Braids Color FX\nOnly in Braids wave mode\nuntil the next note trigger";
+  fxHelpText[fxACF] = "aChChid Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
+  fxHelpText[fxARS] = "aChChid Resonance FX\n00 = none; FF = maximum\nuntil the next note trigger";
+  fxHelpText[fxAEM] = "aChChid Env Mod FX\n00 = none; FF = maximum\nuntil the next note trigger";
 
   fxHelpTextInitialized = true;
 }

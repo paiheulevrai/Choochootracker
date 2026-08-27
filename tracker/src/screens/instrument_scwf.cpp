@@ -120,7 +120,8 @@ static int edit(int col, int row, CellEditAction action) {
 static int input(int isKeyDown, int keys, int) {
   int row = screenInstrumentSCWF.cursorRow;
   if ((row != 3 && row != 4) || screenInstrumentSCWF.cursorCol != 0) { buttonDown = 0; return 0; }
-  if (isKeyDown && (keys == (keyEdit | keyLeft) || keys == (keyEdit | keyRight))) {
+  PopupEditInput input = popupEditInput(isKeyDown, keys, &buttonDown);
+  if (input == PopupEditInput::cycle) {
     InstrumentSCWF* scwf = &chipnomadState->project.instruments[cInstrument].chip.scwf;
     InstrumentSample* oscillator = &scwf->oscillator[row - 3];
     int direction = keys == (keyEdit | keyRight) ? 1 : -1;
@@ -128,9 +129,8 @@ static int input(int isKeyDown, int keys, int) {
     if (fileBrowserGetAdjacentPath(oscillator->path, ".wav", direction, path, sizeof(path))) { loadSlot = row - 3; loaded(path); }
     return 1;
   }
-  if (isKeyDown && keys == keyEdit) { buttonDown = 1; return 1; }
-  if (!isKeyDown && keys == 0 && buttonDown) {
-    buttonDown = 0;
+  if (input == PopupEditInput::hold) return 1;
+  if (input == PopupEditInput::open) {
     loadSlot = row - 3;
     fileBrowserSetup("LOAD SCWF OSC", ".wav", appSettings.scwfPath, loaded, cancelled);
     screenSetup(&screenFileBrowser, 0);
