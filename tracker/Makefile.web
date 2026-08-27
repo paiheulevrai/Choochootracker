@@ -6,6 +6,7 @@ include Makefile.common
 LIBS = $(COMMON_LIBS) platforms/sdl2
 OUTPUT_EXT = .html
 WEB_BUILD = build/web
+EMXX ?= em++
 WEB_CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) -DWEB_BUILD -DDESKTOP_BUILD -DGAMEPAD_SUPPORT
 WEB_LDFLAGS = -sUSE_SDL=2 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=256MB \
 	-sASYNCIFY=1 \
@@ -21,7 +22,7 @@ SOURCES := $(filter-out platforms/sdl2/corelib_mainloop.cpp,$(SOURCES)) \
 
 web:
 	@mkdir -p $(WEB_BUILD)
-	em++ $(WEB_CFLAGS) $(SOURCES) $(WEB_LDFLAGS) -o $(WEB_BUILD)/choochootracker.html \
+	$(EMXX) $(WEB_CFLAGS) $(SOURCES) $(WEB_LDFLAGS) -o $(WEB_BUILD)/choochootracker.html \
 	-sASSERTIONS=1 -sSTACK_SIZE=8388608 -sGL_ASSERTIONS=1
 	@cp ../web/index.html $(WEB_BUILD)/index.html
 

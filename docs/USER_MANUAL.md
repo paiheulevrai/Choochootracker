@@ -1,6 +1,6 @@
 # ChooChooTracker User Manual
 
-ChooChooTracker is an eight-track music tracker for small screens and handheld consoles. It follows the LSDj workflow: songs contain chains, chains contain phrases, and phrases contain notes, instruments and FX. Each instrument uses its own sound engine, so a project can mix AY, Braids, Plaits and PCM samples.
+ChooChooTracker is an eight-track music tracker for small screens and handheld consoles. It follows the LSDj workflow: songs contain chains, chains contain phrases, and phrases contain notes, instruments and FX. Each instrument uses its own sound engine, so a project can mix AY, Braids, Plaits, aChChid and PCM samples.
 
 This manual describes the current development build. Features marked as requiring hardware validation should be tested on the target ArkOS/PortMaster console before live use.
 
@@ -231,6 +231,12 @@ The model popup contains every model exactly once:
 | Wavetables | `37 WAVETABLES`, `38 WAVE-MAP`, `39 WAVE-LINE`, `40 WAVE-PARA` |
 | Noise / Granular | `41 FILTER-NOISE`, `42 TWIN-PEAKS`, `43 CLOCK-NOISE`, `44 GRAN-CLOUD`, `45 PARTICLE`, `46 DIGI-MOD` |
 
+### aChChid
+
+**aChChid** is a monophonic acid bass engine based on Open303. `Square` and `Saw` use its native TB-303 oscillator, filter, envelope and accent behavior. `Braids` replaces only the oscillator, then continues through the same 303 filter and amplifier path; it exposes Model, Timbre and Color instead of Fine tune. aChChid does not use ChooChoo's unified post-filter or ADSR.
+
+An `F` in the note volume column triggers accent. `ASL` makes that note slide from the preceding pitch without retriggering the 303 envelope; `ASL 00` is a 60 ms glide. Notes without `ASL` always retrigger.
+
 ### Plaits
 
 Plaits provides 24 engines, grouped in the selection popup as follows:
@@ -413,6 +419,12 @@ The value is interpreted as a signed 8-bit relative change (`01` adds one, `FF` 
 | `BCL` | `00-FF` | Absolute normalized Color |
 | `BCF` | `00-FF` | Exponential cutoff, 20 Hz to 20 kHz |
 | `BRS` | `00-FF` | Exponential filter resonance |
+
+### aChChid FX
+
+| FX | Value | Meaning |
+|---|---|---|
+| `ASL` | `00-FF` | Slide to the note without retriggering. `00` is 60 ms; higher values extend the glide. |
 
 ### Plaits FX
 

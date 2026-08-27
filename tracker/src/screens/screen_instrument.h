@@ -25,5 +25,6 @@ extern ScreenData screenInstrumentSample;
 extern ScreenData screenInstrumentSCWF;
 extern ScreenData screenInstrumentBYOWTBL;
 extern ScreenData screenInstrumentPlaits;
+extern ScreenData screenInstrumentAChChid;
 
 #endif

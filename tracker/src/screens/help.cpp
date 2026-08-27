@@ -501,6 +501,7 @@ static void initFxHelpText() {
   fxHelpText[fxPAX] = "Plaits Main/Aux FX\n00 main, FF aux\nuntil the next note trigger";
   fxHelpText[fxPCF] = "Plaits Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
   fxHelpText[fxPRS] = "Plaits Resonance FX\nOverrides resonance until\nthe next note trigger";
+  fxHelpText[fxASL] = "aChChid Slide FX\nSlides without retrigger\n00 = 60 ms";
 
   fxHelpTextInitialized = true;
 }

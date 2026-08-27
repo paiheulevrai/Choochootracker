@@ -180,3 +180,116 @@ memory limits and a usable frame-position UI are the real implementation work.
 - Sample accepts 8-bit and 16-bit PCM WAV files in mono or stereo.
 - Sample load errors stay on screen three times longer.
 - Mixer cell indexes are guarded. The reported crash is not considered solved until it can be reproduced or logged.
+
+## Drum synthesizers: PO32 and Weird Drums
+
+These are two new instrument families, not plug-in ports. The tracker remains
+the sequencer: one ChooChoo instrument produces one drum voice, and a kit is
+made by placing several instruments on tracker tracks. Neither integration
+imports JUCE, a pad-grid sequencer, a mixer, or the master FX from the source
+projects.
+
+Both source families are MIT-compatible with ChooChooTracker. `libpo32` is a
+freestanding C99 drum-synthesis and PO-32 transfer library; its synthesis core
+has no platform audio or DSP dependencies. WeirdDrums is a JUCE plug-in, so
+only its MIT DSP design/code may be ported into a native ChooChoo voice. The
+eventual import/export of PO-32 acoustic transfer audio is explicitly separate
+from the synth integration.
+
+### Shared product decision
+
+Drum voices use their own native envelopes. They do **not** expose the shared
+ChooChoo ADSR, Trigger FX, or ADSR preview. The post-voice ChooChoo filter is
+kept: Status, mode, slope, cutoff, resonance, modulation, reverb send and
+delay send remain available exactly as for modern voices.
+
+This requires separating the common filter controls from the current
+`InstrumentVoicePostSettings` envelope controls in the implementation. The
+instrument catalogue should advertise the filter capability without advertising
+ADSR/Trigger capability; screens and FX then hide unsupported shared controls
+instead of adding special cases to their layout.
+
+The drum screen is a new shared layout, rather than a variation of the
+Braids/Plaits screen. It follows the designbook rules: the usual instrument
+header is unchanged; the engine has the left column; the common post-filter has
+the right column; headings use `textTitles`; unfocused values use `textDefault`;
+focused values use `textValue`; values use the established columns 11 and 26.
+There is no contextual navigation text in the title, no ADSR graph, and no
+conditional row movement. The screen is 40 by 20 characters.
+
+### PO32 Drum
+
+`libpo32` supplies 21 underlying patch fields. A first ChooChoo screen exposes
+the nine sound-shaping fields below, plus the common `Vol` in the header. The
+remaining fields (oscillator attack, modulation rate, noise filter frequency
+and Q, noise-envelope attack/decay, EQ, and velocity responses) are set by
+presets in v1. There is deliberately no advanced page.
+
+```text
+INSTRUMENT 00
+
+Type    PO32 Drum       Load  Save
+Name    PO32 KICK
+Transp. Off     Tbl.Tic 01   Vol FF
+
+SOUND                   FILTER
+Wave      Sine          Status   On
+Pitch     050           Mode     LP
+Decay     030           Slope    12 dB
+Mod       Drop          Cutoff   6000 Hz
+Bend      040           Reso     20
+
+NOISE
+Mix       050
+Filter    BP
+Envelope  Exp
+Dist      010
+```
+
+`NOISE Filter` is the PO32 internal noise filter; `FILTER` is always the
+post-synth ChooChoo filter. This wording makes their distinct roles visible.
+The desired later addition is an optional PO-32 transfer WAV export; acoustic
+recording/import is deferred until input support is reliable on every intended
+platform.
+
+Verdict: feasible, low integration risk. Start with the sound engine and the
+screen above; do not add transfers, advanced editing, or kit management in the
+same release.
+
+### Weird Drums
+
+The ChooChoo version uses the original drum-synth idea, not the full
+eight-voice Weird Dreams machine. The common header provides level, so a
+separate per-voice volume row is unnecessary. The screen exposes nine native
+controls: oscillator shape/pitch/decay/pitch modulation/drive, then noise
+mix/filter/cutoff/decay. Presets provide useful starting roles such as kick,
+snare, hat, clap and tom without adding a separate kit editor.
+
+```text
+INSTRUMENT 00
+
+Type    Weird Drums     Load  Save
+Name    WEIRD SNARE
+Transp. Off     Tbl.Tic 01   Vol FF
+
+TONE                    FILTER
+Wave      Tri           Status   On
+Pitch     060           Mode     HP
+Decay     035           Slope    12 dB
+Pitch Mod 045           Cutoff   7200 Hz
+Drive     020           Reso     30
+
+NOISE
+Mix       065
+Filter    BP
+Cutoff    4800 Hz
+Decay     050
+```
+
+The `NOISE` labels make the engine's `Cutoff` and `Decay` unambiguous next to
+the ChooChoo post-filter. Panning is not added solely for this instrument: it
+would first need a consistent cross-engine ChooChoo panning model.
+
+Verdict: feasible, medium integration risk only because the JUCE plug-in DSP
+must be isolated/ported and benchmarked. Keep v1 to one voice per instrument,
+native drum envelopes, presets, and the shared filter.

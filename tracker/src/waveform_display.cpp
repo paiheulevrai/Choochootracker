@@ -156,7 +156,7 @@ Bitmap* waveformDisplayGetBitmap(int trackIdx) {
 
   if (track->note.instrument != EMPTY_VALUE_8) {
     InstrumentType type = chipnomadState->project.instruments[track->note.instrument].type;
-    if (type == InstrumentType::Braids || type == InstrumentType::Sample ||
+    if (type == InstrumentType::Braids || type == InstrumentType::AChChid || type == InstrumentType::Sample ||
         type == InstrumentType::Plaits || type == InstrumentType::PlaitsAlt) {
       return drawVoiceWaveform(trackIdx);
     }

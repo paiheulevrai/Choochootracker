@@ -33,6 +33,7 @@ static SelectionItem instrumentTypeSynth[] = {
   {NULL, (int)InstrumentType::Braids, NULL, 0},
   {NULL, (int)InstrumentType::Plaits, NULL, 0},
   {NULL, (int)InstrumentType::PlaitsAlt, NULL, 0},
+  {NULL, (int)InstrumentType::AChChid, NULL, 0},
 };
 static SelectionItem instrumentTypeSample[] = {
   {NULL, (int)InstrumentType::Sample, NULL, 0},
@@ -42,7 +43,7 @@ static SelectionItem instrumentTypeSample[] = {
 static const SelectionItem instrumentTypeCategories[] = {
   {"CHIP", -1, instrumentTypeChip, 3},
   {"SAMPLE", -1, instrumentTypeSample, 3},
-  {"SYNTH", -1, instrumentTypeSynth, 3},
+  {"SYNTH", -1, instrumentTypeSynth, 4},
 };
 
 static void getInstrumentFilename(char* filename, int size) {
@@ -228,7 +229,7 @@ static ScreenData* instrumentScreen(void) {
   static ScreenData* const screens[] = {
     &screenInstrumentNone, &screenInstrumentAY, &screenInstrumentAY2,
     &screenInstrumentAYSample, &screenInstrumentBraids, &screenInstrumentSample,
-    &screenInstrumentSCWF, &screenInstrumentBYOWTBL, &screenInstrumentPlaits,
+    &screenInstrumentSCWF, &screenInstrumentBYOWTBL, &screenInstrumentPlaits, &screenInstrumentAChChid,
   };
   InstrumentScreenKind kind = getInstrumentDefinition(chipnomadState->project.instruments[cInstrument].type)->screen;
   ScreenData* data = screens[(int)kind];
@@ -244,7 +245,7 @@ static void init(void) {
   screenInstrumentNone.cursorCol = 0;
   SelectionItem* groups[] = {instrumentTypeChip, instrumentTypeSample, instrumentTypeSynth};
   for (int group = 0; group < 3; ++group)
-    for (int item = 0; item < 3; ++item)
+    for (int item = 0; item < (group == 2 ? 4 : 3); ++item)
       groups[group][item].label = getInstrumentDefinition((InstrumentType)groups[group][item].value)->uiName;
 }
 

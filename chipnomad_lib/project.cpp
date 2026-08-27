@@ -53,6 +53,7 @@ FXGroup fxGroups[] = {
   {"BYOWTBL FX", NULL, 0, 6, InstrumentType::BYOWTBL},
   {"Plaits FX", NULL, 0, 7, InstrumentType::Plaits},
   {"Plaits-Alt FX", NULL, 0, 7, InstrumentType::PlaitsAlt},
+  {"aChChid FX", NULL, 0, 1, InstrumentType::AChChid},
 };
 int fxGroupCount = sizeof(fxGroups) / sizeof(FXGroup);
 

@@ -8,6 +8,7 @@
 #undef LUT_FM_FREQUENCY_QUANTIZER_SIZE
 #include "synth/plaits_voice.h"
 #include "synth/plaits_alt_voice.h"
+#include "synth/achchid_voice.h"
 #include "synth/master_effects.h"
 #include <math.h>
 #include <atomic>
@@ -21,6 +22,7 @@ static void updateSampleVoices(ChipNomadState* state);
 static void updateSCWFVoices(ChipNomadState* state);
 static void updatePlaitsVoices(ChipNomadState* state);
 static void updatePlaitsAltVoices(ChipNomadState* state);
+static void updateAChChidVoices(ChipNomadState* state);
 static void applyVoiceEvents(ChipNomadState* state);
 static int hasAudioRateModulation(const ChipNomadState* state);
 static void updateAudioRateModulations(ChipNomadState* state);
@@ -476,6 +478,8 @@ ChipNomadState* chipnomadCreate(void) {
     state->plaitsVoices[i]->init(96000.0f);
     state->plaitsAltVoices[i] = new PlaitsAltVoice();
     state->plaitsAltVoices[i]->init(96000.0f);
+    state->achchidVoices[i] = new AChChidVoice();
+    state->achchidVoices[i]->init(96000.0f);
   }
 
   return state;
@@ -498,6 +502,7 @@ void chipnomadDestroy(ChipNomadState* state) {
     delete state->scwfVoices[i];
     delete state->plaitsVoices[i];
     delete state->plaitsAltVoices[i];
+    delete state->achchidVoices[i];
   }
 
   // Cleanup mix buffer
@@ -647,6 +652,7 @@ static void updateAudioRateModulations(ChipNomadState* state) {
   updateBraidsVoices(state);
   updatePlaitsVoices(state);
   updatePlaitsAltVoices(state);
+  updateAChChidVoices(state);
 }
 
 static int advancePlaybackFrame(ChipNomadState* state) {
@@ -665,7 +671,7 @@ static int advancePlaybackFrame(ChipNomadState* state) {
   motionRecordFrame(state);
   if (allTracksStopped) playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
   updateSampleVoices(state); updateSCWFVoices(state); updateBraidsVoices(state);
-  updatePlaitsVoices(state); updatePlaitsAltVoices(state); applyVoiceEvents(state);
+  updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); applyVoiceEvents(state);
   if (state->audioOverload > 0) state->audioOverload--;
   for (int i = 0; i < PROJECT_MAX_TRACKS; ++i)
     if (state->trackClipping[i] > 0) state->trackClipping[i]--;
@@ -771,6 +777,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
     renderStereoVoiceTracks(state, state->scwfVoices, output, frames);
     renderMonoVoiceTracks(state, state->plaitsVoices, output, frames);
     renderMonoVoiceTracks(state, state->plaitsAltVoices, output, frames);
+    renderMonoVoiceTracks(state, state->achchidVoices, output, frames);
     processMasterMix(state, output, frames);
     samplesLeft -= frames;
     state->frameSampleCounter -= (float)frames;
@@ -933,6 +940,14 @@ static void applyVoiceEvents(ChipNomadState* state) {
         if (track->note.noteKilled) state->plaitsAltVoices[trackIdx]->kill();
         else if (track->note.noteTriggered) state->plaitsAltVoices[trackIdx]->noteOn();
         else state->plaitsAltVoices[trackIdx]->noteOff();
+        break;
+      case InstrumentType::AChChid:
+        if (track->note.noteKilled) state->achchidVoices[trackIdx]->kill();
+        else if (track->note.noteTriggered) {
+          PlaybackFXState* slide = &track->note.fx[fxASL];
+          state->achchidVoices[trackIdx]->noteOn(track->note.pitchFinal, track->note.accent != 0,
+            slide->isOn != 0, slide->fxValue);
+        } else state->achchidVoices[trackIdx]->noteOff();
         break;
       default: break;
     }
@@ -1106,6 +1121,38 @@ static void updateSCWFVoices(ChipNomadState* state) {
                      instrument->type == InstrumentType::BYOWTBL ? byowtbl->frameSize : NULL,
                      instrument->type == InstrumentType::BYOWTBL ? frameIndex : NULL,
                      attack, decay, sustain, release, shape);
+  }
+}
+
+static void updateAChChidVoices(ChipNomadState* state) {
+  Project* project = &state->audioProject;
+  PlaybackState* playback = &state->playbackState;
+  for (int trackIdx = 0; trackIdx < project->tracksCount; ++trackIdx) {
+    PlaybackTrackState* track = &playback->tracks[trackIdx];
+    AChChidVoice* voice = state->achchidVoices[trackIdx];
+    if (track->note.instrument == EMPTY_VALUE_8 ||
+        project->instruments[track->note.instrument].type != InstrumentType::AChChid) {
+      voice->kill();
+      continue;
+    }
+    InstrumentAChChid* a = &project->instruments[track->note.instrument].chip.achchid;
+    int cutoff = a->cutoff, resonance = a->resonance, envMod = a->envMod;
+    float gain = phraseGain(track, &project->instruments[track->note.instrument]);
+    for (int i = 0; i < 4; ++i) {
+      PlaybackModState* mod = &track->note.modulation[i];
+      if (!mod->modulation) continue;
+      int value = playbackModScaleToRange(mod->outValue, mod->modulation->destination == 3 ? 20000 : 100);
+      switch (mod->modulation->destination) {
+        case 1: gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value / 255.0f; break;
+        case 3: cutoff += value; break;
+        case 4: resonance += value; break;
+        case 5: envMod += value; break;
+      }
+    }
+    voice->configure((uint8_t)a->wave, a->fineTune, a->model, a->timbre, a->color,
+      (uint16_t)clampInt(cutoff, 200, 20000), (uint8_t)clampInt(resonance, 0, 100),
+      (uint8_t)clampInt(envMod, 0, 100), (uint16_t)clampInt(a->decay, 200, 2000),
+      a->accent, gain < 0.0f ? 0.0f : gain);
   }
 }
 

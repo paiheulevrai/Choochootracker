@@ -21,6 +21,7 @@ enum class InstrumentType : uint8_t {
   PlaitsAlt = 7,
   SCWF = 8,
   BYOWTBL = 9,
+  AChChid = 10,
   totalCount,
 };
 
@@ -171,6 +172,20 @@ struct InstrumentBraids : InstrumentVoicePostSettings {
   uint16_t color;
 };
 
+enum class AChChidWave : uint8_t { square, saw, braids };
+struct InstrumentAChChid {
+  AChChidWave wave;
+  int8_t fineTune;
+  uint8_t model;
+  uint16_t timbre;
+  uint16_t color;
+  uint16_t cutoff;
+  uint8_t resonance;
+  uint8_t envMod;
+  uint16_t decay;
+  uint8_t accent;
+};
+
 struct InstrumentPlaits : InstrumentVoicePostSettings {
   uint8_t engine;
   uint16_t harmonics;
@@ -219,6 +234,7 @@ union InstrumentChipData {
   InstrumentSCWF scwf;
   InstrumentBYOWTBL byowtbl;
   InstrumentPlaits plaits;
+  InstrumentAChChid achchid;
 };
 
 struct Instrument {
@@ -243,7 +259,7 @@ struct InstrumentFunctions {
 // This is metadata, not an audio abstraction: renderers keep their typed
 // paths while screens, validation and motion routing share this one catalogue.
 enum class InstrumentCategory : uint8_t { none, chip, sample, synth };
-enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits };
+enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid };
 enum class InstrumentMotionValue : uint8_t { raw, speed, cutoff };
 
 static constexpr uint8_t instrumentNoFX = 0xff;

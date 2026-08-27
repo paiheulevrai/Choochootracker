@@ -34,6 +34,7 @@ struct PlaybackNoteState {
   uint8_t noteTriggered;
   uint8_t noteReleased;
   uint8_t noteKilled;
+  uint8_t accent;
 
   uint8_t pitchFinal; // Calculated pitch value
   int8_t pitchOffset; // Pitch offset (semitones)

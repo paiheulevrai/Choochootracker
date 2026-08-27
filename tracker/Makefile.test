@@ -13,7 +13,7 @@ BUILD_DIR = build/tests
 # Include paths
 INCLUDES = -I. -Isrc -Isrc/corelib -Isrc/screens -Isrc/import -Itests/mocks -Iexternal \
            -I../chipnomad_lib -I../chipnomad_lib/chips -I../chipnomad_lib/external/ayumi \
-           -I../chipnomad_lib/external/mutable
+           -I../chipnomad_lib/external/mutable -I../chipnomad_lib/external/open303/Source/DSPCode
 
 # Test executable
 TEST_EXECUTABLE = $(BUILD_DIR)/run_tests$(if $(filter Windows_NT,$(OS)),.exe,)
@@ -31,6 +31,7 @@ TEST_SOURCES = $(filter-out $(TEST_SOURCES_EXCLUDED),$(TEST_SOURCES_ALL))
 CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/*.cpp) \
                         $(wildcard ../chipnomad_lib/chips/*.cpp) \
                         $(wildcard ../chipnomad_lib/synth/*.cpp) \
+                        $(wildcard ../chipnomad_lib/external/open303/Source/DSPCode/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/ayumi/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/mutable/braids/*.cc) \
                         $(wildcard ../chipnomad_lib/external/mutable/stmlib/utils/*.cc) \

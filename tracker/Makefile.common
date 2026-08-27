@@ -21,7 +21,7 @@ PLAITS_ALT_LIBS = ../chipnomad_lib/external/mutable/plaits_alt \
 	../chipnomad_lib/external/mutable/plaits_alt/dsp/fm \
 	../chipnomad_lib/external/mutable/plaits_alt/dsp/physical_modelling \
 	../chipnomad_lib/external/mutable/plaits_alt/dsp/speech
-COMMON_LIBS = src ../chipnomad_lib ../chipnomad_lib/chips ../chipnomad_lib/synth ../chipnomad_lib/external/ayumi ../chipnomad_lib/external/mutable/braids ../chipnomad_lib/external/mutable/stmlib/utils $(PLAITS_LIBS) $(PLAITS_ALT_LIBS) ../chipnomad_lib/export src/corelib src/import src/screens platforms/shared
+COMMON_LIBS = src ../chipnomad_lib ../chipnomad_lib/chips ../chipnomad_lib/synth ../chipnomad_lib/external/ayumi ../chipnomad_lib/external/open303/Source/DSPCode ../chipnomad_lib/external/mutable/braids ../chipnomad_lib/external/mutable/stmlib/utils $(PLAITS_LIBS) $(PLAITS_ALT_LIBS) ../chipnomad_lib/export src/corelib src/import src/screens platforms/shared
 
 # Base build directory
 BUILD_BASE = build
@@ -34,7 +34,8 @@ BUILD = $(BUILD_BASE)/$(PLATFORM)
 # would shadow the C standard header. Plaits includes it from the mutable root.
 INCLUDE_LIBS = $(filter-out ../chipnomad_lib/external/mutable/plaits/dsp/physical_modelling ../chipnomad_lib/external/mutable/plaits_alt/dsp/physical_modelling,$(LIBS))
 INCLUDES = $(addprefix -I, $(INCLUDE_LIBS)) -I../chipnomad_lib -I../chipnomad_lib/external/mutable
-C_SOURCES = $(foreach dir, $(LIBS), $(wildcard $(dir)/*.c))
+# Open303's Fourier wrapper includes fft4g.c directly.
+C_SOURCES = $(filter-out ../chipnomad_lib/external/open303/Source/DSPCode/fft4g.c,$(foreach dir, $(LIBS), $(wildcard $(dir)/*.c)))
 # The Plaits-Alt checkout also contains the STM32 module application. Tracker
 # needs its DSP/resources only; compiling its firmware UI would pull hardware
 # dependencies into every desktop target.

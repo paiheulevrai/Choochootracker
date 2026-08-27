@@ -143,6 +143,9 @@ enum FX {
   // Per-track sends and unified voice-post envelope controls.
   fxRSN, fxDSN, fxEAT, fxEDC, fxESU, fxERL, fxESH, fxTDC, fxTCL,
 
+  // aChChid FX. Appended to preserve project FX IDs.
+  fxASL,
+
   // Total count - must be last
   fxTotalCount
 };

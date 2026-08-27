@@ -265,6 +265,25 @@ static int loadInstrumentSample(FILE* file, Instrument* instrument) {
   return 0;
 }
 
+static int loadInstrumentAChChid(FILE* file, Instrument* instrument) {
+  InstrumentAChChid* a = &instrument->chip.achchid;
+  while (1) {
+    char* line = peekLine(file);
+    if (line == NULL || line[0] == '#') return 0;
+    if (strncmp(line, "- Wave: ", 8) == 0) sscanf(line, "- Wave: %hhu", (uint8_t*)&a->wave);
+    else if (strncmp(line, "- Fine: ", 8) == 0) sscanf(line, "- Fine: %hhd", &a->fineTune);
+    else if (strncmp(line, "- Model: ", 9) == 0) sscanf(line, "- Model: %hhu", &a->model);
+    else if (strncmp(line, "- Timbre: ", 10) == 0) sscanf(line, "- Timbre: %hu", &a->timbre);
+    else if (strncmp(line, "- Color: ", 9) == 0) sscanf(line, "- Color: %hu", &a->color);
+    else if (strncmp(line, "- Cutoff: ", 10) == 0) sscanf(line, "- Cutoff: %hu", &a->cutoff);
+    else if (strncmp(line, "- Resonance: ", 13) == 0) sscanf(line, "- Resonance: %hhu", &a->resonance);
+    else if (strncmp(line, "- Env mod: ", 11) == 0) sscanf(line, "- Env mod: %hhu", &a->envMod);
+    else if (strncmp(line, "- Decay: ", 9) == 0) sscanf(line, "- Decay: %hu", &a->decay);
+    else if (strncmp(line, "- Accent: ", 10) == 0) sscanf(line, "- Accent: %hhu", &a->accent);
+    consumeLine(file);
+  }
+}
+
 static int loadInstrumentSCWF(FILE* file, Instrument* instrument) {
   InstrumentSCWF* scwf = &instrument->chip.scwf;
   while (1) {
@@ -420,6 +439,9 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
       case InstrumentType::Braids:
         if (loadInstrumentBraids(file, instrument)) return 1;
         break;
+      case InstrumentType::AChChid:
+        if (loadInstrumentAChChid(file, instrument)) return 1;
+        break;
       case InstrumentType::Sample:
         if (loadInstrumentSample(file, instrument)) return 1;
         break;
@@ -551,6 +573,21 @@ static int saveInstrumentSample(FILE* file, Instrument* instrument) {
   return 0;
 }
 
+static int saveInstrumentAChChid(FILE* file, Instrument* instrument) {
+  InstrumentAChChid* a = &instrument->chip.achchid;
+  fprintf(file, "- Wave: %hhu\n", (uint8_t)a->wave);
+  fprintf(file, "- Fine: %hhd\n", a->fineTune);
+  fprintf(file, "- Model: %hhu\n", a->model);
+  fprintf(file, "- Timbre: %hu\n", a->timbre);
+  fprintf(file, "- Color: %hu\n", a->color);
+  fprintf(file, "- Cutoff: %hu\n", a->cutoff);
+  fprintf(file, "- Resonance: %hhu\n", a->resonance);
+  fprintf(file, "- Env mod: %hhu\n", a->envMod);
+  fprintf(file, "- Decay: %hu\n", a->decay);
+  fprintf(file, "- Accent: %hhu\n", a->accent);
+  return 0;
+}
+
 static int saveInstrumentSCWF(FILE* file, Instrument* instrument) {
   InstrumentSCWF* scwf = &instrument->chip.scwf;
   fprintf(file, "- Oscillator A path: %s\n", scwf->oscillator[0].path);
@@ -628,6 +665,9 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
       break;
     case InstrumentType::Braids:
       saveInstrumentBraids(file, instrument);
+      break;
+    case InstrumentType::AChChid:
+      saveInstrumentAChChid(file, instrument);
       break;
     case InstrumentType::Sample:
       saveInstrumentSample(file, instrument);

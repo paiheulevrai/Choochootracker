@@ -65,6 +65,7 @@ static void resetNoteFX(PlaybackState* state, int trackIdx) {
 static void resetInstrumentFX(PlaybackTrackState* track) {
   for (int i = fxBMD; i <= fxPRS; i++) track->note.fx[i].isOn = 0;
   for (int i = fxRSN; i <= fxTCL; i++) track->note.fx[i].isOn = 0;
+  track->note.fx[fxASL].isOn = 0;
 }
 
 static void resetTrack(PlaybackState* state, int trackIdx) {
@@ -97,6 +98,7 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   track->note.noteTriggered = 0;
   track->note.noteReleased = 0;
   track->note.noteKilled = 0;
+  track->note.accent = 0;
   track->note.volume1 = 0;
   track->note.volume2 = 0;
   track->note.volume3 = 0;
@@ -448,6 +450,8 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
       handleNoteOff(state, trackIdx);
     } else {
       track->note.pitchBase = note;
+      // Accent is deliberately derived from this row, never from sticky volume.
+      track->note.accent = volume == 0x0f;
       track->note.noteTriggered = 1;
     }
   }
@@ -727,6 +731,7 @@ static void handleInstrument(PlaybackState* state, int trackIdx) {
   case InstrumentType::Sample:
   case InstrumentType::SCWF:
   case InstrumentType::BYOWTBL:
+  case InstrumentType::AChChid:
     break;
   case InstrumentType::none:
     break;
