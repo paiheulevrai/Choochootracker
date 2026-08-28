@@ -141,6 +141,23 @@ void gfxReloadFont(void);
 void gfxDrawHUD(void);
 void gfxSetButtonPressed(int buttonIndex, int pressed);
 
+#ifdef DESKTOP_BUILD
+// Desktop title-screen helpers. They deliberately sit beside the text-grid API
+// so the tracker UI and its portable renderers stay unchanged.
+struct GfxImage;
+struct GfxImage* gfxImageLoadBMP(const char* path);
+void gfxImageFree(struct GfxImage* image);
+int gfxImageWidth(const struct GfxImage* image);
+int gfxImageHeight(const struct GfxImage* image);
+void gfxImageDrawCrop(const struct GfxImage* image, int sourceX, int sourceY,
+  int sourceW, int sourceH, int destinationX, int destinationY);
+void gfxTitleBegin(void);
+void gfxTitleFadeBlack(uint8_t alpha);
+void gfxTitlePresent(void);
+void gfxTitleEnd(void);
+void gfxTitlePrint(int x, int y, const char* text);
+#endif
+
 }
 
 

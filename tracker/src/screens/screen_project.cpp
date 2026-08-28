@@ -18,6 +18,7 @@
 #endif
 
 static int isCharEdit = 0;
+static const AppScreen* projectReturnScreen = &screenProject;
 static char* editingString = NULL;
 static int editingStringLength = 0;
 static int tickRateI = 0;
@@ -25,7 +26,6 @@ static uint16_t tickRateF = 0;
 
 int projectLoadFromPath(const char* path) {
   if (!path) {
-    screenSetup(&screenProject, 0);
     return 1;
   }
 
@@ -81,12 +81,12 @@ int projectLoadFromPath(const char* path) {
     screenMessage(MESSAGE_TIME, "%s", projectFileError);
   }
 
-  screenSetup(&screenProject, 0);
   return loadResult;
 }
 
 static void onProjectLoaded(const char* path) {
   projectLoadFromPath(path);
+  screenSetup(projectReturnScreen, 0);
 }
 
 #ifdef WEB_BUILD
@@ -109,7 +109,7 @@ static void onProjectSaved(const char* folderPath) {
 }
 
 static void onProjectCancelled(void) {
-  screenSetup(&screenProject, 0);
+  screenSetup(projectReturnScreen, 0);
 }
 
 static void doNewProject(void) {
@@ -117,12 +117,23 @@ static void doNewProject(void) {
   projectModified = 0;
   appSettings.projectFilename[0] = 0;
   screensInitAll();
-  screenSetup(&screenProject, 0);
+  screenSetup(projectReturnScreen, 0);
 }
 
 static void doLoadProject(void) {
-  fileBrowserSetup("LOAD PROJECT", ".cct,.vt2", appSettings.projectPath, onProjectLoaded, onProjectCancelled);
+  fileBrowserSetup("LOAD PROJECT", ".cct,.vt2", appSettings.projectPath,
+    onProjectLoaded, onProjectCancelled);
   screenSetup(&screenFileBrowser, 0);
+}
+
+void projectOpenFromScreen(const AppScreen* returnScreen) {
+  projectReturnScreen = returnScreen ? returnScreen : &screenProject;
+  doLoadProject();
+}
+
+void projectCreateNewFromScreen(const AppScreen* returnScreen) {
+  projectReturnScreen = returnScreen ? returnScreen : &screenProject;
+  doNewProject();
 }
 
 static void cancelConfirm(void) {
@@ -297,6 +308,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
     // Load/Save/New/Export
     if (col == 0) {
       // Load project
+      projectReturnScreen = &screenProject;
       if (projectModified) {
         confirmSetup("Lose unsaved changes?", doLoadProject, cancelConfirm);
         screenSetup(&screenConfirm, 0);
@@ -314,6 +326,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
       }
     } else if (col == 2) {
       // New project
+      projectReturnScreen = &screenProject;
       if (projectModified) {
         confirmSetup("Lose unsaved changes?", doNewProject, cancelConfirm);
         screenSetup(&screenConfirm, 0);

@@ -4,6 +4,7 @@
 #include "corelib_gfx.h"
 #include "corelib_font.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 
@@ -44,14 +45,132 @@ static int offsetX;
 static int offsetY;
 static int isDirty;
 static const FontResolution* currentResolution = NULL;
+static SDL_Texture* fontTexture = NULL;
+static SDL_Rect charRects[95];
+
+#ifdef DESKTOP_BUILD
+struct GfxImage {
+  SDL_Texture* texture;
+  int width;
+  int height;
+};
+
+static int titleLogicalSizeActive = 0;
+static SDL_Texture* titleTexture = NULL;
+
+GfxImage* gfxImageLoadBMP(const char* path) {
+  SDL_Surface* surface = SDL_LoadBMP(path);
+  if (!surface) return NULL;
+  const int width = surface->w;
+  const int height = surface->h;
+  SDL_Surface* rgba = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA32, 0);
+  SDL_FreeSurface(surface);
+  if (!rgba) return NULL;
+  uint8_t* pixels = (uint8_t*)rgba->pixels;
+  for (int y = 0; y < rgba->h; y++) {
+    for (int x = 0; x < rgba->w; x++) {
+      uint8_t* pixel = pixels + y * rgba->pitch + x * 4;
+      // Image generation can shift the chroma key a few RGB values.
+      if (pixel[0] > 100 && pixel[2] > 100 &&
+          pixel[0] > pixel[1] * 1.6f && pixel[2] > pixel[1] * 1.6f) pixel[3] = 0;
+    }
+  }
+  SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, rgba);
+  GfxImage* image = texture ? (GfxImage*)malloc(sizeof(GfxImage)) : NULL;
+  if (image) {
+    image->texture = texture;
+    image->width = width;
+    image->height = height;
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+  } else if (texture) {
+    SDL_DestroyTexture(texture);
+  }
+  SDL_FreeSurface(rgba);
+  return image;
+}
+
+void gfxImageFree(GfxImage* image) {
+  if (!image) return;
+  SDL_DestroyTexture(image->texture);
+  free(image);
+}
+
+int gfxImageWidth(const GfxImage* image) { return image ? image->width : 0; }
+int gfxImageHeight(const GfxImage* image) { return image ? image->height : 0; }
+
+void gfxImageDrawCrop(const GfxImage* image, int sourceX, int sourceY,
+  int sourceW, int sourceH, int destinationX, int destinationY) {
+  if (!image || !image->texture || sourceW <= 0 || sourceH <= 0) return;
+  SDL_Rect source = {sourceX, sourceY, sourceW, sourceH};
+  SDL_Rect destination = {destinationX, destinationY, sourceW, sourceH};
+  SDL_RenderCopy(renderer, image->texture, &source, &destination);
+  isDirty = 1;
+}
+
+void gfxTitleBegin(void) {
+  if (!titleLogicalSizeActive) {
+    SDL_RenderSetLogicalSize(renderer, 640, 480);
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+    titleTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+      SDL_TEXTUREACCESS_TARGET, 320, 240);
+    if (titleTexture) SDL_SetTextureBlendMode(titleTexture, SDL_BLENDMODE_NONE);
+    titleLogicalSizeActive = 1;
+  }
+  SDL_SetRenderTarget(renderer, titleTexture);
+  SDL_RenderSetScale(renderer, 0.5f, 0.5f);
+  SDL_SetRenderDrawColor(renderer, 5, 12, 31, 255);
+  SDL_RenderClear(renderer);
+  isDirty = 1;
+}
+
+void gfxTitleFadeBlack(uint8_t alpha) {
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderDrawColor(renderer, 0, 0, 0, alpha);
+  SDL_Rect rect = {0, 0, 640, 480};
+  SDL_RenderFillRect(renderer, &rect);
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+  isDirty = 1;
+}
+
+void gfxTitlePresent(void) {
+  if (!titleTexture) return;
+  SDL_SetRenderTarget(renderer, NULL);
+  SDL_RenderSetScale(renderer, 1.0f, 1.0f);
+  SDL_Rect destination = {0, 0, 640, 480};
+  SDL_RenderCopy(renderer, titleTexture, NULL, &destination);
+  isDirty = 1;
+}
+
+void gfxTitleEnd(void) {
+  SDL_SetRenderTarget(renderer, NULL);
+  SDL_RenderSetScale(renderer, 1.0f, 1.0f);
+  if (titleTexture) SDL_DestroyTexture(titleTexture);
+  titleTexture = NULL;
+  if (titleLogicalSizeActive) SDL_RenderSetLogicalSize(renderer, 0, 0);
+  titleLogicalSizeActive = 0;
+}
+
+void gfxTitlePrint(int x, int y, const char* text) {
+  if (!text || !fontTexture) return;
+  int cx = CHAR_X(x);
+  int cy = CHAR_Y(y);
+  SDL_SetTextureColorMod(fontTexture, (fgColor >> 16) & 0xFF,
+    (fgColor >> 8) & 0xFF, fgColor & 0xFF);
+  for (int i = 0; text[i]; i++) {
+    uint8_t c = text[i];
+    if (c >= 32 && c <= 126) {
+      SDL_Rect dst = {cx, cy, charW, charH};
+      SDL_RenderCopy(renderer, fontTexture, &charRects[c - 32], &dst);
+    }
+    cx += charW;
+  }
+  isDirty = 1;
+}
+#endif
 
 #ifdef TOUCH_INPUT
 static int buttonPressed[8] = {0};
 #endif
-
-// Font texture optimization
-static SDL_Texture* fontTexture = NULL;
-static SDL_Rect charRects[95]; // ASCII 32-126
 
 static void createFontTexture(void) {
   if (!currentResolution || !currentResolution->data) return;

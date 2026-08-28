@@ -7,6 +7,8 @@
 #define SCR_PROJECT_ROWS (6)
 
 int projectLoadFromPath(const char* path);
+void projectOpenFromScreen(const AppScreen* returnScreen);
+void projectCreateNewFromScreen(const AppScreen* returnScreen);
 
 int projectCommonColumnCount(int row);
 void projectCommonDrawStatic(void);

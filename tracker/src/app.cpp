@@ -299,7 +299,11 @@ void appSetup(void) {
   audioManager.start(appSettings.audioSampleRate, appSettings.audioBufferSize);
   audioManager.resume();
 
+#ifdef DESKTOP_BUILD
+  screenSetup(&screenTitle, 0);
+#else
   screenSetup(&screenSong, 0);
+#endif
 }
 
 #ifdef WEB_BUILD
@@ -325,6 +329,10 @@ void appDraw(void) {
   const ColorScheme cs = appSettings.colorScheme;
 
   screenDraw();
+
+#ifdef DESKTOP_BUILD
+  if (currentScreen == &screenTitle) return;
+#endif
 
   if (!chipnomadState) return;
 
@@ -587,6 +595,9 @@ void appOnEvent(MainLoopEventData eventData) {
     gfxClear();
     if (currentScreen) {
       currentScreen->fullRedraw();
+#ifdef DESKTOP_BUILD
+      if (currentScreen != &screenTitle)
+#endif
       drawScreenMap();
     }
     break;

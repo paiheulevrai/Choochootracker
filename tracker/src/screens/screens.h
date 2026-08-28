@@ -107,6 +107,9 @@ int screenMixerGetPage(void);
 extern const AppScreen screenColorTheme;
 extern const AppScreen screenKeyMapping;
 extern const AppScreen screenQuickHelp;
+#ifdef DESKTOP_BUILD
+extern const AppScreen screenTitle;
+#endif
 
 extern const AppScreen* currentScreen;
 
