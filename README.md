@@ -24,14 +24,37 @@
      CAHORS                                       MONTAUBAN
           >>>  8 TRACKS / 96 kHz / CHIPNOMAD-BASED  >>>
 
-.oO[ AY / BRAIDS / PLAITS / PCM SAMPLES / SCWF/ WAVETABLES ]Oo.
+.oO[ AY / BRAIDS / PLAITS / PCM SAMPLES / SCWF/ WTBL / 303 ]Oo.
 ````
+
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/song.png" alt="Song editor" width="31%">
+  <img src="screenshots/phrase.png" alt="Phrase editor" width="31%">
+  <img src="screenshots/mixer.png" alt="Mixer" width="31%">
+</p>
+<p align="center">
+  <img src="screenshots/enginemenu.png" alt="Instrument engine menu" width="31%">
+  <img src="screenshots/plaitsalt.png" alt="Plaits-Alt instrument" width="31%">
+  <img src="screenshots/braidsalt.png" alt="Braids-Alt instrument" width="31%">
+</p>
+<p align="center">
+  <img src="screenshots/sample.png" alt="Sample instrument" width="31%">
+  <img src="screenshots/byowtbl.png" alt="Wavetable instrument" width="31%">
+  <img src="screenshots/cloud.png" alt="Cloud effect" width="31%">
+</p>
+<p align="center">
+  <img src="screenshots/modsources.png" alt="Modulation sources" width="31%">
+  <img src="screenshots/moddest.png" alt="Modulation destinations" width="31%">
+  <img src="screenshots/settings.png" alt="Settings" width="31%">
+</p>
 
 ChooChooTracker is a music tracker for handheld consoles.
 
-Write a beat on the train, automate a weird little synth line, send it through reverb, then keep going until you miss your stop.
+Write a beat on the train, sequence, jam with joysticks, automate a synth line, send it through reverb, then keep going until you miss your stop.
 
-This is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with A LOT of extra synth engines, high quality PCM samples / SCWF / Serum wavetables playback, global reverb/delay, and some other small changes. It keeps ChipNomad's supafast LSDJ-inspired tracker workflow but departs from the chiptune-only vision of Megus to offer a metric ton of modern sound design options. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
+This is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with A LOT of extra synth engines, high quality PCM samples / SCWF / Serum wavetables playback, global reverb/delay, and many other small changes. It keeps ChipNomad's supafast LSDJ-inspired tracker workflow but departs from the chiptune vision of Megus to offer a metric ton of modern sound design options. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
 
 The main target is the Anbernic RG353V through PortMaster. 
 A native Windows build is available for development and desktop testing.
@@ -47,7 +70,8 @@ It should work on any Portmaster capable system, and should also compile on Andr
 - Clean mono or stereo PCM8/PCM16 sample playback (one-shot samples, like your Digitakt)
 - Dual single cycle waveform oscillator: with mix & detune
 - Dual wavetable oscillator: bring your own Serum wavetables !
-- Multimode LP/HP/BP 12/24dB filter for all new synth/sample engines
+- Acid engine (open303 based) that can take Braids as VCO 
+- Multimode LP/HP/BP 12/24dB filters for all new synth/sample engines
 - Several filter flavours inspired 
 - Per-track volume, mute, solo, Reverb send, and Delay send
 - Mutable Instruments Clouds meme lush reverb
@@ -57,7 +81,7 @@ It should work on any Portmaster capable system, and should also compile on Andr
 - Synth engines parameters can be set by TrackFX, kinda like P-locks.
 - 4x mod sources per track: ADSR, AHD, LFO and sticks. Modulations can target modulations.
 - 3 LFO types: normal, slow tempo sync'd (can be very slow) and fast LFO for audio rate modulations
-- Joystick modulation can be live recorded as trackFX 
+- Joystick modulation , that can be live recorded as trackFX 
 - Tracker tables, grooves, chains, and songs
 
 ## One tracker, very different voices
