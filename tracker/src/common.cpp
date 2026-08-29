@@ -36,19 +36,19 @@ void initDefaultAppSettings(void) {
   memset(&appSettings.keyMapping, 0, sizeof(KeyMapping));
 
   // Color scheme defaults
-  appSettings.colorScheme.background = 0x001f00;
-  appSettings.colorScheme.textEmpty = 0x006620;
-  appSettings.colorScheme.textInfo = 0x4e3e00;
-  appSettings.colorScheme.textDefault = 0xa06000;
-  appSettings.colorScheme.textValue = 0xefcf7f;
-  appSettings.colorScheme.textTitles = 0x9f9f50;
-  appSettings.colorScheme.playMarkers = 0xefe000;
-  appSettings.colorScheme.cursor = 0x6f8cff;
-  appSettings.colorScheme.selection = 0x00d090;
-  appSettings.colorScheme.warning = 0xff4040;
+  appSettings.colorScheme.background = 0x050c1f;
+  appSettings.colorScheme.textEmpty = 0x10284a;
+  appSettings.colorScheme.textInfo = 0x52799b;
+  appSettings.colorScheme.textDefault = 0xc9bfa5;
+  appSettings.colorScheme.textValue = 0xffd665;
+  appSettings.colorScheme.textTitles = 0xe6b84f;
+  appSettings.colorScheme.playMarkers = 0x64d6ff;
+  appSettings.colorScheme.cursor = 0x65d8ff;
+  appSettings.colorScheme.selection = 0x245072;
+  appSettings.colorScheme.warning = 0xff6655;
 
   // String defaults
-  strncpy(appSettings.themeName, "Wood", THEME_NAME_LENGTH);
+  strncpy(appSettings.themeName, "Choo", THEME_NAME_LENGTH);
   appSettings.themeName[THEME_NAME_LENGTH] = '\0';
   appSettings.projectFilename[0] = '\0';
 #ifdef WEB_BUILD

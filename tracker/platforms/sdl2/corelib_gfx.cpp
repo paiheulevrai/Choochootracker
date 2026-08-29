@@ -109,15 +109,16 @@ void gfxImageDrawCrop(const GfxImage* image, int sourceX, int sourceY,
 
 void gfxTitleBegin(void) {
   if (!titleLogicalSizeActive) {
-    SDL_RenderSetLogicalSize(renderer, 640, 480);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
     titleTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-      SDL_TEXTUREACCESS_TARGET, 320, 240);
-    if (titleTexture) SDL_SetTextureBlendMode(titleTexture, SDL_BLENDMODE_NONE);
+      SDL_TEXTUREACCESS_TARGET, 256, 224);
+    if (!titleTexture) return;
+    SDL_SetTextureBlendMode(titleTexture, SDL_BLENDMODE_NONE);
+    SDL_RenderSetLogicalSize(renderer, 640, 480);
     titleLogicalSizeActive = 1;
   }
   SDL_SetRenderTarget(renderer, titleTexture);
-  SDL_RenderSetScale(renderer, 0.5f, 0.5f);
+  SDL_RenderSetScale(renderer, 1.0f, 1.0f);
   SDL_SetRenderDrawColor(renderer, 5, 12, 31, 255);
   SDL_RenderClear(renderer);
   isDirty = 1;
@@ -126,7 +127,7 @@ void gfxTitleBegin(void) {
 void gfxTitleFadeBlack(uint8_t alpha) {
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
   SDL_SetRenderDrawColor(renderer, 0, 0, 0, alpha);
-  SDL_Rect rect = {0, 0, 640, 480};
+  SDL_Rect rect = {0, 0, 256, 224};
   SDL_RenderFillRect(renderer, &rect);
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
   isDirty = 1;
@@ -152,17 +153,17 @@ void gfxTitleEnd(void) {
 
 void gfxTitlePrint(int x, int y, const char* text) {
   if (!text || !fontTexture) return;
-  int cx = CHAR_X(x);
-  int cy = CHAR_Y(y);
+  int cx = x * 8;
+  int cy = y * 12;
   SDL_SetTextureColorMod(fontTexture, (fgColor >> 16) & 0xFF,
     (fgColor >> 8) & 0xFF, fgColor & 0xFF);
   for (int i = 0; text[i]; i++) {
     uint8_t c = text[i];
     if (c >= 32 && c <= 126) {
-      SDL_Rect dst = {cx, cy, charW, charH};
+      SDL_Rect dst = {cx, cy, 8, 12};
       SDL_RenderCopy(renderer, fontTexture, &charRects[c - 32], &dst);
     }
-    cx += charW;
+    cx += 8;
   }
   isDirty = 1;
 }

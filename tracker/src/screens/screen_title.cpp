@@ -1,13 +1,26 @@
 #ifdef DESKTOP_BUILD
 
 #include <stdio.h>
+#include <string.h>
+#include "common.h"
 #include "screens.h"
 #include "screen_project.h"
 #include "corelib_gfx.h"
 
-static GfxImage *sky, *far, *middle, *mainLayer, *viaduct, *foreground, *train, *logo;
+static GfxImage *sky, *scene, *foreground, *viaduct, *detail, *train, *logo;
 static int frame;
 static int selected;
+static int continueAvailable;
+
+static void unload(void) {
+  gfxImageFree(sky); sky = NULL;
+  gfxImageFree(scene); scene = NULL;
+  gfxImageFree(foreground); foreground = NULL;
+  gfxImageFree(viaduct); viaduct = NULL;
+  gfxImageFree(detail); detail = NULL;
+  gfxImageFree(train); train = NULL;
+  gfxImageFree(logo); logo = NULL;
+}
 
 static GfxImage* load(const char* name) {
   char path[64];
@@ -16,28 +29,38 @@ static GfxImage* load(const char* name) {
 }
 
 static void init(void) {
-  sky = load("sky.bmp");
-  far = load("far.bmp");
-  middle = load("middle.bmp");
-  mainLayer = load("main.bmp");
-  viaduct = load("viaduct.bmp");
-  foreground = load("foreground.bmp");
-  train = load("train.bmp");
-  logo = load("logo.bmp");
+  unload();
+  sky = load("snes_sky.bmp");
+  scene = load("snes_scene.bmp");
+  foreground = load("snes_foreground.bmp");
+  viaduct = load("snes_viaduct.bmp");
+  detail = load("snes_detail.bmp");
+  train = load("snes_train.bmp");
+  logo = load("snes_logo.bmp");
 }
 
-static void setup(int input) { frame = 0; selected = 0; }
+static int canContinue(void) {
+  FILE* autosave = fopen(getAutosavePath(), "rb");
+  if (!autosave) return 0;
+  fclose(autosave);
+  return 1;
+}
+
+static void setup(int input) {
+  frame = 0;
+  continueAvailable = canContinue();
+  selected = continueAvailable ? 0 : 1;
+}
 static void fullRedraw(void) {}
 
 static void drawWrapped(const GfxImage* image, int offset) {
   const int width = gfxImageWidth(image);
   if (!width) return;
   offset %= width;
-  offset &= ~1; // The title is rendered at half resolution, so avoid half-pixel sampling.
   int x = 0;
-  while (x < 640) {
+  while (x < 256) {
     int part = width - offset;
-    if (part > 640 - x) part = 640 - x;
+    if (part > 256 - x) part = 256 - x;
     gfxImageDrawCrop(image, offset, 0, part, gfxImageHeight(image), x, 0);
     x += part;
     offset = 0;
@@ -47,27 +70,28 @@ static void drawWrapped(const GfxImage* image, int offset) {
 static void drawMenu(void) {
   const char* items[] = {"CONTINUE", "OPEN", "NEW"};
   for (int i = 0; i < 3; i++) {
-    gfxSetFgColor(i == selected ? 0xffd665 : 0xf2e6c7);
-    gfxTitlePrint(15, 7 + i, i == selected && ((frame / 20) & 1) == 0 ? ">" : " ");
-    gfxTitlePrint(17, 7 + i, items[i]);
+    const int textX = (32 - (int)strlen(items[i])) / 2;
+    gfxSetFgColor(i == 0 && !continueAvailable ? 0x777777 :
+      i == selected ? 0xffd665 : 0xf2e6c7);
+    gfxTitlePrint(textX - 2, 6 + i, i == selected && ((frame / 20) & 1) == 0 ? ">" : " ");
+    gfxTitlePrint(textX, 6 + i, items[i]);
   }
 }
 
 static void draw(void) {
   gfxTitleBegin();
-  drawWrapped(sky, frame / 12);
-  drawWrapped(far, frame / 4);
-  drawWrapped(middle, frame / 2);
-  drawWrapped(mainLayer, frame / 2);
+  drawWrapped(sky, frame / 60);
+  drawWrapped(scene, frame / 20);
+  drawWrapped(detail, frame / 60);
   int vibration = frame % 173 < 6 ? (frame & 1 ? -1 : 1) : 0;
   if (train) {
     const int trainWidth = gfxImageWidth(train);
-    const int trainX = ((30 + frame / 2 + trainWidth) % (640 + trainWidth) - trainWidth) & ~1;
-    gfxImageDrawCrop(train, 0, 0, trainWidth, gfxImageHeight(train), trainX, 268 + vibration * 2);
+    const int trainX = (8 + frame / 60 + trainWidth) % (256 + trainWidth) - trainWidth;
+    gfxImageDrawCrop(train, 0, 0, trainWidth, gfxImageHeight(train), trainX, 133 + vibration);
   }
-  drawWrapped(viaduct, frame / 2);
-  drawWrapped(foreground, frame);
-  if (logo) gfxImageDrawCrop(logo, 0, 0, gfxImageWidth(logo), gfxImageHeight(logo), 120, 28);
+  drawWrapped(viaduct, frame / 20);
+  drawWrapped(foreground, frame / 10);
+  if (logo) gfxImageDrawCrop(logo, 0, 0, gfxImageWidth(logo), gfxImageHeight(logo), 48, 20);
   drawMenu();
   if (frame < 30) gfxTitleFadeBlack((uint8_t)(255 - frame * 255 / 30));
   gfxTitlePresent();
@@ -76,13 +100,13 @@ static void draw(void) {
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
   if (!isKeyDown) return 1;
-  if (keys == keyUp && selected > 0) { selected--; return 1; }
+  if (keys == keyUp && selected > 1) { selected--; return 1; }
   if (keys == keyDown && selected < 2) { selected++; return 1; }
   if (keys != keyEdit) return 1;
   gfxTitleEnd();
-  if (selected == 0) screenSetup(&screenSong, 0);
+  if (selected == 0 && continueAvailable) { unload(); screenSetup(&screenSong, 0); }
   else if (selected == 1) projectOpenFromScreen(&screenTitle);
-  else projectCreateNewFromScreen(&screenSong);
+  else { unload(); projectCreateNewFromScreen(&screenSong); }
   return 1;
 }
 
