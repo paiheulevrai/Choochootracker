@@ -58,7 +58,7 @@ This is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with 
 
 The main target is the Anbernic RG353V through PortMaster. 
 A native Windows build is available for development and desktop testing.
-You can also test it in your browser on https://choochootracker.vercel.app/ (use the keyboard on a computer, use the on-screen gamepad on a mobile device).
+You can also test it in your browser on https://choochootracker.vercel.app/ (use the keyboard or gamepad on a computer, use the on-screen gamepad on a mobile device).
 
 It should work on any Portmaster capable system, and should also compile on Android and other platforms though I haven't tested that yet.
 
