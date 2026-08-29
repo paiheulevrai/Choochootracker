@@ -59,9 +59,9 @@ PortMaster-deploy: PortMaster
 	cp ../LICENSE $(PORT_DIR)/licenses/LICENSE.choochootracker.md
 	cp packaging/portmaster/license/* $(PORT_DIR)/licenses/
 	cp packaging/portmaster/ChooChooTracker.sh $(PACKAGE_ROOT)/
-	cp packaging/portmaster/port.json packaging/portmaster/README.md packaging/portmaster/gameinfo.xml packaging/portmaster/cover.png packaging/portmaster/screenshot.png $(PACKAGE_ROOT)/
+	cp packaging/portmaster/port.json packaging/portmaster/README.md packaging/portmaster/gameinfo.xml packaging/portmaster/cover.png packaging/portmaster/screenshot.png $(PORT_DIR)/
 	chmod +x $(PACKAGE_ROOT)/ChooChooTracker.sh $(PORT_DIR)/choochootracker.aarch64
-	sed -i "s/BUILD_DATE_PLACEHOLDER/$$(date +%Y%m%dT%H%M%S)/" $(PACKAGE_ROOT)/gameinfo.xml
+	sed -i "s/BUILD_DATE_PLACEHOLDER/$$(date +%Y%m%dT%H%M%S)/" $(PORT_DIR)/gameinfo.xml
 	rm -f $(BUILD)/choochootracker.zip $(RELEASE)
 	cd $(PACKAGE_ROOT) && zip -qr ../choochootracker.zip .
 	cp $(BUILD)/choochootracker.zip $(RELEASE)
