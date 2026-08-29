@@ -1,5 +1,3 @@
-#ifdef DESKTOP_BUILD
-
 #include <stdio.h>
 #include <string.h>
 #include "common.h"
@@ -118,5 +116,3 @@ const AppScreen screenTitle = {
   .onInput = onInput,
   .getPlaybackLevel = NULL,
 };
-
-#endif

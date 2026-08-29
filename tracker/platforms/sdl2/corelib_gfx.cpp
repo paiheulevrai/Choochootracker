@@ -48,7 +48,6 @@ static const FontResolution* currentResolution = NULL;
 static SDL_Texture* fontTexture = NULL;
 static SDL_Rect charRects[95];
 
-#ifdef DESKTOP_BUILD
 struct GfxImage {
   SDL_Texture* texture;
   int width;
@@ -167,7 +166,6 @@ void gfxTitlePrint(int x, int y, const char* text) {
   }
   isDirty = 1;
 }
-#endif
 
 #ifdef TOUCH_INPUT
 static int buttonPressed[8] = {0};

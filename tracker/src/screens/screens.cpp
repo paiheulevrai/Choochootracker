@@ -92,25 +92,19 @@ void screenDraw() {
     gfxSetCursorColor(appSettings.colorScheme.cursor);
     gfxClearRect(0, 0, 40, 20);
     currentScreen->fullRedraw();
-#ifdef DESKTOP_BUILD
     if (currentScreen != &screenTitle)
-#endif
       drawScreenMap();
 
     pendingScreen = NULL;
   }
 
   currentScreen->draw();
-#ifdef DESKTOP_BUILD
   if (currentScreen != &screenTitle)
-#endif
     drawScreenMap();
 
   // Draw cached message
   if (strlen(messageBuffer) > 0
-#ifdef DESKTOP_BUILD
       && currentScreen != &screenTitle
-#endif
       ) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
     gfxClearRect(0, 19, 40, 1);
@@ -147,9 +141,7 @@ void screenMessage(int time, const char* format, ...) {
 }
 
 void screensInitAll(void) {
-#ifdef DESKTOP_BUILD
   screenTitle.init();
-#endif
   screenSong.init();
   screenChain.init();
   screenPhrase.init();
