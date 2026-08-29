@@ -37,7 +37,7 @@
 <p align="center">
   <img src="screenshots/enginemenu.png" alt="Instrument engine menu" width="31%">
   <img src="screenshots/plaitsalt.png" alt="Plaits-Alt instrument" width="31%">
-  <img src="screenshots/braidsalt.png" alt="Braids-Alt instrument" width="31%">
+  <img src="screenshots/braids.png" alt="Braids instrument" width="31%">
 </p>
 <p align="center">
   <img src="screenshots/sample.png" alt="Sample instrument" width="31%">
