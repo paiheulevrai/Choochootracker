@@ -155,6 +155,7 @@ void gfxTitleFadeBlack(uint8_t alpha);
 void gfxTitlePresent(void);
 void gfxTitleEnd(void);
 void gfxTitlePrint(int x, int y, const char* text);
+void gfxToggleFullscreen(void);
 
 }
 

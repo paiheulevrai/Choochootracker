@@ -39,6 +39,8 @@ static uint32_t cursorColor = 0;
 static char printBuffer[PRINT_BUFFER_SIZE];
 static int screenW;
 static int screenH;
+static int logicalW;
+static int logicalH;
 static int charW;
 static int charH;
 static int offsetX;
@@ -135,7 +137,9 @@ void gfxTitleFadeBlack(uint8_t alpha) {
 void gfxTitlePresent(void) {
   if (!titleTexture) return;
   SDL_SetRenderTarget(renderer, NULL);
-  SDL_RenderSetScale(renderer, 1.0f, 1.0f);
+  // Switching away from a render target resets the renderer viewport.
+  // Restore the 4:3 logical canvas before presenting to a resized window.
+  SDL_RenderSetLogicalSize(renderer, 640, 480);
   SDL_Rect destination = {0, 0, 640, 480};
   SDL_RenderCopy(renderer, titleTexture, NULL, &destination);
   isDirty = 1;
@@ -146,7 +150,7 @@ void gfxTitleEnd(void) {
   SDL_RenderSetScale(renderer, 1.0f, 1.0f);
   if (titleTexture) SDL_DestroyTexture(titleTexture);
   titleTexture = NULL;
-  if (titleLogicalSizeActive) SDL_RenderSetLogicalSize(renderer, 0, 0);
+  if (titleLogicalSizeActive) SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
   titleLogicalSizeActive = 0;
 }
 
@@ -165,6 +169,14 @@ void gfxTitlePrint(int x, int y, const char* text) {
     cx += 8;
   }
   isDirty = 1;
+}
+
+void gfxToggleFullscreen(void) {
+#ifdef DESKTOP_BUILD
+  const Uint32 flags = SDL_GetWindowFlags(window);
+  SDL_SetWindowFullscreen(window, flags & SDL_WINDOW_FULLSCREEN_DESKTOP
+    ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
+#endif
 }
 
 #ifdef TOUCH_INPUT
@@ -253,7 +265,11 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
   window = SDL_CreateWindow(printBuffer,
     SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
     screenW, screenH,
-    SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI
+#ifdef DESKTOP_BUILD
+    | SDL_WINDOW_RESIZABLE
+#endif
+  );
 
   if (!window) {
     fprintf(stderr, "SDL2 Create Window Error: %s\n", SDL_GetError());
@@ -262,6 +278,9 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
   }
 
   renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+  logicalW = screenW;
+  logicalH = screenH;
+  SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
 
   // Check for high-DPI display and get actual drawable size. HTML5 uses a
   // software canvas, so SDL_GL_GetDrawableSize is not meaningful there.

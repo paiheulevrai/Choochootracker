@@ -10,6 +10,16 @@ static int frame;
 static int selected;
 static int continueAvailable;
 
+// Pixel scrolling stays crisp, but must advance often enough to look fluid at
+// the fixed 60 Hz title-screen cadence.
+enum {
+  SKY_SCROLL_FRAMES = 10,
+  SCENE_SCROLL_FRAMES = 6,
+  VIADUCT_SCROLL_FRAMES = 4,
+  FOREGROUND_SCROLL_FRAMES = 2,
+  TRAIN_SCROLL_FRAMES = 4,
+};
+
 static void unload(void) {
   gfxImageFree(sky); sky = NULL;
   gfxImageFree(scene); scene = NULL;
@@ -78,17 +88,18 @@ static void drawMenu(void) {
 
 static void draw(void) {
   gfxTitleBegin();
-  drawWrapped(sky, frame / 60);
-  drawWrapped(scene, frame / 20);
-  drawWrapped(detail, frame / 60);
+  drawWrapped(sky, frame / SKY_SCROLL_FRAMES);
+  // The scenery around the viaduct remains a separate, intermediate plane.
+  drawWrapped(scene, frame / SCENE_SCROLL_FRAMES);
+  drawWrapped(detail, frame / SKY_SCROLL_FRAMES);
   int vibration = frame % 173 < 6 ? (frame & 1 ? -1 : 1) : 0;
   if (train) {
     const int trainWidth = gfxImageWidth(train);
-    const int trainX = (8 + frame / 60 + trainWidth) % (256 + trainWidth) - trainWidth;
+    const int trainX = (8 + frame / TRAIN_SCROLL_FRAMES + trainWidth) % (256 + trainWidth) - trainWidth;
     gfxImageDrawCrop(train, 0, 0, trainWidth, gfxImageHeight(train), trainX, 133 + vibration);
   }
-  drawWrapped(viaduct, frame / 20);
-  drawWrapped(foreground, frame / 10);
+  drawWrapped(viaduct, frame / VIADUCT_SCROLL_FRAMES);
+  drawWrapped(foreground, frame / FOREGROUND_SCROLL_FRAMES);
   if (logo) gfxImageDrawCrop(logo, 0, 0, gfxImageWidth(logo), gfxImageHeight(logo), 48, 20);
   drawMenu();
   if (frame < 30) gfxTitleFadeBlack((uint8_t)(255 - frame * 255 / 30));
@@ -98,7 +109,7 @@ static void draw(void) {
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
   if (!isKeyDown) return 1;
-  if (keys == keyUp && selected > 1) { selected--; return 1; }
+  if (keys == keyUp && selected > 0) { selected--; return 1; }
   if (keys == keyDown && selected < 2) { selected++; return 1; }
   if (keys != keyEdit) return 1;
   gfxTitleEnd();

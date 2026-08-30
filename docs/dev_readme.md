@@ -342,6 +342,10 @@ The next low-priority engine is `SCWF`, a dedicated dual-oscillator single-cycle
 - [ ] Validate every engine on RG353V for CPU, filter, and retrigger behavior; warn when a model cannot meet the eight-voice target with Reverb and Delay active.
 - [ ] Add names and a compact “what each family sounds like” guide for every model.
 
+### 13. Title screen
+
+- [ ] Compress the title-screen artwork for distribution.
+
 ## First-version acceptance criteria
 
 - ChooChooTracker remains usable without major tracker regressions.

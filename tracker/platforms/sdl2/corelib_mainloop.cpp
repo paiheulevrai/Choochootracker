@@ -163,6 +163,13 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
       else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
         // SDL/OS keyboard repeat competes with the app's deterministic repeat timer.
         if (event.type == SDL_KEYDOWN && event.key.repeat) continue;
+#ifdef DESKTOP_BUILD
+        if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_RETURN &&
+            (event.key.keysym.mod & KMOD_ALT)) {
+          gfxToggleFullscreen();
+          continue;
+        }
+#endif
         if (event.key.keysym.sym == BTN_MENU) {
           menu = event.type == SDL_KEYDOWN;
         } else {

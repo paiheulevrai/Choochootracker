@@ -45,6 +45,8 @@ Projects use the `.cct` extension. Instrument files use `.cni`. PCM instruments 
 ### Windows
 
 Run `choochootracker.exe` with `SDL2.dll` and `libwinpthread-1.dll` in the same directory.
+Press **Alt + Enter** to toggle fullscreen. The window is resizable; the image
+scales while keeping its original aspect ratio.
 
 ## 2. Controls
 
