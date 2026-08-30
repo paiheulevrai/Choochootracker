@@ -23,7 +23,7 @@ static void cancelAutoMix(void) {
 
 int screenMixerGetPage(void) { return mixerPage; }
 
-static int columnCount(int row) { return mixerPage == 0 ? (row == PROJECT_MAX_TRACKS ? 1 : 5) : 1; }
+static int columnCount(int row) { return mixerPage == 0 ? (row == PROJECT_MAX_TRACKS ? 1 : 6) : 1; }
 static void drawRowHeader(int row, CellState state) {}
 static void drawColHeader(int col, CellState state) {}
 
@@ -32,7 +32,7 @@ static void drawStatic(void) {
   if (mixerPage == 0) {
     gfxPrint(0, 0, "MIXER");
     gfxPrint(3, 2, "LVL"); gfxPrint(8, 2, "REV"); gfxPrint(13, 2, "DLY");
-    gfxPrint(18, 2, "MUTE"); gfxPrint(25, 2, "SOLO");
+    gfxPrint(18, 2, "TLT"); gfxPrint(23, 2, "M"); gfxPrint(26, 2, "S");
     gfxPrint(32, 2, "CLIP");
     gfxPrint(0, 12, "AUTO MIX");
   } else if (mixerPage == 1) {
@@ -48,10 +48,10 @@ static void drawStatic(void) {
 
 static void drawCursor(int col, int row) {
   if (mixerPage == 0) {
-    static const int x[] = {3, 8, 13, 18, 25};
-    static const int width[] = {3, 3, 3, 3, 3};
+    static const int x[] = {3, 8, 13, 18, 23, 26};
+    static const int width[] = {3, 3, 3, 2, 1, 1};
     if (row == PROJECT_MAX_TRACKS) { gfxCursor(10, 12, 16); return; }
-    if (col < 0 || col >= 5 || row < 0 || row >= PROJECT_MAX_TRACKS) return;
+    if (col < 0 || col >= 6 || row < 0 || row >= PROJECT_MAX_TRACKS) return;
     gfxCursor(x[col], 3 + row, width[col]);
   } else if (row >= 0 && row < (mixerPage == 2 ? 5 : 4)) {
     int width = row == (mixerPage == 2 ? 4 : 3) ? 8 : 4;
@@ -68,13 +68,14 @@ static void drawField(int col, int row, CellState state) {
       gfxPrint(10, 12, state == CellState::focus ? "> RUN AUTO MIX <" : "[ RUN AUTO MIX ]");
       return;
     }
-    if (col < 0 || col >= 5 || row < 0 || row >= PROJECT_MAX_TRACKS) return;
+    if (col < 0 || col >= 6 || row < 0 || row >= PROJECT_MAX_TRACKS) return;
     gfxPrintf(0, 3 + row, "T%d", row + 1);
     if (col == 0) gfxPrintf(3, 3 + row, "%03d", chipnomadState->project.trackVolume[row]);
     else if (col == 1) gfxPrintf(8, 3 + row, "%03d", chipnomadState->project.trackReverbSend[row]);
     else if (col == 2) gfxPrintf(13, 3 + row, "%03d", chipnomadState->project.trackDelaySend[row]);
-    else if (col == 3) gfxPrint(18, 3 + row, audioManager.trackStates[row] == TRACK_MUTED ? "ON " : "OFF");
-    else gfxPrint(25, 3 + row, audioManager.trackStates[row] == TRACK_SOLO ? "ON " : "OFF");
+    else if (col == 3) gfxPrint(18, 3 + row, byteToHex(chipnomadState->project.trackTilt[row]));
+    else if (col == 4) gfxPrint(23, 3 + row, audioManager.trackStates[row] == TRACK_MUTED ? "*" : "-");
+    else gfxPrint(26, 3 + row, audioManager.trackStates[row] == TRACK_SOLO ? "*" : "-");
     gfxSetFgColor(chipnomadState->trackClipping[row] ? appSettings.colorScheme.warning : appSettings.colorScheme.textDefault);
     gfxPrint(32, 3 + row, chipnomadState->trackClipping[row] ? "!" : " ");
     return;
@@ -118,12 +119,13 @@ static int onEdit(int col, int row, CellEditAction action) {
       }
       return 1;
     }
-    if (col < 0 || col >= 5 || row < 0 || row >= PROJECT_MAX_TRACKS) return 0;
+    if (col < 0 || col >= 6 || row < 0 || row >= PROJECT_MAX_TRACKS) return 0;
     if (col == 0) handled = edit8noLast(action, &p->trackVolume[row], 10, 0, 100);
     else if (col == 1) handled = edit8noLast(action, &p->trackReverbSend[row], 10, 0, 100);
     else if (col == 2) handled = edit8noLast(action, &p->trackDelaySend[row], 10, 0, 100);
+    else if (col == 3) handled = edit8noLast(action, &p->trackTilt[row], 16, 0, 255);
     else if (action == CellEditAction::tap) {
-      if (col == 3) audioManager.toggleTrackMute(row); else audioManager.toggleTrackSolo(row);
+      if (col == 4) audioManager.toggleTrackMute(row); else audioManager.toggleTrackSolo(row);
       handled = 1;
     }
   } else if (row >= 0 && row < (mixerPage == 2 ? 5 : 4)) {
@@ -142,7 +144,7 @@ static int onEdit(int col, int row, CellEditAction action) {
   }
   if (handled) {
     projectModified = 1;
-    if (mixerPage == 0 && col >= 3) fullRedraw();
+    if (mixerPage == 0 && col >= 4) fullRedraw();
   }
   return handled;
 }

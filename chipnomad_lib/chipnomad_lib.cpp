@@ -426,8 +426,10 @@ static float effectiveTrackSend(ChipNomadState* state, int trackIdx,
 
 static inline void mixTrackSample(ChipNomadState* state, int trackIdx,
                                   float* mix, float* reverb, float* delay,
-                                  float sample, float reverbSend,
+                                  float sample, int channel, float reverbSend,
                                   float delaySend) {
+  sample = state->trackTilt[trackIdx].process(sample, channel,
+    state->audioProject.trackTilt[trackIdx], state->audioProject.tiltPivotHz);
   float previous = *mix;
   *mix += sample;
   *reverb += sample * reverbSend;
@@ -539,6 +541,7 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
   state->sampleRate = sampleRate;
   state->masterEffects->init((float)sampleRate);
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
+    state->trackTilt[i].init((float)sampleRate);
     state->sampleVoices[i]->init((float)sampleRate);
     state->scwfVoices[i]->init((float)sampleRate);
     state->plaitsVoices[i]->init((float)sampleRate);
@@ -712,7 +715,7 @@ static void renderChipTracks(ChipNomadState* state, float* output, int frames) {
     float delaySend = effectiveTrackSend(state, chipIdx, false);
     for (int i = 0; i < frames * 2; ++i)
       mixTrackSample(state, chipIdx, &output[i], &state->reverbBuffer[i], &state->delayBuffer[i],
-                     state->mixBuffer[i] * gain, reverbSend, delaySend);
+                     state->mixBuffer[i] * gain, i & 1, reverbSend, delaySend);
   }
 }
 
@@ -729,9 +732,9 @@ static void renderMonoVoiceTracks(ChipNomadState* state, Voice* const voices[], 
     for (int i = 0; i < frames; ++i) {
       float sample = state->mixBuffer[i] * 0.25f * trackGain;
       mixTrackSample(state, trackIdx, &output[i * 2], &state->reverbBuffer[i * 2],
-                     &state->delayBuffer[i * 2], sample, reverbSend, delaySend);
+                     &state->delayBuffer[i * 2], sample, 0, reverbSend, delaySend);
       mixTrackSample(state, trackIdx, &output[i * 2 + 1], &state->reverbBuffer[i * 2 + 1],
-                     &state->delayBuffer[i * 2 + 1], sample, reverbSend, delaySend);
+                     &state->delayBuffer[i * 2 + 1], sample, 1, reverbSend, delaySend);
     }
   }
 }
@@ -748,7 +751,7 @@ static void renderStereoVoiceTracks(ChipNomadState* state, Voice* const voices[]
     float delaySend = effectiveTrackSend(state, trackIdx, false);
     for (int i = 0; i < frames * 2; ++i)
       mixTrackSample(state, trackIdx, &output[i], &state->reverbBuffer[i], &state->delayBuffer[i],
-                     state->mixBuffer[i] * gain, reverbSend, delaySend);
+                     state->mixBuffer[i] * gain, i & 1, reverbSend, delaySend);
   }
 }
 

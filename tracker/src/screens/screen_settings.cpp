@@ -20,7 +20,7 @@ static void settingsDrawField(int col, int row, CellState state);
 static int settingsOnEdit(int col, int row, CellEditAction action);
 
 static ScreenData screenSettingsData = {
-  .rows = 12,
+  .rows = 13,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,
@@ -100,18 +100,20 @@ void settingsDrawCursor(int col, int row) {
   } else if (row == 2 && col == 0) {
     gfxCursor(23, 4, 4);
   } else if (row == 3 && col == 0) {
-    gfxCursor(23, 5, 6);
+    gfxCursor(23, 5, 4);
   } else if (row == 4 && col == 0) {
-    gfxCursor(23, 6, 3);
-  } else if (row >= 5 && row <= 7 && col == 0) {
-    gfxCursor(23, 2 + row, row == 5 ? 6 : 4);
-  } else if (row == 8 && col == 0) {
-    gfxCursor(0, 11, 11);
+    gfxCursor(23, 6, 6);
+  } else if (row == 5 && col == 0) {
+    gfxCursor(23, 7, 3);
+  } else if (row >= 6 && row <= 8 && col == 0) {
+    gfxCursor(23, 2 + row, row == 6 ? 6 : 4);
   } else if (row == 9 && col == 0) {
-    gfxCursor(0, 12, 9);
+    gfxCursor(0, 11, 11);
   } else if (row == 10 && col == 0) {
-    gfxCursor(0, 13, 16);
+    gfxCursor(0, 12, 9);
   } else if (row == 11 && col == 0) {
+    gfxCursor(0, 13, 16);
+  } else if (row == 12 && col == 0) {
     gfxCursor(0, 17, 19);
   }
 }
@@ -141,43 +143,48 @@ void settingsDrawField(int col, int row, CellState state) {
     gfxPrintf(23, 4, "%03d%%", mixVolumePercent);
   } else if (row == 3 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 5, "AY Quality");
+    gfxPrint(0, 5, "Tilt pivot");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    const char* qualityNames[] = {"LOW   ", "MEDIUM", "HIGH  ", "BEST  "};
-    gfxPrint(23, 5, qualityNames[appSettings.quality]);
+    gfxPrintf(23, 5, "%u Hz", chipnomadState->project.tiltPivotHz);
   } else if (row == 4 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 6, "AY Sample dithering");
+    gfxPrint(0, 6, "AY Quality");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(23, 6, appSettings.aySampleDithering ? "ON " : "OFF");
+    const char* qualityNames[] = {"LOW   ", "MEDIUM", "HIGH  ", "BEST  "};
+    gfxPrint(23, 6, qualityNames[appSettings.quality]);
   } else if (row == 5 && col == 0) {
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxPrint(0, 7, "AY Sample dithering");
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxPrint(23, 7, appSettings.aySampleDithering ? "ON " : "OFF");
+  } else if (row == 6 && col == 0) {
     static const char* names[] = {"2 BIT ", "3 BIT ", "4 BIT ", "6 BIT ", "8 BIT ", "12 BIT", "16 BIT"};
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 7, "Braids BITS");
+    gfxPrint(0, 8, "Braids BITS");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(23, 7, names[appSettings.braidsBits]);
-  } else if (row == 6 && col == 0) {
-    static const char* levels[] = {"OFF ", "LOW ", "MED ", "HIGH", "MAX "};
-    gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 8, "Braids DRFT");
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(23, 8, levels[appSettings.braidsDrift]);
+    gfxPrint(23, 8, names[appSettings.braidsBits]);
   } else if (row == 7 && col == 0) {
     static const char* levels[] = {"OFF ", "LOW ", "MED ", "HIGH", "MAX "};
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 9, "Braids SIGN");
+    gfxPrint(0, 9, "Braids DRFT");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(23, 9, levels[appSettings.braidsSignature]);
+    gfxPrint(23, 9, levels[appSettings.braidsDrift]);
   } else if (row == 8 && col == 0) {
+    static const char* levels[] = {"OFF ", "LOW ", "MED ", "HIGH", "MAX "};
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxPrint(0, 10, "Braids SIGN");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(0, 11, "Key mapping");
+    gfxPrint(23, 10, levels[appSettings.braidsSignature]);
   } else if (row == 9 && col == 0) {
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(0, 12, "Load font");
+    gfxPrint(0, 11, "Key mapping");
   } else if (row == 10 && col == 0) {
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(0, 13, "Edit color theme");
+    gfxPrint(0, 12, "Load font");
   } else if (row == 11 && col == 0) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxPrint(0, 13, "Edit color theme");
+  } else if (row == 12 && col == 0) {
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
     gfxPrint(0, 17, "Quit ChooChooTracker");
   }
@@ -207,45 +214,49 @@ int settingsOnEdit(int col, int row, CellEditAction action) {
     }
     return handled;
   } else if (row == 3 && col == 0) {
+    int handled = edit16withMinMax(action, &chipnomadState->project.tiltPivotHz, 250, 250, 4000);
+    if (handled) projectModified = 1;
+    return handled;
+  } else if (row == 4 && col == 0) {
     // Quality (0-3)
     int handled = edit8noLast(action, (uint8_t*)&appSettings.quality, 1, 0, 3);
     if (handled) {
       chipnomadSetQuality(chipnomadState, (ChipNomadQuality)appSettings.quality);
     }
     return handled;
-  } else if (row == 4 && col == 0) {
+  } else if (row == 5 && col == 0) {
     // Sample dithering (0/1)
     int handled = edit8noLast(action, (uint8_t*)&appSettings.aySampleDithering, 1, 0, 1);
     if (handled && chipnomadState) {
       chipnomadState->aySampleDithering = appSettings.aySampleDithering;
     }
     return handled;
-  } else if (row >= 5 && row <= 7 && col == 0) {
-    uint8_t value = row == 5 ? appSettings.braidsBits :
-      (row == 6 ? appSettings.braidsDrift : appSettings.braidsSignature);
-    int handled = edit8noLast(action, &value, 1, 0, row == 5 ? 6 : 4);
+  } else if (row >= 6 && row <= 8 && col == 0) {
+    uint8_t value = row == 6 ? appSettings.braidsBits :
+      (row == 7 ? appSettings.braidsDrift : appSettings.braidsSignature);
+    int handled = edit8noLast(action, &value, 1, 0, row == 6 ? 6 : 4);
     if (handled) {
-      if (row == 5) appSettings.braidsBits = value;
-      else if (row == 6) appSettings.braidsDrift = value;
+      if (row == 6) appSettings.braidsBits = value;
+      else if (row == 7) appSettings.braidsDrift = value;
       else appSettings.braidsSignature = value;
       chipnomadSetBraidsSettings(chipnomadState, appSettings.braidsBits,
         appSettings.braidsDrift, appSettings.braidsSignature,
         appSettings.braidsSignatureSeed);
     }
     return handled;
-  } else if (row == 8 && col == 0 && action == CellEditAction::tap) {
+  } else if (row == 9 && col == 0 && action == CellEditAction::tap) {
     screenSetup(&screenKeyMapping, 0);
     return 0;
-  } else if (row == 9 && col == 0 && action == CellEditAction::tap) {
+  } else if (row == 10 && col == 0 && action == CellEditAction::tap) {
     fileBrowserSetup("LOAD FONT", ".cnfont", appSettings.fontFolderPath,
       (void (*)(const char*))fontLoadCallback,
       (void (*)(void))fontCancelCallback);
     screenSetup(&screenFileBrowser, 0);
     return 0;
-  } else if (row == 10 && col == 0 && action == CellEditAction::tap) {
+  } else if (row == 11 && col == 0 && action == CellEditAction::tap) {
     screenSetup(&screenColorTheme, 0);
     return 0;
-  } else if (row == 11 && col == 0 && action == CellEditAction::tap) {
+  } else if (row == 12 && col == 0 && action == CellEditAction::tap) {
     // Trigger exit event
     mainLoopTriggerQuit();
     return 1;

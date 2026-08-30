@@ -31,6 +31,34 @@ TEST_CASE_FIXTURE(ProjectFixture, "projectInit default groove") {
   CHECK(p.grooves[0].speed[2] == EMPTY_VALUE_8);
 }
 
+TEST_CASE_FIXTURE(ProjectFixture, "projectInit default track tilt") {
+  CHECK(p.tiltPivotHz == 1000);
+  for (int i = 0; i < PROJECT_MAX_TRACKS; ++i) CHECK(p.trackTilt[i] == 0x80);
+}
+
+TEST_CASE("track tilt project settings survive save and load") {
+  Project saved, loaded;
+  projectInit(&saved);
+  projectInit(&loaded);
+  saved.chipsCount = 1;
+  saved.tracksCount = 1;
+  saved.chipType = ChipType::AY;
+  std::strcpy(saved.pitchTable.name, "Test");
+  saved.pitchTable.length = 1;
+  std::strcpy(saved.pitchTable.noteNames[0], "C-4");
+  saved.pitchTable.values[0] = 1000;
+  saved.trackTilt[0] = 0x00;
+  saved.trackTilt[7] = 0xff;
+  saved.tiltPivotHz = 2500;
+  const char* path = "build/tests/track_tilt_io.cct";
+  REQUIRE(projectSave(&saved, path) == 0);
+  INFO(projectFileError);
+  REQUIRE(projectLoad(&loaded, path) == 0);
+  CHECK(loaded.trackTilt[0] == 0x00);
+  CHECK(loaded.trackTilt[7] == 0xff);
+  CHECK(loaded.tiltPivotHz == 2500);
+}
+
 TEST_CASE("new projects initialize the validated period pitch table") {
   Project project;
   projectInitAY(&project);

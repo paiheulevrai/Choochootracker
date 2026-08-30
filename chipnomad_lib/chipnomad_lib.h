@@ -4,6 +4,7 @@
 #include "chips/chips.h"
 #include "project.h"
 #include "playback.h"
+#include "synth/track_tilt.h"
 #include "utils.h"
 
 class BraidsVoice;
@@ -65,6 +66,7 @@ struct ChipNomadState {
   int audioOverload;
   int trackClipping[PROJECT_MAX_TRACKS];
   int trackWarnings[PROJECT_MAX_TRACKS];
+  TrackTilt trackTilt[PROJECT_MAX_TRACKS];
   float* mixBuffer;
   float* reverbBuffer;
   float* delayBuffer;

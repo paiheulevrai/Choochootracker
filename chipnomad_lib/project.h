@@ -268,6 +268,8 @@ struct Project {
   uint8_t trackVolume[PROJECT_MAX_TRACKS];
   uint8_t trackReverbSend[PROJECT_MAX_TRACKS];
   uint8_t trackDelaySend[PROJECT_MAX_TRACKS];
+  uint8_t trackTilt[PROJECT_MAX_TRACKS];
+  uint16_t tiltPivotHz;
   uint8_t reverbReturn;
   uint8_t reverbTime;
   uint8_t reverbDamping;

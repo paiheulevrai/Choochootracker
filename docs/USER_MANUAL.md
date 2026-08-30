@@ -150,10 +150,11 @@ Each track has:
 | LVL | Post-engine track level, 000-100 |
 | REV | Send to the shared Clouds reverb, 000-100 |
 | DLY | Send to the shared ping-pong delay, 000-100 |
-| MUTE | Silence this track |
-| SOLO | Listen to this track alone |
+| TLT | Per-track Tilt EQ, `00-FF`; `80` is neutral, low values favour bass and high values favour treble |
+| M | `*` silences this track; `-` leaves it active |
+| S | `*` solos this track; `-` leaves it in the normal mix |
 
-The mixer is track-based. If a track changes instruments, its level and sends remain attached to the track. Each instrument also has its own `00-FF` volume on the Instrument screen, before the track level.
+The mixer is track-based. If a track changes instruments, its level, Tilt and sends remain attached to the track. Each instrument also has its own `00-FF` volume on the Instrument screen, before the track level. Tilt processes the track before its reverb and delay sends; effect returns are not Tilt-processed. `00-3F` progressively adds a soft overdrive to the bass-emphasized Tilt.
 
 ### Clouds Reverb
 
@@ -549,6 +550,7 @@ Save before changing instrument types or loading another project.
 
 - **Repeat delay / speed** tune held-button repeat.
 - **Mix volume** controls final application output.
+- **Tilt pivot** is a per-project `250-4000 Hz` frequency, defaulting to 1 kHz. It sets the centre frequency for all Mixer Tilt controls.
 - **AY Quality** changes AY/YM emulation quality only.
 - **Sample dithering** controls AY Sample dithering only.
 - **Braids BITS / DRFT / SIGN** apply globally to every Braids instrument. Their behavior and saved installation character match the description in the Braids section.

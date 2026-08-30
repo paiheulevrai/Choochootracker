@@ -106,7 +106,11 @@ void projectInit(Project* p) {
   p->linearPitch = 0;
   p->signedTrackSpeed = 1;
   p->perceptualEffects = 1;
-  for (int i = 0; i < PROJECT_MAX_TRACKS; i++) p->trackVolume[i] = 100;
+  for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
+    p->trackVolume[i] = 100;
+    p->trackTilt[i] = 0x80;
+  }
+  p->tiltPivotHz = 1000;
   p->reverbReturn = 100;
   p->reverbTime = 180;
   p->reverbDamping = 160;

@@ -27,9 +27,8 @@ static void fullRedraw(void) {
   gfxPrint(0, 8, "Chains have phrases");
   gfxPrint(0, 9, "Phrases play instruments");
   gfxPrint(0, 10, "Instruments make sound");
-  gfxPrint(0, 12, "Edit while playing: next tick");
-  gfxPrint(0, 13, "Read the user manual next time");
-  gfxPrint(0, 14, "Don't miss your stop.");
+  gfxPrint(0, 13, "Read the manual next time");
+  gfxPrint(0, 14, "you are on a train.");
 }
 
 static void draw(void) {}

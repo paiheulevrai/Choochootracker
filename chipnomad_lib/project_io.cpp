@@ -738,6 +738,13 @@ static int projectLoadInternal(FILE* file, Project* project) {
     consumeLine(file);
   }
   line = peekLine(file);
+  if (line && strncmp(line, "- Track tilts: ", 15) == 0) {
+    if (sscanf(line + 15, "%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu",
+        &p.trackTilt[0], &p.trackTilt[1], &p.trackTilt[2], &p.trackTilt[3],
+        &p.trackTilt[4], &p.trackTilt[5], &p.trackTilt[6], &p.trackTilt[7]) != PROJECT_MAX_TRACKS) return 1;
+    consumeLine(file);
+  }
+  line = peekLine(file);
   if (line && sscanf(line, "- Reverb: %hhu,%hhu,%hhu,%hu", &p.reverbReturn, &p.reverbTime,
                      &p.reverbDamping, &p.reverbFilterCutoffHz) == 4) consumeLine(file);
   line = peekLine(file);
@@ -749,6 +756,8 @@ static int projectLoadInternal(FILE* file, Project* project) {
     p.delayReverbSend = 0;
     consumeLine(file);
   }
+  line = peekLine(file);
+  if (line && sscanf(line, "- Tilt pivot: %hu", &p.tiltPivotHz) == 1) consumeLine(file);
 
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
     if (p.trackReverbSend[i] > 100) p.trackReverbSend[i] = 100;
@@ -761,6 +770,8 @@ static int projectLoadInternal(FILE* file, Project* project) {
   if (p.delayTicks == 0) p.delayTicks = 1;
   if (p.reverbFilterCutoffHz < 20) p.reverbFilterCutoffHz = 20;
   if (p.delayFilterCutoffHz < 20) p.delayFilterCutoffHz = 20;
+  if (p.tiltPivotHz < 250) p.tiltPivotHz = 250;
+  if (p.tiltPivotHz > 4000) p.tiltPivotHz = 4000;
 
   // Try to read linear pitch (optional for backwards compatibility)
   line = peekLine(file);
@@ -1170,10 +1181,14 @@ static int projectSaveInternal(FILE* file, Project* project) {
   fprintf(file, "- Delay sends: %hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu\n",
     project->trackDelaySend[0], project->trackDelaySend[1], project->trackDelaySend[2], project->trackDelaySend[3],
     project->trackDelaySend[4], project->trackDelaySend[5], project->trackDelaySend[6], project->trackDelaySend[7]);
+  fprintf(file, "- Track tilts: %hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu\n",
+    project->trackTilt[0], project->trackTilt[1], project->trackTilt[2], project->trackTilt[3],
+    project->trackTilt[4], project->trackTilt[5], project->trackTilt[6], project->trackTilt[7]);
   fprintf(file, "- Reverb: %hhu,%hhu,%hhu,%hu\n", project->reverbReturn, project->reverbTime,
     project->reverbDamping, project->reverbFilterCutoffHz);
   fprintf(file, "- Delay: %hhu,%hhu,%hhu,%hhu,%hu\n", project->delayReturn, project->delayReverbSend,
     project->delayTicks, project->delayFeedback, project->delayFilterCutoffHz);
+  fprintf(file, "- Tilt pivot: %hu\n", project->tiltPivotHz);
   fprintf(file, "- Linear pitch: %d\n", project->linearPitch);
   fprintf(file, "- Signed track speed: %d\n", project->signedTrackSpeed);
   fprintf(file, "- Perceptual effects: %d\n", project->perceptualEffects);
