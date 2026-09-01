@@ -230,7 +230,7 @@ static int freeBYOWTBLInstrument(Instrument* instrument) {
 }
 
 static const char* modNameAChChid(int modIndex) {
-  static const char* names[] = {"Off", "Volume", "Pitch", "Cutoff", "Reso", "EnvMod"};
+  static const char* names[] = {"Off", "Volume", "Pitch", "Cutoff", "Reso", "EnvMod", "Decay", "Accent"};
   return names[modIndex];
 }
 
@@ -263,7 +263,7 @@ static const InstrumentModDestination destSample[] = {N,D("Volume",instrumentNoF
 static const InstrumentModDestination destPlaits[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Harmonic",fxPHA,16384,InstrumentMotionValue::raw),D("Timbre",fxPTM,16384,InstrumentMotionValue::raw),D("Morph",fxPMO,16384,InstrumentMotionValue::raw),D("AuxMix",fxPAX,255,InstrumentMotionValue::raw),D("Cutoff",fxPCF,20000,InstrumentMotionValue::cutoff),D("Reso",fxPRS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destSCWF[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Detune",fxSDT,255,InstrumentMotionValue::raw),D("Mix",fxSMX,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF2,20000,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destBYOWTBL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Detune",fxSDT,255,InstrumentMotionValue::raw),D("Mix",fxSMX,255,InstrumentMotionValue::raw),D("Index A",fxBIA,255,InstrumentMotionValue::raw),D("Index B",fxBIB,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF2,20000,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
-static const InstrumentModDestination destAChChid[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Cutoff",fxACF,20000,InstrumentMotionValue::cutoff),D("Reso",fxARS,255,InstrumentMotionValue::raw),D("EnvMod",fxAEM,255,InstrumentMotionValue::raw),D("Decay",fxADC,255,InstrumentMotionValue::raw),D("Accent",fxAAC,255,InstrumentMotionValue::raw),D("Timbre",fxATM,16384,InstrumentMotionValue::raw),D("Color",fxACL,16384,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destAChChid[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Cutoff",fxACF,20000,InstrumentMotionValue::cutoff),D("Reso",fxARS,255,InstrumentMotionValue::raw),D("EnvMod",fxAEM,255,InstrumentMotionValue::raw),D("Decay",fxADC,255,InstrumentMotionValue::raw),D("Accent",fxAAC,255,InstrumentMotionValue::raw)};
 #undef N
 #undef D
 #define F(f, n) {(uint8_t)(f), n}
@@ -289,7 +289,7 @@ static const InstrumentDefinition instrumentDefinitions[] = {
   {"Plaits-Alt",InstrumentCategory::synth,InstrumentScreenKind::plaits,destPlaits,COUNT(destPlaits),fxPlaits,COUNT(fxPlaits),{8,modNamePlaits,initPlaitsAltInstrument,freePlaitsInstrument,1,1}},
   {"2xSCWF",InstrumentCategory::sample,InstrumentScreenKind::scwf,destSCWF,COUNT(destSCWF),fxSCWF,COUNT(fxSCWF),{6,modNameSCWF,initSCWFInstrument,freeSCWFInstrument,1,0}},
   {"BYOWTBL",InstrumentCategory::sample,InstrumentScreenKind::byowtbl,destBYOWTBL,COUNT(destBYOWTBL),fxBYOWTBL,COUNT(fxBYOWTBL),{8,modNameBYOWTBL,initBYOWTBLInstrument,freeBYOWTBLInstrument,1,0}},
-  {"aChChid",InstrumentCategory::synth,InstrumentScreenKind::achchid,destAChChid,COUNT(destAChChid),fxAChChid,COUNT(fxAChChid),{5,modNameAChChid,initAChChidInstrument,freeAChChidInstrument,0,0}},
+  {"aChChid",InstrumentCategory::synth,InstrumentScreenKind::achchid,destAChChid,COUNT(destAChChid),fxAChChid,COUNT(fxAChChid),{7,modNameAChChid,initAChChidInstrument,freeAChChidInstrument,0,0}},
 };
 #undef COUNT
 

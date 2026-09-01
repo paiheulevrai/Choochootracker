@@ -156,6 +156,14 @@ TEST_CASE("instrument catalogue covers every family and its routable motion FX")
   getInstrumentFunctions(InstrumentType::BYOWTBL).init(&instrument);
   CHECK(instrumentMotionDestination(&instrument, 5, &fx, &base, &range, &value));
   CHECK(fx == fxBIA);
+
+  static const char* aChChidDestinations[] = {
+    "Off", "Volume", "Pitch", "Cutoff", "Reso", "EnvMod", "Decay", "Accent"
+  };
+  const InstrumentDefinition* aChChid = getInstrumentDefinition(InstrumentType::AChChid);
+  REQUIRE(aChChid->destinationCount == 8);
+  for (int destination = 0; destination < aChChid->destinationCount; ++destination)
+    CHECK(std::strcmp(aChChid->destinations[destination].name, aChChidDestinations[destination]) == 0);
 }
 
 TEST_CASE("new instruments use audible synth defaults") {
