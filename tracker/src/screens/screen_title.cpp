@@ -87,23 +87,6 @@ static void drawMenu(void) {
 }
 
 static void draw(void) {
-#ifdef WEB_BUILD
-  const char* items[] = {"CONTINUE", "OPEN", "NEW"};
-  gfxSetBgColor(appSettings.colorScheme.background);
-  gfxClear();
-  gfxSetFgColor(appSettings.colorScheme.textTitles);
-  gfxPrint(10, 5, "CHOOCHOO TRACKER");
-  gfxSetFgColor(appSettings.colorScheme.textInfo);
-  gfxPrint(13, 7, "MUSIC ON THE MOVE");
-  for (int i = 0; i < 3; i++) {
-    const int x = (40 - (int)strlen(items[i])) / 2;
-    gfxSetFgColor(i == 0 && !continueAvailable ? appSettings.colorScheme.textEmpty :
-      i == selected ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(x - 2, 11 + i * 2, i == selected && ((frame / 20) & 1) == 0 ? ">" : " ");
-    gfxPrint(x, 11 + i * 2, items[i]);
-  }
-  frame++;
-#else
   gfxTitleBegin();
   drawWrapped(sky, frame / SKY_SCROLL_FRAMES);
   // The scenery around the viaduct remains a separate, intermediate plane.
@@ -122,7 +105,6 @@ static void draw(void) {
   if (frame < 30) gfxTitleFadeBlack((uint8_t)(255 - frame * 255 / 30));
   gfxTitlePresent();
   frame++;
-#endif
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
@@ -130,9 +112,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   if (keys == keyUp && selected > 0) { selected--; return 1; }
   if (keys == keyDown && selected < 2) { selected++; return 1; }
   if (keys != keyEdit) return 1;
-#ifndef WEB_BUILD
   gfxTitleEnd();
-#endif
   if (selected == 0 && continueAvailable) { unload(); screenSetup(&screenSong, 0); }
   else if (selected == 1) projectOpenFromScreen(&screenTitle);
   else { unload(); projectCreateNewFromScreen(&screenSong); }

@@ -12,7 +12,7 @@
     main { width: min(100%, 980px); padding: 1rem; text-align: center; }
     h1 { color: #e6b84f; font-size: 1.15rem; letter-spacing: .12em; }
     p { color: #52799b; }
-    #tracker { display: block; width: min(100%, 640px); height: auto; aspect-ratio: 4 / 3;
+    #canvas { display: block; width: min(100%, 640px); height: auto; aspect-ratio: 4 / 3;
       margin: 0 auto; border: 1px solid #245072; background: #050c1f;
       image-rendering: pixelated; }
     #status { color: #ffd665; min-height: 1.5em; }
@@ -42,7 +42,7 @@
     .links a { color: #ffd665; margin: 0 .5rem; }
     @media (pointer: coarse), (max-width: 700px) {
       main { width: min(100%, 640px); padding: .5rem; }
-      #tracker { width: 100%; }
+      #canvas { width: 100%; }
       #touch-controls { display: grid; width: 100%; }
     }
   </style>
@@ -62,7 +62,7 @@
       <input id="sample-folder-input" type="file" accept=".wav,audio/wav" webkitdirectory multiple hidden>
     </div>
     <div class="links"><a href="https://github.com/paiheulevrai/Choochootracker/blob/main/docs/USER_MANUAL.md">Manual</a><a href="https://github.com/paiheulevrai/Choochootracker">GitHub</a></div>
-    <canvas id="tracker" width="640" height="480" tabindex="0" aria-label="ChooChooTracker"></canvas>
+    <canvas id="canvas" width="640" height="480" tabindex="0" aria-label="ChooChooTracker"></canvas>
     <div id="touch-controls" aria-label="Touch controls">
       <div class="dpad" aria-label="Direction pad">
         <button class="up" data-button="0" aria-label="Up">&uarr;</button>
@@ -138,10 +138,10 @@
       if (trackerStarted) return;
       trackerStarted = true;
       start.hidden = true;
-      document.querySelector('#tracker').focus();
+      document.querySelector('#canvas').focus();
       status.textContent = 'Loading tracker…';
       window.Module = window.Module || {};
-      window.Module.canvas = document.querySelector('#tracker');
+      window.Module.canvas = document.querySelector('#canvas');
       window.Module.preRun = (window.Module.preRun || []).concat(() => {
         try {
           FS.mkdir('/user');
