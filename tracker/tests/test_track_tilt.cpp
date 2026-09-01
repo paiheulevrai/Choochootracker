@@ -21,6 +21,16 @@ TEST_CASE("Track tilt is transparent at its center value") {
   CHECK(tilt.process(0.375f, 0, 0x80, 1000) == doctest::Approx(0.375f));
 }
 
+TEST_CASE("Track tilt settles back to transparent at its center value") {
+  TrackTilt settled, fresh;
+  settled.init(48000.0f);
+  fresh.init(48000.0f);
+  for (int i = 0; i < 48000; ++i) settled.process(0.2f, 0, 0x00, 1000);
+  for (int i = 0; i < 48000; ++i) settled.process(0.0f, 0, 0x80, 1000);
+  CHECK(settled.process(0.375f, 0, 0x7f, 1000) ==
+        doctest::Approx(fresh.process(0.375f, 0, 0x7f, 1000)));
+}
+
 TEST_CASE("Track tilt changes low and high frequencies in opposite directions") {
   CHECK(tiltRms(0x00, 100.0f) > tiltRms(0x00, 8000.0f));
   CHECK(tiltRms(0xff, 8000.0f) > tiltRms(0xff, 100.0f));

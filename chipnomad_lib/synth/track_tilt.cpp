@@ -25,11 +25,14 @@ void TrackTilt::update(uint8_t value, uint16_t pivotHz) {
 }
 
 float TrackTilt::process(float input, int channel, uint8_t value, uint16_t pivotHz) {
-  if (value == 0x80) return input;
   if (value != value_ || pivotHz != pivotHz_) update(value, pivotHz);
   lowGain_ += (targetLowGain_ - lowGain_) * smoothingCoefficient_;
   highGain_ += (targetHighGain_ - highGain_) * smoothingCoefficient_;
   drive_ += (targetDrive_ - drive_) * smoothingCoefficient_;
+  if (value == 0x80) {
+    lowpass_[channel & 1] = input;
+    return input;
+  }
   float& low = lowpass_[channel & 1];
   low += filterCoefficient_ * (input - low);
   float output = low * lowGain_ + (input - low) * highGain_;

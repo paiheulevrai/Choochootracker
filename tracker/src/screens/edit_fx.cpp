@@ -89,7 +89,7 @@ int editFXValue(CellEditAction action, uint8_t* fx, uint8_t* lastFX, int isTable
 
   if (fx[0] == fxSPD && !chipnomadState->project.signedTrackSpeed) {
     int handled = edit8noLast(action, &fx[1], 1, 0, 0x10);
-    screenMessage(0, helpFXHint(fx, isTable, instrumentIdx));
+    screenMessage(0, "%s", helpFXHint(fx, isTable, instrumentIdx));
     return handled;
   }
 
@@ -100,7 +100,7 @@ int editFXValue(CellEditAction action, uint8_t* fx, uint8_t* lastFX, int isTable
   }
 
   int handled = edit8noLimit(action, &fx[1], &lastFX[1], bigStep);
-  screenMessage(0, helpFXHint(fx, 0, instrumentIdx));
+  screenMessage(0, "%s", helpFXHint(fx, 0, instrumentIdx));
   return handled;
 }
 

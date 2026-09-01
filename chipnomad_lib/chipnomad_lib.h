@@ -110,6 +110,7 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
 int chipnomadReserveRenderBuffers(ChipNomadState* state, int frames);
 int chipnomadQueueTrackEnabled(ChipNomadState* state, const uint8_t enabled[PROJECT_MAX_TRACKS]);
 int chipnomadQueueProjectRefresh(ChipNomadState* state);
+void chipnomadDiscardQueuedProject(ChipNomadState* state);
 void chipnomadQueuePlaybackStop(ChipNomadState* state);
 int chipnomadQueuePlaybackStartSong(ChipNomadState* state, int songRow, int chainRow, int loop);
 int chipnomadQueuePlaybackStartChain(ChipNomadState* state, int trackIdx, int songRow, int chainRow, int loop);

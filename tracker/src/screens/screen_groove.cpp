@@ -72,7 +72,7 @@ static void drawStatic(void) {
 static void drawField(int col, int row, CellState state) {
   uint8_t value = chipnomadState->project.grooves[groove].speed[row];
   setCellColor(state, value == EMPTY_VALUE_8, value != 0);
-  gfxPrintf(3, 3 + row, byteToHexOrEmpty(value));
+  gfxPrint(3, 3 + row, byteToHexOrEmpty(value));
 }
 
 static void drawRowHeader(int row, CellState state) {

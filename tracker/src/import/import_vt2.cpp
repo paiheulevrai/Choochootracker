@@ -983,12 +983,8 @@ static int cloneInstrumentsForEnvelopes(Project* project, const InstrumentEnvelo
   return nextInstrumentIdx;
 }
 
-int projectLoadVT2(const char* path) {
-  if (!chipnomadState) {
-    return 1;
-  }
-
-
+int projectLoadVT2(Project* destination, const char* path) {
+  if (!destination || !path) return 1;
   VT2Module module;
   if (loadVT2Module(path, &module) != 0) {
     return 1;
@@ -1026,24 +1022,19 @@ int projectLoadVT2(const char* path) {
   InstrumentEnvelopeUsage envelopeUsage[VT2_MAX_SAMPLES];
   scanInstrumentEnvelopeUsage(&module, envelopeUsage);
 
-  Project* savedProject = &chipnomadState->project;
-  chipnomadState->project = p;
-
-  int sampleImportResult = importVT2Samples(path, &chipnomadState->project, module.sampleCount);
+  int sampleImportResult = importVT2Samples(path, &p, module.sampleCount);
 
   InstrumentCloneMap cloneMap;
   if (sampleImportResult == 0) {
-    cloneInstrumentsForEnvelopes(&chipnomadState->project, envelopeUsage, module.sampleCount, &cloneMap);
+    cloneInstrumentsForEnvelopes(&p, envelopeUsage, module.sampleCount, &cloneMap);
   }
 
-  Project tempWithSamples = chipnomadState->project;
-  chipnomadState->project = *savedProject;
-
   if (sampleImportResult != 0) {
+    projectFree(&p);
     return 1;
   }
 
-  project = &tempWithSamples;
+  project = &p;
 
   int patternToPhrases[VT2_MAX_PATTERNS][3][16];
   int patternPhraseCounts[VT2_MAX_PATTERNS];
@@ -1129,9 +1120,8 @@ int projectLoadVT2(const char* path) {
     }
   }
 
-  chipnomadState->project = *project;
-
-
+  projectFree(destination);
+  *destination = p;
   return 0;
 }
 
@@ -1165,7 +1155,7 @@ static int importVT2Samples(const char* path, Project* project, int sampleCount)
       if (inSampleSection && currentSample >= 0 && currentSample < VT2_MAX_SAMPLES && currentSample < PROJECT_MAX_INSTRUMENTS) {
         char sampleName[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
         snprintf(sampleName, PROJECT_INSTRUMENT_NAME_LENGTH + 1, "Sample%02d", currentSample + 1);
-        instrumentLoadVTSFromMemory(sampleLines, sampleLineCount, currentSample, sampleName);
+        instrumentLoadVTSFromMemory(project, sampleLines, sampleLineCount, currentSample, sampleName);
         sampleLineCount = 0;
       }
 
@@ -1190,7 +1180,7 @@ static int importVT2Samples(const char* path, Project* project, int sampleCount)
   if (inSampleSection && currentSample >= 0 && currentSample < VT2_MAX_SAMPLES && currentSample < PROJECT_MAX_INSTRUMENTS) {
     char sampleName[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
     snprintf(sampleName, PROJECT_INSTRUMENT_NAME_LENGTH + 1, "Sample%02d", currentSample + 1);
-    instrumentLoadVTSFromMemory(sampleLines, sampleLineCount, currentSample, sampleName);
+    instrumentLoadVTSFromMemory(project, sampleLines, sampleLineCount, currentSample, sampleName);
   }
 
   for (int i = 0; i < 64; i++) {

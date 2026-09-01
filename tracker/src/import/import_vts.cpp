@@ -328,13 +328,14 @@ int instrumentLoadVTS(const char* path, int instrumentIdx) {
   return 0;
 }
 
-int instrumentLoadVTSFromMemory(char** lines, int lineCount, int instrumentIdx, const char* instrumentName) {
-  if (instrumentIdx < 0 || instrumentIdx >= PROJECT_MAX_INSTRUMENTS) {
+int instrumentLoadVTSFromMemory(Project* project, char** lines, int lineCount,
+                                int instrumentIdx, const char* instrumentName) {
+  if (!project || instrumentIdx < 0 || instrumentIdx >= PROJECT_MAX_INSTRUMENTS) {
     return 1;
   }
 
-  Instrument* inst = &chipnomadState->project.instruments[instrumentIdx];
-  Table* table = &chipnomadState->project.tables[instrumentIdx];
+  Instrument* inst = &project->instruments[instrumentIdx];
+  Table* table = &project->tables[instrumentIdx];
 
   getInstrumentFunctions(InstrumentType::AY1).init(inst);
 

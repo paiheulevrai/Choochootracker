@@ -7,6 +7,7 @@
 #include "corelib_audio.h"
 
 #include "chipnomad_lib.h"
+#include "playback.h"
 #include "corelib_file.h"
 #include "synth/sample_voice.h"
 
@@ -128,6 +129,18 @@ static void resume(void) {
   audioPause(0);
 }
 
+static void replaceProject(Project* replacement) {
+  if (!replacement || !chipnomadState) return;
+  pause();
+  chipnomadDiscardQueuedProject(chipnomadState);
+  projectFree(&chipnomadState->project);
+  chipnomadState->project = *replacement;
+  memset(replacement, 0, sizeof(*replacement));
+  chipnomadInitChips(chipnomadState, aSampleRate, NULL);
+  playbackStop(&chipnomadState->playbackState);
+  resume();
+}
+
 static void reinitializeChips(void) {
   pause();
   chipnomadInitChips(chipnomadState, aSampleRate, NULL);
@@ -217,6 +230,7 @@ struct AudioManager audioManager = {
   .start = start,
   .pause = pause,
   .resume = resume,
+  .replaceProject = replaceProject,
   .reinitializeChips = reinitializeChips,
   .stop = stop,
   .toggleTrackMute = toggleTrackMute,

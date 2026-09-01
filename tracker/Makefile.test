@@ -60,7 +60,11 @@ TRACKER_SRC_SOURCES = src/string_utils.cpp \
                       src/screens/model_catalog.cpp \
                       $(wildcard src/screens/edit_common.cpp) \
                       $(wildcard src/corelib/corelib_file.cpp) \
-                      $(wildcard src/import/import_wav.cpp)
+                      $(wildcard src/import/import_wav.cpp) \
+                      src/import/import_common.cpp \
+                      src/import/import_vt2.cpp \
+                      src/import/import_vts.cpp \
+                      src/import/pt3_tables.cpp
 
 # Mock sources
 MOCK_SOURCES = $(wildcard tests/mocks/*.cpp)

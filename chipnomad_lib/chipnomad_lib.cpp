@@ -39,6 +39,11 @@ class AudioCommandQueue {
     return publishProject(project);
   }
 
+  void discardProject() {
+    int old = projectPublished_.exchange(-1, std::memory_order_acq_rel);
+    if (old >= 0) releasePublished(projectSlots_, old);
+  }
+
   void applyProject(Project* project) {
     int slot = claim(projectSlots_, projectPublished_);
     if (slot < 0) return;
@@ -584,6 +589,10 @@ int chipnomadQueueTrackEnabled(ChipNomadState* state, const uint8_t enabled[PROJ
 
 int chipnomadQueueProjectRefresh(ChipNomadState* state) {
   return state && state->audioCommands ? state->audioCommands->pushProject(state->project) : 0;
+}
+
+void chipnomadDiscardQueuedProject(ChipNomadState* state) {
+  if (state && state->audioCommands) state->audioCommands->discardProject();
 }
 
 void chipnomadQueuePlaybackStop(ChipNomadState* state) {

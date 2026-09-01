@@ -41,31 +41,31 @@ int projectLoadFromPath(const char* path) {
     appSettings.projectPath[0] = '\0';
   }
 
-  chipnomadQueuePlaybackStop(chipnomadState);
-
   // Check file extension to determine loader
   const char* ext = strrchr(path, '.');
   int loadResult = -1;
+  Project replacement;
+  projectInitAY(&replacement);
 
   if (ext != NULL) {
     if (strcasecmp(ext, ".vt2") == 0) {
       // Load VT2 file
-      loadResult = projectLoadVT2(path);
+      loadResult = projectLoadVT2(&replacement, path);
     } else if (strcasecmp(ext, ".cct") == 0) {
       // Load ChooChooTracker native format
-      loadResult = projectLoad(&chipnomadState->project, path);
+      loadResult = projectLoad(&replacement, path);
     } else {
       // Try native format by default
-      loadResult = projectLoad(&chipnomadState->project, path);
+      loadResult = projectLoad(&replacement, path);
     }
   } else {
     // No extension, try native format
-    loadResult = projectLoad(&chipnomadState->project, path);
+    loadResult = projectLoad(&replacement, path);
   }
 
   if (loadResult == 0) {
+    audioManager.replaceProject(&replacement);
     projectModified = 0; // Clear modified flag after loading
-    audioManager.reinitializeChips();
 
     // Store filename without extension
     extractFilenameWithoutExtension(path, appSettings.projectFilename, FILENAME_LENGTH + 1);
@@ -78,6 +78,7 @@ int projectLoadFromPath(const char* path) {
       chipnomadQueuePlaybackClearTrackFX(chipnomadState, i);
     }
   } else {
+    projectFree(&replacement);
     screenMessage(MESSAGE_TIME, "%s", projectFileError);
   }
 
@@ -113,8 +114,9 @@ static void onProjectCancelled(void) {
 }
 
 static void doNewProject(void) {
-  projectFree(&chipnomadState->project);
-  projectInitAY(&chipnomadState->project);
+  Project replacement;
+  projectInitAY(&replacement);
+  audioManager.replaceProject(&replacement);
   projectModified = 0;
   appSettings.projectFilename[0] = 0;
   screensInitAll();

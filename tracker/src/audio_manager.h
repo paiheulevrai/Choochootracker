@@ -14,6 +14,7 @@ struct AudioManager {
   int (*start)(int sampleRate, int audioBufferSize);
   void (*pause)(void);
   void (*resume)(void);
+  void (*replaceProject)(Project* replacement);
   void (*reinitializeChips)(void);
   void (*stop)();
   void (*toggleTrackMute)(int trackIdx);

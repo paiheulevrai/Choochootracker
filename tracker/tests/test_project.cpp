@@ -2,6 +2,7 @@
 
 #include "project.h"
 #include "project_utils.h"
+#include "import/import_vt2.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -164,6 +165,12 @@ TEST_CASE("instrument catalogue covers every family and its routable motion FX")
   REQUIRE(aChChid->destinationCount == 8);
   for (int destination = 0; destination < aChChid->destinationCount; ++destination)
     CHECK(std::strcmp(aChChid->destinations[destination].name, aChChidDestinations[destination]) == 0);
+}
+
+TEST_CASE_FIXTURE(ProjectFixture, "failed VT2 import leaves its destination unchanged") {
+  std::strcpy(p.title, "Keep this project");
+  CHECK(projectLoadVT2(&p, "tests/test_empty_title.cnm") != 0);
+  CHECK(std::strcmp(p.title, "Keep this project") == 0);
 }
 
 TEST_CASE("new instruments use audible synth defaults") {
