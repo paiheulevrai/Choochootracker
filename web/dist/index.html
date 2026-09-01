@@ -8,15 +8,15 @@
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; display: grid; place-items: center;
-      background: #001f00; color: #a06000; font: 16px system-ui, sans-serif; }
+      background: #050c1f; color: #c9bfa5; font: 16px system-ui, sans-serif; }
     main { width: min(100%, 980px); padding: 1rem; text-align: center; }
-    h1 { color: #9f9f50; font-size: 1.15rem; letter-spacing: .12em; }
-    p { color: #a06000; }
+    h1 { color: #e6b84f; font-size: 1.15rem; letter-spacing: .12em; }
+    p { color: #52799b; }
     #tracker { display: block; width: min(100%, 640px); height: auto; aspect-ratio: 4 / 3;
-      margin: 0 auto; border: 1px solid #4e3e00; background: #001f00;
+      margin: 0 auto; border: 1px solid #245072; background: #050c1f;
       image-rendering: pixelated; }
-    #status { color: #efcf7f; min-height: 1.5em; }
-    button { color: #001f00; background: #efcf7f; border: 0; padding: .55rem 1rem;
+    #status { color: #ffd665; min-height: 1.5em; }
+    button { color: #050c1f; background: #ffd665; border: 0; padding: .55rem 1rem;
       font-weight: 700; cursor: pointer; }
     button:disabled { cursor: wait; opacity: .55; }
     #file-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem;
@@ -24,22 +24,22 @@
     #file-controls button { padding: .42rem .7rem; font-size: .8rem; }
     #touch-controls { display: none; width: min(100%, 640px); margin: .75rem auto 0;
       padding: .8rem 1rem .65rem; border: 1px solid #3b4350; border-radius: 1.2rem;
-      background: linear-gradient(#4e3e00, #241a00); box-shadow: inset 0 1px #a06000;
+      background: linear-gradient(#10284a, #050c1f); box-shadow: inset 0 1px #52799b;
       grid-template-columns: 1fr 1fr 1fr; grid-template-areas: "dpad . face" "system system system";
       gap: .65rem; touch-action: none; }
-    #touch-controls button { border: 1px solid #120d00; color: #efcf7f; font: 700 .72rem system-ui;
-      touch-action: none; user-select: none; -webkit-user-select: none; box-shadow: inset 0 1px #a06000, 0 2px 2px #080600; }
+    #touch-controls button { border: 1px solid #050c1f; color: #ffd665; font: 700 .72rem system-ui;
+      touch-action: none; user-select: none; -webkit-user-select: none; box-shadow: inset 0 1px #52799b, 0 2px 2px #050c1f; }
     .dpad { grid-area: dpad; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); aspect-ratio: 1; max-width: 8rem; }
-    .dpad button { background: #3a2b00; border-radius: .25rem; font-size: 1rem; }
+    .dpad button { background: #245072; border-radius: .25rem; font-size: 1rem; }
     .dpad .up { grid-column: 2; } .dpad .left { grid-row: 2; grid-column: 1; }
     .dpad .right { grid-row: 2; grid-column: 3; } .dpad .down { grid-row: 3; grid-column: 2; }
     .face { grid-area: face; display: flex; align-items: center; justify-content: center; gap: .55rem; }
-    .face button { width: 3.6rem; height: 3.6rem; border-radius: 50%; background: #7d361e; }
-    .face button:first-child { background: #4d6d2d; }
+    .face button { width: 3.6rem; height: 3.6rem; border-radius: 50%; background: #ff6655; }
+    .face button:first-child { background: #65d8ff; }
     .system { grid-area: system; display: flex; justify-content: center; gap: .75rem; }
-    .system button { min-width: 5.8rem; min-height: 2rem; border-radius: 1rem; background: #3a2b00; }
+    .system button { min-width: 5.8rem; min-height: 2rem; border-radius: 1rem; background: #10284a; }
     .links { margin: .8rem 0 0; }
-    .links a { color: #efcf7f; margin: 0 .5rem; }
+    .links a { color: #ffd665; margin: 0 .5rem; }
     @media (pointer: coarse), (max-width: 700px) {
       main { width: min(100%, 640px); padding: .5rem; }
       #tracker { width: 100%; }
@@ -50,9 +50,8 @@
 <body>
   <main>
     <h1>CHOOCHOO TRACKER / WEB</h1>
-    <p>PREALPHA - DON'T MISS YOUR STOP</p>
     <button id="start">Start tracker</button>
-    <div id="status">Ready</div>
+    <div id="status"></div>
     <div id="file-controls" aria-label="Project and sample files">
       <button id="import-project" disabled>Import .cct</button>
       <button id="import-samples" disabled>Import WAVs</button>
@@ -160,7 +159,7 @@
       });
       window.Module.onAbort = () => { status.textContent = 'Tracker startup failed.'; };
       window.Module.onRuntimeInitialized = () => {
-        status.textContent = 'Ready — files stay in this browser.';
+        status.textContent = '';
         fileControls.forEach((button) => { button.disabled = false; });
         setInterval(() => syncUserStorage(), 10000);
       };
