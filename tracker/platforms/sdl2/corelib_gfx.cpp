@@ -238,8 +238,8 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
 
   // Detect screen resolution if not provided or zero
   if (screenWidth == NULL || screenHeight == NULL || *screenWidth == 0 || *screenHeight == 0) {
-    #ifdef DESKTOP_BUILD
-      // Default to 640x480 on desktop platforms
+    #if defined(DESKTOP_BUILD) || defined(WEB_BUILD)
+      // Desktop and the HTML canvas use the tracker's native size.
       screenW = 640;
       screenH = 480;
     #else

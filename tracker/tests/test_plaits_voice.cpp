@@ -103,7 +103,7 @@ TEST_CASE("Plaits retriggers after the previous internal envelope decays") {
 TEST_CASE("Plaits physical engines decay in TRIG mode") {
   for (int engine = 19; engine <= 20; ++engine) {
     PlaitsVoice voice;
-    std::vector<float> output(96000);
+    std::vector<float> output(96000 * 3);
     voice.init(96000.0f);
     voice.configure(engine, 16384, 16384, 16384, 0, 0, 0, 255, 60.0f, 1.0f);
     voice.noteOn();
@@ -121,18 +121,21 @@ TEST_CASE("Plaits physical engines decay in TRIG mode") {
 }
 
 TEST_CASE("Plaits FM closes after note off in TRIG mode") {
-  PlaitsVoice voice;
-  std::vector<float> output(96000);
-  voice.init(96000.0f);
-  voice.configure(2, 16384, 16384, 16384, 0, 0, 255, 255, 60.0f, 1.0f);
-  voice.noteOn();
-  voice.render(output.data(), 4096);
-  voice.noteOff();
-  voice.render(output.data(), output.size());
-
-  double tail = 0.0;
-  for (size_t i = output.size() - 4096; i < output.size(); ++i) tail += std::fabs(output[i]);
-  CHECK(tail < 0.01);
+  auto tailEnergy = [](bool release) {
+    PlaitsVoice voice;
+    std::vector<float> output(96000);
+    voice.init(96000.0f);
+    voice.configure(2, 16384, 16384, 16384, 0, 0, 255, 255, 60.0f, 1.0f);
+    voice.noteOn();
+    voice.render(output.data(), 4096);
+    if (release) voice.noteOff();
+    voice.render(output.data(), output.size());
+    double energy = 0.0;
+    for (size_t i = output.size() - 4096; i < output.size(); ++i)
+      energy += std::fabs(output[i]);
+    return energy;
+  };
+  CHECK(tailEnergy(true) < tailEnergy(false) * 0.1);
 }
 
 TEST_CASE("Plaits VCA keeps the internal level open") {

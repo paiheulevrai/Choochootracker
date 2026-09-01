@@ -82,8 +82,8 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyMotionErase[0] = (InputCode){InputDeviceType::keyboard, BTN_R2};
   appSettings.keyMapping.keyEdit[0] = (InputCode){InputDeviceType::keyboard, BTN_A};
 
-#if defined(DESKTOP_BUILD) || defined(ANDROID_BUILD)
-  // Gamepad mappings (Desktop and Android only)
+#if defined(DESKTOP_BUILD) || defined(ANDROID_BUILD) || defined(WEB_BUILD)
+  // Gamepad mappings for targets with SDL/browser controller support.
   appSettings.keyMapping.keyUp[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_DPAD_UP};
   appSettings.keyMapping.keyDown[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_DPAD_DOWN};
   appSettings.keyMapping.keyLeft[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_DPAD_LEFT};

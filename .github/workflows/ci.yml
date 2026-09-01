@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run tests
+        run: make -C tracker -f Makefile.test -j4
+
+  web-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check checked-in Web entry point
+        run: |
+          cmp web/index.html web/dist/index.html
+          grep -Fq '<canvas id="canvas"' web/index.html
+          ! grep -Eq '^WEB_CFLAGS.*DESKTOP_BUILD' tracker/Makefile.web

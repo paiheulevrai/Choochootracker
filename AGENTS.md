@@ -19,9 +19,9 @@
   . .\.tmp\emsdk\emsdk_env.ps1
   $env:PATH += ';C:\msys64\usr\bin;C:\msys64\ucrt64\bin'
   Set-Location tracker
-  & "$env:EMSDK\upstream\emscripten\emmake.exe" `
-    'C:\msys64\usr\bin\make.exe' -j8 -f Makefile.web web-deploy `
-    COMMON_CFLAGS="-std=c++17 -Wall -g -Os -DTEST"
+  & 'C:\msys64\usr\bin\make.exe' -j8 -f Makefile.web web-deploy `
+    'COMMON_CFLAGS=-std=c++17 -Wall -g -Os -DTEST' `
+    "EMXX=$env:EMSDK_PYTHON $env:EMSDK\upstream\emscripten\em++.py"
   ```
 
 - If web reports `clang++.exe: permission denied`, repair the execution
@@ -30,6 +30,8 @@
 - `web-deploy` updates the checked-in `web/dist/` bundle. Regenerate and
   commit it after WebAssembly source changes; Vercel serves that bundle
   directly and does not build Emscripten itself.
+- `docs/build-notes.md` is the canonical human-readable build reference; keep
+  commands here synchronized with it.
 
 ## Verification and commits
 
