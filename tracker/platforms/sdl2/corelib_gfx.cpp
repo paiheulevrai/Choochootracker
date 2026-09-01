@@ -109,6 +109,16 @@ void gfxImageDrawCrop(const GfxImage* image, int sourceX, int sourceY,
 }
 
 void gfxTitleBegin(void) {
+#ifdef WEB_BUILD
+  if (!titleLogicalSizeActive) {
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+    SDL_RenderSetLogicalSize(renderer, 256, 224);
+    titleLogicalSizeActive = 1;
+  }
+  SDL_SetRenderDrawColor(renderer, 5, 12, 31, 255);
+  SDL_RenderClear(renderer);
+  isDirty = 1;
+#else
   if (!titleLogicalSizeActive) {
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
     titleTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
@@ -123,6 +133,7 @@ void gfxTitleBegin(void) {
   SDL_SetRenderDrawColor(renderer, 5, 12, 31, 255);
   SDL_RenderClear(renderer);
   isDirty = 1;
+#endif
 }
 
 void gfxTitleFadeBlack(uint8_t alpha) {
@@ -135,6 +146,9 @@ void gfxTitleFadeBlack(uint8_t alpha) {
 }
 
 void gfxTitlePresent(void) {
+#ifdef WEB_BUILD
+  isDirty = 1;
+#else
   if (!titleTexture) return;
   SDL_SetRenderTarget(renderer, NULL);
   // Switching away from a render target resets the renderer viewport.
@@ -143,6 +157,7 @@ void gfxTitlePresent(void) {
   SDL_Rect destination = {0, 0, 640, 480};
   SDL_RenderCopy(renderer, titleTexture, NULL, &destination);
   isDirty = 1;
+#endif
 }
 
 void gfxTitleEnd(void) {
