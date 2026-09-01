@@ -73,7 +73,7 @@ It should work on any Portmaster capable system, and should also compile on Andr
 - Acid engine (open303 based) that can take Braids as VCO 
 - Multimode LP/HP/BP 12/24dB filters for all new synth/sample engines
 - Several filter flavours inspired 
-- Per-track volume, mute, solo, Reverb send, and Delay send
+- Per-track volume, mute, solo, tiltEQ, Reverb send, and Delay send
 - Mutable Instruments Clouds meme lush reverb
 - Tick-synchronized filtered ping-pong delay
 - Three tracker FX columns per row
