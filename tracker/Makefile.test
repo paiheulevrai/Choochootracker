@@ -18,6 +18,7 @@ INCLUDES = -I. -Isrc -Isrc/corelib -Isrc/screens -Isrc/import -Itests/mocks -Iex
 # Test executable
 TEST_EXECUTABLE = $(BUILD_DIR)/run_tests$(if $(filter Windows_NT,$(OS)),.exe,)
 MEASURE_EXECUTABLE = $(BUILD_DIR)/render_engine_measurements$(if $(filter Windows_NT,$(OS)),.exe,)
+BENCHMARK_EXECUTABLE = $(BUILD_DIR)/benchmark_song$(if $(filter Windows_NT,$(OS)),.exe,)
 
 # Test source files - automatically discover all test_*.cpp except excluded ones
 TEST_SOURCES_ALL = $(wildcard tests/test_*.cpp)
@@ -75,13 +76,15 @@ COMMON_SOURCES = $(CHIPNOMAD_LIB_SOURCES) $(TRACKER_SRC_SOURCES)
 # All sources
 ALL_SOURCES = $(TEST_SOURCES) $(COMMON_SOURCES) $(MOCK_SOURCES)
 MEASURE_SOURCES = tests/render_engine_measurements.cpp $(COMMON_SOURCES) $(MOCK_SOURCES)
-ALL_COMPILE_SOURCES = $(sort $(ALL_SOURCES) $(MEASURE_SOURCES))
+BENCHMARK_SOURCES = tests/benchmark_song.cpp $(COMMON_SOURCES) $(MOCK_SOURCES)
+ALL_COMPILE_SOURCES = $(sort $(ALL_SOURCES) $(MEASURE_SOURCES) $(BENCHMARK_SOURCES))
 
 # Compile each translation unit separately so -j can use every core and
 # unchanged files stay cached between test runs.
 object_for = $(BUILD_DIR)/obj/$(subst ../,up/,$(basename $(1))).o
 OBJECTS := $(foreach source,$(ALL_SOURCES),$(call object_for,$(source)))
 MEASURE_OBJECTS := $(foreach source,$(MEASURE_SOURCES),$(call object_for,$(source)))
+BENCHMARK_OBJECTS := $(foreach source,$(BENCHMARK_SOURCES),$(call object_for,$(source)))
 DEPS := $(OBJECTS:.o=.d)
 
 define compile_source
@@ -115,6 +118,14 @@ $(MEASURE_EXECUTABLE): $(MEASURE_OBJECTS)
 .PHONY: measurements
 measurements: $(MEASURE_EXECUTABLE)
 	@$(MEASURE_EXECUTABLE)
+
+$(BENCHMARK_EXECUTABLE): $(BENCHMARK_OBJECTS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Linking song benchmark..."
+	@$(CXX) $(BENCHMARK_OBJECTS) $(LDFLAGS) -o $(BENCHMARK_EXECUTABLE)
+
+.PHONY: benchmark-song
+benchmark-song: $(BENCHMARK_EXECUTABLE)
 
 # Clean build artifacts
 clean:

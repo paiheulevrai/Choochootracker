@@ -2,6 +2,14 @@
 #include "../../chipnomad_lib/synth/braids_voice.h"
 
 #include <cmath>
+#include <vector>
+
+static int positiveCrossings(const std::vector<float>& samples, size_t start) {
+  int crossings = 0;
+  for (size_t i = start + 1; i < samples.size(); ++i)
+    if (samples[i - 1] <= 0.0f && samples[i] > 0.0f) ++crossings;
+  return crossings;
+}
 
 TEST_CASE("BraidsVoice renders every accessible model") {
   float buffer[4096];
@@ -38,6 +46,21 @@ TEST_CASE("BraidsVoice rejects an unknown model") {
   BraidsVoice voice;
   voice.init();
   CHECK_FALSE(voice.setModel(255));
+}
+
+TEST_CASE("BraidsVoice keeps its pitch when decimated to 48 kHz") {
+  BraidsVoice voice96, voice48;
+  std::vector<float> output96(9600), output48(4800);
+  voice96.init(96000.0f);
+  voice48.init(48000.0f);
+  voice96.noteOn();
+  voice48.noteOn();
+  voice96.render(output96.data(), output96.size());
+  voice48.render(output48.data(), output48.size());
+
+  float frequency96 = positiveCrossings(output96, 960) / 0.09f;
+  float frequency48 = positiveCrossings(output48, 480) / 0.09f;
+  CHECK(frequency48 == doctest::Approx(frequency96).epsilon(0.05));
 }
 
 TEST_CASE("BraidsVoice audio-rate envelope reaches silence after release") {

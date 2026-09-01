@@ -18,6 +18,7 @@ class TrackTilt {
   float filterCoefficient_, smoothingCoefficient_;
   uint8_t value_;
   uint16_t pivotHz_;
+  bool smoothing_;
 };
 
 #endif

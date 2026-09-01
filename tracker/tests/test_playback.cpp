@@ -346,6 +346,40 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Plaits instrument renders and receives note 
   CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
 }
 
+TEST_CASE_FIXTURE(PlaybackFixture, "SLE reaches every BYOWTBL engine FX destination") {
+  getInstrumentFunctions(InstrumentType::BYOWTBL).init(&state->project.instruments[0]);
+  REQUIRE(chipnomadQueueProjectRefresh(state));
+
+  float buffer[2] = {};
+  chipnomadRender(state, buffer, 1);
+
+  PlaybackTrackState* track = &state->playbackState.tracks[0];
+  track->note.instrument = 0;
+  track->note.pitchFinal = 60;
+  track->note.volume = 15;
+  track->slewTicks = 8;
+  const FX destinations[] = {fxSDT, fxSMX, fxBIA, fxBIB, fxSCF2, fxSRS2};
+  for (FX fx : destinations) {
+    track->note.fx[fx].isOn = 1;
+    track->note.fx[fx].fxValue = 16;
+  }
+  track->mode = PlaybackMode::phraseRow;
+  track->songRow = 0;
+  state->frameSampleCounter = 0;
+  chipnomadRender(state, buffer, 1);
+
+  for (FX fx : destinations) track->note.fx[fx].fxValue = 240;
+  state->frameSampleCounter = 0;
+  chipnomadRender(state, buffer, 1);
+
+  for (FX fx : destinations) {
+    CHECK(track->slewTarget[fx] == 240);
+    CHECK(track->slewCurrent[fx] > 16);
+    CHECK(track->slewCurrent[fx] < 240);
+    CHECK(track->slewRemaining[fx] == 7);
+  }
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "PRO 00 suppresses a row and PRO 64 always triggers") {
   setInstrument(0, 0, 0, 15, 0);
   PhraseRow* row = &state->project.phrases[0].rows[0];

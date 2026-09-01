@@ -1,4 +1,5 @@
 #include "multimode_filter.h"
+#include "audio_math.h"
 
 #include <math.h>
 #include <string.h>
@@ -39,8 +40,8 @@ void MultimodeFilter::reset() {
 }
 
 float MultimodeFilter::processStage(float input, int channel, int stage) {
-  if (character_ == 3) input = tanhf(input * 2.0f - driveState_[channel] * 0.35f);
-  else if (character_ == 4) input = tanhf(input * 2.5f - driveState_[channel] * 0.75f);
+  if (character_ == 3) input = audioTanh(input * 2.0f - driveState_[channel] * 0.35f);
+  else if (character_ == 4) input = audioTanh(input * 2.5f - driveState_[channel] * 0.75f);
   float v3 = input - ic2eq_[channel][stage];
   float band = a1_ * ic1eq_[channel][stage] + a2_ * v3;
   float low = ic2eq_[channel][stage] + a2_ * ic1eq_[channel][stage] + a3_ * v3;

@@ -4,7 +4,7 @@
 #include <string.h>
 #include "stmlib/utils/dsp.h"
 
-void BraidsVoice::init() {
+void BraidsVoice::init(float outputSampleRate) {
   oscillator_.Init();
   blockPosition_ = kBlockSize;
   model_ = 0;
@@ -19,8 +19,13 @@ void BraidsVoice::init() {
   oscillator_.set_pitch(60 << 7);
   oscillator_.set_parameters(16384, 16384);
   memset(sync_, 0, sizeof(sync_));
+  outputSampleRate_ = outputSampleRate > 0.0f ? outputSampleRate : kSampleRate;
+  sourcePhase_ = 1.0f;
+  previousSource_ = currentSource_ = 0.0f;
+  memset(decimatorHistory_, 0, sizeof(decimatorHistory_));
+  decimatorPosition_ = 0;
 
-  post_.init(kSampleRate);
+  post_.init(outputSampleRate_);
 }
 
 bool BraidsVoice::setModel(uint8_t model) {
@@ -103,6 +108,27 @@ void BraidsVoice::renderBlock() {
   blockPosition_ = 0;
 }
 
+float BraidsVoice::nextSourceSample() {
+  if (blockPosition_ == kBlockSize) renderBlock();
+  return static_cast<float>(block_[blockPosition_++]) / 32768.0f;
+}
+
+float BraidsVoice::filterSourceSample(float sample) {
+  static const float coefficients[] = {
+    -0.001700396904f, 0.002937331571f, -0.006730091366f,
+     0.014093887904f, -0.026785035820f, 0.049098960594f,
+    -0.096938332776f, 0.315619563324f
+  };
+  decimatorPosition_ = decimatorPosition_ ? decimatorPosition_ - 1 : 30;
+  decimatorHistory_[decimatorPosition_] = sample;
+  decimatorHistory_[decimatorPosition_ + 31] = sample;
+  const float* history = decimatorHistory_ + decimatorPosition_;
+  float filtered = 0.500808226947f * history[15];
+  for (size_t i = 0; i < 8; ++i)
+    filtered += coefficients[i] * (history[i * 2] + history[30 - i * 2]);
+  return filtered;
+}
+
 void BraidsVoice::render(float* output, size_t samples) {
   if (!output) return;
   if (!active_) {
@@ -110,9 +136,17 @@ void BraidsVoice::render(float* output, size_t samples) {
     return;
   }
 
+  const float sourceStep = kSampleRate / outputSampleRate_;
   for (size_t i = 0; i < samples; ++i) {
-    if (blockPosition_ == kBlockSize) renderBlock();
-    float sample = static_cast<float>(block_[blockPosition_++]) / 32768.0f;
+    sourcePhase_ += sourceStep;
+    while (sourcePhase_ >= 1.0f) {
+      sourcePhase_ -= 1.0f;
+      previousSource_ = currentSource_;
+      float source = nextSourceSample();
+      currentSource_ = outputSampleRate_ < kSampleRate
+        ? filterSourceSample(source) : source;
+    }
+    float sample = previousSource_ + (currentSource_ - previousSource_) * sourcePhase_;
     output[i] = post_.process(sample);
     if (!post_.envelopeActive()) {
       active_ = false;

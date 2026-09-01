@@ -267,7 +267,6 @@ void appSetup(void) {
   int projectLoaded = 0;
   if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0) {
     projectLoaded = 1;
-    extractFilenameWithoutExtension(getAutosavePath(), appSettings.projectFilename, FILENAME_LENGTH + 1);
   } else if (projectLoad(&chipnomadState->project, "/projects/TECNODEMO.cct") == 0) {
     projectLoaded = 1;
     extractFilenameWithoutExtension("/projects/TECNODEMO.cct", appSettings.projectFilename, FILENAME_LENGTH + 1);
@@ -275,9 +274,7 @@ void appSetup(void) {
   if (!projectLoaded) projectInitAY(&chipnomadState->project);
 #else
   // Native builds restore the user's auto-saved project.
-  if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0)
-    extractFilenameWithoutExtension(getAutosavePath(), appSettings.projectFilename, FILENAME_LENGTH + 1);
-  else
+  if (projectLoad(&chipnomadState->project, getAutosavePath()) != 0)
     projectInitAY(&chipnomadState->project);
 #endif
 

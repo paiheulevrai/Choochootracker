@@ -563,6 +563,10 @@ Save before changing instrument types or loading another project.
 
 CPU cost depends on active engines and effects. Plaits physical models and Clouds Reverb are heavier than basic AY voices. Measure on the target console, especially with eight Plaits voices and both sends active. A CPU reading near 100% can cause crackles or missed audio deadlines.
 
+The application mixes at 48 kHz on Windows and PortMaster. Braids keeps its native 96 kHz synthesis internally and is anti-alias filtered when reduced to 48 kHz; other engines use their intended output rate. This gives substantially more console headroom without changing project timing or pitch. The tradeoff is a 24 kHz Nyquist limit instead of 48 kHz, which is appropriate for the target hardware and audible range.
+
+Reference measurements on the target console (September 1, 2026) are about 8% CPU for `alf dance`, with a 10% peak, and 21% for `psy`. Treat these as workload references rather than guarantees: active models, modulation, filter character, sends, firmware and power mode all matter.
+
 ### No sound
 
 Check the instrument number, track mute/solo state, track LVL, application Mix volume and the instrument envelope. For samples, verify that the original WAV is still at its saved path. If you are using ArkOS, push menu+L3 (joystick press) to enable/disable OS mute.

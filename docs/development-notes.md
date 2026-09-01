@@ -3,7 +3,7 @@
 ## Braids integration
 
 - Braids exposes 47 production models, indexed from 0 to 46. `QUESTION_MARK` is not part of the accessible set.
-- The original DSP and lookup tables assume a 96 kHz render rate. ChooChooTracker therefore uses 96 kHz until measurements on the RG353V justify a resampling path.
+- Braids still renders internally at its native 96 kHz, then a 31-tap half-band FIR decimates it into the 48 kHz master mix. This preserves its pitch/table assumptions while avoiding a 96 kHz pass through every downstream effect.
 - One `BraidsVoice` belongs to each tracker track. Voices are monophonic, while AY and Braids instruments can coexist in one song.
 - Percussive models from `STRUCK_BELL` through `SNARE` keep Braids' internal `STRIKE` decay. Tonal models use the added audio-rate ADSR.
 - Braids must bypass AY register output. Treating every non-empty instrument as AY caused invalid register work until the AY path was explicitly restricted to AY1, AY2 and AYSample.
@@ -14,7 +14,7 @@
 ## Build and validation
 
 - Native Windows development uses MSYS2 UCRT64, GCC and SDL2. Docker is not required.
-- The Windows build defaults to 96 kHz. An old generated `settings.txt` can still override that value and must be migrated or removed.
+- Windows and PortMaster use a fixed 48 kHz master rate. `settingsLoad` migrates old `audioSampleRate` values so an existing 96 kHz settings file cannot silently undo the optimization.
 - The PortMaster source package should target `aarch64` first: the RG353V uses a 64-bit RK3566 CPU, and keeping an untested ARMHF build doubles the work without helping this target.
 - PortMaster officially supports WSL2/chroot, cross-compilation and Docker. This project uses WSL2/cross-compilation; Docker remains optional.
 
@@ -40,12 +40,12 @@
 
 ## Plaits and master sends
 
-- Plaits runs its original voice at 48 kHz and is linearly resampled into the 96 kHz master mix. Each tracker track owns one monophonic `PlaitsVoice` and a 16 KiB work allocator.
+- Plaits and Plaits-Alt run at their 48 kHz output rate and feed the master mix directly. Engines that deliberately retain a 96 kHz inner loop keep their own upstream decimator. Each tracker track owns one monophonic voice and a 16 KiB work allocator.
 - The 24 engine indices and Main/Aux blend are stored in the instrument. Plaits-specific FX are filtered by instrument type in the existing FX lanes.
 - Plaits has two envelope routings. `TRIG` matches TRIG patched/LEVEL unpatched and reuses the envelope row's D/S storage as LPG decay/color. `VCA` holds LEVEL open and applies the ADSR after the Mutable voice. In `TRIG`, the wrapper now holds the Mutable gate high for the note duration; a repeated tracker note inserts one low block before returning high, preserving its rising-edge retrigger. VCA retriggers attack from the current level instead of resetting to zero, avoiding an amplitude discontinuity. Legacy `LEVEL` values load as `VCA`.
 - The Plaits wrapper passes pitch once to the Mutable voice; the previous integration also repeated it through the modulation input. A one-octave frequency-ratio test guards this path.
 - Reverb and Delay are shared master effects. Tracks accumulate post-fader send buses; each effect is processed once per callback, not once per track.
-- The Clouds reverb delay lengths and memory were scaled for 96 kHz. The ping-pong delay derives its sample delay from project tick rate and delay ticks.
+- The Clouds reverb delay lengths are scaled from its original 32 kHz design to the fixed 48 kHz master rate; its LFO increments also use the actual rate. The ping-pong delay derives its sample delay from project tick rate and delay ticks.
 - `PRO` uses `00-64` as 0-100%, `MOD AB` uses a per-track phrase visit count, and conditions on one row are ANDed. `SPD` uses a rational phase accumulator and persists until replaced.
 - The scheduler advances at most one row per audio tick. High `SPD` multipliers therefore need hardware and musical validation with short grooves.
 
@@ -94,10 +94,10 @@ References: [PortMaster build environments](https://portmaster.games/build-envir
 - All 47 Braids models render finite, non-silent output in the desktop tests.
 - Filter modes and slopes, ADSR release, tracker routing and AY muting are covered by tests.
 - Instrument FX lifetime and Sample playback boundaries/filter stability are covered by tests.
-- The current suite contains 161 passing test cases and 149,328 assertions.
+- The suite includes regressions for Braids 48 kHz decimation, the `tanh` lookup approximation, and all six BYOWTBL `SLE` destinations.
 - The Windows executable compiles and survives an SDL dummy audio/video smoke test.
 - Audio export has been validated on the target console.
-- Eight simultaneous Plaits voices plus Reverb and Delay hold 96 kHz on the RG353V without underruns.
+- September 1 hardware measurements at 48 kHz: `alf dance` runs around 8% with a 10% peak; `psy` reaches about 21% on the target console.
 - The ARM64 binary and PortMaster ZIP build successfully under WSL2. They still need to run on the RG353V.
 
 ## WebAssembly notes

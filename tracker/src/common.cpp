@@ -9,13 +9,14 @@
 static char settingsPath[PATH_LENGTH + 32];
 static char autosavePath[PATH_LENGTH + 32];
 static char lineBuffer[1024];
+static const int kAudioSampleRate = 48000;
 
 AppSettings appSettings;
 
 void initDefaultAppSettings(void) {
   appSettings.screenWidth = 0; // 0 to auto-detect resolution
   appSettings.screenHeight = 0;
-  appSettings.audioSampleRate = 96000;
+  appSettings.audioSampleRate = kAudioSampleRate;
   appSettings.audioBufferSize = 2048;
   appSettings.aySampleDithering = 1; // Default: ON
   appSettings.doubleTapFrames = 20;
@@ -332,6 +333,7 @@ int settingsLoad(void) {
   }
 
   fclose(file);
+  appSettings.audioSampleRate = kAudioSampleRate;
   if (appSettings.braidsBits < 0 || appSettings.braidsBits > 6) appSettings.braidsBits = 6;
   if (appSettings.braidsDrift < 0 || appSettings.braidsDrift > 4) appSettings.braidsDrift = 0;
   if (appSettings.braidsSignature < 0 || appSettings.braidsSignature > 4) appSettings.braidsSignature = 0;

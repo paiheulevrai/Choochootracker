@@ -1,4 +1,5 @@
 #include "track_tilt.h"
+#include "audio_math.h"
 
 #include <math.h>
 
@@ -11,6 +12,7 @@ void TrackTilt::init(float sampleRate) {
   smoothingCoefficient_ = 1.0f - expf(-1.0f / (sampleRate_ * 0.01f));
   value_ = 0x80;
   pivotHz_ = 1000;
+  smoothing_ = false;
 }
 
 void TrackTilt::update(uint8_t value, uint16_t pivotHz) {
@@ -22,13 +24,21 @@ void TrackTilt::update(uint8_t value, uint16_t pivotHz) {
   targetHighGain_ = powf(10.0f, -amount * 9.0f / 20.0f);
   targetDrive_ = value < 0x40 ? 1.0f + (0x40 - value) * 3.0f / 64.0f : 1.0f;
   filterCoefficient_ = 1.0f - expf(-6.283185307179586f * pivotHz_ / sampleRate_);
+  smoothing_ = lowGain_ != targetLowGain_ || highGain_ != targetHighGain_ ||
+               drive_ != targetDrive_;
 }
 
 float TrackTilt::process(float input, int channel, uint8_t value, uint16_t pivotHz) {
   if (value != value_ || pivotHz != pivotHz_) update(value, pivotHz);
-  lowGain_ += (targetLowGain_ - lowGain_) * smoothingCoefficient_;
-  highGain_ += (targetHighGain_ - highGain_) * smoothingCoefficient_;
-  drive_ += (targetDrive_ - drive_) * smoothingCoefficient_;
+  if (smoothing_) {
+    float lowGain = lowGain_ + (targetLowGain_ - lowGain_) * smoothingCoefficient_;
+    float highGain = highGain_ + (targetHighGain_ - highGain_) * smoothingCoefficient_;
+    float drive = drive_ + (targetDrive_ - drive_) * smoothingCoefficient_;
+    smoothing_ = lowGain != lowGain_ || highGain != highGain_ || drive != drive_;
+    lowGain_ = lowGain;
+    highGain_ = highGain;
+    drive_ = drive;
+  }
   if (value == 0x80) {
     lowpass_[channel & 1] = input;
     return input;
@@ -37,6 +47,6 @@ float TrackTilt::process(float input, int channel, uint8_t value, uint16_t pivot
   low += filterCoefficient_ * (input - low);
   float output = low * lowGain_ + (input - low) * highGain_;
   if (drive_ <= 1.001f) return output;
-  output = tanhf(output * drive_) / tanhf(drive_);
+  output = audioTanh(output * drive_) / audioTanh(drive_);
   return output < -1.0f ? -1.0f : (output > 1.0f ? 1.0f : output);
 }

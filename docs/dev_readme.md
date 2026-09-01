@@ -125,9 +125,9 @@ Future implementations may add emulations of acid (303), classic japanese (Korg)
 
 ### Audio rate and polyphony
 
-The original Braids code and lookup tables expect 96 kHz, so ChooChooTracker currently runs its master audio engine at 96 kHz. This avoids changing the tables or adding a more complex internal resampling path.
+The original Braids code and lookup tables expect 96 kHz. ChooChooTracker keeps Braids at that internal rate and anti-alias decimates it into the 48 kHz master engine.
 
-The target is eight simultaneous Braids/Plaits voices at 96 kHz on an Anbernic RG353V. Tested, it works.
+The target is mixed eight-track playback at 48 kHz on an Anbernic RG353V. September 2026 song measurements leave comfortable real-time headroom.
 
 Silent voices skip unnecessary DSP work.
 
@@ -157,7 +157,7 @@ WAV data is not embedded in `.cct` project files. This keeps projects readable a
 
 ## Audio format
 
-- Master engine: 96 kHz
+- Master engine: 48 kHz
 - Internal mix: floating-point stereo
 - Imported samples: 8-bit or 16-bit PCM, mono or stereo
 - Export: 16-bit stereo WAV
@@ -244,7 +244,7 @@ The next low-priority engine is `SCWF`, a dedicated dual-oscillator single-cycle
 - [x] Build the ARM64 binary under WSL2.
 - [x] Create the PortMaster package.
 - [x] Test controls, audio output, and stability on the console.
-- [x] Measure three, six, and eight voices at 96 kHz.
+- [x] Measure representative mixed songs at 48 kHz on RG353V.
 - Optimize only what hardware measurements identify as expensive.
 
 ### 6. Eight-track architecture and usability
@@ -338,7 +338,7 @@ The next low-priority engine is `SCWF`, a dedicated dual-oscillator single-cycle
 - [x] AY, Braids, Plaits, and Sample instruments can share a song.
 - [x] Every accessible Braids model and Plaits engine is selectable.
 - [x] Filters and envelopes do not introduce obvious clicks.
-- [x] Eight Braids voices hold 96 kHz on RG353V.
+- [x] Braids preserves its 96 kHz synthesis domain and decimates safely into the 48 kHz master mix.
 - [x] The project builds natively on Windows.
 - [x] The PortMaster package installs and runs on the console.
 - [x] `.cct` projects preserve the levels of all eight tracks.

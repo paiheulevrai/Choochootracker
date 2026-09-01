@@ -20,7 +20,7 @@ class BraidsVoice {
   static const size_t kBlockSize = 24;
   static constexpr float kSampleRate = 96000.0f;
 
-  void init();
+  void init(float outputSampleRate = kSampleRate);
   bool setModel(uint8_t model);
   void setPitch(int16_t pitch);
   void setParameters(uint16_t timbre, uint16_t color);
@@ -47,6 +47,8 @@ class BraidsVoice {
 
  private:
   void renderBlock();
+  float nextSourceSample();
+  float filterSourceSample(float sample);
 
   braids::MacroOscillator oscillator_;
   int16_t block_[kBlockSize];
@@ -60,6 +62,11 @@ class BraidsVoice {
   uint32_t signatureSeed_;
   braids::SignatureWaveshaper signatureWaveshaper_;
   braids::VcoJitterSource jitterSource_;
+
+  float outputSampleRate_;
+  float sourcePhase_, previousSource_, currentSource_;
+  float decimatorHistory_[62];
+  size_t decimatorPosition_;
 
   VoicePostProcessor<> post_;
 };

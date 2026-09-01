@@ -17,7 +17,8 @@ class MasterEffects {
                size_t frames, const Project* project);
 
  private:
-  float lowpass(float input, float cutoff, float& state);
+  float lowpass(float input, float coefficient, float& state);
+  float lowpassCoefficient(float cutoff) const;
 
   float sampleRate_;
   uint16_t reverbMemory_[65536];

@@ -550,6 +550,7 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
   state->masterEffects->init((float)sampleRate);
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
     state->trackTilt[i].init((float)sampleRate);
+    state->braidsVoices[i]->init((float)sampleRate);
     state->sampleVoices[i]->init((float)sampleRate);
     state->scwfVoices[i]->init((float)sampleRate);
     state->plaitsVoices[i]->init((float)sampleRate);
@@ -1091,13 +1092,19 @@ static void updateSCWFVoices(ChipNomadState* state) {
     uint8_t frameIndex[2] = {byowtbl->frameIndex[0], byowtbl->frameIndex[1]};
     int pitchModulation = 0;
     float gain = phraseGain(track, instrument);
-    if (track->note.fx[fxSDT].isOn) detune = track->note.fx[fxSDT].fxValue;
-    if (track->note.fx[fxSMX].isOn) mix = track->note.fx[fxSMX].fxValue;
-    if (track->note.fx[fxSCF2].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxSCF2].fxValue);
-    if (track->note.fx[fxSRS2].isOn) resonance = track->note.fx[fxSRS2].fxValue;
+    detune = slewEngineFX(track, fxSDT,
+      track->note.fx[fxSDT].isOn ? track->note.fx[fxSDT].fxValue : detune);
+    mix = slewEngineFX(track, fxSMX,
+      track->note.fx[fxSMX].isOn ? track->note.fx[fxSMX].fxValue : mix);
+    cutoff = instrumentFXCutoff(slewEngineFX(track, fxSCF2,
+      track->note.fx[fxSCF2].isOn ? track->note.fx[fxSCF2].fxValue : filterControlFromCutoff(cutoff)));
+    resonance = slewEngineFX(track, fxSRS2,
+      track->note.fx[fxSRS2].isOn ? track->note.fx[fxSRS2].fxValue : resonance);
     if (instrument->type == InstrumentType::BYOWTBL) {
-      if (track->note.fx[fxBIA].isOn) frameIndex[0] = track->note.fx[fxBIA].fxValue;
-      if (track->note.fx[fxBIB].isOn) frameIndex[1] = track->note.fx[fxBIB].fxValue;
+      frameIndex[0] = (uint8_t)slewEngineFX(track, fxBIA,
+        track->note.fx[fxBIA].isOn ? track->note.fx[fxBIA].fxValue : frameIndex[0]);
+      frameIndex[1] = (uint8_t)slewEngineFX(track, fxBIB,
+        track->note.fx[fxBIB].isOn ? track->note.fx[fxBIB].fxValue : frameIndex[1]);
     }
     for (int i = 0; i < 4; ++i) {
       PlaybackModState* mod = &track->note.modulation[i];

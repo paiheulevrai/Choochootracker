@@ -11,8 +11,8 @@ static float mixerGain(uint8_t value) {
 }
 
 void MasterEffects::init(float sampleRate) {
-  sampleRate_ = sampleRate > 0.0f ? sampleRate : 96000.0f;
-  reverb_.Init(reverbMemory_);
+  sampleRate_ = sampleRate > 0.0f ? sampleRate : 48000.0f;
+  reverb_.Init(reverbMemory_, sampleRate_);
   reverbFrames_.clear();
   delayLine_.assign((size_t)(sampleRate_ * 8.0f) * 2, 0.0f);
   delayWrite_ = 0;
@@ -20,10 +20,13 @@ void MasterEffects::init(float sampleRate) {
   delayFilterState_[0] = delayFilterState_[1] = 0.0f;
 }
 
-float MasterEffects::lowpass(float input, float cutoff, float& state) {
+float MasterEffects::lowpassCoefficient(float cutoff) const {
   if (cutoff < 20.0f) cutoff = 20.0f;
   if (cutoff > sampleRate_ * 0.45f) cutoff = sampleRate_ * 0.45f;
-  float coefficient = 1.0f - expf(-6.283185307179586f * cutoff / sampleRate_);
+  return 1.0f - expf(-6.283185307179586f * cutoff / sampleRate_);
+}
+
+float MasterEffects::lowpass(float input, float coefficient, float& state) {
   state += coefficient * (input - state);
   return state;
 }
@@ -40,10 +43,11 @@ void MasterEffects::process(float* reverbBus, float* delayBus, float* output,
     float feedback = std::min<int>(project->delayFeedback, 95) / 100.0f;
     float returnGain = project->perceptualEffects ? mixerGain(project->delayReturn) : project->delayReturn / 100.0f;
     float reverbSend = std::min<int>(project->delayReverbSend, 100) / 100.0f;
+    float filterCoefficient = lowpassCoefficient(project->delayFilterCutoffHz);
+    size_t read = (delayWrite_ + capacity - delaySamples) % capacity;
     for (size_t i = 0; i < frames; ++i) {
-      size_t read = (delayWrite_ + capacity - delaySamples) % capacity;
-      float wetL = lowpass(delayLine_[read * 2], project->delayFilterCutoffHz, delayFilterState_[0]);
-      float wetR = lowpass(delayLine_[read * 2 + 1], project->delayFilterCutoffHz, delayFilterState_[1]);
+      float wetL = lowpass(delayLine_[read * 2], filterCoefficient, delayFilterState_[0]);
+      float wetR = lowpass(delayLine_[read * 2 + 1], filterCoefficient, delayFilterState_[1]);
       delayLine_[delayWrite_ * 2] = delayBus[i * 2] + wetR * feedback;
       delayLine_[delayWrite_ * 2 + 1] = delayBus[i * 2 + 1] + wetL * feedback;
       output[i * 2] += wetL * returnGain;
@@ -52,15 +56,17 @@ void MasterEffects::process(float* reverbBus, float* delayBus, float* output,
         reverbBus[i * 2] += wetL * reverbSend;
         reverbBus[i * 2 + 1] += wetR * reverbSend;
       }
-      delayWrite_ = (delayWrite_ + 1) % capacity;
+      if (++read == capacity) read = 0;
+      if (++delayWrite_ == capacity) delayWrite_ = 0;
     }
   }
 
   if (reverbBus) {
     reverbFrames_.resize(frames);
+    float filterCoefficient = lowpassCoefficient(project->reverbFilterCutoffHz);
     for (size_t i = 0; i < frames; ++i) {
-      reverbFrames_[i].l = lowpass(reverbBus[i * 2], project->reverbFilterCutoffHz, reverbFilterState_[0]);
-      reverbFrames_[i].r = lowpass(reverbBus[i * 2 + 1], project->reverbFilterCutoffHz, reverbFilterState_[1]);
+      reverbFrames_[i].l = lowpass(reverbBus[i * 2], filterCoefficient, reverbFilterState_[0]);
+      reverbFrames_[i].r = lowpass(reverbBus[i * 2 + 1], filterCoefficient, reverbFilterState_[1]);
     }
     reverb_.set_amount(1.0f);
     reverb_.set_input_gain(0.2f);

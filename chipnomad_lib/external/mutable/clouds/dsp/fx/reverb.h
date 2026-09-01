@@ -40,10 +40,11 @@ class Reverb {
   Reverb() { }
   ~Reverb() { }
   
-  void Init(uint16_t* buffer) {
+  void Init(uint16_t* buffer, float sample_rate = 48000.0f) {
     engine_.Init(buffer);
-    engine_.SetLFOFrequency(LFO_1, 0.5f / 96000.0f);
-    engine_.SetLFOFrequency(LFO_2, 0.3f / 96000.0f);
+    if (sample_rate <= 0.0f) sample_rate = 48000.0f;
+    engine_.SetLFOFrequency(LFO_1, 0.5f / sample_rate);
+    engine_.SetLFOFrequency(LFO_2, 0.3f / sample_rate);
     lp_ = 0.7f;
     diffusion_ = 0.625f;
   }
@@ -53,16 +54,18 @@ class Reverb {
     // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
     // Modulation is applied in the loop of the first diffuser AP for additional
     // smearing; and to the two long delays for a slow shimmer/chorus effect.
-    typedef E::Reserve<339,
-      E::Reserve<486,
-      E::Reserve<723,
-      E::Reserve<1197,
-      E::Reserve<4959,
-      E::Reserve<6114,
-      E::Reserve<10233,
-      E::Reserve<5739,
-      E::Reserve<4989,
-      E::Reserve<14346> > > > > > > > > > Memory;
+    // Clouds' original lengths target 32 kHz; these are scaled 1.5x for the
+    // fixed 48 kHz master rate.
+    typedef E::Reserve<170,
+      E::Reserve<243,
+      E::Reserve<362,
+      E::Reserve<599,
+      E::Reserve<2480,
+      E::Reserve<3057,
+      E::Reserve<5117,
+      E::Reserve<2870,
+      E::Reserve<2495,
+      E::Reserve<7173> > > > > > > > > > Memory;
     E::DelayLine<Memory, 0> ap1;
     E::DelayLine<Memory, 1> ap2;
     E::DelayLine<Memory, 2> ap3;
@@ -90,8 +93,8 @@ class Reverb {
       engine_.Start(&c);
       
       // Smear AP1 inside the loop.
-      c.Interpolate(ap1, 30.0f, LFO_1, 180.0f, 1.0f);
-      c.Write(ap1, 300, 0.0f);
+      c.Interpolate(ap1, 15.0f, LFO_1, 90.0f, 1.0f);
+      c.Write(ap1, 150, 0.0f);
       
       c.Read(in_out->l + in_out->r, gain);
 
@@ -108,7 +111,7 @@ class Reverb {
       
       // Main reverb loop.
       c.Load(apout);
-      c.Interpolate(del2, 14040.0f, LFO_2, 300.0f, krt);
+      c.Interpolate(del2, 7020.0f, LFO_2, 150.0f, krt);
       c.Lp(lp_1, klp);
       c.Read(dap1a TAIL, -kap);
       c.WriteAllPass(dap1a, kap);

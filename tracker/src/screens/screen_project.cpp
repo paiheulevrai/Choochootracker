@@ -69,6 +69,7 @@ int projectLoadFromPath(const char* path) {
 
     // Store filename without extension
     extractFilenameWithoutExtension(path, appSettings.projectFilename, FILENAME_LENGTH + 1);
+    settingsSave();
 
     // Reset all screen states (including song position)
     screensInitAll();
@@ -105,6 +106,7 @@ static void onProjectSaved(const char* folderPath) {
     projectModified = 0; // Clear modified flag after saving
     strncpy(appSettings.projectPath, folderPath, PATH_LENGTH);
     appSettings.projectPath[PATH_LENGTH] = 0;
+    settingsSave();
   }
   screenSetup(&screenProject, 0);
 }
@@ -119,6 +121,7 @@ static void doNewProject(void) {
   audioManager.replaceProject(&replacement);
   projectModified = 0;
   appSettings.projectFilename[0] = 0;
+  settingsSave();
   screensInitAll();
   screenSetup(projectReturnScreen, 0);
 }
