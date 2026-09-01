@@ -13,11 +13,11 @@ static int continueAvailable;
 // Pixel scrolling stays crisp, but must advance often enough to look fluid at
 // the fixed 60 Hz title-screen cadence.
 enum {
-  SKY_SCROLL_FRAMES = 10,
-  SCENE_SCROLL_FRAMES = 6,
-  VIADUCT_SCROLL_FRAMES = 4,
-  FOREGROUND_SCROLL_FRAMES = 2,
-  TRAIN_SCROLL_FRAMES = 4,
+  SKY_SCROLL_FRAMES = 13,
+  SCENE_SCROLL_FRAMES = 8,
+  VIADUCT_SCROLL_FRAMES = 5,
+  FOREGROUND_SCROLL_FRAMES = 3,
+  TRAIN_SCROLL_FRAMES = 5,
 };
 
 static void unload(void) {
