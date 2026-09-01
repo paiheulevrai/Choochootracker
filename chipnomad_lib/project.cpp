@@ -161,6 +161,13 @@ void projectInit(Project* p) {
   }
 }
 
+void projectFree(Project* p) {
+  if (!p) return;
+  for (int i = 0; i < PROJECT_MAX_INSTRUMENTS; i++) {
+    getInstrumentFunctions(p->instruments[i].type).free(&p->instruments[i]);
+  }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Convenience functions
 

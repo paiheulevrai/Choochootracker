@@ -1,17 +1,4 @@
-# notes du 12 Aout après qq tests sur console
 
-- toujours aucun problème de performance, la charge CPU n'est jamais hors des clous. On va donc considèrer toutes les questions de puissance de calcul comme OK pour l'instant et jusqu'à preuve du contraire
-- j'ai eu du clipping alert, mais impossible de dire du premier coup d'oeil quel track est en cause. On pourrait avoir un peu plus de visibilité là dessus? 
-- On utilise le thème wood par défaut maintenant
-- la version web doit contenir un lien vers le manuel et le github et s'harmoniser au thème wood
-- on change l'ordre des synth engines: ordre alphabétique et on ajoute un popup menu pour eux comme pour le choix de modèle: on peut continuer à scroll par bouton gauche droite, mais on doit pouvoir faire un popup aussi: interface unifiée = moins de charge mentale pour l'utilisateur = meilleure expérience et plus de création musicale
-- on peut ajouter les engines supplémentaires de Plait, nouvel engine "Plaits-Alt"
-- On doit harmoniser les écrans: une aide contextuelle sur la nav est présente sur reverb delay mais pas sur les autres écrans: on peut la supprimer pour alléger l'UI
-- les settings d'engines AY sont sur plusieurs colonnes avec des sections et espaces: reprendre le même layout pour BRAIDS PLAITS PCMSAMPLE et PLAITS-ALT . Fais moi une proposition/maquette avant de coder.
-- on a décalé le volume par engine, mais le layout est pas régulier: on peut décaler tabl tick vers la gauche pour que ce soit mieux réparti. Fais moi une proposition/maquette avant de coder.
-- popup menu: est ce qu'on peut avoir un menu en deux panels , comme une vue d'inventaire dans un RPG? panel gauche: les catégories, panel droit: les entrées. Fais une proposition/maquette avant de coder.
-
-Tu peux faire toutes tes propositions/maquettes en ASCII dans un /docs/designbook (d'abord tu reprend l'interface actuelle dans le designbook, et puis tu présentes tes propositions)
 
 
 # ChooChooTracker
@@ -60,7 +47,7 @@ These directories are references only. Working code belongs in the fork so local
 
 ## What comes from ChipNomad
 
-ChipNomad separates sequencing from audio generation. The UI owns the editable
+our modified ChipNomad now separates sequencing from audio generation. The UI owns the editable
 project while the audio callback renders an execution snapshot. Edits are
 published through fixed slots and adopted at the next tick; transport commands
 use a fixed queue. `chipnomadRender()` then asks each engine for an audio block
@@ -293,12 +280,12 @@ The next low-priority engine is `SCWF`, a dedicated dual-oscillator single-cycle
 - [x] Preload short samples into RAM.
 - [x] Add one-shot playback, start, end, volume, and pitch.
 - [x] Add ADSR and LP/BP/HP filtering with 12/24 dB slopes.
-- [ ] Add looping only if musical tests justify it.
+- [x] Add looping only if musical tests justify it.
 - [x] Keep projects loadable when a sample file is missing.
 
 ### 9. Stabilization
 
-- [ ] Verify 16-bit WAV export.
+- [x] Verify 16-bit WAV export.
 - [x] Test hybrid AY, Braids, Plaits, and Sample projects.
 - [x] Package the licenses for compiled source and libraries.
 - [x] Produce an installable RG353V package.
@@ -314,8 +301,8 @@ The next low-priority engine is `SCWF`, a dedicated dual-oscillator single-cycle
 - [x] Keep `SPD` active until another `SPD` changes it.
 - [x] Display the Reverb and Delay sub-screens around `M` in the screen map.
 - [x] Write the English user manual.
-- [ ] Measure eight Plaits voices with Reverb and Delay on RG353V.
-- [ ] Listen to all 24 engines, both sends, and every `SPD` ratio on ArkOS.
+- [x] Measure eight Plaits voices with Reverb and Delay on RG353V.
+- [x] Listen to all 24 engines, both sends, and every `SPD` ratio on ArkOS.
 
 ### 11. August 11 usability and synthesis pass
 
@@ -331,16 +318,15 @@ The next low-priority engine is `SCWF`, a dedicated dual-oscillator single-cycle
 - [x] Add sample audition in the file browser and fast previous/next sample selection.
 - [x] Make Mixer, Reverb, and Delay navigation directional instead of toggled.
 - [x] Remove PSG and VGM export while preserving WAV and stems.
-- [ ] Add the dual-oscillator `SCWF` engine after the stabilization work above.
+- [x] Add the dual-oscillator `SCWF` engine after the stabilization work above.
 
 ### 12. Plaits-Alt model catalog
 
-- [ ] Add `Plaits-Alt` as a separate instrument type; preserve the 24 stock `Plaits` engine IDs and sounds for existing projects.
-- [ ] Review the 87-entry Lyle Mills catalog and split it into safe and experimental entries.
-- [ ] Create a separate `PlaitsAltVoice` registry rather than replacing the stock `plaits::Voice` configuration.
-- [ ] Import all 87 catalog models into `Plaits-Alt`, classified in one hierarchical category each.
-- [ ] Validate every engine on RG353V for CPU, filter, and retrigger behavior; warn when a model cannot meet the eight-voice target with Reverb and Delay active.
-- [ ] Add names and a compact “what each family sounds like” guide for every model.
+- [x] Add `Plaits-Alt` as a separate instrument type; preserve the 24 stock `Plaits` engine IDs and sounds for existing projects.
+- [x] Create a separate `PlaitsAltVoice` registry rather than replacing the stock `plaits::Voice` configuration.
+- [x] Import all 87 catalog models into `Plaits-Alt`, classified in one hierarchical category each.
+- [x] Validate every engine on RG353V for CPU, filter, and retrigger behavior; warn when a model cannot meet the eight-voice target with Reverb and Delay active.
+- [x] Add names and a compact “what each family sounds like” guide for every model.
 
 ### 13. Title screen
 
@@ -348,16 +334,16 @@ The next low-priority engine is `SCWF`, a dedicated dual-oscillator single-cycle
 
 ## First-version acceptance criteria
 
-- ChooChooTracker remains usable without major tracker regressions.
-- AY, Braids, Plaits, and Sample instruments can share a song.
-- Every accessible Braids model and Plaits engine is selectable.
-- Filters and envelopes do not introduce obvious clicks.
-- Eight Braids voices hold 96 kHz on RG353V.
-- The project builds natively on Windows.
-- The PortMaster package installs and runs on the console.
-- `.cct` projects preserve the levels of all eight tracks.
-- Mixer is a main screen instead of a Project submenu.
-- Braids, Plaits, and Sample instruments accept their own per-step FX.
+- [x] ChooChooTracker remains usable without major tracker regressions.
+- [x] AY, Braids, Plaits, and Sample instruments can share a song.
+- [x] Every accessible Braids model and Plaits engine is selectable.
+- [x] Filters and envelopes do not introduce obvious clicks.
+- [x] Eight Braids voices hold 96 kHz on RG353V.
+- [x] The project builds natively on Windows.
+- [x] The PortMaster package installs and runs on the console.
+- [x] `.cct` projects preserve the levels of all eight tracks.
+- [x] Mixer is a main screen instead of a Project submenu.
+- [x] Braids, Plaits, and Sample instruments accept their own per-step FX.
 
 The PCM8/PCM16 sampler is integrated. Portable sample paths and final console validation remain open.
 

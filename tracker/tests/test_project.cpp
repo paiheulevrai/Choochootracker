@@ -4,6 +4,7 @@
 #include "project_utils.h"
 
 #include <cstring>
+#include <cstdlib>
 
 TEST_SUITE("project") {
 
@@ -75,6 +76,16 @@ TEST_CASE_FIXTURE(ProjectFixture, "projectInit other grooves empty") {
 TEST_CASE_FIXTURE(ProjectFixture, "projectInit instruments empty") {
   for (int i = 0; i < PROJECT_MAX_INSTRUMENTS; i++)
     CHECK(instrumentIsEmpty(&p, i));
+}
+
+TEST_CASE_FIXTURE(ProjectFixture, "projectFree releases instrument sample data") {
+  Instrument* instrument = &p.instruments[0];
+  getInstrumentFunctions(InstrumentType::Sample).init(instrument);
+  instrument->chip.sample.data = static_cast<int16_t*>(std::malloc(sizeof(int16_t)));
+  REQUIRE(instrument->chip.sample.data != nullptr);
+  projectFree(&p);
+  CHECK(instrument->type == InstrumentType::none);
+  CHECK(instrument->chip.sample.data == nullptr);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "projectInit phrases empty") {

@@ -56,6 +56,7 @@ struct ChipNomadState {
   // The UI is the sole writer of project. The audio callback only reads
   // audioProject after a tick-boundary snapshot handoff.
   Project project;
+  int ownsProjectResources;
   // UI owns project; the audio callback reads only audioProject.
   Project audioProject;
   PlaybackState playbackState;

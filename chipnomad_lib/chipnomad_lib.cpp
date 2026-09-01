@@ -449,6 +449,7 @@ ChipNomadState* chipnomadCreate(void) {
   if (!state) return NULL;
 
   memset(state, 0, sizeof(ChipNomadState));
+  state->ownsProjectResources = 1;
   state->audioCommands = new AudioCommandQueue();
   fillFXNames();
   projectInit(&state->project);
@@ -510,6 +511,8 @@ void chipnomadDestroy(ChipNomadState* state) {
     delete state->plaitsAltVoices[i];
     delete state->achchidVoices[i];
   }
+
+  if (state->ownsProjectResources) projectFree(&state->project);
 
   // Cleanup mix buffer
   free(state->mixBuffer);

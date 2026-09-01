@@ -301,6 +301,8 @@ extern char projectFileError[41];
 void fillFXNames();
 // Initialize an empty project
 void projectInit(Project* p);
+// Release dynamically allocated instrument data from an initialized project.
+void projectFree(Project* p);
 // Load project from a file
 int projectLoad(Project* p, const char* path);
 // Save project to a file

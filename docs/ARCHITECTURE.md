@@ -66,6 +66,8 @@ resizes memory inside the callback.
 
 See [realtime-architecture.md](realtime-architecture.md) for detailed
 constraints and diagnostics.
+See [codebase-map.md](codebase-map.md) for the visual code map and suggested
+review paths.
 
 ## Render flow
 

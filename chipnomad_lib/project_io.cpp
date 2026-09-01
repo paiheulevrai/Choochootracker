@@ -900,12 +900,13 @@ static int projectLoadInternal(FILE* file, Project* project) {
   snprintf(projectFileError, 40, "Invalid phrase data");
   if (projectLoadPhrases(file, &p)) return 1;
   snprintf(projectFileError, 40, "Invalid instrument data");
-  if (projectLoadInstruments(file, &p)) return 1;
+  if (projectLoadInstruments(file, &p)) { projectFree(&p); return 1; }
   snprintf(projectFileError, 40, "Invalid table data");
-  if (projectLoadTables(file, &p)) return 1;
+  if (projectLoadTables(file, &p)) { projectFree(&p); return 1; }
   snprintf(projectFileError, 40, "Invalid wavetable data");
-  if (projectLoadAYWavetables(file, &p)) return 1;
+  if (projectLoadAYWavetables(file, &p)) { projectFree(&p); return 1; }
 
+  projectFree(project);
   *project = p;
   return 0;
 }

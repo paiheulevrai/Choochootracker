@@ -113,6 +113,7 @@ static void onProjectCancelled(void) {
 }
 
 static void doNewProject(void) {
+  projectFree(&chipnomadState->project);
   projectInitAY(&chipnomadState->project);
   projectModified = 0;
   appSettings.projectFilename[0] = 0;

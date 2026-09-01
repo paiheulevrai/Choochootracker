@@ -17,6 +17,7 @@ class Exporter {
     Exporter(Project* project, int startRow) {
       this->chipnomadState = chipnomadCreate();
       this->chipnomadState->project = *project;
+      this->chipnomadState->ownsProjectResources = 0;
       this->renderedSeconds = 0;
       playbackInit(&this->chipnomadState->playbackState, &this->chipnomadState->project);
       playbackStartSong(&this->chipnomadState->playbackState, startRow, 0, 0);
