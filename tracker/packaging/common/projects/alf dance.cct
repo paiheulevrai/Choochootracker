@@ -797,8 +797,8 @@ E-6 04 0F --- 00 --- 00 --- 00
 - Mod3: 2,5,32,0,0,239,0
 - Mod4: 3,6,32,0,0,24,8
 - Chip data:
-- Oscillator A path: C:\Users\surga\Desktop\mobilegroove\tracker\build\windows\SR_wavetables\WaveEdit\BASIC_TH.WAV
-- Oscillator B path: C:\Users\surga\Desktop\mobilegroove\tracker\build\windows\SR_wavetables\WaveEdit\PLESANT_.WAV
+- Oscillator A path: SR_wavetables/WaveEdit/BASIC_TH.WAV
+- Oscillator B path: SR_wavetables/WaveEdit/PLESANT_.WAV
 - Position A: 106
 - Position B: 40
 - Detune: 22

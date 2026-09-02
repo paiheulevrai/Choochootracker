@@ -348,7 +348,7 @@ D#2 02 0F PSL 00 --- 00 --- 00
 - Mod3: 2,0,0,0,0,0,0
 - Mod4: 2,0,0,0,0,0,0
 - Chip data:
-- Sample path: C:\Users\surga\Desktop\mobilegroove\tracker\build\windows\samples\ChocolateAmen\01-kik.wav
+- Sample path: samples/ChocolateAmen/01-kik.wav
 - Sample pitch: 0
 - Sample speed: 100
 - Sample start: 0
@@ -379,7 +379,7 @@ D#2 02 0F PSL 00 --- 00 --- 00
 - Mod3: 2,0,0,0,0,0,0
 - Mod4: 2,0,0,0,0,0,0
 - Chip data:
-- Sample path: C:\Users\surga\Desktop\mobilegroove\tracker\build\windows\samples\ChocolateAmen\03-sn1.wav
+- Sample path: samples/ChocolateAmen/03-sn1.wav
 - Sample pitch: 0
 - Sample speed: 100
 - Sample start: 0
@@ -438,7 +438,7 @@ D#2 02 0F PSL 00 --- 00 --- 00
 - Mod3: 2,0,0,0,0,0,0
 - Mod4: 3,7,16,9,2,24,4
 - Chip data:
-- Sample path: C:\Users\surga\Desktop\mobilegroove\tracker\build\windows\samples\ChocolateAmen\02-hat.wav
+- Sample path: samples/ChocolateAmen/02-hat.wav
 - Sample pitch: 0
 - Sample speed: 100
 - Sample start: 0

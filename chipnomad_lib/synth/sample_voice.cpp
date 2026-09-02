@@ -6,6 +6,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+static void sampleStorePath(const char* path, InstrumentSample* sample) {
+  char workingDirectory[1024];
+  const char* storedPath = path;
+  if (getcwd(workingDirectory, sizeof(workingDirectory))) {
+    size_t length = strlen(workingDirectory);
+#ifdef _WIN32
+    if (strlen(path) > length && _strnicmp(path, workingDirectory, length) == 0 &&
+#else
+    if (strlen(path) > length && strncmp(path, workingDirectory, length) == 0 &&
+#endif
+        (path[length] == '/' || path[length] == '\\')) {
+      storedPath = path + length + 1;
+    }
+  }
+  strncpy(sample->path, storedPath, sizeof(sample->path) - 1);
+  sample->path[sizeof(sample->path) - 1] = 0;
+}
 
 static float envelopeTime(uint8_t value) {
   float normalized = value / 255.0f;
@@ -264,8 +283,7 @@ int sampleLoadWav16(const char* path, InstrumentSample* sample,
   sample->frameCount = frames;
   sample->sampleRate = sampleRate;
   sample->channels = (uint8_t)channels;
-  strncpy(sample->path, path, sizeof(sample->path) - 1);
-  sample->path[sizeof(sample->path) - 1] = 0;
+  sampleStorePath(path, sample);
   error[0] = 0;
   return 0;
 }
