@@ -263,13 +263,13 @@ void appSetup(void) {
   }
 
 #ifdef WEB_BUILD
-  // Restore the browser's IndexedDB-backed autosave, with the demo as fallback.
+  // Restore the browser's IndexedDB-backed autosave, with DNB as fallback.
   int projectLoaded = 0;
   if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0) {
     projectLoaded = 1;
-  } else if (projectLoad(&chipnomadState->project, "/projects/TECNODEMO.cct") == 0) {
+  } else if (projectLoad(&chipnomadState->project, "/projects/DNB.cct") == 0) {
     projectLoaded = 1;
-    extractFilenameWithoutExtension("/projects/TECNODEMO.cct", appSettings.projectFilename, FILENAME_LENGTH + 1);
+    extractFilenameWithoutExtension("/projects/DNB.cct", appSettings.projectFilename, FILENAME_LENGTH + 1);
   }
   if (!projectLoaded) projectInitAY(&chipnomadState->project);
 #else

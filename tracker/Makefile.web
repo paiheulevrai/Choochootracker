@@ -8,12 +8,17 @@ OUTPUT_EXT = .html
 WEB_BUILD = build/web
 EMXX ?= em++
 WEB_CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) -DWEB_BUILD -DGAMEPAD_SUPPORT
+WEB_DATA_DIRS = $(filter-out projects,$(COMMON_DATA_DIRS))
+WEB_PRELOAD = $(foreach dir,$(WEB_DATA_DIRS),--preload-file packaging/common/$(dir)@/$(dir)) \
+	--preload-file packaging/common/projects/DNB.cct@/projects/DNB.cct \
+	--preload-file "packaging/common/projects/psy.cct@/projects/psy.cct" \
+	--preload-file "packaging/common/projects/alf dance.cct@/projects/alf dance.cct"
 WEB_LDFLAGS = -sUSE_SDL=2 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=256MB \
 	-sASYNCIFY=1 \
 	-sFORCE_FILESYSTEM=1 -sNO_EXIT_RUNTIME=1 -sEXPORTED_RUNTIME_METHODS=ccall,FS \
 	-sDEFAULT_TO_CXX \
 	-lidbfs.js \
-	--preload-file packaging/common@/
+	$(WEB_PRELOAD)
 
 SOURCES := $(filter-out platforms/sdl2/corelib_mainloop.cpp,$(SOURCES)) \
 	platforms/web/corelib_mainloop.cpp
