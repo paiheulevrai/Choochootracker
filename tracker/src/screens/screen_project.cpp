@@ -115,6 +115,12 @@ static void onProjectCancelled(void) {
   screenSetup(projectReturnScreen, 0);
 }
 
+static void doLoadProject(void) {
+  fileBrowserSetup("LOAD PROJECT", ".cct,.vt2", appSettings.projectPath,
+    onProjectLoaded, onProjectCancelled);
+  screenSetup(&screenFileBrowser, 0);
+}
+
 static void doNewProject(void) {
   Project replacement;
   projectInitAY(&replacement);
@@ -126,15 +132,16 @@ static void doNewProject(void) {
   screenSetup(projectReturnScreen, 0);
 }
 
-static void doLoadProject(void) {
-  fileBrowserSetup("LOAD PROJECT", ".cct,.vt2", appSettings.projectPath,
-    onProjectLoaded, onProjectCancelled);
-  screenSetup(&screenFileBrowser, 0);
-}
-
 void projectOpenFromScreen(const AppScreen* returnScreen) {
   projectReturnScreen = returnScreen ? returnScreen : &screenProject;
   doLoadProject();
+}
+
+void projectOpenFromScreenAtPath(const AppScreen* returnScreen, const char* path) {
+  projectReturnScreen = returnScreen ? returnScreen : &screenProject;
+  fileBrowserSetup("LOAD PROJECT", ".cct,.vt2", path,
+    onProjectLoaded, onProjectCancelled);
+  screenSetup(&screenFileBrowser, 0);
 }
 
 void projectCreateNewFromScreen(const AppScreen* returnScreen) {

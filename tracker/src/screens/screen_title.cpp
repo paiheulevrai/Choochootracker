@@ -114,7 +114,13 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   if (keys != keyEdit) return 1;
   gfxTitleEnd();
   if (selected == 0 && continueAvailable) { unload(); screenSetup(&screenSong, 0); }
-  else if (selected == 1) projectOpenFromScreen(&screenTitle);
+  else if (selected == 1) {
+#ifdef WEB_BUILD
+    projectOpenFromScreenAtPath(&screenTitle, "/projects");
+#else
+    projectOpenFromScreen(&screenTitle);
+#endif
+  }
   else { unload(); projectCreateNewFromScreen(&screenSong); }
   return 1;
 }

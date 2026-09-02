@@ -8,6 +8,7 @@
 
 int projectLoadFromPath(const char* path);
 void projectOpenFromScreen(const AppScreen* returnScreen);
+void projectOpenFromScreenAtPath(const AppScreen* returnScreen, const char* path);
 void projectCreateNewFromScreen(const AppScreen* returnScreen);
 
 int projectCommonColumnCount(int row);
