@@ -48,10 +48,14 @@ static void init(void) {
 }
 
 static int canContinue(void) {
+#ifdef WEB_BUILD
+  return 1;
+#else
   FILE* autosave = fopen(getAutosavePath(), "rb");
   if (!autosave) return 0;
   fclose(autosave);
   return 1;
+#endif
 }
 
 static void setup(int input) {

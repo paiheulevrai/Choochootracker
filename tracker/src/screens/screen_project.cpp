@@ -87,8 +87,10 @@ int projectLoadFromPath(const char* path) {
 }
 
 static void onProjectLoaded(const char* path) {
-  projectLoadFromPath(path);
-  screenSetup(projectReturnScreen, 0);
+  if (projectLoadFromPath(path) == 0 && projectReturnScreen == &screenTitle)
+    screenSetup(&screenSong, 0);
+  else
+    screenSetup(projectReturnScreen, 0);
 }
 
 #ifdef WEB_BUILD
