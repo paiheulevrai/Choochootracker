@@ -262,21 +262,21 @@ void appSetup(void) {
     return;
   }
 
-#ifdef WEB_BUILD
-  // Restore the browser's IndexedDB-backed autosave, with DNB as fallback.
+  // Restore autosave; a bundled Grieg demo is the first-launch fallback.
   int projectLoaded = 0;
   if (projectLoad(&chipnomadState->project, getAutosavePath()) == 0) {
     projectLoaded = 1;
-  } else if (projectLoad(&chipnomadState->project, "/projects/DNB.cct") == 0) {
+  }
+#ifdef WEB_BUILD
+  const char* defaultProject = "/projects/grieg-mountain-king-fm.cct";
+#else
+  const char* defaultProject = "projects/grieg-mountain-king-fm.cct";
+#endif
+  if (!projectLoaded && projectLoad(&chipnomadState->project, defaultProject) == 0) {
     projectLoaded = 1;
-    extractFilenameWithoutExtension("/projects/DNB.cct", appSettings.projectFilename, FILENAME_LENGTH + 1);
+    extractFilenameWithoutExtension(defaultProject, appSettings.projectFilename, FILENAME_LENGTH + 1);
   }
   if (!projectLoaded) projectInitAY(&chipnomadState->project);
-#else
-  // Native builds restore the user's auto-saved project.
-  if (projectLoad(&chipnomadState->project, getAutosavePath()) != 0)
-    projectInitAY(&chipnomadState->project);
-#endif
 
   // Initialize all screen states
   screensInitAll();

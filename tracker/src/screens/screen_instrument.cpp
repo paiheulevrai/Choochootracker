@@ -474,11 +474,14 @@ void instrumentCommonDrawEnvelopePreview(uint8_t attack, uint8_t decay, uint8_t 
 }
 
 void instrumentCommonDrawLivePreview(void) {
-  int track = *pSongTrack;
-  int active = track >= 0 && track < chipnomadState->project.tracksCount &&
-    chipnomadGetPlaybackStatus(chipnomadState)->tracks[track].note.instrument == cInstrument &&
-    chipnomadState->voiceMonitors[track].active;
-  if (!active) {
+  const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
+  int track = -1;
+  for (int i = 0; i < chipnomadState->project.tracksCount; ++i) {
+    if (playback->tracks[i].note.instrument == cInstrument &&
+        chipnomadState->voiceMonitors[i].active &&
+        (track < 0 || i == *pSongTrack)) track = i;
+  }
+  if (track < 0) {
     if (livePreviewWasActive) currentScreen->fullRedraw();
     livePreviewWasActive = 0;
     return;
