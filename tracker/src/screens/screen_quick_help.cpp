@@ -29,9 +29,7 @@ static void fullRedraw(void) {
   gfxPrint(0, 10, "Instruments make sound");
   gfxPrint(0, 13, "Read the manual next time");
   gfxPrint(0, 14, "you are on a train.");
-#ifdef ANDROID_BUILD
-  gfxPrint(0, 16, "Touch controls show without a pad");
-#endif
+
 }
 
 static void draw(void) {}

@@ -34,6 +34,12 @@ extern const uint8_t icon_shift[ICON_HEIGHT * ICON_BYTES_PER_ROW];
 // PLAY text
 extern const uint8_t icon_play[ICON_HEIGHT * ICON_BYTES_PER_ROW];
 
+// Physical button labels used by Android's touch controls.
+extern const uint8_t icon_a[ICON_HEIGHT * ICON_BYTES_PER_ROW];
+extern const uint8_t icon_b[ICON_HEIGHT * ICON_BYTES_PER_ROW];
+extern const uint8_t icon_select[ICON_HEIGHT * ICON_BYTES_PER_ROW];
+extern const uint8_t icon_start[ICON_HEIGHT * ICON_BYTES_PER_ROW];
+
 extern const uint8_t icon_rec[ICON_HEIGHT * ICON_BYTES_PER_ROW];
 extern const uint8_t icon_del[ICON_HEIGHT * ICON_BYTES_PER_ROW];
 

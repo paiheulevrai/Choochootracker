@@ -6,7 +6,7 @@
 #include "corelib_gfx.h"
 #include "corelib_file.h"
 
-static GfxImage *sky, *scene, *foreground, *viaduct, *detail, *train, *logo;
+static GfxImage *sky, *scene, *foreground, *viaduct, *train, *logo;
 static int frame;
 static int selected;
 static int continueAvailable;
@@ -26,7 +26,6 @@ static void unload(void) {
   gfxImageFree(scene); scene = NULL;
   gfxImageFree(foreground); foreground = NULL;
   gfxImageFree(viaduct); viaduct = NULL;
-  gfxImageFree(detail); detail = NULL;
   gfxImageFree(train); train = NULL;
   gfxImageFree(logo); logo = NULL;
 }
@@ -50,7 +49,6 @@ static void init(void) {
   scene = load("snes_scene.bmp");
   foreground = load("snes_foreground.bmp");
   viaduct = load("snes_viaduct.bmp");
-  detail = load("snes_detail.bmp");
   train = load("snes_train.bmp");
   logo = load("snes_logo.bmp");
 }
@@ -73,7 +71,7 @@ static void setup(int input) {
 }
 static void fullRedraw(void) {}
 
-static void drawWrapped(const GfxImage* image, int offset) {
+static void drawWrapped(const GfxImage* image, int offset, int y) {
   const int width = gfxImageWidth(image);
   if (!width) return;
   offset %= width;
@@ -81,7 +79,7 @@ static void drawWrapped(const GfxImage* image, int offset) {
   while (x < 256) {
     int part = width - offset;
     if (part > 256 - x) part = 256 - x;
-    gfxImageDrawCrop(image, offset, 0, part, gfxImageHeight(image), x, 0);
+    gfxImageDrawCrop(image, offset, 0, part, gfxImageHeight(image), x, y);
     x += part;
     offset = 0;
   }
@@ -100,19 +98,18 @@ static void drawMenu(void) {
 
 static void draw(void) {
   gfxTitleBegin();
-  drawWrapped(sky, frame / SKY_SCROLL_FRAMES);
+  drawWrapped(sky, frame / SKY_SCROLL_FRAMES, 0);
   // The scenery around the viaduct remains a separate, intermediate plane.
-  drawWrapped(scene, frame / SCENE_SCROLL_FRAMES);
-  drawWrapped(detail, frame / SKY_SCROLL_FRAMES);
+  drawWrapped(scene, frame / SCENE_SCROLL_FRAMES, 112);
   int vibration = frame % 173 < 6 ? (frame & 1 ? -1 : 1) : 0;
   if (train) {
     const int trainWidth = gfxImageWidth(train);
     const int trainX = (8 + frame / TRAIN_SCROLL_FRAMES + trainWidth) % (256 + trainWidth) - trainWidth;
     gfxImageDrawCrop(train, 0, 0, trainWidth, gfxImageHeight(train), trainX, 133 + vibration);
   }
-  drawWrapped(viaduct, frame / VIADUCT_SCROLL_FRAMES);
-  drawWrapped(foreground, frame / FOREGROUND_SCROLL_FRAMES);
-  if (logo) gfxImageDrawCrop(logo, 0, 0, gfxImageWidth(logo), gfxImageHeight(logo), 48, 20);
+  drawWrapped(viaduct, frame / VIADUCT_SCROLL_FRAMES, 152);
+  drawWrapped(foreground, frame / FOREGROUND_SCROLL_FRAMES, 136);
+  if (logo) gfxImageDrawCrop(logo, 0, 0, gfxImageWidth(logo), gfxImageHeight(logo), 52, 24);
   drawMenu();
   if (frame < 30) gfxTitleFadeBlack((uint8_t)(255 - frame * 255 / 30));
   gfxTitlePresent();

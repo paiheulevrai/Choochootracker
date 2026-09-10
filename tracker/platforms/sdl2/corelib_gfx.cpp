@@ -963,10 +963,17 @@ void gfxDrawHUD(void) {
 #endif
 
   drawDpad();
+  #ifdef ANDROID_BUILD
+  drawButton(&aButtonRect, icon_a, 4);
+  drawButton(&bButtonRect, icon_b, 5);
+  drawButton(&startButtonRect, icon_start, 6);
+  drawButton(&selectButtonRect, icon_select, 7);
+  #else
   drawButton(&aButtonRect, icon_edit, 4);
   drawButton(&bButtonRect, icon_opt, 5);
   drawButton(&startButtonRect, icon_play, 6);
   drawButton(&selectButtonRect, icon_shift, 7);
+  #endif
 #ifdef ANDROID_BUILD
   drawButton(&recButtonRect, icon_rec, 8);
   drawButton(&delButtonRect, icon_del, 9);
