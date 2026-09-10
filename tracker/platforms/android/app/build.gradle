@@ -5,6 +5,10 @@ plugins {
 def signingFile = rootProject.file('keystore.properties')
 def signingProps = new Properties()
 if (signingFile.exists()) signingFile.withInputStream { signingProps.load(it) }
+def signingStoreFile = System.getenv('CCT_KEYSTORE_FILE') ?: signingProps['storeFile']
+def signingStorePassword = System.getenv('CCT_KEYSTORE_PASSWORD') ?: signingProps['storePassword']
+def signingKeyAlias = System.getenv('CCT_KEY_ALIAS') ?: signingProps['keyAlias']
+def signingKeyPassword = System.getenv('CCT_KEY_PASSWORD') ?: signingProps['keyPassword']
 def localProps = new Properties()
 def localPropsFile = rootProject.file('local.properties')
 if (localPropsFile.exists()) localPropsFile.withInputStream { localProps.load(it) }
@@ -71,6 +75,17 @@ android {
     // Make sure assets are copied before building
     preBuild.dependsOn copyChooChooTrackerAssets
 
+    signingConfigs {
+        release {
+            if (signingStoreFile) {
+                storeFile rootProject.file(signingStoreFile)
+                storePassword signingStorePassword
+                keyAlias signingKeyAlias
+                keyPassword signingKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             debuggable true
@@ -78,18 +93,7 @@ android {
         }
         release {
             minifyEnabled false
-            if (signingFile.exists()) signingConfig signingConfigs.release
-        }
-    }
-
-    signingConfigs {
-        release {
-            if (signingFile.exists()) {
-                storeFile rootProject.file(signingProps['storeFile'])
-                storePassword signingProps['storePassword']
-                keyAlias signingProps['keyAlias']
-                keyPassword signingProps['keyPassword']
-            }
+            if (signingStoreFile) signingConfig signingConfigs.release
         }
     }
     

@@ -20,6 +20,7 @@ settings.txt
 libchipnomad.so
 tracker/platforms/android/app/src/main/assets/choochootracker_data
 tracker/platforms/android/keystore.properties
+tracker/platforms/android/*.jks
 rg_log.txt
 chipnomad_log.txt
 
