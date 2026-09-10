@@ -4,7 +4,7 @@
 
 - Developer legal name: Pierre-Emmanuel Surga
 - Support email: pierre@project1404.com
-- Privacy policy URL: `https://choochootracker.vercel.app/privacy.html`
+- Privacy policy URL: `https://github.com/paiheulevrai/Choochootracker/blob/main/docs/privacy-policy.md`
 - Package: `com.paiheulevrai.choochootracker`
 
 ## English listing copy
