@@ -4,6 +4,7 @@
 #include "screens.h"
 #include "screen_project.h"
 #include "corelib_gfx.h"
+#include "corelib_file.h"
 
 static GfxImage *sky, *scene, *foreground, *viaduct, *detail, *train, *logo;
 static int frame;
@@ -31,7 +32,14 @@ static void unload(void) {
 }
 
 static GfxImage* load(const char* name) {
-  char path[64];
+  char path[PATH_LENGTH + 64];
+#ifdef ANDROID_BUILD
+  char workspace[PATH_LENGTH];
+  if (fileGetDefaultDirectory(workspace, sizeof(workspace)) == 0) {
+    snprintf(path, sizeof(path), "%s/title/%s", workspace, name);
+    return gfxImageLoadBMP(path);
+  }
+#endif
   snprintf(path, sizeof(path), "title/%s", name);
   return gfxImageLoadBMP(path);
 }

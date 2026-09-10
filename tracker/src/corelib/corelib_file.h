@@ -26,6 +26,11 @@ struct FileEntry {
 // Returns 0 on success, -1 on failure
 int fileGetDefaultDirectory(char* buffer, int bufferSize);
 
+// Opens Android's system document picker and copies the selected file into
+// the private workspace. Other targets intentionally do nothing.
+void fileImportDocument(const char* mimeType, const char* relativeDirectory);
+void fileExportDocument(const char* path, const char* mimeType);
+
 // Check if a directory exists
 // Returns 1 if exists, 0 if not
 int fileDirectoryExists(const char* path);

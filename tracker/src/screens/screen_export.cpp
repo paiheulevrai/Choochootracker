@@ -87,6 +87,9 @@ static void draw(void) {
           webDownloadExportFile(currentExportPath);
         }
 #endif
+#ifdef ANDROID_BUILD
+        if (!currentExportIsStems) fileExportDocument(currentExportPath, "audio/wav");
+#endif
       } else {
         screenMessage(MESSAGE_TIME, "Export failed");
       }

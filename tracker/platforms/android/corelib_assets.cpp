@@ -10,6 +10,60 @@
 
 static AAssetManager* assetManager = NULL;
 
+int androidGetWorkspacePath(char* buffer, int bufferSize) {
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (!env || !activity) return 1;
+    jclass cls = env->GetObjectClass(activity);
+    jmethodID method = env->GetMethodID(cls, "getWorkspacePath", "()Ljava/lang/String;");
+    jstring path = method ? (jstring)env->CallObjectMethod(activity, method) : NULL;
+    const char* value = path ? env->GetStringUTFChars(path, NULL) : NULL;
+    if (value) snprintf(buffer, bufferSize, "%s", value);
+    if (value) env->ReleaseStringUTFChars(path, value);
+    if (path) env->DeleteLocalRef(path);
+    env->DeleteLocalRef(cls);
+    env->DeleteLocalRef(activity);
+    return value ? 0 : 1;
+}
+
+void androidOpenDocument(const char* mimeType, const char* relativeDirectory) {
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (!env || !activity) return;
+    jclass cls = env->GetObjectClass(activity);
+    jmethodID method = env->GetMethodID(cls, "openDocument", "(Ljava/lang/String;Ljava/lang/String;)V");
+    if (method) {
+        jstring mime = env->NewStringUTF(mimeType);
+        jstring directory = env->NewStringUTF(relativeDirectory);
+        env->CallVoidMethod(activity, method, mime, directory);
+        env->DeleteLocalRef(mime);
+        env->DeleteLocalRef(directory);
+    }
+    env->DeleteLocalRef(cls);
+    env->DeleteLocalRef(activity);
+}
+
+void androidSaveDocument(const char* path, const char* mimeType) {
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    jobject activity = (jobject)SDL_AndroidGetActivity();
+    if (!env || !activity) return;
+    jclass cls = env->GetObjectClass(activity);
+    jmethodID method = env->GetMethodID(cls, "saveDocument", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+    if (method) {
+        const char* name = strrchr(path, '/');
+        name = name ? name + 1 : path;
+        jstring source = env->NewStringUTF(path);
+        jstring mime = env->NewStringUTF(mimeType);
+        jstring filename = env->NewStringUTF(name);
+        env->CallVoidMethod(activity, method, source, mime, filename);
+        env->DeleteLocalRef(source);
+        env->DeleteLocalRef(mime);
+        env->DeleteLocalRef(filename);
+    }
+    env->DeleteLocalRef(cls);
+    env->DeleteLocalRef(activity);
+}
+
 static AAssetManager* getAssetManager(void) {
     if (assetManager) return assetManager;
 
@@ -33,13 +87,16 @@ static AAssetManager* getAssetManager(void) {
 }
 
 static const char* assetDirs[] = {
-    "chipnomad_data/fonts",
-    "chipnomad_data/instruments",
-    "chipnomad_data/pitch-tables",
-    "chipnomad_data/projects",
-    "chipnomad_data/samples",
-    "chipnomad_data/themes",
-    "chipnomad_data/wavetables",
+    "choochootracker_data/fonts",
+    "choochootracker_data/instruments",
+    "choochootracker_data/pitch-tables",
+    "choochootracker_data/projects",
+    "choochootracker_data/samples",
+    "choochootracker_data/themes",
+    "choochootracker_data/AY_wavetables",
+    "choochootracker_data/SR_wavetables",
+    "choochootracker_data/waveforms",
+    "choochootracker_data/title",
     NULL
 };
 
@@ -82,42 +139,45 @@ static int copyAssetFile(const char* assetPath, const char* destPath) {
     return 0;
 }
 
+static void copyAssetTree(AAssetManager* mgr, const char* assetDir, const char* destDir) {
+    mkdir(destDir, 0755);
+    AAssetDir* dir = AAssetManager_openDir(mgr, assetDir);
+    if (!dir) return;
+    const char* filename;
+    while ((filename = AAssetDir_getNextFileName(dir)) != NULL) {
+        char assetPath[1024];
+        char destPath[1024];
+        snprintf(assetPath, sizeof(assetPath), "%s/%s", assetDir, filename);
+        snprintf(destPath, sizeof(destPath), "%s/%s", destDir, filename);
+        if (!fileExists(destPath) && copyAssetFile(assetPath, destPath) != 0)
+            copyAssetTree(mgr, assetPath, destPath);
+    }
+    AAssetDir_close(dir);
+}
+
 int assetsInit(void) {
     if (!getAssetManager()) return 1;
 
-    const char* dataPath = "/storage/emulated/0/Documents/ChipNomad";
-    const char* bundledPath = "/storage/emulated/0/Documents/ChipNomad/BundledContent";
-
+    char dataPath[1024];
+    if (androidGetWorkspacePath(dataPath, sizeof(dataPath))) return 1;
     mkdir(dataPath, 0755);
-    mkdir(bundledPath, 0755);
 
     AAssetManager* mgr = getAssetManager();
 
     for (int i = 0; assetDirs[i] != NULL; i++) {
         const char* assetDir = assetDirs[i];
-        const char* subpath = assetDir + 15; // Strip "chipnomad_data/" prefix
+        const char* subpath = strchr(assetDir, '/') + 1;
 
         char destDir[512];
-        snprintf(destDir, sizeof(destDir), "%s/%s", bundledPath, subpath);
-        mkdir(destDir, 0755);
-
-        AAssetDir* dir = AAssetManager_openDir(mgr, assetDir);
-        if (!dir) continue;
-
-        const char* filename;
-        while ((filename = AAssetDir_getNextFileName(dir)) != NULL) {
-            char assetPath[512];
-            char destPath[512];
-            snprintf(assetPath, sizeof(assetPath), "%s/%s", assetDir, filename);
-            snprintf(destPath, sizeof(destPath), "%s/%s", destDir, filename);
-
-            if (!fileExists(destPath)) {
-                copyAssetFile(assetPath, destPath);
-            }
-        }
-
-        AAssetDir_close(dir);
+        snprintf(destDir, sizeof(destDir), "%s/%s", dataPath, subpath);
+        copyAssetTree(mgr, assetDir, destDir);
     }
+
+    // Bundled projects store their sample paths relative to the application
+    // data root (for example "samples/909/BT0A0D0.WAV"). Android starts the
+    // native process in a different working directory, so make that root the
+    // current directory once the private workspace is ready.
+    if (chdir(dataPath) != 0) return 1;
 
     return 0;
 }

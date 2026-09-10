@@ -39,10 +39,8 @@ static void createDirectoryRecursive(const char* path) {
 
 int fileGetDefaultDirectory(char* buffer, int bufferSize) {
 #ifdef ANDROID_BUILD
-  const char* dataPath = "/storage/emulated/0/Documents/ChipNomad";
-  createDirectoryRecursive(dataPath);
-  snprintf(buffer, bufferSize, "%s", dataPath);
-  return 0;
+  extern int androidGetWorkspacePath(char*, int);
+  return androidGetWorkspacePath(buffer, bufferSize);
 #elif defined(MACOS_BUILD)
   const char* home = getenv("HOME");
   if (home) {
@@ -54,6 +52,26 @@ int fileGetDefaultDirectory(char* buffer, int bufferSize) {
   return 0;
 #else
   return getcwd(buffer, bufferSize) ? 0 : -1;
+#endif
+}
+
+void fileImportDocument(const char* mimeType, const char* relativeDirectory) {
+#ifdef ANDROID_BUILD
+  extern void androidOpenDocument(const char*, const char*);
+  androidOpenDocument(mimeType, relativeDirectory);
+#else
+  (void)mimeType;
+  (void)relativeDirectory;
+#endif
+}
+
+void fileExportDocument(const char* path, const char* mimeType) {
+#ifdef ANDROID_BUILD
+  extern void androidSaveDocument(const char*, const char*);
+  androidSaveDocument(path, mimeType);
+#else
+  (void)path;
+  (void)mimeType;
 #endif
 }
 

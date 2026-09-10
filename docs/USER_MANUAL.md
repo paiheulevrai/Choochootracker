@@ -54,7 +54,11 @@ ChooChooTracker works best with a gamepad that has a D-pad, 2 analogue sticks an
 
 Mappings can be changed in **Settings > Key mapping**.
 
-Windows and web users can also use a game controller. Gamepad input has been tested on Windows and Android.
+Windows, web, and Android users can also use a game controller. On Android,
+touch controls appear automatically when no gamepad is connected: in portrait
+they sit below the tracker, while landscape puts the D-pad on the left and
+the action buttons on the right. Android projects and samples stay private to
+the app; use the Android file picker to import files and save WAV exports.
 
 ### Navigation
 

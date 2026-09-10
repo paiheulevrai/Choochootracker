@@ -56,7 +56,11 @@ static Button buttons[] = {
 };
 
 static int isPointInRect(int x, int y, SDL_Rect* rect) {
-  return (x >= rect->x && x < rect->x + rect->w && y >= rect->y && y < rect->y + rect->h);
+  // Phone taps are imprecise at the edge of a button. Keep the visual gap but
+  // accept a small invisible halo; it never overlaps the next control.
+  const int halo = 10;
+  return (x >= rect->x - halo && x < rect->x + rect->w + halo &&
+    y >= rect->y - halo && y < rect->y + rect->h + halo);
 }
 
 static int getTouchButton(int x, int y) {
@@ -69,6 +73,21 @@ static int getTouchButton(int x, int y) {
   }
   return -1;
 }
+
+#ifdef ANDROID_BUILD
+// SDL's renderer watcher remaps finger x/y through the current 4:3 viewport
+// before queued events reach us, clamping touches in the control side bands.
+// The event filter runs before renderer watchers, so preserve raw normalized
+// window coordinates in dx/dy (unused by our button handling).
+static int SDLCALL preserveRawTouchCoordinates(void*, SDL_Event* event) {
+  if (event->type == SDL_FINGERDOWN || event->type == SDL_FINGERUP ||
+      event->type == SDL_FINGERMOTION) {
+    event->tfinger.dx = event->tfinger.x;
+    event->tfinger.dy = event->tfinger.y;
+  }
+  return 1;
+}
+#endif
 #endif
 
 void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData)) {
@@ -94,8 +113,26 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 
   FingerButton activeFingers[10] = {0};
   int numActiveFingers = 0;
+  int buttonTouches[8] = {0};
+#ifndef ANDROID_BUILD
+  int mouseTouchButton = -1;
+#endif
 
   extern void gfxSetButtonPressed(int buttonIndex, int pressed);
+  auto releaseFingers = [&]() {
+    for (int i = 0; i < 8; ++i) {
+      if (!buttonTouches[i]) continue;
+      buttonTouches[i] = 0;
+      gfxSetButtonPressed(i, 0);
+      eventData.type = MainLoopEvent::keyUp;
+      eventData.data.input = (InputCode){InputDeviceType::logical, buttons[i].key};
+      onEvent(eventData);
+    }
+    numActiveFingers = 0;
+  };
+#ifdef ANDROID_BUILD
+  SDL_SetEventFilter(preserveRawTouchCoordinates, NULL);
+#endif
 #endif
 
 #ifdef GAMEPAD_SUPPORT
@@ -130,6 +167,9 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 #endif
       }
       else if (event.type == SDL_APP_WILLENTERBACKGROUND) {
+#ifdef TOUCH_INPUT
+        releaseFingers();
+#endif
         eventData.type = MainLoopEvent::sleep;
         eventData.data.value = 0;
         onEvent(eventData);
@@ -153,6 +193,19 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
         wakeRedrawFrames = FPS;
       }
       else if (event.type == SDL_WINDOWEVENT) {
+        if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED ||
+            event.window.event == SDL_WINDOWEVENT_RESIZED) {
+          gfxHandleResize();
+#ifdef TOUCH_INPUT
+          releaseFingers();
+#endif
+          // A resize changes the explicit tracker viewport. Redraw the
+          // current screen immediately instead of waiting for an input frame.
+          eventData.type = MainLoopEvent::fullRedraw;
+          eventData.data.value = 0;
+          onEvent(eventData);
+          wakeRedrawFrames = FPS;
+        }
         if (event.window.event == SDL_WINDOWEVENT_RESTORED ||
             event.window.event == SDL_WINDOWEVENT_EXPOSED ||
             event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
@@ -189,7 +242,12 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           for (int i = 0; i < SDL_NumJoysticks(); i++) {
             if (SDL_IsGameController(i)) {
               gameController = SDL_GameControllerOpen(i);
-              if (gameController) break;
+              if (gameController) {
+#ifdef TOUCH_INPUT
+                vpadEnabled = 0;
+#endif
+                break;
+              }
             }
           }
         }
@@ -206,31 +264,39 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 #endif
 #ifdef TOUCH_INPUT
       if (event.type == SDL_FINGERDOWN) {
-        int wx, wy;
-        SDL_GetWindowSize(SDL_GetWindowFromID(event.tfinger.windowID), &wx, &wy);
         int dx, dy;
-        SDL_GL_GetDrawableSize(SDL_GetWindowFromID(event.tfinger.windowID), &dx, &dy);
+        gfxGetPhysicalSize(&dx, &dy);
+#ifdef ANDROID_BUILD
+        int x = (int)(event.tfinger.dx * dx);
+        int y = (int)(event.tfinger.dy * dy);
+#else
         int x = (int)(event.tfinger.x * dx);
         int y = (int)(event.tfinger.y * dy);
+#endif
 
         int buttonIndex = getTouchButton(x, y);
         if (buttonIndex >= 0 && numActiveFingers < 10) {
           activeFingers[numActiveFingers].fingerId = event.tfinger.fingerId;
           activeFingers[numActiveFingers].buttonIndex = buttonIndex;
           numActiveFingers++;
-          gfxSetButtonPressed(buttonIndex, 1);
-          eventData.type = MainLoopEvent::keyDown;
-          eventData.data.input = (InputCode){InputDeviceType::logical, buttons[buttonIndex].key};
-          onEvent(eventData);
+          if (buttonTouches[buttonIndex]++ == 0) {
+            gfxSetButtonPressed(buttonIndex, 1);
+            eventData.type = MainLoopEvent::keyDown;
+            eventData.data.input = (InputCode){InputDeviceType::logical, buttons[buttonIndex].key};
+            onEvent(eventData);
+          }
         }
       }
       else if (event.type == SDL_FINGERUP) {
         for (int i = 0; i < numActiveFingers; i++) {
           if (activeFingers[i].fingerId == event.tfinger.fingerId) {
-            gfxSetButtonPressed(activeFingers[i].buttonIndex, 0);
-            eventData.type = MainLoopEvent::keyUp;
-            eventData.data.input = (InputCode){InputDeviceType::logical, buttons[activeFingers[i].buttonIndex].key};
-            onEvent(eventData);
+            int buttonIndex = activeFingers[i].buttonIndex;
+            if (--buttonTouches[buttonIndex] == 0) {
+              gfxSetButtonPressed(buttonIndex, 0);
+              eventData.type = MainLoopEvent::keyUp;
+              eventData.data.input = (InputCode){InputDeviceType::logical, buttons[buttonIndex].key};
+              onEvent(eventData);
+            }
             for (int j = i; j < numActiveFingers - 1; j++) {
               activeFingers[j] = activeFingers[j + 1];
             }
@@ -239,6 +305,33 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           }
         }
       }
+      // Non-Android touch backends may expose taps as mouse events. Android
+      // always uses SDL finger IDs here: do not mix its synthetic mouse events
+      // with fingers, or a two-finger shortcut can lose one held button.
+#ifndef ANDROID_BUILD
+      else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+        int buttonIndex = getTouchButton(event.button.x, event.button.y);
+        if (buttonIndex >= 0 && mouseTouchButton < 0) {
+          mouseTouchButton = buttonIndex;
+          if (buttonTouches[buttonIndex]++ == 0) {
+            gfxSetButtonPressed(buttonIndex, 1);
+            eventData.type = MainLoopEvent::keyDown;
+            eventData.data.input = (InputCode){InputDeviceType::logical, buttons[buttonIndex].key};
+            onEvent(eventData);
+          }
+        }
+      }
+      else if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && mouseTouchButton >= 0) {
+        int buttonIndex = mouseTouchButton;
+        mouseTouchButton = -1;
+        if (--buttonTouches[buttonIndex] == 0) {
+          gfxSetButtonPressed(buttonIndex, 0);
+          eventData.type = MainLoopEvent::keyUp;
+          eventData.data.input = (InputCode){InputDeviceType::logical, buttons[buttonIndex].key};
+          onEvent(eventData);
+        }
+      }
+#endif
 #endif
     }
 

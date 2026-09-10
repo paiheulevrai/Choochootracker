@@ -58,6 +58,14 @@ void initDefaultAppSettings(void) {
   strncpy(appSettings.ayWavetablePath, "/AY_wavetables", PATH_LENGTH);
   strncpy(appSettings.scwfPath, "/waveforms", PATH_LENGTH);
   strncpy(appSettings.srWavetablePath, "/SR_wavetables", PATH_LENGTH);
+#elif defined(ANDROID_BUILD)
+  char workspace[PATH_LENGTH];
+  if (fileGetDefaultDirectory(workspace, sizeof(workspace)) != 0) strncpy(workspace, ".", sizeof(workspace));
+  snprintf(appSettings.projectPath, sizeof(appSettings.projectPath), "%s/projects", workspace);
+  snprintf(appSettings.samplePath, sizeof(appSettings.samplePath), "%s/samples", workspace);
+  snprintf(appSettings.ayWavetablePath, sizeof(appSettings.ayWavetablePath), "%s/AY_wavetables", workspace);
+  snprintf(appSettings.scwfPath, sizeof(appSettings.scwfPath), "%s/waveforms", workspace);
+  snprintf(appSettings.srWavetablePath, sizeof(appSettings.srWavetablePath), "%s/SR_wavetables", workspace);
 #else
   strncpy(appSettings.projectPath, "projects", PATH_LENGTH);
   strncpy(appSettings.samplePath, "samples", PATH_LENGTH);
@@ -70,10 +78,17 @@ void initDefaultAppSettings(void) {
   appSettings.ayWavetablePath[PATH_LENGTH] = '\0';
   appSettings.scwfPath[PATH_LENGTH] = '\0';
   appSettings.srWavetablePath[PATH_LENGTH] = '\0';
+#ifdef ANDROID_BUILD
+  snprintf(appSettings.pitchTablePath, sizeof(appSettings.pitchTablePath), "%s/pitch-tables", workspace);
+  snprintf(appSettings.instrumentPath, sizeof(appSettings.instrumentPath), "%s/instruments", workspace);
+  snprintf(appSettings.themePath, sizeof(appSettings.themePath), "%s/themes", workspace);
+  snprintf(appSettings.fontFolderPath, sizeof(appSettings.fontFolderPath), "%s/fonts", workspace);
+#else
   strncpy(appSettings.pitchTablePath, "pitch-tables", PATH_LENGTH);
   strncpy(appSettings.instrumentPath, "instruments", PATH_LENGTH);
   strncpy(appSettings.themePath, "themes", PATH_LENGTH);
   strncpy(appSettings.fontFolderPath, "fonts", PATH_LENGTH);
+#endif
   appSettings.pitchTablePath[PATH_LENGTH] = '\0';
   appSettings.instrumentPath[PATH_LENGTH] = '\0';
   appSettings.themePath[PATH_LENGTH] = '\0';

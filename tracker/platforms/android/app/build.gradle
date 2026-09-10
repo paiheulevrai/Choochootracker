@@ -2,19 +2,28 @@ plugins {
     id 'com.android.application'
 }
 
+def signingFile = rootProject.file('keystore.properties')
+def signingProps = new Properties()
+if (signingFile.exists()) signingFile.withInputStream { signingProps.load(it) }
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) localPropsFile.withInputStream { localProps.load(it) }
+def androidSdk = System.getenv('ANDROID_HOME') ?: localProps['sdk.dir']
+def androidNdk = System.getenv('ANDROID_NDK_ROOT') ?: "${androidSdk}/ndk/30.0.16248370"
+
 // Custom task to build native code using external makefiles and copy the results
 task buildNativeArm64(type: Exec) {
     def multiplatformProjectRoot = rootProject.projectDir.parentFile.parentFile
     workingDir multiplatformProjectRoot
-    commandLine 'make', 'android', 'ARCH=arm64-v8a'
-    environment 'ANDROID_NDK_ROOT', System.getenv('ANDROID_NDK_ROOT') ?: "${System.getenv('ANDROID_HOME')}/ndk/29.0.14206865"
+    commandLine 'C:/msys64/usr/bin/bash.exe', '-c', 'export PATH=/ucrt64/bin:/usr/bin:$PATH; make -f Makefile.android android ARCH=arm64-v8a'
+    environment 'ANDROID_NDK_ROOT', androidNdk
 }
 
 task buildNativeArm32(type: Exec) {
     def multiplatformProjectRoot = rootProject.projectDir.parentFile.parentFile
     workingDir multiplatformProjectRoot
-    commandLine 'make', 'android', 'ARCH=armeabi-v7a'
-    environment 'ANDROID_NDK_ROOT', System.getenv('ANDROID_NDK_ROOT') ?: "${System.getenv('ANDROID_HOME')}/ndk/29.0.14206865"
+    commandLine 'C:/msys64/usr/bin/bash.exe', '-c', 'export PATH=/ucrt64/bin:/usr/bin:$PATH; make -f Makefile.android android ARCH=armeabi-v7a'
+    environment 'ANDROID_NDK_ROOT', androidNdk
 }
 
 task copyNativeLibs(type: Copy) {
@@ -40,27 +49,27 @@ task copyNativeLibs(type: Copy) {
 preBuild.dependsOn copyNativeLibs
 
 android {
-    namespace 'org.chipnomad.tracker'
-    compileSdk 34
+    namespace 'com.paiheulevrai.choochootracker'
+    compileSdk 36
 
     defaultConfig {
-        applicationId "org.chipnomad.tracker"
+        applicationId "com.paiheulevrai.choochootracker"
         minSdk 26
-        targetSdk 34
+        targetSdk 36
         versionCode 1
         versionName "1.0"
     }
 
-    // Copy ChipNomad data files to assets
-    task copyChipNomadAssets(type: Copy) {
+    // Copy bundled tracker content to assets.
+    task copyChooChooTrackerAssets(type: Copy) {
         from '../../../packaging/common'  // Use existing packaging folder
-        into 'src/main/assets/chipnomad_data'
+        into 'src/main/assets/choochootracker_data'
         include '**/*'
         exclude '**/.git*'
     }
 
     // Make sure assets are copied before building
-    preBuild.dependsOn copyChipNomadAssets
+    preBuild.dependsOn copyChooChooTrackerAssets
 
     buildTypes {
         debug {
@@ -69,6 +78,18 @@ android {
         }
         release {
             minifyEnabled false
+            if (signingFile.exists()) signingConfig signingConfigs.release
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (signingFile.exists()) {
+                storeFile rootProject.file(signingProps['storeFile'])
+                storePassword signingProps['storePassword']
+                keyAlias signingProps['keyAlias']
+                keyPassword signingProps['keyPassword']
+            }
         }
     }
     

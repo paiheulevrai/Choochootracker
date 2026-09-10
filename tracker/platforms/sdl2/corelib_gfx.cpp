@@ -3,6 +3,7 @@
 #include "version.h"
 #include "corelib_gfx.h"
 #include "corelib_font.h"
+#include "../../src/common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +42,35 @@ static int screenW;
 static int screenH;
 static int logicalW;
 static int logicalH;
+#ifdef ANDROID_BUILD
+// The tracker was designed for a 640x480 canvas. Keep that canvas intact on
+// phones; physical pixels are used only by the touch-control overlay.
+static int physicalW;
+static int physicalH;
+
+static SDL_Rect getTrackerViewport(void) {
+  if (physicalW < physicalH) {
+    const int canvasH = physicalW * 3 / 4;
+    const int button = physicalW / 8;
+    const int gap = button / 7;
+    const int controlsH = 3 * button + 2 * gap;
+    const int groupH = canvasH + gap + controlsH;
+    return (SDL_Rect){0, (physicalH - groupH) / 2, physicalW, canvasH};
+  }
+  const int canvasW = physicalH * 4 / 3;
+  return (SDL_Rect){(physicalW - canvasW) / 2, 0, canvasW, physicalH};
+}
+
+static void useTrackerCanvas(void) {
+  // SDL resets its viewport when changing render targets. The viewport is
+  // explicit so portrait can centre the canvas + controls as one composition.
+  SDL_Rect viewport = getTrackerViewport();
+  SDL_RenderSetLogicalSize(renderer, 0, 0);
+  SDL_RenderSetViewport(renderer, &viewport);
+  SDL_RenderSetScale(renderer, (float)viewport.w / logicalW,
+    (float)viewport.h / logicalH);
+}
+#endif
 static int charW;
 static int charH;
 static int offsetX;
@@ -58,6 +88,52 @@ struct GfxImage {
 
 static int titleLogicalSizeActive = 0;
 static SDL_Texture* titleTexture = NULL;
+
+#ifdef TOUCH_INPUT
+static void layoutVirtualPad(void) {
+  extern SDL_Rect dpadUpRect, dpadDownRect, dpadLeftRect, dpadRightRect;
+  extern SDL_Rect aButtonRect, bButtonRect, startButtonRect, selectButtonRect, dpadRect;
+  int layoutW = screenW;
+  int layoutH = screenH;
+#ifdef ANDROID_BUILD
+  layoutW = physicalW;
+  layoutH = physicalH;
+#endif
+  int btnSize = layoutW < layoutH ? layoutW / 8 : layoutH / 7;
+  if (layoutW >= layoutH) {
+    const int sideBand = (layoutW - layoutH * 4 / 3) / 2;
+    const int sideBandButton = sideBand / 4;
+    if (sideBandButton > 0 && btnSize > sideBandButton) btnSize = sideBandButton;
+  }
+  if (btnSize < 48) btnSize = 48;
+  int margin = btnSize / 4;
+  int gap = btnSize / 7;
+  if (layoutW < layoutH) {
+    SDL_Rect canvas = getTrackerViewport();
+    int y = canvas.y + canvas.h + gap;
+    dpadUpRect = (SDL_Rect){margin + btnSize + gap, y, btnSize, btnSize};
+    dpadLeftRect = (SDL_Rect){margin, y + btnSize + gap, btnSize, btnSize};
+    dpadRightRect = (SDL_Rect){margin + (btnSize + gap) * 2, y + btnSize + gap, btnSize, btnSize};
+    dpadDownRect = (SDL_Rect){margin + btnSize + gap, y + (btnSize + gap) * 2, btnSize, btnSize};
+    bButtonRect = (SDL_Rect){layoutW - margin - btnSize * 2 - gap, y, btnSize, btnSize};
+    aButtonRect = (SDL_Rect){layoutW - margin - btnSize, y, btnSize, btnSize};
+    selectButtonRect = (SDL_Rect){layoutW / 2 - btnSize - gap, layoutH - margin - btnSize, btnSize, btnSize};
+    startButtonRect = (SDL_Rect){layoutW / 2 + gap, layoutH - margin - btnSize, btnSize, btnSize};
+  } else {
+    int y = (layoutH - (btnSize + gap) * 3 + gap) / 2;
+    dpadUpRect = (SDL_Rect){margin + btnSize + gap, y, btnSize, btnSize};
+    dpadLeftRect = (SDL_Rect){margin, y + btnSize + gap, btnSize, btnSize};
+    dpadRightRect = (SDL_Rect){margin + (btnSize + gap) * 2, y + btnSize + gap, btnSize, btnSize};
+    dpadDownRect = (SDL_Rect){margin + btnSize + gap, y + (btnSize + gap) * 2, btnSize, btnSize};
+    int right = layoutW - margin - btnSize;
+    aButtonRect = (SDL_Rect){right, y, btnSize, btnSize};
+    bButtonRect = (SDL_Rect){right - btnSize - gap, y, btnSize, btnSize};
+    selectButtonRect = (SDL_Rect){right - btnSize - gap, y + (btnSize + gap) * 2, btnSize, btnSize};
+    startButtonRect = (SDL_Rect){right, y + (btnSize + gap) * 2, btnSize, btnSize};
+  }
+  dpadRect = (SDL_Rect){dpadLeftRect.x, dpadUpRect.y, btnSize * 3 + gap * 2, btnSize * 3 + gap * 2};
+}
+#endif
 
 GfxImage* gfxImageLoadBMP(const char* path) {
   SDL_Surface* surface = SDL_LoadBMP(path);
@@ -137,11 +213,26 @@ void gfxTitleFadeBlack(uint8_t alpha) {
 void gfxTitlePresent(void) {
   if (!titleTexture) return;
   SDL_SetRenderTarget(renderer, NULL);
+#ifdef ANDROID_BUILD
+  // A title frame only occupies the centered 4:3 canvas. Clear the physical
+  // display first, otherwise pixels from the preceding tracker frame remain
+  // visible in the side bands.
+  SDL_RenderSetLogicalSize(renderer, physicalW, physicalH);
+  SDL_SetRenderDrawColor(renderer, 5, 12, 31, 255);
+  SDL_RenderClear(renderer);
+  useTrackerCanvas();
+#endif
   // Switching away from a render target resets the renderer viewport.
   // Restore the 4:3 logical canvas before presenting to a resized window.
+#ifndef ANDROID_BUILD
   SDL_RenderSetLogicalSize(renderer, 640, 480);
+#endif
   SDL_Rect destination = {0, 0, 640, 480};
   SDL_RenderCopy(renderer, titleTexture, NULL, &destination);
+  // HUD hit boxes use the full mobile renderer coordinates.
+#ifndef ANDROID_BUILD
+  SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
+#endif
   isDirty = 1;
 }
 
@@ -150,7 +241,13 @@ void gfxTitleEnd(void) {
   SDL_RenderSetScale(renderer, 1.0f, 1.0f);
   if (titleTexture) SDL_DestroyTexture(titleTexture);
   titleTexture = NULL;
-  if (titleLogicalSizeActive) SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
+  if (titleLogicalSizeActive) {
+#ifdef ANDROID_BUILD
+    useTrackerCanvas();
+#else
+    SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
+#endif
+  }
   titleLogicalSizeActive = 0;
 }
 
@@ -229,6 +326,10 @@ static void createFontTexture(void) {
 #endif
 
 int gfxSetup(int *screenWidth, int *screenHeight) {
+  #ifdef ANDROID_BUILD
+  SDL_SetHint(SDL_HINT_ORIENTATIONS,
+    "LandscapeLeft LandscapeRight Portrait PortraitUpsideDown");
+  #endif
   if (SDL_Init(SDL_INIT_FLAGS) != 0) {
     fprintf(stderr, "SDL2 Initialization Error: %s\n", SDL_GetError());
     return 1;
@@ -266,6 +367,9 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
     SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
     screenW, screenH,
     SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI
+#ifdef ANDROID_BUILD
+    | SDL_WINDOW_RESIZABLE
+#endif
 #ifdef DESKTOP_BUILD
     | SDL_WINDOW_RESIZABLE
 #endif
@@ -278,9 +382,6 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
   }
 
   renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
-  logicalW = screenW;
-  logicalH = screenH;
-  SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
 
   // Check for high-DPI display and get actual drawable size. HTML5 uses a
   // software canvas, so SDL_GL_GetDrawableSize is not meaningful there.
@@ -300,6 +401,20 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
     screenW = drawableW;
     screenH = drawableH;
   }
+
+#ifdef ANDROID_BUILD
+  physicalW = screenW;
+  physicalH = screenH;
+  screenW = 640;
+  screenH = 480;
+#endif
+  logicalW = screenW;
+  logicalH = screenH;
+#ifdef ANDROID_BUILD
+  useTrackerCanvas();
+#else
+  SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
+#endif
 
 #ifdef WEB_BUILD
   // SDL's browser backend can report the physical screen size while the canvas
@@ -337,37 +452,7 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
   extern SDL_Rect aButtonRect, bButtonRect, startButtonRect, selectButtonRect;
   extern SDL_Rect dpadRect;
 
-  int winW, winH;
-  SDL_GetWindowSize(window, &winW, &winH);
-  float dpiScale = (float)screenW / winW;
-  int btnSize = (int)(VPAD_BUTTON_SIZE * dpiScale);
-  int margin = (int)(VPAD_MARGIN * dpiScale);
-  int buttonGap = (int)(15 * dpiScale);
-
-  // D-pad: cross layout (UP top-center, LEFT/RIGHT middle, DOWN bottom-center)
-  int dpadX = margin;
-  int dpadY = screenH - (btnSize + buttonGap) * 3 - margin;
-
-  dpadUpRect = (SDL_Rect){dpadX + btnSize + buttonGap, dpadY, btnSize, btnSize};
-  dpadLeftRect = (SDL_Rect){dpadX, dpadY + btnSize + buttonGap, btnSize, btnSize};
-  dpadRightRect = (SDL_Rect){dpadX + (btnSize + buttonGap) * 2, dpadY + btnSize + buttonGap, btnSize, btnSize};
-  dpadDownRect = (SDL_Rect){dpadX + btnSize + buttonGap, dpadY + (btnSize + buttonGap) * 2, btnSize, btnSize};
-
-  // EDIT and OPT on same level as UP
-  int rightX = screenW - margin - btnSize;
-  int rightY = dpadY;
-
-  aButtonRect = (SDL_Rect){rightX, rightY, btnSize, btnSize};
-  bButtonRect = (SDL_Rect){rightX - btnSize - buttonGap, rightY, btnSize, btnSize};
-
-  // START and SELECT at bottom center
-  int centerX = screenW / 2;
-  int bottomY = screenH - btnSize - margin;
-
-  selectButtonRect = (SDL_Rect){centerX - btnSize - buttonGap, bottomY, btnSize, btnSize};
-  startButtonRect = (SDL_Rect){centerX + buttonGap, bottomY, btnSize, btnSize};
-
-  dpadRect = (SDL_Rect){dpadX, dpadY, btnSize * 3 + buttonGap * 2, (btnSize + buttonGap) * 3 - buttonGap};
+  layoutVirtualPad();
 #endif
 
   return 0;
@@ -656,24 +741,85 @@ void gfxReloadFont(void) {
   isDirty = 1;
 }
 
+void gfxHandleResize(void) {
+  if (!window || !renderer) return;
+  int width, height;
+  if (SDL_GetRendererOutputSize(renderer, &width, &height) != 0 || width <= 0 || height <= 0) return;
+#ifdef ANDROID_BUILD
+  if (width == physicalW && height == physicalH) return;
+  physicalW = width;
+  physicalH = height;
+  screenW = 640;
+  screenH = 480;
+#else
+  if (width == screenW && height == screenH) return;
+  screenW = width;
+  screenH = height;
+#endif
+  logicalW = screenW;
+  logicalH = screenH;
+#ifdef ANDROID_BUILD
+  useTrackerCanvas();
+#else
+  SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
+#endif
+  gfxReloadFont();
+#ifdef TOUCH_INPUT
+  layoutVirtualPad();
+#endif
+  isDirty = 1;
+}
+
+void gfxGetPhysicalSize(int* width, int* height) {
+  int outputW = 0;
+  int outputH = 0;
+  if (renderer) SDL_GetRendererOutputSize(renderer, &outputW, &outputH);
+#ifdef ANDROID_BUILD
+  if (outputW <= 0) outputW = physicalW;
+  if (outputH <= 0) outputH = physicalH;
+#else
+  if (outputW <= 0) outputW = screenW;
+  if (outputH <= 0) outputH = screenH;
+#endif
+  if (width) *width = outputW;
+  if (height) *height = outputH;
+}
+
 #ifdef TOUCH_INPUT
 static void drawButton(SDL_Rect* rect, const uint8_t* iconData, int btnIndex) {
-  int bg = buttonPressed[btnIndex] ? 120 : 80;
-  SDL_SetRenderDrawColor(renderer, bg, bg, bg, 255);
+  const ColorScheme& colors = appSettings.colorScheme;
+  int color = colors.textInfo;       // D-pad
+  if (btnIndex == 4) color = colors.textValue; // A / EDIT
+  if (btnIndex == 5) color = colors.textTitles; // B / OPT
+  if (btnIndex >= 6) color = colors.selection; // SELECT / START
+  uint8_t r = (color >> 16) & 0xff;
+  uint8_t g = (color >> 8) & 0xff;
+  uint8_t b = color & 0xff;
+  if (buttonPressed[btnIndex]) { r = (uint8_t)(r * 0.68f); g = (uint8_t)(g * 0.68f); b = (uint8_t)(b * 0.68f); }
+  SDL_SetRenderDrawColor(renderer, r, g, b, 245);
   SDL_RenderFillRect(renderer, rect);
-  SDL_SetRenderDrawColor(renderer, 120, 120, 120, 255);
+  SDL_SetRenderDrawColor(renderer, (colors.background >> 16) & 0xff,
+    (colors.background >> 8) & 0xff, colors.background & 0xff, 255);
   SDL_RenderDrawRect(renderer, rect);
 
   if (iconData) {
-    int iconX = rect->x + (rect->w - ICON_WIDTH) / 2;
-    int iconY = rect->y + (rect->h - ICON_HEIGHT) / 2;
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    int iconScale = rect->w / (ICON_WIDTH * 3);
+    if (iconScale < 2) iconScale = 2;
+    if (iconScale > 4) iconScale = 4;
+    int iconW = ICON_WIDTH * iconScale;
+    int iconH = ICON_HEIGHT * iconScale;
+    int iconX = rect->x + (rect->w - iconW) / 2;
+    int iconY = rect->y + (rect->h - iconH) / 2;
+    SDL_SetRenderDrawColor(renderer, (colors.textDefault >> 16) & 0xff,
+      (colors.textDefault >> 8) & 0xff, colors.textDefault & 0xff, 255);
     for (int y = 0; y < ICON_HEIGHT; y++) {
       for (int x = 0; x < ICON_WIDTH; x++) {
         int byteIndex = y * ICON_BYTES_PER_ROW + x / 8;
         int bitIndex = 7 - (x % 8);
         if (iconData[byteIndex] & (1 << bitIndex)) {
-          SDL_RenderDrawPoint(renderer, iconX + x, iconY + y);
+          SDL_Rect pixel = { iconX + x * iconScale, iconY + y * iconScale,
+            iconScale, iconScale };
+          SDL_RenderFillRect(renderer, &pixel);
         }
       }
     }
@@ -689,6 +835,12 @@ void gfxDrawHUD(void) {
 
   if (!vpadEnabled) return;
 
+#ifdef ANDROID_BUILD
+  // The tracker is a centered 640x480 canvas; controls are a physical overlay,
+  // matching the Web controls placed outside that canvas.
+  SDL_RenderSetLogicalSize(renderer, physicalW, physicalH);
+#endif
+
   drawButton(&dpadUpRect, icon_arrow_up, 0);
   drawButton(&dpadDownRect, icon_arrow_down, 1);
   drawButton(&dpadLeftRect, icon_arrow_left, 2);
@@ -697,6 +849,9 @@ void gfxDrawHUD(void) {
   drawButton(&bButtonRect, icon_opt, 5);
   drawButton(&startButtonRect, icon_play, 6);
   drawButton(&selectButtonRect, icon_shift, 7);
+#ifdef ANDROID_BUILD
+  useTrackerCanvas();
+#endif
 #endif
 }
 
