@@ -30,7 +30,7 @@ Designed for phones and tablets, ChooChooTracker works in portrait and landscape
 
 ## Artwork checklist
 
-- 512×512 PNG launcher icon with no transparency.
-- 1024×500 PNG feature graphic.
+- 512×512 PNG launcher icon with no transparency: `docs/play-store-assets/ChooChooTracker-play-icon-512.png`.
+- 1024×500 PNG feature graphic: `docs/play-store-assets/ChooChooTracker-feature-graphic-1024x500.png`.
 - At least two unedited phone screenshots: portrait virtual controls and landscape virtual controls.
 - Optional tablet screenshots after device testing.
