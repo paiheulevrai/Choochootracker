@@ -7,8 +7,10 @@
 #include "corelib_file.h"
 #include "utils.h"
 #include "copy_paste.h"
+#include "screen_instrument.h"
 
 const AppScreen* currentScreen = NULL;
+static ScreenData* touchScreenData = NULL;
 
 static int messageTimer = -1;
 static char messageBuffer[42] = "";
@@ -80,6 +82,7 @@ void drawScreenMap() {
 }
 
 void screenSetup(const AppScreen* screen, int input) {
+  touchScreenData = NULL;
   pendingScreen = screen;
   pendingScreenInput = input;
 }
@@ -188,6 +191,7 @@ static void validateCursorBounds(ScreenData* screen) {
 }
 
 void screenFullRedraw(ScreenData* screen) {
+  touchScreenData = screen;
   validateCursorBounds(screen);
 
   if (screen->cursorRow < screen->topRow) {
@@ -241,6 +245,104 @@ void screenFullRedraw(ScreenData* screen) {
   } else {
     screen->drawCursor(screen->cursorCol, screen->cursorRow);
   }
+}
+
+static int screenTouchEnvelopeAt(int col, int row, int* targetCol) {
+  if (currentScreen != &screenInstrument || !touchScreenData || row < 13 || row > 14 ||
+      touchScreenData->rows <= 9) return 0;
+  Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
+  if (instrument->type == InstrumentType::AY1 || col < 3 || col > 39) return 0;
+
+  // These bounds come directly from instrumentCommonDrawVoicePostStatic():
+  // A/D/S/R begin at 6/11/16/21, their values at 7/12/17/22, and Shape
+  // begins at 27 with its value at 35.  Each gets a full finger-sized span.
+  if ((instrument->type == InstrumentType::Plaits || instrument->type == InstrumentType::PlaitsAlt) &&
+      instrument->chip.plaits.envelopeMode == 0) {
+    if (targetCol) *targetCol = col <= 10 ? 0 : 1; // LPG D and C
+    return 1;
+  }
+  if (touchScreenData->getColumnCount(9) != 5) return 0;
+  if (targetCol) *targetCol = col <= 10 ? 0 : col <= 15 ? 1 :
+    col <= 20 ? 2 : col <= 25 ? 3 : 4;
+  return 1;
+}
+
+static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
+  if (!touchScreenData || touchScreenData->selectMode == 1) return 0;
+  int envelopeCol;
+  if (screenTouchEnvelopeAt(col, row, &envelopeCol)) {
+    if (targetCol) *targetCol = envelopeCol;
+    if (targetRow) *targetRow = 9;
+    return 1;
+  }
+  int envelopeRow = 0;
+  int instrumentCommonRow = -1;
+  if (currentScreen == &screenInstrument) {
+    InstrumentType type = chipnomadState->project.instruments[cInstrument].type;
+    // Instrument pages deliberately leave visual separator rows. Their
+    // envelopes are not at the generic spreadsheet row offsets.
+    if (row >= 2 && row <= 4) {
+      instrumentCommonRow = row - 2;
+      row = instrumentCommonRow;
+    } else if (type == InstrumentType::AY1 && row >= 11 && row <= 14) {
+      row -= 5;
+      envelopeRow = 1;
+    } else {
+      row = touchScreenData->topRow + row - 3;
+    }
+  } else {
+    row = touchScreenData->topRow + row - 3;
+  }
+  // Most tracker pages keep editable cells on rows 3..18. Their field
+  // columns occupy the same 3..32 text-grid span, even when a page uses
+  // wider cells (Song) or tighter cells (Phrase).
+  if (row < 0 || row >= touchScreenData->rows || col < 3 ||
+      (col > 32 && !envelopeRow)) return 0;
+  int columns = touchScreenData->getColumnCount(row);
+  if (columns <= 0) return 0;
+  // Song tracks are fixed 3-character cells, unlike Phrase/Table fields
+  // which deliberately use the full tracker grid width.
+  int mappedCol = currentScreen == &screenSong ? (col - 3) / 3 : (col - 3) * columns / 30;
+  if (instrumentCommonRow == 0) {
+    mappedCol = col < 20 ? 0 : col < 28 ? 1 : 2; // Type, Load, Save
+  } else if (instrumentCommonRow == 1) {
+    mappedCol = col - 8; // Instrument name begins at character 8
+    if (mappedCol < 0) mappedCol = 0;
+  } else if (instrumentCommonRow == 2) {
+    mappedCol = col < 18 ? 0 : col < 29 ? 1 : 2; // Transpose, tick, volume
+  }
+  if (mappedCol >= columns) mappedCol = columns - 1;
+  if (touchScreenData->isCellValid && !touchScreenData->isCellValid(mappedCol, row)) return 0;
+  if (targetCol) *targetCol = mappedCol;
+  if (targetRow) *targetRow = row;
+  return 1;
+}
+
+int screenTouchTap(int col, int row) {
+  int targetCol, targetRow;
+  if (!screenTouchCellAt(col, row, &targetCol, &targetRow)) return 0;
+  touchScreenData->cursorCol = targetCol;
+  touchScreenData->cursorRow = targetRow;
+  screenFullRedraw(touchScreenData);
+  return 1;
+}
+
+int screenTouchAdjust(int col, int row) {
+  int envelopeCol;
+  if (screenTouchEnvelopeAt(col, row, &envelopeCol))
+    return touchScreenData->cursorRow == 9 && touchScreenData->cursorCol == envelopeCol;
+  int targetCol, targetRow;
+  if (!screenTouchCellAt(col, row, &targetCol, &targetRow)) return 0;
+  // Tap selects the exact ADSR/Shape field. Once selected, accept a drag
+  // anywhere across that envelope row so narrow values remain usable.
+  if (currentScreen == &screenInstrument && targetRow >= 6)
+    return targetRow == touchScreenData->cursorRow;
+  // A finger is wider than compact tracker cells.  Permit a one-cell halo
+  // around the focused value when starting a horizontal adjustment.
+  return targetCol >= touchScreenData->cursorCol - 1 &&
+         targetCol <= touchScreenData->cursorCol + 1 &&
+         targetRow >= touchScreenData->cursorRow - 1 &&
+         targetRow <= touchScreenData->cursorRow + 1;
 }
 
 void screenDrawOverlays(ScreenData* screen) {

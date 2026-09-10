@@ -405,17 +405,20 @@ void appOnEvent(MainLoopEventData eventData) {
 
     if (quickHelpSelectHeld && !rawInputActive && value != keyShift) quickHelpSelectAlone = 0;
 
-    if (!rawInputActive && isMotionRecordTrigger(eventData.data.input)) {
+    if (!rawInputActive && (isMotionRecordTrigger(eventData.data.input) ||
+        (eventData.data.input.deviceType == InputDeviceType::logical && eventData.data.input.code == keyMotionRecord))) {
       motionRecordHeld = 1;
       updateMotionRecordMode();
       break;
     }
-    if (!rawInputActive && isMotionLiveTrigger(eventData.data.input)) {
+    if (!rawInputActive && (isMotionLiveTrigger(eventData.data.input) ||
+        (eventData.data.input.deviceType == InputDeviceType::logical && eventData.data.input.code == keyMotionLive))) {
       motionLiveHeld = 1;
       updateMotionRecordMode();
       break;
     }
-    if (!rawInputActive && isMotionEraseTrigger(eventData.data.input)) {
+    if (!rawInputActive && (isMotionEraseTrigger(eventData.data.input) ||
+        (eventData.data.input.deviceType == InputDeviceType::logical && eventData.data.input.code == keyMotionErase))) {
       motionEraseHeld = 1;
       updateMotionRecordMode();
       break;
@@ -476,17 +479,20 @@ void appOnEvent(MainLoopEventData eventData) {
       inputRawCallback(eventData.data.input, 0);
     }
 
-    if (!rawInputActive && isMotionRecordTrigger(eventData.data.input)) {
+    if (!rawInputActive && (isMotionRecordTrigger(eventData.data.input) ||
+        (eventData.data.input.deviceType == InputDeviceType::logical && eventData.data.input.code == keyMotionRecord))) {
       motionRecordHeld = 0;
       updateMotionRecordMode();
       break;
     }
-    if (!rawInputActive && isMotionLiveTrigger(eventData.data.input)) {
+    if (!rawInputActive && (isMotionLiveTrigger(eventData.data.input) ||
+        (eventData.data.input.deviceType == InputDeviceType::logical && eventData.data.input.code == keyMotionLive))) {
       motionLiveHeld = 0;
       updateMotionRecordMode();
       break;
     }
-    if (!rawInputActive && isMotionEraseTrigger(eventData.data.input)) {
+    if (!rawInputActive && (isMotionEraseTrigger(eventData.data.input) ||
+        (eventData.data.input.deviceType == InputDeviceType::logical && eventData.data.input.code == keyMotionErase))) {
       motionEraseHeld = 0;
       updateMotionRecordMode();
       break;
@@ -589,6 +595,19 @@ void appOnEvent(MainLoopEventData eventData) {
       if (currentScreen != &screenTitle)
         drawScreenMap();
     }
+    break;
+  case MainLoopEvent::touchTap:
+    screenTouchTap(eventData.data.touch.x, eventData.data.touch.y);
+    break;
+  case MainLoopEvent::touchAdjust:
+    if (screenTouchAdjust(eventData.data.touch.x, eventData.data.touch.y)) {
+      appInput(1, keyEdit | eventData.data.touch.direction, 1);
+      appInput(0, 0, 0);
+    }
+    break;
+  case MainLoopEvent::touchNavigate:
+    appInput(1, keyShift | eventData.data.touch.direction, 1);
+    appInput(0, 0, 0);
     break;
   }
 }

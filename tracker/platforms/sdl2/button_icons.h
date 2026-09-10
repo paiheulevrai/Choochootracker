@@ -34,4 +34,7 @@ extern const uint8_t icon_shift[ICON_HEIGHT * ICON_BYTES_PER_ROW];
 // PLAY text
 extern const uint8_t icon_play[ICON_HEIGHT * ICON_BYTES_PER_ROW];
 
+extern const uint8_t icon_rec[ICON_HEIGHT * ICON_BYTES_PER_ROW];
+extern const uint8_t icon_del[ICON_HEIGHT * ICON_BYTES_PER_ROW];
+
 #endif // BUTTON_ICONS_H

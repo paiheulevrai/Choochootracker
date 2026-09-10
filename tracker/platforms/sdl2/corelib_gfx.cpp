@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <math.h>
 
 #ifdef TOUCH_INPUT
 #include "button_icons.h"
@@ -47,15 +48,24 @@ static int logicalH;
 // phones; physical pixels are used only by the touch-control overlay.
 static int physicalW;
 static int physicalH;
+static int resizePresentDelay;
 
 static SDL_Rect getTrackerViewport(void) {
   if (physicalW < physicalH) {
-    const int canvasH = physicalW * 3 / 4;
     const int button = physicalW / 8;
+    const int buttonH = button * 2;
     const int gap = button / 7;
-    const int controlsH = 3 * button + 2 * gap;
+    const int controlsH = 4 * buttonH + 3 * gap;
+    // Keep the complete canvas + controls composition on-screen, including
+    // unusually short portrait displays.
+    int canvasH = physicalW * 3 / 4;
+    const int availableCanvasH = physicalH - controlsH - gap;
+    if (canvasH > availableCanvasH) canvasH = availableCanvasH;
+    if (canvasH < 1) canvasH = 1;
+    const int canvasW = canvasH * 4 / 3;
     const int groupH = canvasH + gap + controlsH;
-    return (SDL_Rect){0, (physicalH - groupH) / 2, physicalW, canvasH};
+    return (SDL_Rect){(physicalW - canvasW) / 2, (physicalH - groupH) / 2,
+      canvasW, canvasH};
   }
   const int canvasW = physicalH * 4 / 3;
   return (SDL_Rect){(physicalW - canvasW) / 2, 0, canvasW, physicalH};
@@ -93,6 +103,7 @@ static SDL_Texture* titleTexture = NULL;
 static void layoutVirtualPad(void) {
   extern SDL_Rect dpadUpRect, dpadDownRect, dpadLeftRect, dpadRightRect;
   extern SDL_Rect aButtonRect, bButtonRect, startButtonRect, selectButtonRect, dpadRect;
+  extern SDL_Rect recButtonRect, delButtonRect, leftStickRect, rightStickRect;
   int layoutW = screenW;
   int layoutH = screenH;
 #ifdef ANDROID_BUILD
@@ -106,32 +117,50 @@ static void layoutVirtualPad(void) {
     if (sideBandButton > 0 && btnSize > sideBandButton) btnSize = sideBandButton;
   }
   if (btnSize < 48) btnSize = 48;
+  const int buttonH = btnSize * 2;
+  const int actionW = btnSize * 4 / 3;
   int margin = btnSize / 4;
   int gap = btnSize / 7;
+  const int dpadSize = layoutW < layoutH ? btnSize * 5 / 4 : btnSize;
+  const int dpadTotal = dpadSize * 3 + gap * 2;
   if (layoutW < layoutH) {
     SDL_Rect canvas = getTrackerViewport();
     int y = canvas.y + canvas.h + gap;
-    dpadUpRect = (SDL_Rect){margin + btnSize + gap, y, btnSize, btnSize};
-    dpadLeftRect = (SDL_Rect){margin, y + btnSize + gap, btnSize, btnSize};
-    dpadRightRect = (SDL_Rect){margin + (btnSize + gap) * 2, y + btnSize + gap, btnSize, btnSize};
-    dpadDownRect = (SDL_Rect){margin + btnSize + gap, y + (btnSize + gap) * 2, btnSize, btnSize};
-    bButtonRect = (SDL_Rect){layoutW - margin - btnSize * 2 - gap, y, btnSize, btnSize};
-    aButtonRect = (SDL_Rect){layoutW - margin - btnSize, y, btnSize, btnSize};
-    selectButtonRect = (SDL_Rect){layoutW / 2 - btnSize - gap, layoutH - margin - btnSize, btnSize, btnSize};
-    startButtonRect = (SDL_Rect){layoutW / 2 + gap, layoutH - margin - btnSize, btnSize, btnSize};
+    int dpadY = y + (buttonH * 2 + gap - dpadTotal) / 2;
+    dpadUpRect = (SDL_Rect){margin + dpadSize + gap, dpadY, dpadSize, dpadSize};
+    dpadLeftRect = (SDL_Rect){margin, dpadY + dpadSize + gap, dpadSize, dpadSize};
+    dpadRightRect = (SDL_Rect){margin + (dpadSize + gap) * 2, dpadY + dpadSize + gap, dpadSize, dpadSize};
+    dpadDownRect = (SDL_Rect){margin + dpadSize + gap, dpadY + (dpadSize + gap) * 2, dpadSize, dpadSize};
+    bButtonRect = (SDL_Rect){layoutW - margin - actionW * 2 - gap, y, actionW, buttonH};
+    aButtonRect = (SDL_Rect){layoutW - margin - actionW, y, actionW, buttonH};
+    // Action controls are a compact two-by-two group, visually independent
+    // from the live modulation pads below.
+    selectButtonRect = (SDL_Rect){layoutW - margin - actionW * 2 - gap,
+      y + buttonH + gap, actionW, buttonH};
+    startButtonRect = (SDL_Rect){layoutW - margin - actionW,
+      y + buttonH + gap, actionW, buttonH};
+    int stickY = y + buttonH * 5 / 2 + gap * 2;
+    leftStickRect = (SDL_Rect){margin, stickY, buttonH, buttonH};
+    rightStickRect = (SDL_Rect){layoutW - margin - buttonH, stickY, buttonH, buttonH};
+    int motionH = buttonH / 2;
+    int motionY = stickY + (buttonH - motionH) / 2;
+    recButtonRect = (SDL_Rect){layoutW / 2 - actionW - gap / 2, motionY, actionW, motionH};
+    delButtonRect = (SDL_Rect){layoutW / 2 + gap / 2, motionY, actionW, motionH};
   } else {
-    int y = (layoutH - (btnSize + gap) * 3 + gap) / 2;
-    dpadUpRect = (SDL_Rect){margin + btnSize + gap, y, btnSize, btnSize};
-    dpadLeftRect = (SDL_Rect){margin, y + btnSize + gap, btnSize, btnSize};
-    dpadRightRect = (SDL_Rect){margin + (btnSize + gap) * 2, y + btnSize + gap, btnSize, btnSize};
-    dpadDownRect = (SDL_Rect){margin + btnSize + gap, y + (btnSize + gap) * 2, btnSize, btnSize};
-    int right = layoutW - margin - btnSize;
-    aButtonRect = (SDL_Rect){right, y, btnSize, btnSize};
-    bButtonRect = (SDL_Rect){right - btnSize - gap, y, btnSize, btnSize};
-    selectButtonRect = (SDL_Rect){right - btnSize - gap, y + (btnSize + gap) * 2, btnSize, btnSize};
-    startButtonRect = (SDL_Rect){right, y + (btnSize + gap) * 2, btnSize, btnSize};
+    int y = (layoutH - (buttonH * 2 + gap)) / 2;
+    int dpadY = y + (buttonH * 2 + gap - dpadTotal) / 2;
+    dpadUpRect = (SDL_Rect){margin + dpadSize + gap, dpadY, dpadSize, dpadSize};
+    dpadLeftRect = (SDL_Rect){margin, dpadY + dpadSize + gap, dpadSize, dpadSize};
+    dpadRightRect = (SDL_Rect){margin + (dpadSize + gap) * 2, dpadY + dpadSize + gap, dpadSize, dpadSize};
+    dpadDownRect = (SDL_Rect){margin + dpadSize + gap, dpadY + (dpadSize + gap) * 2, dpadSize, dpadSize};
+    int right = layoutW - margin - actionW;
+    aButtonRect = (SDL_Rect){right, y, actionW, buttonH};
+    bButtonRect = (SDL_Rect){right - actionW - gap, y, actionW, buttonH};
+    selectButtonRect = (SDL_Rect){right - actionW - gap, y + buttonH + gap, actionW, buttonH};
+    startButtonRect = (SDL_Rect){right, y + buttonH + gap, actionW, buttonH};
+    recButtonRect = delButtonRect = leftStickRect = rightStickRect = (SDL_Rect){0, 0, 0, 0};
   }
-  dpadRect = (SDL_Rect){dpadLeftRect.x, dpadUpRect.y, btnSize * 3 + gap * 2, btnSize * 3 + gap * 2};
+  dpadRect = (SDL_Rect){dpadLeftRect.x, dpadUpRect.y, dpadTotal, dpadTotal};
 }
 #endif
 
@@ -277,7 +306,7 @@ void gfxToggleFullscreen(void) {
 }
 
 #ifdef TOUCH_INPUT
-static int buttonPressed[8] = {0};
+static int buttonPressed[10] = {0};
 #endif
 
 static void createFontTexture(void) {
@@ -588,6 +617,15 @@ void gfxRect(int x, int y, int w, int h) {
 }
 
 void gfxUpdateScreen(void) {
+#ifdef ANDROID_BUILD
+  // SDL can report the new dimensions before Android has attached the new
+  // surface. Presenting in that short window crashes inside SDL_RenderPresent.
+  if (resizePresentDelay > 0) {
+    resizePresentDelay--;
+    isDirty = 1;
+    return;
+  }
+#endif
   if (isDirty) {
     gfxDrawHUD();
     SDL_RenderPresent(renderer);
@@ -749,6 +787,7 @@ void gfxHandleResize(void) {
   if (width == physicalW && height == physicalH) return;
   physicalW = width;
   physicalH = height;
+  resizePresentDelay = 2;
   screenW = 640;
   screenH = 480;
 #else
@@ -785,6 +824,25 @@ void gfxGetPhysicalSize(int* width, int* height) {
   if (height) *height = outputH;
 }
 
+int gfxGetTouchGridPosition(int physicalX, int physicalY, int* col, int* row) {
+  int logicalX = physicalX;
+  int logicalY = physicalY;
+#ifdef ANDROID_BUILD
+  SDL_Rect viewport = getTrackerViewport();
+  if (physicalX < viewport.x || physicalY < viewport.y ||
+      physicalX >= viewport.x + viewport.w || physicalY >= viewport.y + viewport.h) return 0;
+  logicalX = (physicalX - viewport.x) * logicalW / viewport.w;
+  logicalY = (physicalY - viewport.y) * logicalH / viewport.h;
+#endif
+  if (!charW || !charH || logicalX < offsetX || logicalY < offsetY) return 0;
+  int gridX = (logicalX - offsetX) / charW;
+  int gridY = (logicalY - offsetY) / charH;
+  if (gridX < 0 || gridX >= TEXT_COLS || gridY < 0 || gridY >= TEXT_ROWS) return 0;
+  if (col) *col = gridX;
+  if (row) *row = gridY;
+  return 1;
+}
+
 #ifdef TOUCH_INPUT
 static void drawButton(SDL_Rect* rect, const uint8_t* iconData, int btnIndex) {
   const ColorScheme& colors = appSettings.colorScheme;
@@ -792,6 +850,8 @@ static void drawButton(SDL_Rect* rect, const uint8_t* iconData, int btnIndex) {
   if (btnIndex == 4) color = colors.textValue; // A / EDIT
   if (btnIndex == 5) color = colors.textTitles; // B / OPT
   if (btnIndex >= 6) color = colors.selection; // SELECT / START
+  if (btnIndex == 8) color = colors.textValue; // REC
+  if (btnIndex == 9) color = colors.textTitles; // DEL
   uint8_t r = (color >> 16) & 0xff;
   uint8_t g = (color >> 8) & 0xff;
   uint8_t b = color & 0xff;
@@ -810,8 +870,9 @@ static void drawButton(SDL_Rect* rect, const uint8_t* iconData, int btnIndex) {
     int iconH = ICON_HEIGHT * iconScale;
     int iconX = rect->x + (rect->w - iconW) / 2;
     int iconY = rect->y + (rect->h - iconH) / 2;
-    SDL_SetRenderDrawColor(renderer, (colors.textDefault >> 16) & 0xff,
-      (colors.textDefault >> 8) & 0xff, colors.textDefault & 0xff, 255);
+    const int labelColor = btnIndex >= 4 ? colors.background : colors.textDefault;
+    SDL_SetRenderDrawColor(renderer, (labelColor >> 16) & 0xff,
+      (labelColor >> 8) & 0xff, labelColor & 0xff, 255);
     for (int y = 0; y < ICON_HEIGHT; y++) {
       for (int x = 0; x < ICON_WIDTH; x++) {
         int byteIndex = y * ICON_BYTES_PER_ROW + x / 8;
@@ -825,6 +886,63 @@ static void drawButton(SDL_Rect* rect, const uint8_t* iconData, int btnIndex) {
     }
   }
 }
+
+static void drawFilledCircle(int cx, int cy, int radius, int color, int alpha) {
+  SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff, alpha);
+  for (int y = -radius; y <= radius; ++y) {
+    int half = (int)sqrtf((float)(radius * radius - y * y));
+    SDL_Rect line = {cx - half, cy + y, half * 2 + 1, 1};
+    SDL_RenderFillRect(renderer, &line);
+  }
+}
+
+static void drawDpad(void) {
+  extern SDL_Rect dpadUpRect, dpadDownRect, dpadLeftRect, dpadRightRect;
+  const ColorScheme& colors = appSettings.colorScheme;
+  const int base = colors.textInfo;
+  const int shadow = ((base >> 17) & 0x7f) << 16 | ((base >> 9) & 0x7f) << 8 | ((base >> 1) & 0x7f);
+  extern SDL_Rect dpadRect;
+  int radius = dpadRect.w / 2;
+  int cx = dpadRect.x + radius, cy = dpadRect.y + radius;
+  drawFilledCircle(cx + 4, cy + 5, radius, shadow, 255);
+  drawFilledCircle(cx, cy, radius, base, 255);
+  drawFilledCircle(cx, cy, radius / 4, shadow, 255);
+  SDL_Rect* parts[] = {&dpadUpRect, &dpadDownRect, &dpadLeftRect, &dpadRightRect};
+  const uint8_t* icons[] = {icon_arrow_up, icon_arrow_down, icon_arrow_left, icon_arrow_right};
+  for (int i = 0; i < 4; ++i) {
+    if (buttonPressed[i]) {
+      drawFilledCircle(parts[i]->x + parts[i]->w / 2, parts[i]->y + parts[i]->h / 2,
+        parts[i]->w / 3, shadow, 255);
+    }
+    int scale = parts[i]->w / (ICON_WIDTH * 3);
+    if (scale < 2) scale = 2;
+    if (scale > 4) scale = 4;
+    int x = parts[i]->x + (parts[i]->w - ICON_WIDTH * scale) / 2;
+    int y = parts[i]->y + (parts[i]->h - ICON_HEIGHT * scale) / 2;
+    SDL_SetRenderDrawColor(renderer, (colors.textDefault >> 16) & 0xff,
+      (colors.textDefault >> 8) & 0xff, colors.textDefault & 0xff, 255);
+    for (int py = 0; py < ICON_HEIGHT; ++py) for (int px = 0; px < ICON_WIDTH; ++px) {
+      if (!(icons[i][py * ICON_BYTES_PER_ROW + px / 8] & (1 << (7 - px % 8)))) continue;
+      SDL_Rect pixel = {x + px * scale, y + py * scale, scale, scale};
+      SDL_RenderFillRect(renderer, &pixel);
+    }
+  }
+}
+
+#ifdef ANDROID_BUILD
+static void drawStick(SDL_Rect* rect, int axis) {
+  const ColorScheme& colors = appSettings.colorScheme;
+  int r = rect->w / 2;
+  int cx = rect->x + r, cy = rect->y + r;
+  // Opaque redraw clears the previous knob position during playback redraws.
+  drawFilledCircle(cx, cy, r, colors.selection, 255);
+  extern float vpadStickAxes[4];
+  int knob = r / 3;
+  int knobX = cx + (int)(vpadStickAxes[axis + 1] * (r - knob));
+  int knobY = cy - (int)(vpadStickAxes[axis] * (r - knob));
+  drawFilledCircle(knobX, knobY, knob, colors.textDefault, 255);
+}
+#endif
 #endif
 
 void gfxDrawHUD(void) {
@@ -832,6 +950,9 @@ void gfxDrawHUD(void) {
   extern int vpadEnabled;
   extern SDL_Rect dpadUpRect, dpadDownRect, dpadLeftRect, dpadRightRect;
   extern SDL_Rect aButtonRect, bButtonRect, startButtonRect, selectButtonRect;
+#ifdef ANDROID_BUILD
+  extern SDL_Rect recButtonRect, delButtonRect, leftStickRect, rightStickRect;
+#endif
 
   if (!vpadEnabled) return;
 
@@ -841,14 +962,17 @@ void gfxDrawHUD(void) {
   SDL_RenderSetLogicalSize(renderer, physicalW, physicalH);
 #endif
 
-  drawButton(&dpadUpRect, icon_arrow_up, 0);
-  drawButton(&dpadDownRect, icon_arrow_down, 1);
-  drawButton(&dpadLeftRect, icon_arrow_left, 2);
-  drawButton(&dpadRightRect, icon_arrow_right, 3);
+  drawDpad();
   drawButton(&aButtonRect, icon_edit, 4);
   drawButton(&bButtonRect, icon_opt, 5);
   drawButton(&startButtonRect, icon_play, 6);
   drawButton(&selectButtonRect, icon_shift, 7);
+#ifdef ANDROID_BUILD
+  drawButton(&recButtonRect, icon_rec, 8);
+  drawButton(&delButtonRect, icon_del, 9);
+  drawStick(&leftStickRect, 0);
+  drawStick(&rightStickRect, 2);
+#endif
 #ifdef ANDROID_BUILD
   useTrackerCanvas();
 #endif
@@ -857,7 +981,7 @@ void gfxDrawHUD(void) {
 
 void gfxSetButtonPressed(int buttonIndex, int pressed) {
 #ifdef TOUCH_INPUT
-  if (buttonIndex >= 0 && buttonIndex < 8) {
+  if (buttonIndex >= 0 && buttonIndex < 10) {
     buttonPressed[buttonIndex] = pressed;
     isDirty = 1;
   }

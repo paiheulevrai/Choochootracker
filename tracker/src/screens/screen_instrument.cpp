@@ -510,7 +510,13 @@ int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
       1, 0, static_cast<uint8_t>(InstrumentType::totalCount) - 1);
     InstrumentType newType = chipnomadState->project.instruments[cInstrument].type;
 
-    if (oldType != newType) setInstrumentType(newType);
+    if (oldType != newType) {
+      // edit8noLast updates the displayed enum in place. Restore the old
+      // value so setInstrumentType can release it and run the new type's
+      // initializer instead of treating this as a no-op.
+      chipnomadState->project.instruments[cInstrument].type = oldType;
+      setInstrumentType(newType);
+    }
   } else if (row == 0 && col == 1) {
     // Load instrument (supports .cni and .vts formats)
     fileBrowserSetup("LOAD INSTRUMENT", ".cni,.vts", appSettings.instrumentPath, onInstrumentLoaded, onInstrumentCancelled);

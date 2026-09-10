@@ -46,6 +46,9 @@ static int isCharEdit = 0;
 static void onThemeLoaded(const char* path) {
   int result = loadTheme(path);
   if (result == 0) {
+    // On Android this also clears the physical bands behind the virtual pad.
+    gfxSetBgColor(appSettings.colorScheme.background);
+    gfxClear();
     screenMessage(MESSAGE_TIME, "Theme loaded");
     extractFilenameWithoutExtension(path, appSettings.themeName, THEME_NAME_LENGTH + 1);
     // Store the directory path

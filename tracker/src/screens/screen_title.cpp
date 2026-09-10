@@ -123,7 +123,8 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   if (!isKeyDown) return 1;
   if (keys == keyUp && selected > 0) { selected--; return 1; }
   if (keys == keyDown && selected < 2) { selected++; return 1; }
-  if (keys != keyEdit) return 1;
+  // Start is a second confirm key on the title screen only.
+  if (keys != keyEdit && keys != keyPlay) return 1;
   gfxTitleEnd();
   if (selected == 0 && continueAvailable) { unload(); screenSetup(&screenSong, 0); }
   else if (selected == 1) {

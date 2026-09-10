@@ -1,5 +1,6 @@
 #include "corelib_mainloop.h"
 #include <stdint.h>
+#include <stdlib.h>
 #include <SDL2/SDL.h>
 #include "corelib_gfx.h"
 #include "corelib_keymap.h"
@@ -37,6 +38,8 @@ static void initGamepad(void) {
 int vpadEnabled = 0;
 SDL_Rect dpadRect, aButtonRect, bButtonRect, startButtonRect, selectButtonRect;
 SDL_Rect dpadUpRect, dpadDownRect, dpadLeftRect, dpadRightRect;
+SDL_Rect recButtonRect, delButtonRect, leftStickRect, rightStickRect;
+float vpadStickAxes[4] = {};
 
 // Button definitions
 struct Button {
@@ -52,10 +55,13 @@ static Button buttons[] = {
   {&aButtonRect, keyEdit},
   {&bButtonRect, keyOpt},
   {&startButtonRect, keyPlay},
-  {&selectButtonRect, keyShift}
+  {&selectButtonRect, keyShift},
+  {&recButtonRect, keyMotionRecord},
+  {&delButtonRect, keyMotionErase}
 };
 
 static int isPointInRect(int x, int y, SDL_Rect* rect) {
+  if (rect->w <= 0 || rect->h <= 0) return 0;
   // Phone taps are imprecise at the edge of a button. Keep the visual gap but
   // accept a small invisible halo; it never overlaps the next control.
   const int halo = 10;
@@ -66,7 +72,7 @@ static int isPointInRect(int x, int y, SDL_Rect* rect) {
 static int getTouchButton(int x, int y) {
   if (!vpadEnabled) return -1;
 
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < (int)(sizeof(buttons) / sizeof(buttons[0])); i++) {
     if (isPointInRect(x, y, buttons[i].rect)) {
       return i;
     }
@@ -111,16 +117,28 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     int buttonIndex;
   };
 
-  FingerButton activeFingers[10] = {0};
+  FingerButton activeFingers[12] = {0};
   int numActiveFingers = 0;
-  int buttonTouches[8] = {0};
+  int buttonTouches[10] = {0};
+  struct Gesture {
+    SDL_FingerID fingerId;
+    int active;
+    int startX, startY;
+    int startCol, startRow;
+    int lastAdjustX;
+    int navigation;
+    int moved;
+  } gesture = {};
+#ifdef ANDROID_BUILD
+  struct StickFinger { SDL_FingerID fingerId; } stickFingers[2] = {{-1}, {-1}};
+#endif
 #ifndef ANDROID_BUILD
   int mouseTouchButton = -1;
 #endif
 
   extern void gfxSetButtonPressed(int buttonIndex, int pressed);
   auto releaseFingers = [&]() {
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < (int)(sizeof(buttons) / sizeof(buttons[0])); ++i) {
       if (!buttonTouches[i]) continue;
       buttonTouches[i] = 0;
       gfxSetButtonPressed(i, 0);
@@ -129,7 +147,58 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
       onEvent(eventData);
     }
     numActiveFingers = 0;
+    gesture.active = 0;
+#ifdef ANDROID_BUILD
+    int hadStick = stickFingers[0].fingerId != -1 || stickFingers[1].fingerId != -1;
+    stickFingers[0].fingerId = stickFingers[1].fingerId = -1;
+    for (int i = 0; i < 4; ++i) vpadStickAxes[i] = 0.0f;
+    if (hadStick) {
+      eventData.type = MainLoopEvent::keyUp;
+      eventData.data.input = (InputCode){InputDeviceType::logical, keyMotionLive};
+      onEvent(eventData);
+    }
+#endif
   };
+  auto touchPosition = [&](const SDL_TouchFingerEvent& finger, int* x, int* y) {
+    int width, height;
+    gfxGetPhysicalSize(&width, &height);
+#ifdef ANDROID_BUILD
+    *x = (int)(finger.dx * width);
+    *y = (int)(finger.dy * height);
+#else
+    *x = (int)(finger.x * width);
+    *y = (int)(finger.y * height);
+#endif
+  };
+  auto sendTouch = [&](MainLoopEvent type, int col, int row, int direction) {
+    eventData.type = type;
+    eventData.data.touch = {col, row, direction};
+    onEvent(eventData);
+  };
+#ifdef ANDROID_BUILD
+  auto stickAt = [&](int x, int y) {
+    SDL_Rect* pads[] = {&leftStickRect, &rightStickRect};
+    for (int i = 0; i < 2; ++i) {
+      SDL_Rect* pad = pads[i];
+      int cx = pad->x + pad->w / 2, cy = pad->y + pad->h / 2, r = pad->w / 2;
+      int dx = x - cx, dy = y - cy;
+      if (pad->w > 0 && dx * dx + dy * dy <= r * r) return i;
+    }
+    return -1;
+  };
+  auto updateStick = [&](int stick, int x, int y) {
+    SDL_Rect* pad = stick == 0 ? &leftStickRect : &rightStickRect;
+    int cx = pad->x + pad->w / 2, cy = pad->y + pad->h / 2, r = pad->w / 2;
+    float horizontal = (float)(x - cx) / r;
+    float vertical = (float)(cy - y) / r;
+    if (horizontal < -1.0f) horizontal = -1.0f;
+    if (horizontal > 1.0f) horizontal = 1.0f;
+    if (vertical < -1.0f) vertical = -1.0f;
+    if (vertical > 1.0f) vertical = 1.0f;
+    vpadStickAxes[stick * 2] = vertical;
+    vpadStickAxes[stick * 2 + 1] = horizontal;
+  };
+#endif
 #ifdef ANDROID_BUILD
   SDL_SetEventFilter(preserveRawTouchCoordinates, NULL);
 #endif
@@ -206,6 +275,11 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           onEvent(eventData);
           wakeRedrawFrames = FPS;
         }
+        if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+#ifdef TOUCH_INPUT
+          releaseFingers();
+#endif
+        }
         if (event.window.event == SDL_WINDOWEVENT_RESTORED ||
             event.window.event == SDL_WINDOWEVENT_EXPOSED ||
             event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
@@ -244,6 +318,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
               gameController = SDL_GameControllerOpen(i);
               if (gameController) {
 #ifdef TOUCH_INPUT
+                releaseFingers();
                 vpadEnabled = 0;
 #endif
                 break;
@@ -265,17 +340,23 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 #ifdef TOUCH_INPUT
       if (event.type == SDL_FINGERDOWN) {
         int dx, dy;
-        gfxGetPhysicalSize(&dx, &dy);
+        touchPosition(event.tfinger, &dx, &dy);
 #ifdef ANDROID_BUILD
-        int x = (int)(event.tfinger.dx * dx);
-        int y = (int)(event.tfinger.dy * dy);
-#else
-        int x = (int)(event.tfinger.x * dx);
-        int y = (int)(event.tfinger.y * dy);
+        int stick = stickAt(dx, dy);
+        if (stick >= 0 && stickFingers[stick].fingerId == -1) {
+          int hadStick = stickFingers[0].fingerId != -1 || stickFingers[1].fingerId != -1;
+          stickFingers[stick].fingerId = event.tfinger.fingerId;
+          updateStick(stick, dx, dy);
+          if (!hadStick) {
+            eventData.type = MainLoopEvent::keyDown;
+            eventData.data.input = (InputCode){InputDeviceType::logical, keyMotionLive};
+            onEvent(eventData);
+          }
+        } else
 #endif
-
-        int buttonIndex = getTouchButton(x, y);
-        if (buttonIndex >= 0 && numActiveFingers < 10) {
+        {
+        int buttonIndex = getTouchButton(dx, dy);
+        if (buttonIndex >= 0 && numActiveFingers < 12) {
           activeFingers[numActiveFingers].fingerId = event.tfinger.fingerId;
           activeFingers[numActiveFingers].buttonIndex = buttonIndex;
           numActiveFingers++;
@@ -285,7 +366,63 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
             eventData.data.input = (InputCode){InputDeviceType::logical, buttons[buttonIndex].key};
             onEvent(eventData);
           }
+        } else if (!gesture.active) {
+          int col, row;
+          if (gfxGetTouchGridPosition(dx, dy, &col, &row)) {
+            gesture = {event.tfinger.fingerId, 1, dx, dy, col, row, dx,
+              col >= 34 && row >= 15, 0};
+          }
         }
+        }
+      }
+      else if (event.type == SDL_FINGERMOTION) {
+        int x, y;
+        touchPosition(event.tfinger, &x, &y);
+#ifdef ANDROID_BUILD
+        int stick = -1;
+        for (int i = 0; i < 2; ++i) if (stickFingers[i].fingerId == event.tfinger.fingerId) stick = i;
+        if (stick >= 0) {
+          updateStick(stick, x, y);
+        } else
+#endif
+        if (gesture.active && gesture.fingerId == event.tfinger.fingerId) {
+        if (gesture.navigation) {
+          int dx = x - gesture.startX;
+          int dy = y - gesture.startY;
+          int width, height;
+          gfxGetPhysicalSize(&width, &height);
+          int threshold = (width < height ? width : height) / 24;
+          if (!gesture.moved && (abs(x - gesture.startX) >= threshold || abs(y - gesture.startY) >= threshold)) {
+            int direction = abs(dx) >= abs(dy) ? (dx < 0 ? keyLeft : keyRight) :
+              (dy < 0 ? keyUp : keyDown);
+            sendTouch(MainLoopEvent::touchNavigate, gesture.startCol, gesture.startRow, direction);
+            gesture.moved = 1;
+          }
+        } else {
+          // Once a value drag has started, capture it until finger-up.  The
+          // user may cross labels or leave the original cell while adjusting.
+          int width, height;
+          gfxGetPhysicalSize(&width, &height);
+          int stepPixels = (width < height ? width : height) / 20;
+          if (stepPixels < 24) stepPixels = 24;
+          int delta = x - gesture.lastAdjustX;
+          if (abs(delta) >= stepPixels) {
+            // Horizontal drags use the existing coarse Edit+Up/Down actions.
+            int direction = delta < 0 ? keyDown : keyUp;
+            int steps = abs(delta) / stepPixels;
+            for (int i = 0; i < steps; ++i)
+              sendTouch(MainLoopEvent::touchAdjust, gesture.startCol, gesture.startRow, direction);
+            gesture.lastAdjustX += delta < 0 ? -steps * stepPixels : steps * stepPixels;
+            gesture.moved = 1;
+          } else {
+            int width, height;
+            gfxGetPhysicalSize(&width, &height);
+            int threshold = (width < height ? width : height) / 24;
+            if (abs(x - gesture.startX) >= threshold || abs(y - gesture.startY) >= threshold)
+              gesture.moved = 1;
+          }
+        }
+      }
       }
       else if (event.type == SDL_FINGERUP) {
         for (int i = 0; i < numActiveFingers; i++) {
@@ -303,6 +440,23 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
             numActiveFingers--;
             break;
           }
+        }
+#ifdef ANDROID_BUILD
+        for (int i = 0; i < 2; ++i) {
+          if (stickFingers[i].fingerId != event.tfinger.fingerId) continue;
+          stickFingers[i].fingerId = -1;
+          vpadStickAxes[i * 2] = vpadStickAxes[i * 2 + 1] = 0.0f;
+          if (stickFingers[0].fingerId == -1 && stickFingers[1].fingerId == -1) {
+            eventData.type = MainLoopEvent::keyUp;
+            eventData.data.input = (InputCode){InputDeviceType::logical, keyMotionLive};
+            onEvent(eventData);
+          }
+          break;
+        }
+#endif
+        if (gesture.active && gesture.fingerId == event.tfinger.fingerId) {
+          if (!gesture.moved) sendTouch(MainLoopEvent::touchTap, gesture.startCol, gesture.startRow, 0);
+          gesture.active = 0;
         }
       }
       // Non-Android touch backends may expose taps as mouse events. Android
@@ -366,6 +520,11 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
         gamepadTriggerDown[trigger] = 0;
       }
       eventData.type = MainLoopEvent::gamepadAxes;
+#ifdef TOUCH_INPUT
+      for (int axis = 0; axis < 4; ++axis) eventData.data.axes[axis] = vpadStickAxes[axis];
+#else
+      for (int axis = 0; axis < 4; ++axis) eventData.data.axes[axis] = 0.0f;
+#endif
     }
     onEvent(eventData);
 #endif

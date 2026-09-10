@@ -24,7 +24,10 @@ enum Key {
   keyOpt = 0x20,
   keyPlay = 0x40,
   keyShift = 0x80,
-  keyUnmapped = 0x400,
+  keyMotionLive = 0x100,
+  keyMotionRecord = 0x200,
+  keyMotionErase = 0x400,
+  keyUnmapped = 0x800,
 };
 
 enum GamepadInputCode {

@@ -12,6 +12,9 @@ enum class MainLoopEvent {
   sleep,
   wake,
   fullRedraw,
+  touchTap,
+  touchAdjust,
+  touchNavigate,
 };
 
 struct MainLoopEventData {
@@ -20,6 +23,7 @@ struct MainLoopEventData {
     int value;
     InputCode input;
     float axes[4];
+    struct { int x, y, direction; } touch;
   } data;
 };
 

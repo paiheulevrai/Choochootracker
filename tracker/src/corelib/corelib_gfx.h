@@ -144,6 +144,7 @@ void gfxHandleResize(void);
 // Physical drawable dimensions, for overlays whose hitboxes are outside the
 // tracker's fixed logical canvas.
 void gfxGetPhysicalSize(int* width, int* height);
+int gfxGetTouchGridPosition(int physicalX, int physicalY, int* col, int* row);
 
 // Title-screen helpers. They deliberately sit beside the text-grid API so the
 // tracker UI and its portable renderers stay unchanged.
