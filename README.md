@@ -57,8 +57,11 @@ Write a beat on the train, sequence, jam with joysticks, automate a synth line, 
 This is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with A LOT of extra synth engines, high quality PCM samples / SCWF / Serum wavetables playback, global reverb/delay, and many other small changes. It keeps ChipNomad's supafast LSDJ-inspired tracker workflow but departs from the chiptune vision of Megus to offer a metric ton of modern sound design options. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
 
 The main target is the Anbernic RG353V through PortMaster. It should work on any Portmaster system.
+
 A native Windows build is available for development and desktop testing.
+
 You can also test it in your browser on https://choochootracker.vercel.app/ (use the keyboard or gamepad on a computer, use the on-screen gamepad on a mobile device). 
+
 Android version is available in "closed beta", contact me on Discord https://discord.gg/Ut9vM6zgKU to get access.
 
 ## What it can do
