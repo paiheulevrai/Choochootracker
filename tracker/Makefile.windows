@@ -38,7 +38,13 @@ endef
 
 $(foreach source,$(SOURCES),$(eval $(call compile_source,$(source))))
 
-.PHONY: windows
+.PHONY: windows choochooplayer
+
+# Build the visualizer through its own source list, using the same MSYS2
+# toolchain and runtime conventions as the tracker.
+choochooplayer:
+	$(MAKE) -C ../choochooplayer windows
+
 windows: $(TARGET)
 	cp "$$(dirname "$$(command -v sdl2-config)")/SDL2.dll" $(BUILD)/
 	cp "$$(dirname "$$(command -v sdl2-config)")/libwinpthread-1.dll" $(BUILD)/

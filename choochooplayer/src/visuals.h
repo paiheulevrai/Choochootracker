@@ -31,6 +31,7 @@ struct VisualState {
   FT_Library ftLibrary;
   FT_Face ftFace;
   VisualizerConfig* config;
+  float renderScale;
   TrackHistory trackHistory[PROJECT_MAX_TRACKS];
 };
 

@@ -36,6 +36,11 @@ macOS macOS-deploy:
 windows windows-deploy:
 	$(MAKE) -f Makefile.windows $@
 
+# ChooChooPlayer visualizer (Windows)
+.PHONY: choochooplayer
+choochooplayer:
+	$(MAKE) -f Makefile.windows choochooplayer
+
 # Linux
 .PHONY: linux linux-deploy
 linux linux-deploy:

@@ -355,13 +355,20 @@ static void renderText(VisualState* visualState, const char* text, int x, int y,
     }
 
     SDL_SetTextureColorMod(glyph->texture, color.r, color.g, color.b);
-    SDL_Rect dst = {pen_x + glyph->bearing_x, y - glyph->bearing_y, glyph->width, glyph->height};
+    float scale = visualState->renderScale;
+    SDL_Rect dst = {
+      static_cast<int>((pen_x + glyph->bearing_x) * scale),
+      static_cast<int>((y - glyph->bearing_y) * scale),
+      static_cast<int>(glyph->width * scale),
+      static_cast<int>(glyph->height * scale)
+    };
     SDL_RenderCopy(visualState->renderer, glyph->texture, NULL, &dst);
     pen_x += glyph->advance;
   }
 }
 
 int visualsInit(VisualState* visualState) {
+  visualState->renderScale = 1.0f;
   // Initialize track history buffers
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
     visualState->trackHistory[i].count = 0;
@@ -446,14 +453,18 @@ void visualsRender(VisualState* visualState) {
 
     // Calculate total width and center horizontally
     int totalWidth = trackCount * trackContentWidth + (trackCount - 1) * trackSpacing;
-    int startX = (visualState->config->windowWidth - totalWidth) / 2;
+    visualState->renderScale = totalWidth > visualState->config->windowWidth
+      ? static_cast<float>(visualState->config->windowWidth) / totalWidth : 1.0f;
+    int virtualWidth = static_cast<int>(visualState->config->windowWidth / visualState->renderScale);
+    int virtualHeight = static_cast<int>(visualState->config->windowHeight / visualState->renderScale);
+    int startX = (virtualWidth - totalWidth) / 2;
 
     if (visualState->config->playerMode == PLAYER_MODE_PHRASE) {
       // PHRASE MODE: Show current phrase for each track
 
       // Center content vertically with slight downward adjustment
       int totalHeight = 16 * lineHeight;
-      int startY = (visualState->config->windowHeight - totalHeight) / 2 + fontSize / 2;
+      int startY = (virtualHeight - totalHeight) / 2 + fontSize / 2;
 
       for (int trackIdx = 0; trackIdx < trackCount; trackIdx++) {
         PlaybackTrackState* track = &visualState->playback->tracks[trackIdx];
@@ -494,7 +505,7 @@ void visualsRender(VisualState* visualState) {
 
       // Center content vertically
       int totalHeight = scrollRows * lineHeight;
-      int startY = (visualState->config->windowHeight - totalHeight) / 2 + fontSize / 2;
+      int startY = (virtualHeight - totalHeight) / 2 + fontSize / 2;
 
       for (int trackIdx = 0; trackIdx < trackCount; trackIdx++) {
         PlaybackTrackState* track = &visualState->playback->tracks[trackIdx];

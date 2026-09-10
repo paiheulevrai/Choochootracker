@@ -13,6 +13,16 @@ make -j4 windows
 
 The executable and bundled files are written to `tracker/build/windows/`.
 
+The ChooChooPlayer visualizer uses the same Windows toolchain:
+
+```sh
+cd tracker
+make -j4 choochooplayer
+```
+
+Its self-contained package is written to `choochooplayer/build/windows/`.
+Run `launch-alf-dance.bat` there to preview the bundled `alf dance.cct` project.
+
 ## Web
 
 Emscripten is installed locally at `.tmp/emsdk`; do not search for or install
@@ -55,8 +65,8 @@ Install the Android SDK/NDK selected by `ANDROID_HOME` (or set
 
 ```powershell
 Set-Location tracker
-& 'C:\\msys64\\usr\\bin\\make.exe' -f Makefile.android android-apk
-& 'C:\\msys64\\usr\\bin\\make.exe' -f Makefile.android android-bundle
+& 'C:\msys64\usr\bin\make.exe' -f Makefile.android android-apk
+& 'C:\msys64\usr\bin\make.exe' -f Makefile.android android-bundle
 ```
 
 The native build also needs SDL 2.32.10 headers in
@@ -79,7 +89,7 @@ $env:CCT_KEY_ALIAS = 'choochootracker-upload'
 $env:CCT_KEYSTORE_PASSWORD = '<upload-key-password>'
 $env:CCT_KEY_PASSWORD = $env:CCT_KEYSTORE_PASSWORD
 Set-Location tracker
-& 'C:\\msys64\\usr\\bin\\make.exe' -f Makefile.android android-bundle
+& 'C:\msys64\usr\bin\make.exe' -f Makefile.android android-bundle
 ```
 
 The signed Play artifact is
@@ -90,8 +100,8 @@ themes, fonts, AY/SR wavetables, waveforms and title assets. Confirm it before
 uploading:
 
 ```powershell
-& 'C:\\Program Files\\Android\\Android Studio\\jbr\\bin\\jar.exe' tf `
-  tracker\\platforms\\android\\app\\build\\outputs\\bundle\\release\\app-release.aab
+& 'C:\Program Files\Android\Android Studio\jbr\bin\jar.exe' tf `
+  tracker\platforms\android\app\build\outputs\bundle\release\app-release.aab
 ```
 
 Build `android-apk` for the signed direct-install APK, then install it with
