@@ -50,7 +50,7 @@
   <img src="screenshots/settings.png" alt="Settings" width="31%">
 </p>
 
-ChooChooTracker is a music tracker for handheld consoles.
+ChooChooTracker is a music tracker for handheld consoles, PC and Android.
 
 Write a beat on the train, sequence, jam with joysticks, automate a synth line, send it through reverb, then keep going until you miss your stop.
 
