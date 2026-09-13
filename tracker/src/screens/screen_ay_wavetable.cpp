@@ -112,26 +112,31 @@ static void updatePreviews(void) {
   Project* p = &chipnomadState->project;
   int isYM = p->chipSetup.ay.isYM;
 
+  auto renderPreview = [isYM](Bitmap* bitmap, uint8_t* wavetable) {
+    if (appSettings.ayWavetableLfoView) renderAYWavetableLfoPreview(bitmap, wavetable);
+    else renderAYWavetablePreview(bitmap, wavetable, isYM);
+  };
+
   // Update current wavetable preview (3 lines tall)
   if (previewBitmap) {
-    renderAYWavetablePreview(previewBitmap, p->ayWavetables[wavetableIdx], isYM);
+    renderPreview(previewBitmap, p->ayWavetables[wavetableIdx]);
   }
 
   // Update adjacent wavetable previews (1 line tall each)
   if (wavetableIdx >= 2 && previewBitmapPrev2) {
-    renderAYWavetablePreview(previewBitmapPrev2, p->ayWavetables[wavetableIdx - 2], isYM);
+    renderPreview(previewBitmapPrev2, p->ayWavetables[wavetableIdx - 2]);
   }
   if (wavetableIdx >= 1 && previewBitmapPrev1) {
-    renderAYWavetablePreview(previewBitmapPrev1, p->ayWavetables[wavetableIdx - 1], isYM);
+    renderPreview(previewBitmapPrev1, p->ayWavetables[wavetableIdx - 1]);
   }
   if (wavetableIdx <= 254 && previewBitmapNext1) {
-    renderAYWavetablePreview(previewBitmapNext1, p->ayWavetables[wavetableIdx + 1], isYM);
+    renderPreview(previewBitmapNext1, p->ayWavetables[wavetableIdx + 1]);
   }
   if (wavetableIdx <= 253 && previewBitmapNext2) {
-    renderAYWavetablePreview(previewBitmapNext2, p->ayWavetables[wavetableIdx + 2], isYM);
+    renderPreview(previewBitmapNext2, p->ayWavetables[wavetableIdx + 2]);
   }
   if (wavetableIdx <= 252 && previewBitmapNext3) {
-    renderAYWavetablePreview(previewBitmapNext3, p->ayWavetables[wavetableIdx + 3], isYM);
+    renderPreview(previewBitmapNext3, p->ayWavetables[wavetableIdx + 3]);
   }
 }
 
@@ -161,7 +166,7 @@ static void drawStatic(void) {
 
   // Title
   gfxSetFgColor(cs.textTitles);
-  gfxPrint(0, 0, "AY_WAVETABLE");
+  gfxPrint(0, 0, appSettings.ayWavetableLfoView ? "AY_WAVETABLE [LFO]" : "AY_WAVETABLE");
 
   // Button labels and text (row 0 is at y=2)
   gfxSetFgColor(cs.textDefault);
@@ -428,9 +433,10 @@ static int onEdit(int col, int row, CellEditAction action) {
 
       // Update preview immediately after edit
       Project* p = &chipnomadState->project;
-      int isYM = p->chipSetup.ay.isYM;
       if (previewBitmap) {
-        renderAYWavetablePreview(previewBitmap, p->ayWavetables[wavetableIdx], isYM);
+        if (appSettings.ayWavetableLfoView) renderAYWavetableLfoPreview(previewBitmap, p->ayWavetables[wavetableIdx]);
+        else renderAYWavetablePreview(previewBitmap, p->ayWavetables[wavetableIdx], p->chipSetup.ay.isYM);
+        gfxClearRect(2, 8, PREVIEW_WIDTH_CHARS, PREVIEW_HEIGHT_CHARS);
         gfxSetFgColor(appSettings.colorScheme.textInfo);
         gfxDrawBitmap(previewBitmap, 2, 8);
       }
@@ -442,7 +448,12 @@ static int onEdit(int col, int row, CellEditAction action) {
 }
 
 static int inputScreenNavigation(int keys, int tapCount) {
-  if (keys == (keyUp | keyShift)) {
+  if (keys == (keyOpt | keyPlay)) {
+    appSettings.ayWavetableLfoView = !appSettings.ayWavetableLfoView;
+    screenMessage(MESSAGE_TIME, appSettings.ayWavetableLfoView ? "LFO view" : "Standard view");
+    fullRedraw();
+    return 1;
+  } else if (keys == (keyUp | keyShift)) {
     // Go back to Table screen
     screenSetup(&screenTable, 0);
     return 1;

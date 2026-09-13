@@ -444,3 +444,16 @@ void renderAYWavetablePreview(Bitmap* bitmap, uint8_t* wavetable, int isYM) {
 
   renderWaveformPreview(bitmap, wavetable, 32, transformFunc);
 }
+
+uint8_t ayWavetableLfoPreviewLevel(uint8_t value) {
+  return (uint8_t)((value & 0x0F) * 255 / 15);
+}
+
+void renderAYWavetableLfoPreview(Bitmap* bitmap, uint8_t* wavetable) {
+  if (bitmap) gfxBitmapClear(bitmap);
+  if (!bitmap || !wavetable) return;
+
+  const int zeroY = bitmap->heightPixels / 2;
+  for (int x = 0; x < bitmap->widthPixels; ++x) bitmap->data[zeroY * bitmap->widthPixels + x] = 64;
+  renderWaveformPreview(bitmap, wavetable, 32, ayWavetableLfoPreviewLevel);
+}

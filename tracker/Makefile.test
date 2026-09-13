@@ -55,9 +55,11 @@ CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/speech/*.cc)
 
 TRACKER_SRC_SOURCES = src/string_utils.cpp \
+                      src/common.cpp \
                       src/project_utils.cpp \
                       src/pitch_table_utils.cpp \
                       src/ay_wavetable_io.cpp \
+                      src/waveform_display.cpp \
                       src/screens/model_catalog.cpp \
                       $(wildcard src/screens/edit_common.cpp) \
                       $(wildcard src/corelib/corelib_file.cpp) \

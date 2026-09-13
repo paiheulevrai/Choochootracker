@@ -32,6 +32,7 @@ void initDefaultAppSettings(void) {
   if (!appSettings.braidsSignatureSeed) appSettings.braidsSignatureSeed = 1;
   appSettings.pitchConflictWarning = 0;
   appSettings.quickHelpReleaseSeen = 0;
+  appSettings.ayWavetableLfoView = 0;
 
   // Zero out key mapping (platform-specific defaults applied later)
   memset(&appSettings.keyMapping, 0, sizeof(KeyMapping));
@@ -130,6 +131,7 @@ int settingsSave(void) {
   fprintf(file, "braidsSignatureSeed: %u\n", appSettings.braidsSignatureSeed);
   fprintf(file, "pitchConflictWarning: %d\n", appSettings.pitchConflictWarning);
   fprintf(file, "quickHelpReleaseSeen: %d\n", appSettings.quickHelpReleaseSeen);
+  fprintf(file, "ayWavetableLfoView: %d\n", appSettings.ayWavetableLfoView);
 
   // Save key mapping codes
   fprintf(file, "keyUp: %d,%d,%d\n", appSettings.keyMapping.keyUp[0].code, appSettings.keyMapping.keyUp[1].code, appSettings.keyMapping.keyUp[2].code);
@@ -240,6 +242,8 @@ int settingsLoad(void) {
       sscanf(line + 22, "%d", &appSettings.pitchConflictWarning);
     } else if (strncmp(line, "quickHelpReleaseSeen: ", 22) == 0) {
       sscanf(line + 22, "%d", &appSettings.quickHelpReleaseSeen);
+    } else if (strncmp(line, "ayWavetableLfoView: ", 20) == 0) {
+      sscanf(line + 20, "%d", &appSettings.ayWavetableLfoView);
     } else if (strncmp(line, "keyUp: ", 7) == 0) {
       sscanf(line + 7, "%d,%d,%d", &appSettings.keyMapping.keyUp[0].code, &appSettings.keyMapping.keyUp[1].code, &appSettings.keyMapping.keyUp[2].code);
     } else if (strncmp(line, "keyDown: ", 9) == 0) {

@@ -63,6 +63,7 @@ struct AppSettings {
   uint32_t braidsSignatureSeed;
   int pitchConflictWarning;
   int quickHelpReleaseSeen;
+  int ayWavetableLfoView;
   KeyMapping keyMapping;
   ColorScheme colorScheme;
   char themeName[THEME_NAME_LENGTH + 1];

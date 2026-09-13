@@ -56,6 +56,10 @@ void renderFloatPreview(Bitmap* bitmap, const float* samples, uint32_t count);
  */
 void renderAYWavetablePreview(Bitmap* bitmap, uint8_t* wavetable, int isYM);
 
+/** Linear 0..15 preview used when editing an AY wavetable as an LFO shape. */
+uint8_t ayWavetableLfoPreviewLevel(uint8_t value);
+void renderAYWavetableLfoPreview(Bitmap* bitmap, uint8_t* wavetable);
+
 
 #ifdef __cplusplus
 }
