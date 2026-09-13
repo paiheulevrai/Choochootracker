@@ -83,6 +83,8 @@ Android version is available in "closed beta", contact me on Discord https://dis
 - Synth engines parameters can be set by TrackFX, kinda like P-locks.
 - 4x mod sources per track: ADSR, AHD, LFO and sticks. Modulations can target modulations.
 - 3 LFO types: normal, slow tempo sync'd (can be very slow) and fast LFO for audio rate modulations
+- AY Wavetables as LFO shapes
+- LFO can retrig on phrase & chains start (in addition to standard lfo trigs)
 - Joystick modulation , that can be live recorded as trackFX 
 - Tracker tables, grooves, chains, and songs
 
