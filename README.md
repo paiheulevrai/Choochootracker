@@ -132,6 +132,7 @@ Find bugs or anything? Come discuss on Discord: https://discord.gg/Ut9vM6zgKU
 - Everything: working or it seems.
 - there may still be some crashes and bugs
 - Visual identity will be finalized once bugs become so rare you collect them.
+- need to tweak the scaling of various controls 
 
 ## Why the train name?
 
