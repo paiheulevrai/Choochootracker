@@ -79,6 +79,8 @@ const char* instrumentTypeName(InstrumentType type) {
       return "Plaits-Alt";
     case InstrumentType::AChChid:
       return "aChChid";
+    case InstrumentType::DrumSynth:
+      return "Bogie";
     case InstrumentType::none:
       return "None";
     default:

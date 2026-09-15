@@ -56,6 +56,7 @@ CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/*.cpp) \
 
 TRACKER_SRC_SOURCES = src/string_utils.cpp \
                       src/common.cpp \
+                      src/copy_paste.cpp \
                       src/project_utils.cpp \
                       src/pitch_table_utils.cpp \
                       src/ay_wavetable_io.cpp \

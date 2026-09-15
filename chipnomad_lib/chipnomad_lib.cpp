@@ -9,6 +9,7 @@
 #include "synth/plaits_voice.h"
 #include "synth/plaits_alt_voice.h"
 #include "synth/achchid_voice.h"
+#include "synth/drum_synth_voice.h"
 #include "synth/master_effects.h"
 #include <math.h>
 #include <atomic>
@@ -23,6 +24,7 @@ static void updateSCWFVoices(ChipNomadState* state);
 static void updatePlaitsVoices(ChipNomadState* state);
 static void updatePlaitsAltVoices(ChipNomadState* state);
 static void updateAChChidVoices(ChipNomadState* state);
+static void updateDrumSynthVoices(ChipNomadState* state);
 static void applyVoiceEvents(ChipNomadState* state);
 static int hasAudioRateModulation(const ChipNomadState* state);
 static void updateAudioRateModulations(ChipNomadState* state);
@@ -113,6 +115,8 @@ class AudioCommandQueue {
         case kStartPhrase: playbackStartPhrase(playback, command.a, command.b, command.c, command.d); break;
         case kStartPhraseRow: playbackStartPhraseRow(playback, command.a, const_cast<PhraseRow*>(&command.row)); break;
         case kQueuePhrase: playbackQueuePhrase(playback, command.a, command.b, command.c); break;
+        case kStartLiveChain: playbackStartLiveChain(playback, command.a, command.b); break;
+        case kQueueLiveChain: playbackQueueLiveChain(playback, command.a, command.b, command.c); break;
         case kPreviewNote: playbackPreviewNote(playback, command.a, (uint8_t)command.b, (uint8_t)command.c); break;
         case kStopPreview: playbackStopPreview(playback, command.a); break;
         case kClearTrackFX: memset(playback->tracks[command.a].note.fx, 0, sizeof(playback->tracks[command.a].note.fx)); break;
@@ -152,7 +156,7 @@ class AudioCommandQueue {
   template <typename T> struct Slot { T value; std::atomic<int> state{kFree}; };
   struct Settings { uint64_t trackMask = ~UINT64_C(0); LoopRange loopRange{}; uint8_t loopDirty = 0; };
   struct AudioCommand { uint8_t type; int a, b, c, d; PhraseRow row; };
-  enum CommandType { kStartSong, kStartChain, kStartPhrase, kStartPhraseRow, kQueuePhrase, kPreviewNote, kStopPreview, kClearTrackFX };
+  enum CommandType { kStartSong, kStartChain, kStartPhrase, kStartPhraseRow, kQueuePhrase, kPreviewNote, kStopPreview, kClearTrackFX, kStartLiveChain, kQueueLiveChain };
   static constexpr unsigned int kSlotCount = 3;
   static constexpr unsigned int kCommandCapacity = 64;
 
@@ -492,6 +496,8 @@ ChipNomadState* chipnomadCreate(void) {
     state->plaitsAltVoices[i]->init(96000.0f);
     state->achchidVoices[i] = new AChChidVoice();
     state->achchidVoices[i]->init(96000.0f);
+    state->drumSynthVoices[i] = new DrumSynthVoice();
+    state->drumSynthVoices[i]->init(96000.0f);
   }
 
   return state;
@@ -515,6 +521,7 @@ void chipnomadDestroy(ChipNomadState* state) {
     delete state->plaitsVoices[i];
     delete state->plaitsAltVoices[i];
     delete state->achchidVoices[i];
+    delete state->drumSynthVoices[i];
   }
 
   if (state->ownsProjectResources) projectFree(&state->project);
@@ -555,6 +562,8 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
     state->scwfVoices[i]->init((float)sampleRate);
     state->plaitsVoices[i]->init((float)sampleRate);
     state->plaitsAltVoices[i]->init((float)sampleRate);
+    state->achchidVoices[i]->init((float)sampleRate);
+    state->drumSynthVoices[i]->init((float)sampleRate);
   }
 
   // Use provided factory or default
@@ -615,6 +624,12 @@ int chipnomadQueuePlaybackStartPhraseRow(ChipNomadState* state, int trackIdx, co
 int chipnomadQueuePlaybackQueuePhrase(ChipNomadState* state, int trackIdx, int songRow, int chainRow) {
   return state && state->audioCommands ? state->audioCommands->pushCommand(4, trackIdx, songRow, chainRow) : 0;
 }
+int chipnomadQueuePlaybackStartLiveChain(ChipNomadState* state, int trackIdx, int songRow) {
+  return state && state->audioCommands ? state->audioCommands->pushCommand(8, trackIdx, songRow) : 0;
+}
+int chipnomadQueuePlaybackQueueLiveChain(ChipNomadState* state, int trackIdx, int songRow, int urgent) {
+  return state && state->audioCommands ? state->audioCommands->pushCommand(9, trackIdx, songRow, urgent) : 0;
+}
 int chipnomadQueuePlaybackPreviewNote(ChipNomadState* state, int trackIdx, uint8_t note, uint8_t instrument) {
   return state && state->audioCommands ? state->audioCommands->pushCommand(5, trackIdx, note, instrument) : 0;
 }
@@ -673,6 +688,7 @@ static void updateAudioRateModulations(ChipNomadState* state) {
   updatePlaitsVoices(state);
   updatePlaitsAltVoices(state);
   updateAChChidVoices(state);
+  updateDrumSynthVoices(state);
 }
 
 static int advancePlaybackFrame(ChipNomadState* state) {
@@ -691,7 +707,7 @@ static int advancePlaybackFrame(ChipNomadState* state) {
   motionRecordFrame(state);
   if (allTracksStopped) playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
   updateSampleVoices(state); updateSCWFVoices(state); updateBraidsVoices(state);
-  updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); applyVoiceEvents(state);
+  updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); updateDrumSynthVoices(state); applyVoiceEvents(state);
   if (state->audioOverload > 0) state->audioOverload--;
   for (int i = 0; i < PROJECT_MAX_TRACKS; ++i)
     if (state->trackClipping[i] > 0) state->trackClipping[i]--;
@@ -798,6 +814,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
     renderMonoVoiceTracks(state, state->plaitsVoices, output, frames);
     renderMonoVoiceTracks(state, state->plaitsAltVoices, output, frames);
     renderMonoVoiceTracks(state, state->achchidVoices, output, frames);
+    renderMonoVoiceTracks(state, state->drumSynthVoices, output, frames);
     processMasterMix(state, output, frames);
     samplesLeft -= frames;
     state->frameSampleCounter -= (float)frames;
@@ -968,6 +985,10 @@ static void applyVoiceEvents(ChipNomadState* state) {
           state->achchidVoices[trackIdx]->noteOn(track->note.pitchFinal, track->note.accent != 0,
             slide->isOn != 0, slide->fxValue);
         } else state->achchidVoices[trackIdx]->noteOff();
+        break;
+      case InstrumentType::DrumSynth:
+        if (track->note.noteKilled) state->drumSynthVoices[trackIdx]->kill();
+        else if (track->note.noteTriggered) state->drumSynthVoices[trackIdx]->noteOn();
         break;
       default: break;
     }
@@ -1193,6 +1214,53 @@ static void updateAChChidVoices(ChipNomadState* state) {
       (uint16_t)clampInt(cutoff, 200, 20000), (uint8_t)clampInt(resonance, 0, 100),
       (uint8_t)clampInt(envMod, 0, 100), (uint16_t)clampInt(decay, 200, 2000),
       (uint8_t)clampInt(accent, 0, 100), gain < 0.0f ? 0.0f : gain);
+  }
+}
+
+static void updateDrumSynthVoices(ChipNomadState* state) {
+  Project* project = &state->audioProject;
+  PlaybackState* playback = &state->playbackState;
+  for (int trackIdx = 0; trackIdx < project->tracksCount; ++trackIdx) {
+    PlaybackTrackState* track = &playback->tracks[trackIdx];
+    DrumSynthVoice* voice = state->drumSynthVoices[trackIdx];
+    if (track->note.instrument == EMPTY_VALUE_8 ||
+        project->instruments[track->note.instrument].type != InstrumentType::DrumSynth) {
+      voice->kill(); continue;
+    }
+    InstrumentDrumSynth* d = &project->instruments[track->note.instrument].chip.drumSynth;
+    int engine = (int)d->engine, decay = d->decay, tone = d->tone, sweep = d->sweep;
+    int noise = d->noise, fm = d->fm, drive = d->drive;
+    int cutoff = d->filterCutoffHz, resonance = d->filterResonance, pitchModulation = 0;
+    float gain = phraseGain(track, &project->instruments[track->note.instrument]);
+    if (track->note.fx[fxDMD].isOn) engine = track->note.fx[fxDMD].fxValue;
+    decay = slewEngineFX(track, fxDDC, track->note.fx[fxDDC].isOn ? track->note.fx[fxDDC].fxValue : decay);
+    tone = slewEngineFX(track, fxDTO, track->note.fx[fxDTO].isOn ? track->note.fx[fxDTO].fxValue : tone);
+    sweep = slewEngineFX(track, fxDSW, track->note.fx[fxDSW].isOn ? track->note.fx[fxDSW].fxValue : sweep);
+    noise = slewEngineFX(track, fxDNO, track->note.fx[fxDNO].isOn ? track->note.fx[fxDNO].fxValue : noise);
+    fm = slewEngineFX(track, fxDFM, track->note.fx[fxDFM].isOn ? track->note.fx[fxDFM].fxValue : fm);
+    drive = slewEngineFX(track, fxDDR, track->note.fx[fxDDR].isOn ? track->note.fx[fxDDR].fxValue : drive);
+    cutoff = instrumentFXCutoff(slewEngineFX(track, fxDCF, track->note.fx[fxDCF].isOn ? track->note.fx[fxDCF].fxValue : filterControlFromCutoff(cutoff)));
+    resonance = slewEngineFX(track, fxDRS, track->note.fx[fxDRS].isOn ? track->note.fx[fxDRS].fxValue : resonance);
+    for (int i = 0; i < 4; ++i) {
+      PlaybackModState* mod = &track->note.modulation[i]; if (!mod->modulation) continue;
+      int value = playbackModScaleToRange(mod->outValue, 255);
+      switch (mod->modulation->destination) {
+        case 1: gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
+        case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
+        case 3: decay += value; break; case 4: tone += value; break; case 5: sweep += value; break;
+        case 6: noise += value; break; case 7: fm += value; break; case 8: drive += value; break;
+        case 9: cutoff += playbackModScaleToRange(mod->outValue, 20000); break; case 10: resonance += value; break;
+      }
+    }
+    InstrumentDrumSynth configured = *d;
+    configured.engine = (DrumSynthEngine)clampInt(engine, 0, 11);
+    configured.decay = (uint8_t)clampInt(decay, 0, 255); configured.tone = (uint8_t)clampInt(tone, 0, 255);
+    configured.sweep = (uint8_t)clampInt(sweep, 0, 255); configured.noise = (uint8_t)clampInt(noise, 0, 255);
+    configured.fm = (uint8_t)clampInt(fm, 0, 255); configured.drive = (uint8_t)clampInt(drive, 0, 255);
+    int cents = track->note.pitchFinal == EMPTY_VALUE_8 ? 6000 :
+      (project->linearPitch ? project->pitchTable.values[track->note.pitchFinal] : (track->note.pitchFinal + 12) * 100) + track->note.fineOffset + pitchModulation;
+    voice->configure(&configured, (float)cents, gain < 0.0f ? 0.0f : gain,
+      (uint16_t)clampInt(cutoff, 20, 20000), (uint8_t)clampInt(resonance, 0, 255));
   }
 }
 

@@ -370,6 +370,15 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     case fxPAX: snprintf(buffer, bufferSize, "Plaits aux mix %hhu", fx[1]); break;
     case fxPCF: snprintf(buffer, bufferSize, "Plaits cutoff %hhu", fx[1]); break;
     case fxPRS: snprintf(buffer, bufferSize, "Plaits resonance %hhu", fx[1]); break;
+    case fxDMD: snprintf(buffer, bufferSize, "Bogie engine %hhu", fx[1]); break;
+    case fxDDC: snprintf(buffer, bufferSize, "Bogie decay %hhu", fx[1]); break;
+    case fxDTO: snprintf(buffer, bufferSize, "Bogie tone %hhu", fx[1]); break;
+    case fxDSW: snprintf(buffer, bufferSize, "Bogie sweep %hhu", fx[1]); break;
+    case fxDNO: snprintf(buffer, bufferSize, "Bogie noise %hhu", fx[1]); break;
+    case fxDFM: snprintf(buffer, bufferSize, "Bogie FM %hhu", fx[1]); break;
+    case fxDDR: snprintf(buffer, bufferSize, "Bogie drive %hhu", fx[1]); break;
+    case fxDCF: snprintf(buffer, bufferSize, "Bogie cutoff %hhu", fx[1]); break;
+    case fxDRS: snprintf(buffer, bufferSize, "Bogie resonance %hhu", fx[1]); break;
     default:
       break;
   }
@@ -509,6 +518,15 @@ static void initFxHelpText() {
   fxHelpText[fxACF] = "aChChid Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
   fxHelpText[fxARS] = "aChChid Resonance FX\n00 = none; FF = maximum\nuntil the next note trigger";
   fxHelpText[fxAEM] = "aChChid Env Mod FX\n00 = none; FF = maximum\nuntil the next note trigger";
+  fxHelpText[fxDMD] = "Bogie Engine FX\n00-0B selects a drum model\nuntil the next note trigger";
+  fxHelpText[fxDDC] = "Bogie Decay FX\nOverrides internal decay\nuntil the next note trigger";
+  fxHelpText[fxDTO] = "Bogie Tone FX\nOverrides tonal brightness\nuntil the next note trigger";
+  fxHelpText[fxDSW] = "Bogie Sweep FX\nOverrides pitch sweep\nuntil the next note trigger";
+  fxHelpText[fxDNO] = "Bogie Noise FX\nOverrides noise amount\nuntil the next note trigger";
+  fxHelpText[fxDFM] = "Bogie FM FX\nOverrides harmonic/FM amount\nuntil the next note trigger";
+  fxHelpText[fxDDR] = "Bogie Drive FX\nOverrides internal drive\nuntil the next note trigger";
+  fxHelpText[fxDCF] = "Bogie Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
+  fxHelpText[fxDRS] = "Bogie Resonance FX\nOverrides resonance\nuntil the next note trigger";
 
   fxHelpTextInitialized = true;
 }

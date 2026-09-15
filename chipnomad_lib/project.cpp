@@ -52,6 +52,7 @@ FXGroup fxGroups[] = {
   {"Plaits FX", NULL, 0, 7, InstrumentType::Plaits},
   {"Plaits-Alt FX", NULL, 0, 7, InstrumentType::PlaitsAlt},
   {"aChChid FX", NULL, 0, 8, InstrumentType::AChChid},
+  {"Bogie FX", NULL, 0, 8, InstrumentType::DrumSynth},
   {"ADSR / Trigger FX", fxNamesEnvelope, 0, 7, InstrumentType::none},
   {"Modulation FX", fxNamesModulation, 0, 5, InstrumentType::none},
 };
@@ -68,12 +69,12 @@ void fillFXNames() {
   // Fill counts in fxGroups array
   fxGroups[0].count = fxSequencerCount;
   fxGroups[1].count = fxTrackCount;
-  fxGroups[12].count = fxEnvelopeCount;
-  fxGroups[13].count = fxModulationCount;
+  fxGroups[13].count = fxEnvelopeCount;
+  fxGroups[14].count = fxModulationCount;
   // Instrument groups are materialized from the declarative catalogue.  The
   // editor still receives its established FXName view, without duplicating
   // family availability or labels here.
-  for (int group = 2; group < 12; ++group) {
+  for (int group = 2; group < 13; ++group) {
     InstrumentType type = fxGroups[group].instType;
     const InstrumentDefinition* definition = getInstrumentDefinition(type);
     FXName* names = instrumentGroupNames[(int)type];

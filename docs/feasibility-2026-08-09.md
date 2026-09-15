@@ -90,9 +90,28 @@ Verdict: feasible, medium risk. Validate a global reverb without UI first, then 
 
 ## Playback FX and conditions
 
-### Tables as automation
 
-Tables already support this. Their four FX columns accept Braids and Sample FX and replay them at each column's own speed. A table can sequence cutoff, resonance, timbre, color, start, end, or volume. FX reset happens before table initialization so row 0 takes effect immediately on a trigger.
+### Cross-screen FX clipboard and control-path bounce
+
+Tables can act as a control-path resampling target: turn live or generated automation into explicit, editable FX values that can loop and be reused. The first prerequisite is a shared FX-only clipboard between Phrase and Table screens. Copying a selection made only of FX name/value columns should allow paste into any FX lane of either screen. Complete row copies remain screen-specific because note, instrument, transpose and table pitch columns have different meanings. A paste that exceeds the target's 16 rows or available FX lanes is truncated; Phrase has three FX lanes and Table has four.
+
+This makes a recorded Motion Record passage easy to "bounce" into a chosen table: record the gesture in the Phrase as normal, copy its FX cells, then paste them into a table for looping or further editing. It avoids making real-time table recording the default, which would be ambiguous when table lanes run at different speeds or loop back over the same row. The selected target table is always explicit because tables can be shared by instruments.
+
+A later LFO-to-table bounce can use the same destination and clipboard conventions. It samples one full LFO cycle into the 16 rows of a user-chosen table and FX lane. Only modulation destinations with an existing direct FX representation should be eligible; generic modulation parameters and destinations without an FX mapping are excluded. This is a generated control curve, not a replacement for the live Motion Record workflow.
+
+Verdict: the cross-screen FX clipboard is feasible with low risk; LFO-to-table bounce is feasible with medium UI and validation risk. Test lane offsets, Phrase/Table lane truncation, the 16-row boundary, cut behavior, and that source-screen copy/paste remains unchanged.
+
+### Live Mode inspired by Little Piggy Tracker
+
+Little Piggy Tracker's Live Mode lets the performer queue a chain on an individual song track. The queued chain begins only when that track reaches the end of its current chain, so tracks can switch independently. This is useful for live arrangement without abrupt note cuts.
+
+ChooChooTracker already has the necessary foundations: every track owns its playback position, transport commands cross the UI/audio boundary through the fixed command queue, and phrase playback already supports a queued transition. A Live Mode on the Song screen can extend that model with a queue-chain command per track. While playback is active, PLAY on the current Song cell queues its chain for that column; a selected range queues each non-empty cell in its respective track. A queued empty cell stops its track at its next chain boundary. The existing global STOP remains immediate.
+
+The UI needs a Song/Live mode indicator and a visible queued-chain marker per track. The playback status should expose the queued target without exposing mutable audio state. Queue replacement should be last-input-wins for each track, and range loops should disable or clear queued live transitions so their semantics remain unambiguous. Project format changes are not required.
+
+The recommended start behavior is direct playback from the selected Song row, followed by Live Mode queues. This is more natural in the current interface than reproducing Piggy's queue-first stopped state, while preserving the musical chain-boundary transitions.
+
+Verdict: feasible, medium implementation risk and low DSP risk. Test independent track boundaries, replacing a pending queue, empty-cell stops, range-loop interaction, command-queue overflow, visual status, and Windows/Web/PortMaster controls.
 
 ### Existing glide
 
@@ -172,14 +191,6 @@ production-ready; otherwise bright Serum tables will alias. Reference:
 
 Verdict: feasible, medium risk. Parsing/import is low risk; anti-aliasing,
 memory limits and a usable frame-position UI are the real implementation work.
-
-## Fixes prompted by testing
-
-- New projects now initialize the linear pitch table in cents.
-- Braids octave and fine tuning were corrected when Linear Pitch is disabled.
-- Sample accepts 8-bit and 16-bit PCM WAV files in mono or stereo.
-- Sample load errors stay on screen three times longer.
-- Mixer cell indexes are guarded. The reported crash is not considered solved until it can be reproduced or logged.
 
 ## Drum synthesizers: PO32 and Weird Drums
 
@@ -293,3 +304,41 @@ would first need a consistent cross-engine ChooChoo panning model.
 Verdict: feasible, medium integration risk only because the JUCE plug-in DSP
 must be isolated/ported and benchmarked. Keep v1 to one voice per instrument,
 native drum envelopes, presets, and the shared filter.
+
+## PSP-1000 port
+
+The original PSP has 32 MiB of main RAM, a MIPS CPU that can run up to 333 MHz
+in homebrew, and a 480x272 display. [PlayStation Portable hardware](https://en.wikipedia.org/wiki/PlayStation_Portable_hardware)
+This makes a PSP-1000 port feasible as a measurement target, but medium-to-high
+risk as a complete product: do not promise full-performance parity before
+testing on the physical console.
+
+The first POC should remain single-core and build the complete tracker,
+including every current engine and Plaits-Alt. It should run the PSP CPU at
+333 MHz, use 1024-frame stereo buffers and the PSP's native 44.1 kHz output,
+and retain the Mixer CPU meter. The purpose is to measure actual engine cost,
+not to hide it behind reduced polyphony or a reduced build.
+
+44.1 kHz is a PSP-only host-rate exception; Windows and PortMaster remain
+48 kHz targets. The master mix, AY, PCM, SCWF, BYOWTBL, aChChid, envelopes,
+filters, Tilt, delay and reverb run at the PSP host rate. Braids retains its
+96 kHz source domain and existing decimator; Plaits and Plaits-Alt retain their
+48 kHz generation and use their existing wrapper conversion to the host rate.
+No global 48-to-44.1 kHz SRC is needed.
+
+The port needs a PSPSDK/C++17 compatibility pass, RAM and link-map inspection,
+audio-deadline testing, and a PSP graphics backend that scales the tracker
+480x320 logical canvas proportionally to the 480x272 display. Media Engine
+work is explicitly deferred. Likewise, a true 48 kHz Braids mode is not part
+of the POC: it requires changing its rate-dependent tables and increments, then
+validating pitch, aliasing and all 47 models. Consider it only if physical PSP
+measurements justify that DSP work.
+
+The next decision follows hardware measurements: record average and peak Mixer
+CPU, active voices, send/effect state and audible crackles for every engine on
+the PSP-1000. Use those results before setting engine polyphony caps or
+investing in Media Engine offload.
+
+Verdict: feasible as a mono-core hardware POC, medium-to-high risk. The real
+console benchmark decides whether a production PSP profile needs reduced
+polyphony, engine restrictions or Media Engine work.

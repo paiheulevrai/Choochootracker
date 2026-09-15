@@ -8,6 +8,7 @@ It follows the classic LSDj workflow and navigation system, with several sound d
 - Mutable Instruments Braids, Plaits and Plaits-Alt oscillators, with a multimode filter
 - PCM samples, single-cycle waveforms and wavetable oscillators, with a multimode filter
 - aChChid, a versatile acid synth based on Open303
+- Bogie, a native 12-model drum synthesiser with a multimode filter
 
 ## 1. Installation and files
 
@@ -143,6 +144,12 @@ It is common to reserve 1 chain for empty phrases, usually `00` or `FE`.
 
 You can keep multiple sub-songs in a project by creating "islands": sections separated by empty rows.
 
+#### Live Mode
+
+Double-tap **OPT** to enter or leave Live Mode; `LIVE` replaces the Song title. In Live Mode, **PLAY** starts the selected chain on its own track when that track is stopped. On a playing track, it queues the selected chain for the next chain boundary; press **PLAY** twice for an urgent change at the next phrase boundary. A selected empty Song cell queues a quantised stop instead. `+` marks a queued chain, `!` an urgent chain and `-` a queued stop.
+
+Select one Song row across several columns to queue or stop those tracks together. Multi-row selections are deliberately rejected. Live queues are cleared while a Song range loop is active. Live is a performance mode and is not saved in the project.
+
 #### Controls
 
 - **OPT + [UP/DOWN]**: jump 16 positions up or down
@@ -150,8 +157,8 @@ You can keep multiple sub-songs in a project by creating "islands": sections sep
 - Select a range, then double-tap **SHIFT + EDIT**: deep-clone both the chains and their phrases
 - Select a range, then use **EDIT + [UP/DOWN]**: move the selection up or down
 - Tap **OPT** 3 times: add or remove a highlight for visual organisation
-- **OPT + SHIFT**: mute the current track (release **OPT** first to keep the mute active)
-- **OPT + PLAY**: solo the current track (release **OPT** first to keep the solo active)
+- **OPT + SHIFT**: mute the current track or selected columns (release **OPT** first to keep the mute active)
+- **OPT + PLAY**: solo the current track or selected columns (release **OPT** first to keep the solo active)
 - **OPT + [LEFT/RIGHT]**: solo every track to the left or right of the current track
 
 ### Chain
@@ -326,6 +333,16 @@ Global Braids settings are available in the app settings:
 
 An `F` in the note volume column triggers an accent. `ASL` slides to that note from the previous pitch without retriggering the 303 envelope. `ASL 00` gives a `60 ms` glide. Notes without `ASL` always retrigger. Modulation destinations include Decay and Accent, plus Timbre and Color in Braids wave mode.
 
+### Bogie
+
+**Bogie** is a native one-shot drum synthesiser. Tracker notes set pitch and the tracker/instrument volume sets level; each trigger has its own internal decay, so it has no ADSR page. It has 12 models: `Kick`, `Snare`, `Hat`, `Clap`, `Tom`, `Rim`, `FM`, `Noise`, `Cowbell`, `Cymbal`, `Shaker` and `Clave`.
+
+Its six macros are **Decay**, **Tone**, **Sweep**, **Noise**, **FM** and **Drive**. Their labels adapt where useful (for example, Kick's Noise is `Click`, and Cowbell's FM is metallic cross-modulation). Every macro is active on every model, but its musical role changes with the model: Sweep can alter pitch, burst spacing or metallic spread; FM can add cross-modulation, a metallic layer or a ring-like overtone.
+
+Every model can use the shared LP/BP/HP multimode filter, with Clean, Classic, Aggro or Acid character, `12`/`24 dB` slope, cutoff and resonance. Bogie supports all of its active macros plus Volume, Pitch, Cutoff and Resonance as modulation and motion-recording destinations. Use short Decay with Cowbell for sharp phonk attacks; increase FM for a harder, more metallic bell.
+
+On the Modulation screen, press **EDIT** on a source to choose a family (Envelopes, LFO or Sticks), then its source. **Left** and **Right** still cycle sources directly.
+
 ### Subtractive engines
 
 The engines in this category share a VCO to VCF to VCA architecture.
@@ -475,7 +492,7 @@ LFO trigger types:
 
 Motion recording writes track FX into the phrase currently playing. It updates matching FX first, then uses empty slots from right to left. It never overwrites a different FX. If all 3 slots are full, that motion is not recorded on the step. A `!` in the bottom-right corner means that more destinations changed than the 3 FX columns could hold.
 
-Motion recording supports Braids, Plaits, PCM Sample, 2xSCWF and BYOWTBL destinations, including sample start, end, speed, loop and filter controls where applicable.
+Motion recording supports Braids, Plaits, PCM Sample, 2xSCWF, BYOWTBL and Bogie destinations, including active Bogie macros and filter controls where applicable.
 
 ## 7. Tables
 
@@ -487,7 +504,15 @@ Putting a `TIC` FX on the last table row sets the speed of that column and overr
 
 A 16-row table may look short next to a long Vortex Tracker instrument, but the `HOP` FX can create conditional loops such as "repeat these rows 5 times", as well as nested loops. With loops and independent FX column speeds, those 16 rows can go a surprisingly long way.
 
+### Keep a table running across notes
+
+Placing an instrument number in a phrase row starts that instrument's table again from row `00`, including when it is the same instrument as before. To trigger more notes while keeping the table at its current position, set the instrument only on the first note, then leave the Instrument column empty on subsequent note rows. Those notes still trigger normally, but the table keeps advancing.
+
 Tables `00-7F` are reserved for default instrument tables. Tables `80-FE` are intended for auxiliary tables started by the `TBX` effect. The lower range also works for auxiliary tables, but using it that way can cause unexpected conflicts and confusion.
+
+### Copy FX between Phrase and Table
+
+Select only FX name/value columns, then copy or cut them from a Phrase and paste them into any FX lane of a Table, or do the reverse. The copy keeps the exact selected cells, so a command-only or value-only selection remains partial. Pasting begins at the current FX cell and is clipped at row `F` and the destination's final FX lane. Notes, instrument numbers, pitch and volume never cross between these two screens.
 
 ### Controls
 
@@ -656,6 +681,15 @@ The value is interpreted as a signed `8-bit` relative change (`01` adds `1`, `FF
 | `ARS` | `00-FF` | 303 filter resonance, none to maximum. |
 | `AEM` | `00-FF` | 303 filter envelope modulation, none to maximum. |
 
+### Bogie FX
+
+| FX | Value | Meaning |
+|---|---|---|
+| `DMD` | `00-0B` | Selects the Bogie model until the next trigger. |
+| `DDC`, `DTO`, `DSW`, `DNO`, `DFM`, `DDR` | `00-FF` | Override Decay, Tone, Sweep, Noise, FM or Drive until the next trigger. All six macros are available on every model. |
+| `DCF` | `00-FF` | Filter cutoff, mapped logarithmically. |
+| `DRS` | `00-FF` | Filter resonance. |
+
 ### Plaits FX
 
 | FX | Value | Meaning |
@@ -822,4 +856,4 @@ Adjust Repeat delay and Repeat speed in Settings. If a single press moves twice,
 
 ## 14. Credits and licensing
 
-ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. The aChChid engine uses Open303 by Robin Schmidt, copyright 2009, under the MIT License. See the packaged license files for exact attribution.
+ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. The aChChid engine uses Open303 by Robin Schmidt, copyright 2009, under the MIT License. Bogie is an original native implementation. See the packaged license files for exact attribution.

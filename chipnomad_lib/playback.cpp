@@ -107,6 +107,7 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   track->note.instrumentTable.tableIdx = EMPTY_VALUE_8;
   track->note.auxTable.tableIdx = EMPTY_VALUE_8;
   track->mode = PlaybackMode::stopped;
+  track->queue.liveAction = LiveQueueAction::none;
 
   resetNoteFX(state, trackIdx);
 
@@ -286,7 +287,8 @@ void handleNoteOff(PlaybackState* state, int trackIdx) {
   track->note.noteReleased = 1;
 
   int isModernVoice = instType == InstrumentType::Braids ||
-    instType == InstrumentType::Plaits || instType == InstrumentType::PlaitsAlt || instType == InstrumentType::Sample;
+    instType == InstrumentType::Plaits || instType == InstrumentType::PlaitsAlt || instType == InstrumentType::Sample ||
+    instType == InstrumentType::DrumSynth;
 
   int hasVolumeADSR = 0;
 
@@ -754,6 +756,7 @@ static void handleInstrument(PlaybackState* state, int trackIdx) {
   case InstrumentType::SCWF:
   case InstrumentType::BYOWTBL:
   case InstrumentType::AChChid:
+  case InstrumentType::DrumSynth:
     break;
   case InstrumentType::none:
     break;
@@ -811,6 +814,24 @@ static void nextFrame(PlaybackState* state, int trackIdx, int chipIdx) {
   }
 }
 
+static int applyLiveQueue(PlaybackState* state, int trackIdx) {
+  PlaybackTrackState* track = &state->tracks[trackIdx];
+  LiveQueueAction action = track->queue.liveAction;
+  if (action == LiveQueueAction::stopNormal || action == LiveQueueAction::stopUrgent) {
+    resetTrack(state, trackIdx);
+    track->queue.mode = PlaybackMode::none;
+    return 1;
+  }
+  track->mode = PlaybackMode::live;
+  track->songRow = track->queue.songRow;
+  track->chainRow = 0;
+  track->phraseRow = 0;
+  track->loop = 1;
+  track->queue.mode = PlaybackMode::none;
+  track->queue.liveAction = LiveQueueAction::none;
+  return 0;
+}
+
 static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
   int stopped = 0;
   int enteredPhrase = 0;
@@ -834,6 +855,14 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
     track->phraseRow = 0;
     enteredPhrase = 1;
 
+    if (track->queue.liveAction == LiveQueueAction::urgent ||
+        track->queue.liveAction == LiveQueueAction::stopUrgent) {
+      stopped = applyLiveQueue(state, trackIdx);
+      resetTrackFXAuxState(state, trackIdx);
+      if (!stopped) restartStructuralLFOs(state, trackIdx, 1, 1);
+      return stopped;
+    }
+
     // Check chain-level loop after phrase overflow
     if (state->loopRange.enabled && state->loopRange.level == 1 && track->loop &&
         track->songRow == state->loopRange.endSongRow &&
@@ -844,6 +873,18 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
       resetTrackFXAuxState(state, trackIdx);
       restartStructuralLFOs(state, trackIdx, 1, 1);
       return stopped;
+    }
+
+    if (track->queue.liveAction == LiveQueueAction::normal ||
+        track->queue.liveAction == LiveQueueAction::stopNormal) {
+      int chain = track->songRow == EMPTY_VALUE_16 ? EMPTY_VALUE_16 : p->song[track->songRow][trackIdx];
+      int next = track->chainRow + 1;
+      if (chain == EMPTY_VALUE_16 || next >= 16 || p->chains[chain].rows[next].phrase == EMPTY_VALUE_16) {
+        stopped = applyLiveQueue(state, trackIdx);
+        resetTrackFXAuxState(state, trackIdx);
+        if (!stopped) restartStructuralLFOs(state, trackIdx, 1, 1);
+        return stopped;
+      }
     }
 
     // Play mode logic:
@@ -920,6 +961,16 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
         stopped = 1;
       }
     }
+    else if (track->mode == PlaybackMode::live) {
+      int chain = p->song[track->songRow][trackIdx];
+      int chainRow = track->chainRow + 1;
+      if (chainRow >= 16 || p->chains[chain].rows[chainRow].phrase == EMPTY_VALUE_16) {
+        track->chainRow = 0;
+        enteredChain = 1;
+      } else {
+        track->chainRow = chainRow;
+      }
+    }
     // TODO: If in the future I will add NTH command from M8, this logic will need to be updated
     resetTrackFXAuxState(state, trackIdx);
     if (!stopped) restartStructuralLFOs(state, trackIdx, enteredPhrase, enteredChain);
@@ -989,6 +1040,8 @@ int playbackIsPlaying(PlaybackState* state) {
 
 void playbackSetLoopRange(PlaybackState* state, LoopRange range) {
   state->loopRange = range;
+  if (range.enabled)
+    for (int i = 0; i < PROJECT_MAX_TRACKS; ++i) state->tracks[i].queue.liveAction = LiveQueueAction::none;
 }
 
 void playbackClearLoopRange(PlaybackState* state) {
@@ -1064,6 +1117,42 @@ void playbackQueuePhrase(PlaybackState* state, int trackIdx, int songRow, int ch
   track->queue.loop = track->loop;
 }
 
+static int liveChainValid(const PlaybackState* state, int trackIdx, int songRow) {
+  if (trackIdx < 0 || trackIdx >= state->p->tracksCount || songRow < 0 || songRow >= PROJECT_MAX_LENGTH) return 0;
+  int chain = state->p->song[songRow][trackIdx];
+  return chain != EMPTY_VALUE_16 && state->p->chains[chain].rows[0].phrase != EMPTY_VALUE_16;
+}
+
+void playbackStartLiveChain(PlaybackState* state, int trackIdx, int songRow) {
+  if (!liveChainValid(state, trackIdx, songRow)) return;
+  PlaybackTrackState* track = &state->tracks[trackIdx];
+  if (track->mode != PlaybackMode::stopped) return;
+  track->queue.mode = PlaybackMode::live;
+  track->queue.songRow = songRow;
+  track->queue.chainRow = 0;
+  track->queue.phraseRow = 0;
+  track->queue.loop = 1;
+  track->queue.liveAction = LiveQueueAction::none;
+}
+
+void playbackQueueLiveChain(PlaybackState* state, int trackIdx, int songRow, int urgent) {
+  if (trackIdx < 0 || trackIdx >= state->p->tracksCount || state->loopRange.enabled) return;
+  PlaybackTrackState* track = &state->tracks[trackIdx];
+  if (track->mode == PlaybackMode::stopped) {
+    if (songRow >= 0) playbackStartLiveChain(state, trackIdx, songRow);
+    return;
+  }
+  int stop = songRow < 0 || state->p->song[songRow][trackIdx] == EMPTY_VALUE_16;
+  if (!stop && !liveChainValid(state, trackIdx, songRow)) return;
+  track->queue.mode = stop ? PlaybackMode::stopped : PlaybackMode::live;
+  track->queue.songRow = stop ? EMPTY_VALUE_16 : songRow;
+  track->queue.chainRow = 0;
+  track->queue.phraseRow = 0;
+  track->queue.loop = 1;
+  track->queue.liveAction = stop ? (urgent ? LiveQueueAction::stopUrgent : LiveQueueAction::stopNormal)
+                                  : (urgent ? LiveQueueAction::urgent : LiveQueueAction::normal);
+}
+
 void playbackPreviewNote(PlaybackState* state, int trackIdx, uint8_t note, uint8_t instrument) {
   // Create a phrase row for preview
   PhraseRow phraseRow = {0};
@@ -1130,6 +1219,7 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
 
       // Consume queued event
       track->queue.mode = PlaybackMode::none;
+      track->queue.liveAction = LiveQueueAction::none;
 
       restartStructuralLFOs(state, trackIdx, track->mode != PlaybackMode::phraseRow,
                             track->mode == PlaybackMode::song || track->mode == PlaybackMode::chain);

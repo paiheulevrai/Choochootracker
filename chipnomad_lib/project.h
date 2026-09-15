@@ -153,6 +153,17 @@ enum FX {
   fxARS, // 303 filter resonance
   fxAEM, // 303 envelope modulation
 
+  // DrumSynth FX. Appended to preserve project FX IDs.
+  fxDMD, // Engine
+  fxDDC, // Decay
+  fxDTO, // Tone
+  fxDSW, // Sweep
+  fxDNO, // Noise
+  fxDFM, // FM
+  fxDDR, // Drive
+  fxDCF, // Filter cutoff
+  fxDRS, // Filter resonance
+
   // Total count - must be last
   fxTotalCount
 };

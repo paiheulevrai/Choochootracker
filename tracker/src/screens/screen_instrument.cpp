@@ -35,6 +35,9 @@ static SelectionItem instrumentTypeSynth[] = {
   {NULL, (int)InstrumentType::PlaitsAlt, NULL, 0},
   {NULL, (int)InstrumentType::AChChid, NULL, 0},
 };
+static SelectionItem instrumentTypeDrums[] = {
+  {NULL, (int)InstrumentType::DrumSynth, NULL, 0},
+};
 static SelectionItem instrumentTypeSample[] = {
   {NULL, (int)InstrumentType::Sample, NULL, 0},
   {NULL, (int)InstrumentType::SCWF, NULL, 0},
@@ -44,7 +47,30 @@ static const SelectionItem instrumentTypeCategories[] = {
   {"CHIP", -1, instrumentTypeChip, 3},
   {"SAMPLE", -1, instrumentTypeSample, 3},
   {"SYNTH", -1, instrumentTypeSynth, 4},
+  {"DRUMS", -1, instrumentTypeDrums, 1},
 };
+
+static const InstrumentType instrumentTypesAlphabetical[] = {
+  InstrumentType::SCWF, InstrumentType::AChChid, InstrumentType::AY1,
+  InstrumentType::AY2, InstrumentType::AYSample, InstrumentType::DrumSynth,
+  InstrumentType::Braids, InstrumentType::BYOWTBL, InstrumentType::none,
+  InstrumentType::Sample, InstrumentType::Plaits, InstrumentType::PlaitsAlt,
+};
+
+static int editInstrumentType(CellEditAction action, InstrumentType* type) {
+  action = convertMultiAction(action);
+  if (action == CellEditAction::clear) { *type = InstrumentType::none; return 1; }
+  if (action == CellEditAction::tap) return 1;
+  int direction = (action == CellEditAction::increase || action == CellEditAction::increaseBig) ? 1 :
+                  (action == CellEditAction::decrease || action == CellEditAction::decreaseBig) ? -1 : 0;
+  if (!direction) return 0;
+  int count = sizeof(instrumentTypesAlphabetical) / sizeof(instrumentTypesAlphabetical[0]);
+  for (int i = 0; i < count; ++i) if (instrumentTypesAlphabetical[i] == *type) {
+    if (i + direction >= 0 && i + direction < count) *type = instrumentTypesAlphabetical[i + direction];
+    return 1;
+  }
+  return 0;
+}
 
 static void getInstrumentFilename(char* filename, int size) {
   if (strlen(chipnomadState->project.instruments[cInstrument].name) > 0) {
@@ -185,7 +211,7 @@ static int instrumentTypePopupInput(int isKeyDown, int keys, ScreenData* screen)
     return 0;
   }
   if (input == PopupEditInput::open) {
-    selectionPopupSetup("INSTRUMENT TYPE", instrumentTypeCategories, 3,
+    selectionPopupSetup("INSTRUMENT TYPE", instrumentTypeCategories, 4,
       (int)chipnomadState->project.instruments[cInstrument].type,
       selectInstrumentType, cancelInstrumentTypeSelection);
     screenSetup(&screenSelectionPopup, 0);
@@ -226,6 +252,7 @@ static ScreenData* instrumentScreen(void) {
     &screenInstrumentNone, &screenInstrumentAY, &screenInstrumentAY2,
     &screenInstrumentAYSample, &screenInstrumentBraids, &screenInstrumentSample,
     &screenInstrumentSCWF, &screenInstrumentBYOWTBL, &screenInstrumentPlaits, &screenInstrumentAChChid,
+    &screenInstrumentDrumSynth,
   };
   InstrumentScreenKind kind = getInstrumentDefinition(chipnomadState->project.instruments[cInstrument].type)->screen;
   ScreenData* data = screens[(int)kind];
@@ -239,9 +266,10 @@ static void init(void) {
   typeButtonDown = 0;
   screenInstrumentNone.cursorRow = 0;
   screenInstrumentNone.cursorCol = 0;
-  SelectionItem* groups[] = {instrumentTypeChip, instrumentTypeSample, instrumentTypeSynth};
-  for (int group = 0; group < 3; ++group)
-    for (int item = 0; item < (group == 2 ? 4 : 3); ++item)
+  SelectionItem* groups[] = {instrumentTypeChip, instrumentTypeSample, instrumentTypeSynth, instrumentTypeDrums};
+  const int counts[] = {3, 3, 4, 1};
+  for (int group = 0; group < 4; ++group)
+    for (int item = 0; item < counts[group]; ++item)
       groups[group][item].label = getInstrumentDefinition((InstrumentType)groups[group][item].value)->uiName;
 }
 
@@ -494,7 +522,8 @@ void instrumentCommonDrawLivePreview(void) {
   gfxDrawBitmap(livePreviewBitmap, 0, 16);
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
   InstrumentVoicePostSettings* post = voicePostSettings(instrument, instrument->type);
-  if (post && ((instrument->type != InstrumentType::Plaits &&
+  if (post && instrument->type != InstrumentType::DrumSynth &&
+      ((instrument->type != InstrumentType::Plaits &&
                 instrument->type != InstrumentType::PlaitsAlt) ||
                instrument->chip.plaits.envelopeMode != 0)) {
     instrumentCommonDrawEnvelopePreview(post->attack, post->decay, post->sustain,
@@ -508,9 +537,7 @@ int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
   if (row == 0 && col == 0) {
     // Instrument type
     InstrumentType oldType = chipnomadState->project.instruments[cInstrument].type;
-    handled = edit8noLast(action,
-      reinterpret_cast<uint8_t*>(&chipnomadState->project.instruments[cInstrument].type),
-      1, 0, static_cast<uint8_t>(InstrumentType::totalCount) - 1);
+    handled = editInstrumentType(action, &chipnomadState->project.instruments[cInstrument].type);
     InstrumentType newType = chipnomadState->project.instruments[cInstrument].type;
 
     if (oldType != newType) {

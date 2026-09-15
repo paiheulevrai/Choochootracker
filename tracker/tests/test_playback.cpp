@@ -145,6 +145,70 @@ TEST_CASE_FIXTURE(PlaybackFixture, "playback init all tracks stopped") {
   CHECK_FALSE(playbackIsPlaying(&state->playbackState));
 }
 
+TEST_CASE_FIXTURE(PlaybackFixture, "Live chains loop and switch at the requested boundary") {
+  Project* p = &state->project;
+  p->tracksCount = 2;
+  for (int i = 0; i < 16; ++i) p->grooves[0].speed[i] = 1;
+  p->chains[0].rows[0].phrase = 0;
+  p->chains[0].rows[1].phrase = 0;
+  p->chains[1].rows[0].phrase = 0;
+  p->chains[2].rows[0].phrase = 0;
+  p->song[0][0] = 0;
+  p->song[1][0] = 1;
+  p->song[2][0] = 2;
+
+  playbackStartLiveChain(&state->playbackState, 0, 0);
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::live);
+
+  state->playbackState.tracks[0].phraseRow = 15;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].chainRow == 1);
+
+  playbackQueueLiveChain(&state->playbackState, 0, 1, 0);
+  state->playbackState.tracks[0].phraseRow = 15;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::live);
+  CHECK(state->playbackState.tracks[0].songRow == 1);
+  CHECK(state->playbackState.tracks[0].chainRow == 0);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Live urgent switches at a phrase boundary and stop is quantized") {
+  Project* p = &state->project;
+  for (int i = 0; i < 16; ++i) p->grooves[0].speed[i] = 1;
+  p->chains[0].rows[0].phrase = 0;
+  p->chains[0].rows[1].phrase = 0;
+  p->chains[1].rows[0].phrase = 0;
+  p->chains[2].rows[0].phrase = 0;
+  p->song[0][0] = 0;
+  p->song[1][0] = 1;
+  p->song[2][0] = 2;
+  playbackStartLiveChain(&state->playbackState, 0, 0);
+  playbackNextFrame(state);
+
+  playbackQueueLiveChain(&state->playbackState, 0, 1, 0);
+  playbackQueueLiveChain(&state->playbackState, 0, 2, 1);
+  CHECK(state->playbackState.tracks[0].queue.liveAction == LiveQueueAction::urgent);
+  CHECK(state->playbackState.tracks[0].queue.songRow == 2);
+  LoopRange range = {1};
+  playbackSetLoopRange(&state->playbackState, range);
+  CHECK(state->playbackState.tracks[0].queue.liveAction == LiveQueueAction::none);
+  playbackQueueLiveChain(&state->playbackState, 0, 1, 0);
+  CHECK(state->playbackState.tracks[0].queue.liveAction == LiveQueueAction::none);
+  playbackClearLoopRange(&state->playbackState);
+
+  playbackQueueLiveChain(&state->playbackState, 0, 1, 1);
+  state->playbackState.tracks[0].phraseRow = 15;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].songRow == 1);
+  CHECK(state->playbackState.tracks[0].chainRow == 0);
+
+  playbackQueueLiveChain(&state->playbackState, 0, -1, 0);
+  state->playbackState.tracks[0].phraseRow = 15;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::stopped);
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "instrument FX holds until the next note trigger") {
   state->project.instruments[0].type = InstrumentType::Braids;
   state->project.instruments[0].tableSpeed = 1;

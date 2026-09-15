@@ -17,6 +17,15 @@ enum class PlaybackMode {
   phrase,
   phraseRow,
   loop,
+  live,
+};
+
+enum class LiveQueueAction : uint8_t {
+  none,
+  normal,
+  urgent,
+  stopNormal,
+  stopUrgent,
 };
 
 struct PlaybackTableState {
@@ -60,6 +69,7 @@ struct PlaybackTrackQueue {
   int chainRow;
   int phraseRow;
   int loop;
+  LiveQueueAction liveAction;
 };
 
 struct PlaybackTrackState {
@@ -224,6 +234,8 @@ void playbackStartPhraseRow(PlaybackState* state, int trackIdx, PhraseRow* phras
  * @param chainRow Row position in the chain containing the phrase
  */
 void playbackQueuePhrase(PlaybackState* state, int trackIdx, int songRow, int chainRow);
+void playbackStartLiveChain(PlaybackState* state, int trackIdx, int songRow);
+void playbackQueueLiveChain(PlaybackState* state, int trackIdx, int songRow, int urgent);
 
 /**
  * Stops playback on all tracks

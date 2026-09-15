@@ -13,6 +13,7 @@ class SCWFVoice;
 class PlaitsVoice;
 class PlaitsAltVoice;
 class AChChidVoice;
+class DrumSynthVoice;
 class AudioCommandQueue;
 
 constexpr int VOICE_MONITOR_SAMPLES = 256;
@@ -79,6 +80,7 @@ struct ChipNomadState {
   PlaitsVoice* plaitsVoices[PROJECT_MAX_TRACKS];
   PlaitsAltVoice* plaitsAltVoices[PROJECT_MAX_TRACKS];
   AChChidVoice* achchidVoices[PROJECT_MAX_TRACKS];
+  DrumSynthVoice* drumSynthVoices[PROJECT_MAX_TRACKS];
   VoiceMonitor voiceMonitors[PROJECT_MAX_TRACKS];
   MasterEffects* masterEffects;
   AudioCommandQueue* audioCommands;
@@ -117,6 +119,8 @@ int chipnomadQueuePlaybackStartChain(ChipNomadState* state, int trackIdx, int so
 int chipnomadQueuePlaybackStartPhrase(ChipNomadState* state, int trackIdx, int songRow, int chainRow, int loop);
 int chipnomadQueuePlaybackStartPhraseRow(ChipNomadState* state, int trackIdx, const PhraseRow* row);
 int chipnomadQueuePlaybackQueuePhrase(ChipNomadState* state, int trackIdx, int songRow, int chainRow);
+int chipnomadQueuePlaybackStartLiveChain(ChipNomadState* state, int trackIdx, int songRow);
+int chipnomadQueuePlaybackQueueLiveChain(ChipNomadState* state, int trackIdx, int songRow, int urgent);
 int chipnomadQueuePlaybackPreviewNote(ChipNomadState* state, int trackIdx, uint8_t note, uint8_t instrument);
 int chipnomadQueuePlaybackStopPreview(ChipNomadState* state, int trackIdx);
 int chipnomadQueuePlaybackClearTrackFX(ChipNomadState* state, int trackIdx);

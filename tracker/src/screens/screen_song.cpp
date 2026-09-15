@@ -24,6 +24,7 @@ typedef enum {
 } MuteSoloState;
 
 static MuteSoloState muteSoloState = MUTE_SOLO_EMPTY;
+static int liveMode = 0;
 
 static int getColumnCount(int row);
 static void drawStatic(void);
@@ -60,6 +61,60 @@ static ScreenData screen = {
   .getLoopRange = getLoopRange,
 };
 
+static void selectedTrackBounds(int* first, int* last) {
+  *first = screen.cursorCol;
+  *last = screen.cursorCol;
+  if (screen.selectMode) {
+    int startRow, endRow;
+    getSelectionBounds(&screen, first, &startRow, last, &endRow);
+  }
+}
+
+static void toggleSelectedMute(void) {
+  int first, last, allMuted = 1;
+  selectedTrackBounds(&first, &last);
+  for (int i = first; i <= last; ++i) if (audioManager.trackStates[i] != TRACK_MUTED) allMuted = 0;
+  for (int i = 0; i < PROJECT_MAX_TRACKS; ++i)
+    if (audioManager.trackStates[i] == TRACK_SOLO) audioManager.trackStates[i] = TRACK_NORMAL;
+  for (int i = first; i <= last; ++i) audioManager.trackStates[i] = allMuted ? TRACK_NORMAL : TRACK_MUTED;
+  audioManager.toggleTrackMute(-1);
+}
+
+static void toggleSelectedSolo(void) {
+  int first, last, onlySelectionSolo = 1;
+  selectedTrackBounds(&first, &last);
+  for (int i = 0; i < chipnomadState->project.tracksCount; ++i) {
+    int selected = i >= first && i <= last;
+    if (audioManager.trackStates[i] != (selected ? TRACK_SOLO : TRACK_NORMAL)) onlySelectionSolo = 0;
+  }
+  for (int i = 0; i < PROJECT_MAX_TRACKS; ++i)
+    audioManager.trackStates[i] = (!onlySelectionSolo && i >= first && i <= last) ? TRACK_SOLO : TRACK_NORMAL;
+  audioManager.toggleTrackSolo(-1);
+}
+
+static int livePlay(int tapCount) {
+  int first, last, startRow, endRow;
+  selectedTrackBounds(&first, &last);
+  if (screen.selectMode) getSelectionBounds(&screen, &first, &startRow, &last, &endRow);
+  else startRow = endRow = screen.cursorRow;
+  if (screen.selectMode && startRow != endRow) {
+    screenMessage(MESSAGE_TIME, "Live: select one row");
+    return 1;
+  }
+  int row = screen.selectMode ? startRow : screen.cursorRow;
+  const PlaybackStatus* status = chipnomadGetPlaybackStatus(chipnomadState);
+  for (int track = first; track <= last; ++track) {
+    int chain = chipnomadState->project.song[row][track];
+    if (status->tracks[track].mode == PlaybackMode::stopped) {
+      if (chain != EMPTY_VALUE_16) chipnomadQueuePlaybackStartLiveChain(chipnomadState, track, row);
+    } else {
+      chipnomadQueuePlaybackQueueLiveChain(chipnomadState, track,
+        chain == EMPTY_VALUE_16 ? -1 : row, tapCount >= 2);
+    }
+  }
+  return 1;
+}
+
 static void init(void) {
   lastChainValue = 0;
   screen.cursorRow = 0;
@@ -70,6 +125,7 @@ static void init(void) {
   screen.selectStartCol = 0;
   screen.selectAnchorRow = 0;
   screen.selectAnchorCol = 0;
+  liveMode = 0;
   pSongRow = &screen.cursorRow;
   pSongTrack = &screen.cursorCol;
 }
@@ -89,7 +145,7 @@ static int getColumnCount(int row) {
 
 static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
-  gfxPrint(0, 0, "SONG");
+  gfxPrint(0, 0, liveMode ? "LIVE" : "SONG");
 }
 
 static void drawField(int col, int row, CellState state) {
@@ -147,11 +203,21 @@ static void fullRedraw(void) {
 static void draw(void) {
   for (int c = 0; c < chipnomadState->project.tracksCount; c++) {
     gfxClearRect(2 + c * 3, 3, 1, 16);
-    if (chipnomadGetPlaybackStatus(chipnomadState)->tracks[c].songRow != EMPTY_VALUE_16) {
-      int row = chipnomadGetPlaybackStatus(chipnomadState)->tracks[c].songRow - screen.topRow;
+    const PlaybackTrackState* track = &chipnomadGetPlaybackStatus(chipnomadState)->tracks[c];
+    if (track->songRow != EMPTY_VALUE_16) {
+      int row = track->songRow - screen.topRow;
       if (row >= 0 && row < 16) {
         gfxSetFgColor(appSettings.colorScheme.playMarkers);
         gfxPrint(2 + c * 3, 3 + row, ">");
+      }
+    }
+    if (track->queue.liveAction != LiveQueueAction::none) {
+      int stop = track->queue.liveAction == LiveQueueAction::stopNormal || track->queue.liveAction == LiveQueueAction::stopUrgent;
+      int urgent = track->queue.liveAction == LiveQueueAction::urgent || track->queue.liveAction == LiveQueueAction::stopUrgent;
+      int row = (stop ? track->songRow : track->queue.songRow) - screen.topRow;
+      if (row >= 0 && row < 16) {
+        gfxSetFgColor(appSettings.colorScheme.playMarkers);
+        gfxPrint(2 + c * 3, 3 + row, stop ? "-" : (urgent ? "!" : "+"));
       }
     }
 
@@ -334,8 +400,16 @@ static int onEdit(int col, int row, CellEditAction action) {
 static int onInput(int isKeyDown, int keys, int tapCount) {
   int handled = 0;
 
-  // Only handle mute/solo when not in selection mode
-  if (screen.selectMode == 0) {
+  if (isKeyDown && keys == keyOpt && tapCount == 2) {
+    liveMode ^= 1;
+    drawStatic();
+    screenMessage(MESSAGE_TIME, liveMode ? "Live: PLAY queue, double urgent" : "Song mode");
+    return 1;
+  }
+  if (isKeyDown && liveMode && keys == keyPlay) return livePlay(tapCount);
+
+  // Mute/solo accepts a selected group of Song columns.
+  {
     switch (muteSoloState) {
       case MUTE_SOLO_EMPTY:
         if (isKeyDown && keys == keyOpt) {
@@ -354,11 +428,11 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
 
       case MUTE_SOLO_OPT_PRESSED:
         if (isKeyDown && keys == (keyOpt | keyShift)) {
-          audioManager.toggleTrackMute(screen.cursorCol);
+          toggleSelectedMute();
           muteSoloState = MUTE_SOLO_MUTE_STATE;
           handled = 1;
         } else if (isKeyDown && keys == (keyOpt | keyPlay)) {
-          audioManager.toggleTrackSolo(screen.cursorCol);
+          toggleSelectedSolo();
           muteSoloState = MUTE_SOLO_SOLO_STATE;
           handled = 1;
         } else if (isKeyDown && keys == (keyOpt | keyLeft)) {
@@ -387,7 +461,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
       case MUTE_SOLO_MUTE_STATE:
         if (!isKeyDown && keys == keyOpt) {
           // SHIFT released first - momentary unmute
-          audioManager.toggleTrackMute(screen.cursorCol);
+          toggleSelectedMute();
           muteSoloState = MUTE_SOLO_OPT_PRESSED;
           handled = 1;
         } else if (!isKeyDown && keys == keyShift) {
@@ -404,7 +478,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
       case MUTE_SOLO_SOLO_STATE:
         if (!isKeyDown && keys == keyOpt) {
           // PLAY released first - momentary unsolo
-          audioManager.toggleTrackSolo(screen.cursorCol);
+          toggleSelectedSolo();
           muteSoloState = MUTE_SOLO_OPT_PRESSED;
           handled = 1;
         } else if (!isKeyDown && keys == keyPlay) {
@@ -435,8 +509,8 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     }
   }
 
-  // Reset state when all keys released or entering selection mode
-  if (keys == 0 || screen.selectMode != 0) {
+  // Reset state when all keys are released.
+  if (keys == 0) {
     muteSoloState = MUTE_SOLO_EMPTY;
   }
 

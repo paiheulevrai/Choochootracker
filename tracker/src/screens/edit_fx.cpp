@@ -19,12 +19,21 @@ static InstrumentType getInstrumentType(uint8_t instrumentIdx) {
 static InstrumentType getCurrentInstrumentType() {
   return getInstrumentType(currentInstrumentIdx);
 }
+static const Instrument* getCurrentInstrument() {
+  return currentInstrumentIdx != EMPTY_VALUE_8 && currentInstrumentIdx < PROJECT_MAX_INSTRUMENTS
+    ? &chipnomadState->project.instruments[currentInstrumentIdx] : NULL;
+}
 
-static bool isFXAvailable(enum FX fx, InstrumentType instrumentType) {
-  if (instrumentType != InstrumentType::none && instrumentFXAvailable(instrumentType, (uint8_t)fx)) return true;
+static bool isFXAvailable(enum FX fx, uint8_t instrumentIdx) {
+  InstrumentType instrumentType = getInstrumentType(instrumentIdx);
+  const Instrument* instrument = instrumentIdx != EMPTY_VALUE_8 && instrumentIdx < PROJECT_MAX_INSTRUMENTS
+    ? &chipnomadState->project.instruments[instrumentIdx] : NULL;
+  if (instrument && instrumentFXAvailableForInstrument(instrument, (uint8_t)fx)) return true;
   for (int groupIdx = 0; groupIdx < fxGroupCount; groupIdx++) {
     FXGroup* group = &fxGroups[groupIdx];
     if (group->instType != InstrumentType::none && group->instType != instrumentType) continue;
+    if (group->instType == InstrumentType::DrumSynth && instrument &&
+        !instrumentFXAvailableForInstrument(instrument, (uint8_t)fx)) continue;
     for (int i = 0; i < group->count; i++) {
       if (group->fxList[i].fx == fx) return true;
     }
@@ -33,14 +42,33 @@ static bool isFXAvailable(enum FX fx, InstrumentType instrumentType) {
 }
 
 static void stepFX(uint8_t* fx, int direction, uint8_t instrumentIdx) {
-  InstrumentType instrumentType = getInstrumentType(instrumentIdx);
   for (int candidate = (int)fx[0] + direction;
        candidate >= 0 && candidate < fxTotalCount; candidate += direction) {
-    if (isFXAvailable((enum FX)candidate, instrumentType)) {
+    if (isFXAvailable((enum FX)candidate, instrumentIdx)) {
       fx[0] = candidate;
       return;
     }
   }
+}
+
+static int visibleFXCount(const FXGroup* group) {
+  const Instrument* instrument = getCurrentInstrument();
+  if (!instrument || group->instType != InstrumentType::DrumSynth) return group->count;
+  int count = 0;
+  for (int i = 0; i < group->count; ++i)
+    if (instrumentFXAvailableForInstrument(instrument, group->fxList[i].fx)) ++count;
+  return count;
+}
+
+static const FXName* visibleFXAt(const FXGroup* group, int visibleIndex) {
+  const Instrument* instrument = getCurrentInstrument();
+  if (!instrument || group->instType != InstrumentType::DrumSynth) return
+    visibleIndex >= 0 && visibleIndex < group->count ? &group->fxList[visibleIndex] : NULL;
+  for (int i = 0; i < group->count; ++i) {
+    if (!instrumentFXAvailableForInstrument(instrument, group->fxList[i].fx)) continue;
+    if (visibleIndex-- == 0) return &group->fxList[i];
+  }
+  return NULL;
 }
 
 void fxEditFullDraw(uint8_t currentFX, uint8_t instrumentIdx);
@@ -199,7 +227,10 @@ int drawFXList(int visibleGroupIdx, int y) {
   int cols = group->columns;  // Use group-specific column count
 
   // Draw FX in grid with group-specific column count
-  for (int idx = 0; idx < group->count; idx++) {
+  int count = visibleFXCount(group);
+  for (int idx = 0; idx < count; idx++) {
+    const FXName* item = visibleFXAt(group, idx);
+    if (!item) continue;
     int row = idx / cols;
     int col = idx % cols;
     int fxY = y + row;
@@ -212,7 +243,7 @@ int drawFXList(int visibleGroupIdx, int y) {
       gfxSetFgColor(appSettings.colorScheme.textDefault);
     }
 
-    gfxPrint(1 + col * 4, fxY, group->fxList[idx].name);
+    gfxPrint(1 + col * 4, fxY, item->name);
 
     if (isCurrent) {
       gfxCursor(1 + col * 4, fxY, 3);
@@ -220,7 +251,7 @@ int drawFXList(int visibleGroupIdx, int y) {
   }
 
   // Calculate how many rows the FX list takes
-  int rows = (group->count + cols - 1) / cols;  // Ceiling division
+  int rows = (count + cols - 1) / cols;  // Ceiling division
   return y + rows;
 }
 
@@ -245,8 +276,9 @@ void fxEditFullDraw(uint8_t currentFX, uint8_t instrumentIdx) {
   for (int g = 0; g < visibleGroupCount; g++) {
     FXGroup* group = getVisibleGroup(g, instType);
     if (group) {
-      for (int i = 0; i < group->count; i++) {
-        if (group->fxList[i].fx == currentFX) {
+      for (int i = 0; i < visibleFXCount(group); i++) {
+        const FXName* item = visibleFXAt(group, i);
+        if (item && item->fx == currentFX) {
           foundGroup = g;
           foundIdx = i;
           break;
@@ -294,8 +326,9 @@ int fxEditInput(int keys, int tapCount, uint8_t* fx, uint8_t* lastFX) {
   if (keys == 0) {
     // Selection complete - update the FX value
     FXGroup* group = getVisibleGroup(currentGroup, getCurrentInstrumentType());
-    if (group && currentIdx < group->count) {
-      fx[0] = group->fxList[currentIdx].fx;
+    const FXName* item = group ? visibleFXAt(group, currentIdx) : NULL;
+    if (item) {
+      fx[0] = item->fx;
       lastFX[0] = fx[0];
     }
     return 1;
@@ -311,7 +344,7 @@ int fxEditInput(int keys, int tapCount, uint8_t* fx, uint8_t* lastFX) {
     if (keys & keyRight) {
       // Move to next FX (linear navigation)
       currentIdx++;
-      if (currentIdx >= group->count) {
+      if (currentIdx >= visibleFXCount(group)) {
         // Reached end of current group - move to next group
         if (currentGroup < visibleGroupCount - 1) {
           currentGroup++;
@@ -319,7 +352,7 @@ int fxEditInput(int keys, int tapCount, uint8_t* fx, uint8_t* lastFX) {
           expandedGroup = currentGroup;
         } else {
           // At last FX of last group - stay there
-          currentIdx = group->count - 1;
+          currentIdx = visibleFXCount(group) - 1;
         }
       }
     } else if (keys & keyLeft) {
@@ -330,7 +363,7 @@ int fxEditInput(int keys, int tapCount, uint8_t* fx, uint8_t* lastFX) {
         if (currentGroup > 0) {
           currentGroup--;
           FXGroup* prevGroup = getVisibleGroup(currentGroup, getCurrentInstrumentType());
-          currentIdx = prevGroup ? prevGroup->count - 1 : 0;
+          currentIdx = prevGroup ? visibleFXCount(prevGroup) - 1 : 0;
           expandedGroup = currentGroup;
         } else {
           // At first FX of first group - stay there
@@ -347,7 +380,7 @@ int fxEditInput(int keys, int tapCount, uint8_t* fx, uint8_t* lastFX) {
           FXGroup* prevGroup = getVisibleGroup(currentGroup, getCurrentInstrumentType());
           if (prevGroup) {
             // Position at last FX of previous group
-            currentIdx = prevGroup->count - 1;
+            currentIdx = visibleFXCount(prevGroup) - 1;
           } else {
             currentIdx = 0;
           }
@@ -360,7 +393,7 @@ int fxEditInput(int keys, int tapCount, uint8_t* fx, uint8_t* lastFX) {
     } else if (keys & keyDown) {
       // Move down one row in grid (using group-specific column count)
       currentIdx += group->columns;
-      if (currentIdx >= group->count) {
+      if (currentIdx >= visibleFXCount(group)) {
         // Reached bottom of current group - move to next group
         if (currentGroup < visibleGroupCount - 1) {
           currentGroup++;
@@ -368,7 +401,7 @@ int fxEditInput(int keys, int tapCount, uint8_t* fx, uint8_t* lastFX) {
           expandedGroup = currentGroup;
         } else {
           // At bottom of last group - stay at last FX
-          currentIdx = group->count - 1;
+          currentIdx = visibleFXCount(group) - 1;
         }
       }
     }
@@ -376,15 +409,17 @@ int fxEditInput(int keys, int tapCount, uint8_t* fx, uint8_t* lastFX) {
     // If group changed, need full redraw
     if (oldGroup != currentGroup) {
       FXGroup* newGroup = getVisibleGroup(currentGroup, getCurrentInstrumentType());
-      if (newGroup && currentIdx < newGroup->count) {
-        fxEditFullDraw(newGroup->fxList[currentIdx].fx, currentInstrumentIdx);
+      const FXName* item = newGroup ? visibleFXAt(newGroup, currentIdx) : NULL;
+      if (item) {
+        fxEditFullDraw(item->fx, currentInstrumentIdx);
       }
     } else {
       // Same group, just update the FX selection
       // For now, do a simple redraw (can optimize later)
       FXGroup* currentGroupPtr = getVisibleGroup(currentGroup, getCurrentInstrumentType());
-      if (currentGroupPtr && currentIdx < currentGroupPtr->count) {
-        fxEditFullDraw(currentGroupPtr->fxList[currentIdx].fx, currentInstrumentIdx);
+      const FXName* item = currentGroupPtr ? visibleFXAt(currentGroupPtr, currentIdx) : NULL;
+      if (item) {
+        fxEditFullDraw(item->fx, currentInstrumentIdx);
       }
     }
   }

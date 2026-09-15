@@ -22,6 +22,7 @@ enum class InstrumentType : uint8_t {
   SCWF = 8,
   BYOWTBL = 9,
   AChChid = 10,
+  DrumSynth = 11,
   totalCount,
 };
 
@@ -190,6 +191,18 @@ struct InstrumentAChChid {
   uint8_t accent;
 };
 
+enum class DrumSynthEngine : uint8_t { kick, snare, hat, clap, tom, rim, fm, noise, cowbell, cymbal, shaker, clave, totalCount };
+
+struct InstrumentDrumSynth : InstrumentVoicePostSettings {
+  DrumSynthEngine engine;
+  uint8_t decay;
+  uint8_t tone;
+  uint8_t sweep;
+  uint8_t noise;
+  uint8_t fm;
+  uint8_t drive;
+};
+
 struct InstrumentPlaits : InstrumentVoicePostSettings {
   uint8_t engine;
   uint16_t harmonics;
@@ -239,6 +252,7 @@ union InstrumentChipData {
   InstrumentBYOWTBL byowtbl;
   InstrumentPlaits plaits;
   InstrumentAChChid achchid;
+  InstrumentDrumSynth drumSynth;
 };
 
 struct Instrument {
@@ -262,8 +276,8 @@ struct InstrumentFunctions {
 
 // This is metadata, not an audio abstraction: renderers keep their typed
 // paths while screens, validation and motion routing share this one catalogue.
-enum class InstrumentCategory : uint8_t { none, chip, sample, synth };
-enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid };
+enum class InstrumentCategory : uint8_t { none, chip, sample, synth, drums };
+enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth };
 enum class InstrumentMotionValue : uint8_t { raw, speed, cutoff };
 
 static constexpr uint8_t instrumentNoFX = 0xff;
@@ -298,6 +312,9 @@ int instrumentMotionDestination(const Instrument* instrument, int destination,
                                 uint8_t* fx, int* base, int* range,
                                 InstrumentMotionValue* value);
 int instrumentFXAvailable(InstrumentType type, uint8_t fx);
+int instrumentFXAvailableForInstrument(const Instrument* instrument, uint8_t fx);
+int instrumentModDestinationAvailable(const Instrument* instrument, int destination);
+int drumSynthMacroUsed(DrumSynthEngine engine, int macro);
 InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument);
 const char* instrumentModDestinationName(InstrumentType type, int destination);
 int instrumentModDestinationMax(InstrumentType type);

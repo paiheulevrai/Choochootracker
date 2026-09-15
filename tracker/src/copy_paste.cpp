@@ -24,6 +24,10 @@ static int cpBufPhraseEndCol;
 static int cpBufTableRows = 0;
 static int cpBufTableStartCol;
 static int cpBufTableEndCol;
+static uint8_t cpBufFX[16][8];
+static int cpBufFXRows = 0;
+static int cpBufFXCols = 0;
+static int cpBufFXStartCol;
 static int cpBufInstrumentValid = 0;
 static int cpBufWavetableValid = 0;
 
@@ -34,8 +38,33 @@ void resetCopyBuffers(void) {
   cpBufChainRows = 0;
   cpBufPhraseRows = 0;
   cpBufTableRows = 0;
+  cpBufFXRows = 0;
   cpBufInstrumentValid = 0;
   cpBufWavetableValid = 0;
+}
+
+static int isFXSelection(int startCol, int endCol, int lastFXCol) {
+  return startCol >= 3 && endCol <= lastFXCol;
+}
+
+static void copyFXCells(const uint8_t fx[][2], int row, int startCol, int endCol) {
+  for (int col = startCol; col <= endCol; ++col)
+    cpBufFX[row][col - startCol] = fx[(col - 3) / 2][(col - 3) % 2];
+}
+
+static void clearFXCells(uint8_t fx[][2], int startCol, int endCol) {
+  for (int col = startCol; col <= endCol; ++col)
+    fx[(col - 3) / 2][(col - 3) % 2] = (col - 3) % 2 ? 0 : EMPTY_VALUE_8;
+}
+
+static int canPasteFX(int lastFXCol, int startCol) {
+  return cpBufFXRows && startCol >= 3 && startCol <= lastFXCol &&
+    !((startCol - cpBufFXStartCol) & 1);
+}
+
+static void pasteFXCells(uint8_t fx[][2], int row, int lastFXCol, int startCol) {
+  for (int col = 0; col < cpBufFXCols && startCol + col <= lastFXCol; ++col)
+    fx[(startCol + col - 3) / 2][(startCol + col - 3) % 2] = cpBufFX[row][col];
 }
 
 void copyGroove(int grooveIdx, int startRow, int endRow, int isCut) {
@@ -136,31 +165,33 @@ void copyPhrase(int phraseIdx, int startCol, int startRow, int endCol, int endRo
   cpBufPhraseRows = endRow - startRow + 1;
   cpBufPhraseStartCol = startCol;
   cpBufPhraseEndCol = endCol;
+  int fxOnly = isFXSelection(startCol, endCol, 8);
+  cpBufFXRows = fxOnly ? cpBufPhraseRows : 0;
+  if (fxOnly) { cpBufFXCols = endCol - startCol + 1; cpBufFXStartCol = startCol; }
 
   for (int row = 0; row < cpBufPhraseRows; row++) {
     cpBufPhrase.rows[row] = chipnomadState->project.phrases[phraseIdx].rows[startRow + row];
+    if (fxOnly) copyFXCells(cpBufPhrase.rows[row].fx, row, startCol, endCol);
 
     if (isCut) {
       if (startCol <= 0 && endCol >= 0) chipnomadState->project.phrases[phraseIdx].rows[startRow + row].note = EMPTY_VALUE_8;
       if (startCol <= 1 && endCol >= 1) chipnomadState->project.phrases[phraseIdx].rows[startRow + row].instrument = EMPTY_VALUE_8;
       if (startCol <= 2 && endCol >= 2) chipnomadState->project.phrases[phraseIdx].rows[startRow + row].volume = EMPTY_VALUE_8;
-      if (startCol <= 3 && endCol >= 4) {
-        chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[0][0] = EMPTY_VALUE_8;
-        chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[0][1] = 0;
-      }
-      if (startCol <= 5 && endCol >= 6) {
-        chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[1][0] = EMPTY_VALUE_8;
-        chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[1][1] = 0;
-      }
-      if (startCol <= 7 && endCol >= 8) {
-        chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[2][0] = EMPTY_VALUE_8;
-        chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[2][1] = 0;
-      }
+      int fxStart = startCol > 3 ? startCol : 3, fxEnd = endCol < 8 ? endCol : 8;
+      if (fxStart <= fxEnd) clearFXCells(chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx, fxStart, fxEnd);
     }
   }
 }
 
 int pastePhrase(int phraseIdx, int startCol, int startRow) {
+  if (canPasteFX(8, startCol)) {
+    int rowsPasted = 0;
+    for (int row = 0; row < cpBufFXRows && startRow + row < 16; ++row) {
+      pasteFXCells(chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx, row, 8, startCol);
+      ++rowsPasted;
+    }
+    return rowsPasted;
+  }
   // Check if we can paste - same column or FX to FX
   int canPaste = (startCol == cpBufPhraseStartCol) ||
   (startCol >= 3 && startCol <= 8 && cpBufPhraseStartCol >= 3 && cpBufPhraseStartCol <= 8);
@@ -218,35 +249,33 @@ void copyTable(int tableIdx, int startCol, int startRow, int endCol, int endRow,
   cpBufTableRows = endRow - startRow + 1;
   cpBufTableStartCol = startCol;
   cpBufTableEndCol = endCol;
+  int fxOnly = isFXSelection(startCol, endCol, 10);
+  cpBufFXRows = fxOnly ? cpBufTableRows : 0;
+  if (fxOnly) { cpBufFXCols = endCol - startCol + 1; cpBufFXStartCol = startCol; }
 
   for (int row = 0; row < cpBufTableRows; row++) {
     cpBufTable.rows[row] = chipnomadState->project.tables[tableIdx].rows[startRow + row];
+    if (fxOnly) copyFXCells(cpBufTable.rows[row].fx, row, startCol, endCol);
 
     if (isCut) {
       if (startCol <= 0 && endCol >= 0) chipnomadState->project.tables[tableIdx].rows[startRow + row].pitchFlag = 0;
       if (startCol <= 1 && endCol >= 1) chipnomadState->project.tables[tableIdx].rows[startRow + row].pitchOffset = 0;
       if (startCol <= 2 && endCol >= 2) chipnomadState->project.tables[tableIdx].rows[startRow + row].volume = EMPTY_VALUE_8;
-      if (startCol <= 3 && endCol >= 4) {
-        chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[0][0] = EMPTY_VALUE_8;
-        chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[0][1] = 0;
-      }
-      if (startCol <= 5 && endCol >= 6) {
-        chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[1][0] = EMPTY_VALUE_8;
-        chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[1][1] = 0;
-      }
-      if (startCol <= 7 && endCol >= 8) {
-        chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[2][0] = EMPTY_VALUE_8;
-        chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[2][1] = 0;
-      }
-      if (startCol <= 9 && endCol >= 10) {
-        chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[3][0] = EMPTY_VALUE_8;
-        chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[3][1] = 0;
-      }
+      int fxStart = startCol > 3 ? startCol : 3, fxEnd = endCol < 10 ? endCol : 10;
+      if (fxStart <= fxEnd) clearFXCells(chipnomadState->project.tables[tableIdx].rows[startRow + row].fx, fxStart, fxEnd);
     }
   }
 }
 
 int pasteTable(int tableIdx, int startCol, int startRow) {
+  if (canPasteFX(10, startCol)) {
+    int rowsPasted = 0;
+    for (int row = 0; row < cpBufFXRows && startRow + row < 16; ++row) {
+      pasteFXCells(chipnomadState->project.tables[tableIdx].rows[startRow + row].fx, row, 10, startCol);
+      ++rowsPasted;
+    }
+    return rowsPasted;
+  }
   // Check if we can paste - same column or FX to FX
   int canPaste = (startCol == cpBufTableStartCol) ||
   (startCol >= 3 && startCol <= 10 && cpBufTableStartCol >= 3 && cpBufTableStartCol <= 10);

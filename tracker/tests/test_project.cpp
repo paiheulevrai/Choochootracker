@@ -115,10 +115,12 @@ TEST_CASE("modulation destination limits match every engine's routing") {
   CHECK(instrumentModDestinationMax(InstrumentType::Plaits) == 33);
   CHECK(instrumentModDestinationMax(InstrumentType::PlaitsAlt) == 33);
   CHECK(instrumentModDestinationMax(InstrumentType::AChChid) == 27);
+  CHECK(instrumentModDestinationMax(InstrumentType::DrumSynth) == 28);
 }
 
 TEST_CASE("voice-post modulation destinations keep their labels") {
-  static const char* labels[] = {"ADSR A", "ADSR D", "ADSR S", "ADSR R", "ADSR Shape", "Trig D", "Trig C"};
+  static const char* labels[] = {"ADSR A", "ADSR D", "ADSR S", "ADSR R", "ADSR Shape", "Trig D", "Trig C",
+                                 "M1 P5", "M2 P5", "M3 P5", "M4 P5"};
   int firstGeneric = getInstrumentFunctions(InstrumentType::Plaits).modDestinationsCount + 1;
   for (int i = 0; i < genericModTotalCount - genericModEnvelopeAttack; ++i)
     CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Plaits,
@@ -172,12 +174,45 @@ TEST_CASE("instrument catalogue covers every family and its routable motion FX")
   CHECK(fx == fxATM); CHECK(range == 16384);
   CHECK(instrumentMotionDestination(&achchid, 9, &fx, &base, &range, &value));
   CHECK(fx == fxACL); CHECK(range == 16384);
+
+  static const char* drumSynthDestinations[] = {
+    "Off", "Volume", "Pitch", "Decay", "Tone", "Sweep", "Noise", "FM", "Drive", "Cutoff", "Reso"
+  };
+  const InstrumentDefinition* drumSynth = getInstrumentDefinition(InstrumentType::DrumSynth);
+  CHECK(std::strcmp(drumSynth->uiName, "Bogie") == 0);
+  CHECK(drumSynth->category == InstrumentCategory::drums);
+  REQUIRE(drumSynth->destinationCount == 11);
+  for (int destination = 0; destination < drumSynth->destinationCount; ++destination)
+    CHECK(std::strcmp(drumSynth->destinations[destination].name, drumSynthDestinations[destination]) == 0);
+  getInstrumentFunctions(InstrumentType::DrumSynth).init(&instrument);
+  uint8_t expectedFX[] = {fxDDC, fxDTO, fxDSW, fxDNO, fxDFM, fxDDR, fxDCF, fxDRS};
+  int expectedBase[] = {72, 128, 150, 24, 32, 28, 20000, 0};
+  int expectedRange[] = {255, 255, 255, 255, 255, 255, 20000, 255};
+  for (int destination = 3; destination <= 10; ++destination) {
+    CHECK(instrumentMotionDestination(&instrument, destination, &fx, &base, &range, &value));
+    CHECK(fx == expectedFX[destination - 3]);
+    CHECK(base == expectedBase[destination - 3]);
+    CHECK(range == expectedRange[destination - 3]);
+  }
+  CHECK(instrumentMotionDestination(&instrument, 9, &fx, &base, &range, &value));
+  CHECK(base == 20000); CHECK(range == 20000); CHECK(value == InstrumentMotionValue::cutoff);
+  CHECK(instrumentMotionDestination(&instrument, 10, &fx, &base, &range, &value));
+  CHECK(base == 0); CHECK(range == 255); CHECK(value == InstrumentMotionValue::raw);
+  instrument.chip.drumSynth.engine = DrumSynthEngine::clap;
+  CHECK(instrumentFXAvailableForInstrument(&instrument, fxDSW));
+  CHECK(instrumentFXAvailableForInstrument(&instrument, fxDFM));
+  CHECK(instrumentModDestinationAvailable(&instrument, 5));
+  CHECK(instrumentModDestinationAvailable(&instrument, 7));
+  CHECK(instrumentFXAvailableForInstrument(&instrument, fxDNO));
+  CHECK(instrumentFXAvailableForInstrument(&instrument, fxDCF));
+  CHECK(instrumentModDestinationAvailable(&instrument, 6));
+  CHECK(instrumentModDestinationAvailable(&instrument, 9));
 }
 
 TEST_CASE("v4 projects preserve LFO wavetable settings") {
   Project saved, loaded;
-  projectInit(&saved);
-  projectInit(&loaded);
+  projectInitAY(&saved);
+  projectInitAY(&loaded);
   getInstrumentFunctions(InstrumentType::AY2).init(&saved.instruments[0]);
   Modulation& mod = saved.instruments[0].modulation[2];
   mod.type = ModulationType::SLFO;
@@ -200,6 +235,7 @@ TEST_CASE("v4 projects preserve LFO wavetable settings") {
 TEST_CASE("v3 projects default the LFO wavetable index to zero") {
   Project project;
   projectInit(&project);
+  INFO(projectFileError);
   REQUIRE(projectLoad(&project, "packaging/common/projects/alf dance.cct") == 0);
   CHECK(projectFileVersion == 3);
   for (int instrument = 0; instrument < PROJECT_MAX_INSTRUMENTS; ++instrument)
@@ -212,8 +248,9 @@ TEST_CASE("phrase FX groups put the active engine after Track FX") {
   CHECK(std::strcmp(fxGroups[1].name, "Track FX") == 0);
   CHECK(fxGroups[2].instType == InstrumentType::AY1);
   CHECK(fxGroups[11].instType == InstrumentType::AChChid);
-  CHECK(std::strcmp(fxGroups[12].name, "ADSR / Trigger FX") == 0);
-  CHECK(std::strcmp(fxGroups[13].name, "Modulation FX") == 0);
+  CHECK(fxGroups[12].instType == InstrumentType::DrumSynth);
+  CHECK(std::strcmp(fxGroups[13].name, "ADSR / Trigger FX") == 0);
+  CHECK(std::strcmp(fxGroups[14].name, "Modulation FX") == 0);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "failed VT2 import leaves its destination unchanged") {

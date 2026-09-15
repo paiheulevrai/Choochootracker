@@ -44,7 +44,11 @@
 #define ROW_TOTAL 16
 #define ROWS_PER_MOD 8
 
-static SelectionItem destinationCategories[5];
+static SelectionItem destinationCategories[6];
+static SelectionItem sourceCategories[3];
+static const SelectionItem envelopeSources[] = {{"ADSR", (int)ModulationType::ADSR, NULL, 0}, {"AHD", (int)ModulationType::AHD, NULL, 0}};
+static const SelectionItem lfoSources[] = {{"LFO", (int)ModulationType::LFO, NULL, 0}, {"SYNC LFO", (int)ModulationType::SLFO, NULL, 0}, {"FAST LFO", (int)ModulationType::FLFO, NULL, 0}};
+static const SelectionItem stickSources[] = {{"LINEAR", (int)ModulationType::StickLinear, NULL, 0}, {"RATE", (int)ModulationType::StickRate, NULL, 0}};
 static SelectionItem engineDestinations[32];
 static SelectionItem sendDestinations[2];
 static SelectionItem parameterDestinations[16];
@@ -57,6 +61,38 @@ static char wavetableLabels[4][20];
 static char wavetableHelpers[4][40];
 static int editedModIndex;
 static int destinationButtonDown;
+
+static void setModulationType(Modulation* mod, ModulationType type) {
+  ModulationType oldType = mod->type;
+  mod->type = type;
+  if (oldType == type || (modulationIsLiveStick(oldType) && modulationIsLiveStick(type))) return;
+  mod->p1 = 0;
+  mod->p2 = type == ModulationType::StickRate ? 24 : 0;
+  mod->p3 = type == ModulationType::ADSR ? 255 :
+            (type == ModulationType::FLFO ? 0 : (type == ModulationType::SLFO ? 24 : 6));
+  mod->p4 = type == ModulationType::SLFO ? 4 : 0;
+  mod->p5 = 0;
+}
+
+static void sourceSelected(int value) {
+  setModulationType(&chipnomadState->project.instruments[cInstrument].modulation[editedModIndex],
+                    static_cast<ModulationType>(value));
+  projectModified = 1;
+  screenSetup(&screenModulation, cInstrument);
+}
+
+static void sourceCancelled() { screenSetup(&screenModulation, cInstrument); }
+
+static void openSourcePopup(int modIndex) {
+  editedModIndex = modIndex;
+  sourceCategories[0] = {"ENVELOPES", -1, envelopeSources, 2};
+  sourceCategories[1] = {"LFO", -1, lfoSources, 3};
+  sourceCategories[2] = {"STICKS", -1, stickSources, 2};
+  selectionPopupSetup("SOURCE", sourceCategories, 3,
+    (int)chipnomadState->project.instruments[cInstrument].modulation[modIndex].type,
+    sourceSelected, sourceCancelled);
+  screenSetup(&screenSelectionPopup, 0);
+}
 
 static void destinationSelected(int value) {
   chipnomadState->project.instruments[cInstrument].modulation[editedModIndex].destination = value;
@@ -93,9 +129,10 @@ static void openDestinationPopup(int modIndex) {
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
   InstrumentFunctions functions = getInstrumentFunctions(instrument->type);
   editedModIndex = modIndex;
-  for (int i = 0; i <= functions.modDestinationsCount; ++i) {
-    engineDestinations[i] = {instrumentModDestinationName(instrument->type, i), i, NULL, 0};
-  }
+  int engineDestinationCount = 0;
+  for (int i = 0; i <= functions.modDestinationsCount; ++i)
+    if (instrumentModDestinationAvailable(instrument, i))
+      engineDestinations[engineDestinationCount++] = {instrumentModDestinationName(instrument->type, i), i, NULL, 0};
   int firstGeneric = functions.modDestinationsCount + 1;
   sendDestinations[0] = {"REVERB SEND", firstGeneric + genericModReverbSend, NULL, 0};
   sendDestinations[1] = {"DELAY SEND", firstGeneric + genericModDelaySend, NULL, 0};
@@ -121,7 +158,7 @@ static void openDestinationPopup(int modIndex) {
     triggerDestinations[i] = {triggerNames[i], firstGeneric + genericModTriggerDecay + i, NULL, 0};
 
   int categoryCount = 0;
-  destinationCategories[categoryCount++] = {"ENGINE", -1, engineDestinations, functions.modDestinationsCount + 1};
+  destinationCategories[categoryCount++] = {"ENGINE", -1, engineDestinations, engineDestinationCount};
   destinationCategories[categoryCount++] = {"FX SENDS", -1, sendDestinations, 2};
   destinationCategories[categoryCount++] = {"MODULATORS", -1, parameterDestinations, 16};
   destinationCategories[categoryCount++] = {"LFO TABLES", -1, wavetableDestinations, 4};
@@ -439,21 +476,16 @@ static int onEdit(int col, int row, enum CellEditAction action) {
     case 0: { // Type
       uint8_t type = static_cast<uint8_t>(mod->type);
       uint8_t oldType = type;
+      if (action == CellEditAction::tap) {
+        openSourcePopup(modIdx);
+        return 0;
+      }
       handled = edit8noLast(action, &type, 1, 0, static_cast<uint8_t>(ModulationType::totalCount) - 1);
       if (type == static_cast<uint8_t>(ModulationType::StickVelocity)) {
         type = oldType < type ? static_cast<uint8_t>(ModulationType::StickRate)
                               : static_cast<uint8_t>(ModulationType::StickLinear);
       }
-      mod->type = static_cast<ModulationType>(type);
-      if (oldType != type && !(modulationIsLiveStick(static_cast<ModulationType>(oldType)) &&
-                               modulationIsLiveStick(mod->type))) {
-        mod->p1 = 0;
-        mod->p2 = mod->type == ModulationType::StickRate ? 24 : 0;
-        mod->p3 = (mod->type == ModulationType::ADSR) ? 255 :
-                  (mod->type == ModulationType::FLFO ? 0 : (mod->type == ModulationType::SLFO ? 24 : 6));
-        mod->p4 = mod->type == ModulationType::SLFO ? 4 : 0;
-        mod->p5 = 0;
-      }
+      setModulationType(mod, static_cast<ModulationType>(type));
       if (oldType != type) screenFullRedraw(&screenData);
       break;
     }

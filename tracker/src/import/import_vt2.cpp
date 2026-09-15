@@ -656,6 +656,9 @@ static int loadVT2Module(const char* path, VT2Module* module) {
   }
 
   fclose(file);
+  // A title is the one required module identity field for this importer.
+  // Reject a truncated/empty header before it can replace the current project.
+  if (!module->title[0]) return 1;
   return 0;
 }
 
@@ -985,8 +988,13 @@ static int cloneInstrumentsForEnvelopes(Project* project, const InstrumentEnvelo
 
 int projectLoadVT2(Project* destination, const char* path) {
   if (!destination || !path) return 1;
-  VT2Module module;
+  // VT2Module holds all 256 decoded patterns and exceeds the Windows test
+  // thread stack. Keep this import-only buffer off the stack.
+  VT2Module* moduleStorage = (VT2Module*)malloc(sizeof(VT2Module));
+  if (!moduleStorage) return 1;
+  VT2Module& module = *moduleStorage;
   if (loadVT2Module(path, &module) != 0) {
+    free(moduleStorage);
     return 1;
   }
 
@@ -1031,6 +1039,7 @@ int projectLoadVT2(Project* destination, const char* path) {
 
   if (sampleImportResult != 0) {
     projectFree(&p);
+    free(moduleStorage);
     return 1;
   }
 
@@ -1122,6 +1131,7 @@ int projectLoadVT2(Project* destination, const char* path) {
 
   projectFree(destination);
   *destination = p;
+  free(moduleStorage);
   return 0;
 }
 

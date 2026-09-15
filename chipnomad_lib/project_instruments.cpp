@@ -250,6 +250,22 @@ static int initAChChidInstrument(Instrument* instrument) {
 
 static int freeAChChidInstrument(Instrument* instrument) { freeCommon(instrument); return 0; }
 
+static const char* modNameDrumSynth(int modIndex) {
+  static const char* names[] = {"Off", "Volume", "Pitch", "Decay", "Tone", "Sweep", "Noise", "FM", "Drive", "Cutoff", "Reso"};
+  return names[modIndex];
+}
+int drumSynthMacroUsed(DrumSynthEngine engine, int macro) {
+  return (int)engine >= 0 && (int)engine < (int)DrumSynthEngine::totalCount && macro >= 0 && macro < 6;
+}
+static int initDrumSynthInstrument(Instrument* instrument) {
+  initCommon(instrument); instrument->type = InstrumentType::DrumSynth;
+  InstrumentDrumSynth* d = &instrument->chip.drumSynth;
+  d->engine = DrumSynthEngine::kick; d->decay = 72; d->tone = 128;
+  d->sweep = 150; d->noise = 24; d->fm = 32; d->drive = 28;
+  initVoicePostSettings(d); return 0;
+}
+static int freeDrumSynthInstrument(Instrument* instrument) { freeCommon(instrument); return 0; }
+
 // The one source of truth for family metadata.  Values are accessed through
 // typed code below; no union member is addressed by an offset.
 #define D(n, f, r, v) {n, (uint8_t)(f), r, v}
@@ -264,6 +280,7 @@ static const InstrumentModDestination destPlaits[] = {N,D("Volume",instrumentNoF
 static const InstrumentModDestination destSCWF[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Detune",fxSDT,255,InstrumentMotionValue::raw),D("Mix",fxSMX,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF2,20000,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destBYOWTBL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Detune",fxSDT,255,InstrumentMotionValue::raw),D("Mix",fxSMX,255,InstrumentMotionValue::raw),D("Index A",fxBIA,255,InstrumentMotionValue::raw),D("Index B",fxBIB,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF2,20000,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destAChChid[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Cutoff",fxACF,20000,InstrumentMotionValue::cutoff),D("Reso",fxARS,255,InstrumentMotionValue::raw),D("EnvMod",fxAEM,255,InstrumentMotionValue::raw),D("Decay",fxADC,255,InstrumentMotionValue::raw),D("Accent",fxAAC,255,InstrumentMotionValue::raw),D("Timbre",fxATM,16384,InstrumentMotionValue::raw),D("Color",fxACL,16384,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destDrumSynth[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Decay",fxDDC,255,InstrumentMotionValue::raw),D("Tone",fxDTO,255,InstrumentMotionValue::raw),D("Sweep",fxDSW,255,InstrumentMotionValue::raw),D("Noise",fxDNO,255,InstrumentMotionValue::raw),D("FM",fxDFM,255,InstrumentMotionValue::raw),D("Drive",fxDDR,255,InstrumentMotionValue::raw),D("Cutoff",fxDCF,20000,InstrumentMotionValue::cutoff),D("Reso",fxDRS,255,InstrumentMotionValue::raw)};
 #undef N
 #undef D
 #define F(f, n) {(uint8_t)(f), n}
@@ -276,6 +293,7 @@ static const InstrumentFX fxSCWF[]={F(fxSDT,"SDT"),F(fxSMX,"SMX"),F(fxSCF2,"SCF"
 static const InstrumentFX fxBYOWTBL[]={F(fxSDT,"SDT"),F(fxSMX,"SMX"),F(fxBIA,"BIA"),F(fxBIB,"BIB"),F(fxSCF2,"SCF"),F(fxSRS2,"SRS")};
 static const InstrumentFX fxPlaits[]={F(fxPMD,"PMD"),F(fxPHA,"PHA"),F(fxPTM,"PTM"),F(fxPMO,"PMO"),F(fxPAX,"PAX"),F(fxPCF,"PCF"),F(fxPRS,"PRS")};
 static const InstrumentFX fxAChChid[]={F(fxASL,"ASL"),F(fxADC,"ADC"),F(fxAAC,"AAC"),F(fxATM,"ATM"),F(fxACL,"ACL"),F(fxACF,"ACF"),F(fxARS,"ARS"),F(fxAEM,"AEM")};
+static const InstrumentFX fxDrumSynth[]={F(fxDMD,"DMD"),F(fxDDC,"DDC"),F(fxDTO,"DTO"),F(fxDSW,"DSW"),F(fxDNO,"DNO"),F(fxDFM,"DFM"),F(fxDDR,"DDR"),F(fxDCF,"DCF"),F(fxDRS,"DRS")};
 #undef F
 #define COUNT(a) (uint8_t)(sizeof(a) / sizeof((a)[0]))
 static const InstrumentDefinition instrumentDefinitions[] = {
@@ -290,6 +308,7 @@ static const InstrumentDefinition instrumentDefinitions[] = {
   {"2xSCWF",InstrumentCategory::sample,InstrumentScreenKind::scwf,destSCWF,COUNT(destSCWF),fxSCWF,COUNT(fxSCWF),{6,modNameSCWF,initSCWFInstrument,freeSCWFInstrument,1,0}},
   {"BYOWTBL",InstrumentCategory::sample,InstrumentScreenKind::byowtbl,destBYOWTBL,COUNT(destBYOWTBL),fxBYOWTBL,COUNT(fxBYOWTBL),{8,modNameBYOWTBL,initBYOWTBLInstrument,freeBYOWTBLInstrument,1,0}},
   {"aChChid",InstrumentCategory::synth,InstrumentScreenKind::achchid,destAChChid,COUNT(destAChChid),fxAChChid,COUNT(fxAChChid),{9,modNameAChChid,initAChChidInstrument,freeAChChidInstrument,0,0}},
+  {"Bogie",InstrumentCategory::drums,InstrumentScreenKind::drumSynth,destDrumSynth,COUNT(destDrumSynth),fxDrumSynth,COUNT(fxDrumSynth),{10,modNameDrumSynth,initDrumSynthInstrument,freeDrumSynthInstrument,0,0}},
 };
 #undef COUNT
 
@@ -314,6 +333,20 @@ int instrumentFXAvailable(InstrumentType type, uint8_t fx) {
   return 0;
 }
 
+int instrumentFXAvailableForInstrument(const Instrument* instrument, uint8_t fx) {
+  if (!instrument || !instrumentFXAvailable(instrument->type, fx)) return 0;
+  if (instrument->type != InstrumentType::DrumSynth) return 1;
+  int macro = fx == fxDDC ? 0 : fx == fxDTO ? 1 : fx == fxDSW ? 2 :
+    fx == fxDNO ? 3 : fx == fxDFM ? 4 : fx == fxDDR ? 5 : -1;
+  return macro < 0 || drumSynthMacroUsed(instrument->chip.drumSynth.engine, macro);
+}
+
+int instrumentModDestinationAvailable(const Instrument* instrument, int destination) {
+  if (!instrumentModDestination(instrument ? instrument->type : InstrumentType::none, destination)) return 0;
+  return !instrument || instrument->type != InstrumentType::DrumSynth ||
+    destination < 3 || destination > 8 || drumSynthMacroUsed(instrument->chip.drumSynth.engine, destination - 3);
+}
+
 InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument) {
   switch (instrument->type) {
     case InstrumentType::Braids: return &instrument->chip.braids;
@@ -322,6 +355,7 @@ InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument)
     case InstrumentType::BYOWTBL: return &instrument->chip.byowtbl;
     case InstrumentType::Plaits:
     case InstrumentType::PlaitsAlt: return &instrument->chip.plaits;
+    case InstrumentType::DrumSynth: return &instrument->chip.drumSynth;
     default: return NULL;
   }
 }
@@ -343,6 +377,8 @@ int instrumentMotionDestination(const Instrument* instrument, int destination, u
       *base = destination == 3 ? instrument->chip.byowtbl.detune : destination == 4 ? instrument->chip.byowtbl.mix : destination == 5 ? instrument->chip.byowtbl.frameIndex[0] : destination == 6 ? instrument->chip.byowtbl.frameIndex[1] : destination == 7 ? instrument->chip.byowtbl.filterCutoffHz : instrument->chip.byowtbl.filterResonance; break;
     case InstrumentType::AChChid:
       *base = destination == 3 ? instrument->chip.achchid.cutoff : destination == 4 ? instrument->chip.achchid.resonance * 255 / 100 : destination == 5 ? instrument->chip.achchid.envMod * 255 / 100 : destination == 6 ? instrument->chip.achchid.decay * 255 / 2000 : destination == 7 ? instrument->chip.achchid.accent * 255 / 100 : destination == 8 ? (instrument->chip.achchid.timbre + 64) / 129 : (instrument->chip.achchid.color + 64) / 129; break;
+    case InstrumentType::DrumSynth:
+      *base = destination == 3 ? instrument->chip.drumSynth.decay : destination == 4 ? instrument->chip.drumSynth.tone : destination == 5 ? instrument->chip.drumSynth.sweep : destination == 6 ? instrument->chip.drumSynth.noise : destination == 7 ? instrument->chip.drumSynth.fm : destination == 8 ? instrument->chip.drumSynth.drive : destination == 9 ? instrument->chip.drumSynth.filterCutoffHz : instrument->chip.drumSynth.filterResonance; break;
     default: return 0;
   }
   return 1;
@@ -368,7 +404,7 @@ int instrumentGenericModDestination(InstrumentType type, int destination) {
 
 int instrumentModDestinationMax(InstrumentType type) {
   InstrumentFunctions functions = getInstrumentFunctions(type);
-  int genericCount = functions.supportsVoicePost ? genericModTotalCount : genericModFirstP5 + 4;
+  int genericCount = functions.supportsVoicePost ? genericModFirstP5 : genericModDestinationCount;
   return functions.modDestinationsCount + genericCount;
 }
 

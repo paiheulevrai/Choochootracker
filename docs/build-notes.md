@@ -32,8 +32,8 @@ another copy. In PowerShell:
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 . .\.tmp\emsdk\emsdk_env.ps1
 $env:PATH += ';C:\msys64\usr\bin;C:\msys64\ucrt64\bin'
-$empy = '/c/Users/<you>/Desktop/mobilegroove/.tmp/emsdk/python/3.13.3_64bit/python.exe'
-$empp = '/c/Users/<you>/Desktop/mobilegroove/.tmp/emsdk/upstream/emscripten/em++.py'
+$empy = $env:EMSDK_PYTHON -replace '\\','/'
+$empp = "$env:EMSDK/upstream/emscripten/em++.py"
 Set-Location tracker
 & 'C:\msys64\usr\bin\make.exe' -j8 -f Makefile.web web-deploy `
   'COMMON_CFLAGS=-std=c++17 -Wall -g -Os -DTEST' `
@@ -43,6 +43,9 @@ Set-Location tracker
 The deploy target updates the checked-in browser bundle in `web/dist/`; Vercel
 serves it directly. Commit that directory after every WebAssembly source
 change. The bundled SDK requires its own Python, hence the explicit `EMXX`.
+If Windows reports `clang++.exe: permission denied`, unblock the bundled
+compiler with `Unblock-File -LiteralPath .tmp\emsdk\upstream\bin\clang++.exe`,
+verify `clang++.exe --version`, then retry.
 
 ## PortMaster (ARM64)
 
@@ -82,6 +85,15 @@ $env:ANDROID_NDK_ROOT = "$env:LOCALAPPDATA\Android\Sdk\ndk\30.0.16248370"
 The native build also needs SDL 2.32.10 headers in
 `.tmp/SDL2-2.32.10/SDL2`; retrieve the matching SDL source archive once and
 copy its `include/*.h` files into that directory if it is absent.
+If an NDK wrapper reports `clang++.exe: Permission denied`, unblock the shared
+NDK compiler (not the wrapper) before retrying:
+
+```powershell
+Unblock-File -LiteralPath "$env:ANDROID_NDK_ROOT\toolchains\llvm\prebuilt\windows-x86_64\bin\clang++.exe"
+```
+
+The first Gradle package build can download its wrapper distribution, so it
+needs network access.
 
 For a signed release, create one upload key once. Keep its `.jks` file in a
 safe backup and its password in a password manager: losing either prevents

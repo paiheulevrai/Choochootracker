@@ -391,7 +391,7 @@ void appDraw(void) {
 */
 void appOnEvent(MainLoopEventData eventData) {
   static int dPadMask = keyLeft | keyRight | keyUp | keyDown;
-  static int doubleTapMask = keyEdit | keyOpt | keyUnmapped;
+  static int doubleTapMask = keyEdit | keyOpt | keyUnmapped | keyPlay;
 
   switch (eventData.type) {
   case MainLoopEvent::keyDown: {

@@ -321,8 +321,8 @@ static int loadInstrumentBYOWTBL(FILE* file, Instrument* instrument) {
   for (int i = 0; i < 2; ++i) {
     if (!table->oscillator[i].path[0]) continue;
     char error[64];
-    if (srWavetableLoadWav(table->oscillator[i].path, &table->oscillator[i],
-                         &table->frameSize[i], &table->tableFrames[i], error, sizeof(error))) return 1;
+    srWavetableLoadWav(table->oscillator[i].path, &table->oscillator[i],
+                       &table->frameSize[i], &table->tableFrames[i], error, sizeof(error));
   }
   return 0;
 }
@@ -344,6 +344,23 @@ static int loadInstrumentPlaits(FILE* file, Instrument* instrument) {
 }
 
 // Load modulation data
+static int loadInstrumentDrumSynth(FILE* file, Instrument* instrument) {
+  InstrumentDrumSynth* d = &instrument->chip.drumSynth;
+  while (1) {
+    char* line = peekLine(file);
+    if (line == NULL || line[0] == '#') return 0;
+    if (strncmp(line, "- Engine: ", 10) == 0) sscanf(line, "- Engine: %hhu", (uint8_t*)&d->engine);
+    else if (strncmp(line, "- Drum decay: ", 14) == 0) sscanf(line, "- Drum decay: %hhu", &d->decay);
+    else if (strncmp(line, "- Tone: ", 8) == 0) sscanf(line, "- Tone: %hhu", &d->tone);
+    else if (strncmp(line, "- Sweep: ", 9) == 0) sscanf(line, "- Sweep: %hhu", &d->sweep);
+    else if (strncmp(line, "- Noise: ", 9) == 0) sscanf(line, "- Noise: %hhu", &d->noise);
+    else if (strncmp(line, "- FM: ", 6) == 0) sscanf(line, "- FM: %hhu", &d->fm);
+    else if (strncmp(line, "- Drive: ", 9) == 0) sscanf(line, "- Drive: %hhu", &d->drive);
+    else loadVoicePostSetting(line, d);
+    consumeLine(file);
+  }
+}
+
 static int loadModulation(FILE* file, Instrument* instrument) {
   for (int i = 0; i < 4; i++) {
     char* line = peekLine(file);
@@ -457,6 +474,9 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
       case InstrumentType::PlaitsAlt:
         if (loadInstrumentPlaits(file, instrument)) return 1;
         break;
+      case InstrumentType::DrumSynth:
+        if (loadInstrumentDrumSynth(file, instrument)) return 1;
+        break;
       default:
         break;
     }
@@ -471,6 +491,10 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
   } else if (instrument->type == InstrumentType::Sample &&
              instrument->chip.sample.filterCutoffHz > 20000) {
     instrument->chip.sample.filterCutoffHz = 20000;
+  } else if (instrument->type == InstrumentType::DrumSynth) {
+    InstrumentDrumSynth* d = &instrument->chip.drumSynth;
+    if ((uint8_t)d->engine >= (uint8_t)DrumSynthEngine::totalCount) d->engine = DrumSynthEngine::kick;
+    if (d->filterCutoffHz > 20000) d->filterCutoffHz = 20000;
   }
 
   return 0;
@@ -624,6 +648,21 @@ static int saveInstrumentPlaits(FILE* file, Instrument* instrument) {
   return 0;
 }
 
+static int saveInstrumentDrumSynth(FILE* file, Instrument* instrument) {
+  InstrumentDrumSynth* d = &instrument->chip.drumSynth;
+  fprintf(file, "- Engine: %hhu\n", (uint8_t)d->engine);
+  fprintf(file, "- Drum decay: %hhu\n", d->decay); fprintf(file, "- Tone: %hhu\n", d->tone);
+  fprintf(file, "- Sweep: %hhu\n", d->sweep); fprintf(file, "- Noise: %hhu\n", d->noise);
+  fprintf(file, "- FM: %hhu\n", d->fm); fprintf(file, "- Drive: %hhu\n", d->drive);
+  fprintf(file, "- Filter enabled: %hhu\n", d->filterEnabled);
+  fprintf(file, "- Filter character: %hhu\n", d->filterCharacter);
+  fprintf(file, "- Filter mode: %hhu\n", d->filterMode);
+  fprintf(file, "- Filter slope: %hhu\n", d->filterSlope24dB);
+  fprintf(file, "- Filter cutoff: %hu\n", d->filterCutoffHz);
+  fprintf(file, "- Filter resonance: %hhu\n", d->filterResonance);
+  return 0;
+}
+
 // Save modulation data
 static int saveModulation(FILE* file, Instrument* instrument) {
   fprintf(file, "- Modulation:\n");
@@ -684,6 +723,9 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
     case InstrumentType::Plaits:
     case InstrumentType::PlaitsAlt:
       saveInstrumentPlaits(file, instrument);
+      break;
+    case InstrumentType::DrumSynth:
+      saveInstrumentDrumSynth(file, instrument);
       break;
     default:
       break;

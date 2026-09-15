@@ -1,4 +1,5 @@
 #include "achchid_voice.h"
+#include <math.h>
 #include <string.h>
 
 void AChChidVoice::init(float sampleRate) {
@@ -32,8 +33,12 @@ void AChChidVoice::renderBraidsBlock() {
 }
 void AChChidVoice::render(float* output, int samples) {
   for (int i = 0; i < samples; ++i) {
+    float sample;
     if (wave_ == 2) { if (braidsPosition_ == 24) renderBraidsBlock();
-      output[i] = synth_.getSampleWithExternalInput(braidsBlock_[braidsPosition_++] / 32768.0) * gain_;
-    } else output[i] = synth_.getSample() * gain_;
+      sample = synth_.getSampleWithExternalInput(braidsBlock_[braidsPosition_++] / 32768.0);
+    } else sample = synth_.getSample();
+    // Continuous soft limiting prevents Open303 resonance/accent peaks from
+    // overdriving the shared mixer without a discontinuous clip threshold.
+    output[i] = 0.85f * tanhf(sample * gain_ / 0.85f);
   }
 }
