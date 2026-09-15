@@ -62,6 +62,13 @@ static char wavetableHelpers[4][40];
 static int editedModIndex;
 static int destinationButtonDown;
 
+static void cycleDestination(Instrument* instrument, Modulation* mod, int direction) {
+  int previous = mod->destination;
+  do {
+    cycle8(&mod->destination, direction, 0, instrumentModDestinationMax(instrument->type), 1);
+  } while (!instrumentModDestinationAvailable(instrument, mod->destination) && mod->destination != previous);
+}
+
 static void setModulationType(Modulation* mod, ModulationType type) {
   ModulationType oldType = mod->type;
   mod->type = type;
@@ -495,8 +502,11 @@ static int onEdit(int col, int row, enum CellEditAction action) {
         openDestinationPopup(modIdx);
         return 0;
       }
-      handled = edit8noLast(action, &mod->destination, 1, 0,
-        instrumentModDestinationMax(inst->type));
+      if (action == CellEditAction::increase || action == CellEditAction::increaseBig) {
+        cycleDestination(inst, mod, 1); handled = 1;
+      } else if (action == CellEditAction::decrease || action == CellEditAction::decreaseBig) {
+        cycleDestination(inst, mod, -1); handled = 1;
+      }
       break;
     }
     case 2: // Amount
@@ -573,10 +583,15 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   if (getModRow(screenData.cursorRow) == 1) {
     Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
     Modulation* mod = &instrument->modulation[getModIndex(screenData.cursorCol, screenData.cursorRow)];
+    if (isKeyDown && (keys == keyLeft || keys == keyRight)) {
+      cycleDestination(instrument, mod, keys == keyRight ? 1 : -1);
+      projectModified = 1;
+      drawField(screenData.cursorCol, screenData.cursorRow, CellState::focus);
+      return 1;
+    }
     PopupEditInput input = popupEditInput(isKeyDown, keys, &destinationButtonDown);
     if (input == PopupEditInput::cycle) {
-      int maximum = instrumentModDestinationMax(instrument->type);
-      cycle8(&mod->destination, keys == (keyEdit | keyRight) ? 1 : -1, 0, maximum, 1);
+      cycleDestination(instrument, mod, keys == (keyEdit | keyRight) ? 1 : -1);
       projectModified = 1;
       drawField(screenData.cursorCol, screenData.cursorRow, CellState::focus);
       return 1;

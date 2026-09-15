@@ -62,17 +62,25 @@ static Button buttons[] = {
 
 static int isPointInRect(int x, int y, SDL_Rect* rect) {
   if (rect->w <= 0 || rect->h <= 0) return 0;
-  // Phone taps are imprecise at the edge of a button. Keep the visual gap but
-  // accept a small invisible halo; it never overlaps the next control.
-  const int halo = 10;
-  return (x >= rect->x - halo && x < rect->x + rect->w + halo &&
-    y >= rect->y - halo && y < rect->y + rect->h + halo);
+  return x >= rect->x && x < rect->x + rect->w && y >= rect->y && y < rect->y + rect->h;
 }
 
 static int getTouchButton(int x, int y) {
   if (!vpadEnabled) return -1;
-
-  for (int i = 0; i < (int)(sizeof(buttons) / sizeof(buttons[0])); i++) {
+  if (isPointInRect(x, y, &dpadRect)) {
+    const int dx = x - (dpadRect.x + dpadRect.w / 2);
+    const int dy = y - (dpadRect.y + dpadRect.h / 2);
+    if (abs(dx) > abs(dy)) return dx < 0 ? 2 : 3;
+    return dy < 0 ? 0 : 1;
+  }
+  for (int i = 4; i < (int)(sizeof(buttons) / sizeof(buttons[0])); i++) {
+    if ((i == 4 || i == 5) && buttons[i].rect->w > 0) {
+      const int cx = buttons[i].rect->x + buttons[i].rect->w / 2;
+      const int cy = buttons[i].rect->y + buttons[i].rect->h / 2;
+      const int dx = x - cx, dy = y - cy, r = buttons[i].rect->w / 2;
+      if (dx * dx + dy * dy <= r * r) return i;
+      continue;
+    }
     if (isPointInRect(x, y, buttons[i].rect)) {
       return i;
     }

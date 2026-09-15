@@ -30,31 +30,32 @@ static SelectionItem instrumentTypeChip[] = {
   {NULL, (int)InstrumentType::AYSample, NULL, 0},
 };
 static SelectionItem instrumentTypeSynth[] = {
+  {NULL, (int)InstrumentType::AChChid, NULL, 0},
   {NULL, (int)InstrumentType::Braids, NULL, 0},
   {NULL, (int)InstrumentType::Plaits, NULL, 0},
   {NULL, (int)InstrumentType::PlaitsAlt, NULL, 0},
-  {NULL, (int)InstrumentType::AChChid, NULL, 0},
 };
 static SelectionItem instrumentTypeDrums[] = {
   {NULL, (int)InstrumentType::DrumSynth, NULL, 0},
 };
 static SelectionItem instrumentTypeSample[] = {
-  {NULL, (int)InstrumentType::Sample, NULL, 0},
   {NULL, (int)InstrumentType::SCWF, NULL, 0},
   {NULL, (int)InstrumentType::BYOWTBL, NULL, 0},
+  {NULL, (int)InstrumentType::Sample, NULL, 0},
 };
 static const SelectionItem instrumentTypeCategories[] = {
   {"CHIP", -1, instrumentTypeChip, 3},
+  {"DRUMS", -1, instrumentTypeDrums, 1},
   {"SAMPLE", -1, instrumentTypeSample, 3},
   {"SYNTH", -1, instrumentTypeSynth, 4},
-  {"DRUMS", -1, instrumentTypeDrums, 1},
 };
 
-static const InstrumentType instrumentTypesAlphabetical[] = {
-  InstrumentType::SCWF, InstrumentType::AChChid, InstrumentType::AY1,
-  InstrumentType::AY2, InstrumentType::AYSample, InstrumentType::DrumSynth,
-  InstrumentType::Braids, InstrumentType::BYOWTBL, InstrumentType::none,
-  InstrumentType::Sample, InstrumentType::Plaits, InstrumentType::PlaitsAlt,
+static const InstrumentType instrumentTypesQuickCycle[] = {
+  InstrumentType::none, InstrumentType::DrumSynth,
+  InstrumentType::AY1, InstrumentType::AY2, InstrumentType::AYSample,
+  InstrumentType::SCWF, InstrumentType::BYOWTBL, InstrumentType::Sample,
+  InstrumentType::AChChid, InstrumentType::Braids,
+  InstrumentType::Plaits, InstrumentType::PlaitsAlt,
 };
 
 static int editInstrumentType(CellEditAction action, InstrumentType* type) {
@@ -64,9 +65,9 @@ static int editInstrumentType(CellEditAction action, InstrumentType* type) {
   int direction = (action == CellEditAction::increase || action == CellEditAction::increaseBig) ? 1 :
                   (action == CellEditAction::decrease || action == CellEditAction::decreaseBig) ? -1 : 0;
   if (!direction) return 0;
-  int count = sizeof(instrumentTypesAlphabetical) / sizeof(instrumentTypesAlphabetical[0]);
-  for (int i = 0; i < count; ++i) if (instrumentTypesAlphabetical[i] == *type) {
-    if (i + direction >= 0 && i + direction < count) *type = instrumentTypesAlphabetical[i + direction];
+  int count = sizeof(instrumentTypesQuickCycle) / sizeof(instrumentTypesQuickCycle[0]);
+  for (int i = 0; i < count; ++i) if (instrumentTypesQuickCycle[i] == *type) {
+    *type = instrumentTypesQuickCycle[(i + direction + count) % count];
     return 1;
   }
   return 0;

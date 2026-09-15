@@ -1,4 +1,4 @@
-> **NOT EVEN ALPHA. Testing is not finished. CHOO CHOO.**
+> ** ALPHA VERSION. Software is not finished. CHOO CHOO.**
 
 ```*        .         *               .            *
    ______ __ __  ____   ____   ______ __ __  ____   ____
@@ -22,9 +22,9 @@
  _.-'--`-.___.-'--`-.___==___.-'--`-.___.-'--`-._
 ==========================================================>
      CAHORS                                       MONTAUBAN
-          >>>  8 TRACKS / 96 kHz / CHIPNOMAD-BASED  >>>
+          >>>  8 TRACKS  / CHIPNOMAD-BASED  >>>
 
-.oO[ AY / BRAIDS / PLAITS / PCM SAMPLES / SCWF/ WTBL / 303 ]Oo.
+.oO[ AY / BRAIDS / PLAITS / SAMPLES / WTBL / DRUMSYNTH / 303 ]Oo.
 ````
 
 ## Screenshots
@@ -54,15 +54,17 @@ ChooChooTracker is a music tracker for handheld consoles, PC and Android.
 
 Write a beat on the train, sequence, jam with joysticks, automate a synth line, send it through reverb, then keep going until you miss your stop.
 
-This is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with A LOT of extra synth engines, high quality PCM samples / SCWF / Serum wavetables playback, global reverb/delay, and many other small changes. It keeps ChipNomad's supafast LSDJ-inspired tracker workflow but departs from the chiptune vision of Megus to offer a metric ton of modern sound design options. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
+This is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker), with A LOT of extra synth engines, high quality PCM samples / SCWF / Serum wavetables playback, global reverb/delay, and many other small changes. It keeps ChipNomad's supafast LSDJ-inspired tracker workflow but departs from the chiptune vision of Megus to offer a wide range of modern sound design options. The name comes from the first proof of concept, written on a train between Cahors and Montauban.
 
-The main target is the Anbernic RG353V through PortMaster. It should work on any Portmaster system.
+The main target is the Anbernic RG353V through PortMaster. It should work on any Portmaster system. So far tested and working on Arkos and TrimUI.
 
 A native Windows build is available for development and desktop testing.
 
 You can also test it in your browser on https://choochootracker.vercel.app/ (use the keyboard or gamepad on a computer, use the on-screen gamepad on a mobile device). 
 
 Android version is available in "closed beta", contact me on Discord https://discord.gg/Ut9vM6zgKU to get access.
+
+Other platforms: the app is SDL2 based, it should compile anywhere.
 
 ## What it can do
 
@@ -72,29 +74,28 @@ Android version is available in "closed beta", contact me on Discord https://dis
 - Clean mono or stereo PCM8/PCM16 sample playback (one-shot samples, like your Digitakt)
 - Dual single cycle waveform oscillator: with mix & detune
 - Dual wavetable oscillator: bring your own Serum wavetables !
-- Acid engine (open303 based) that can take Braids as VCO 
+- Achchid: acid engine (open303 based) that can take Braids as VCO
+- Bogie: In-house drum synth with 12 VA/FM models (including cowbells).
 - Multimode LP/HP/BP 12/24dB filters for all new synth/sample engines
-- Several filter flavours inspired 
+- Several filter flavours inspired by analog synths
 - Per-track volume, mute, solo, tiltEQ, Reverb send, and Delay send
 - Mutable Instruments Clouds meme lush reverb
 - Tick-synchronized filtered ping-pong delay
 - Three tracker FX columns per row
 - Added tracker FX inspired by Elektron and Nerdseq: Probability, modulo conditions, and per-track invididual playback speed
 - Synth engines parameters can be set by TrackFX, kinda like P-locks.
-- 4x mod sources per track: ADSR, AHD, LFO and sticks. Modulations can target modulations.
+- 4x mod sources per track: ADSR, AHD, LFO and joysticks. Modulations can target modulations.
 - 3 LFO types: normal, slow tempo sync'd (can be very slow) and fast LFO for audio rate modulations
 - AY Wavetables as LFO shapes
 - LFO can retrig on phrase & chains start (in addition to standard lfo trigs)
 - Joystick modulation , that can be live recorded as trackFX 
-- Tracker tables, grooves, chains, and songs
+- Tracker tables (4 FX slots per table row), grooves, chains, and songs
 
-## One tracker, very different voices
+## One tracker, many engines
 
-Instruments in LSDJ/Chipnomad work like "Machines" in the Elektron world.
+Instruments in Choochootracker work like "Machines" in the Elektron world.
 
-Each instrument has its sound engine and can be mixed/matched at will: you can have an AY bass on one track, a Braids drum model on another, a Plaits chord engine or a Plaits-Alt texture on the next, and some repitched heehaa samples beside them.
-
-There is no project-wide chip selection and no forced group of three AY channels. And of course you can use several instruments in a track so you can do "single track challenges".
+Each instrument has its sound engine, and can be mixed/matched at will: you can have an AY bass on one track, a Braids drum model on another, a Plaits chord engine or a Plaits-Alt texture on the next, and some repitched heehaa samples beside them.
 
 
 ## Handheld workflow
@@ -108,7 +109,7 @@ Dlay    Sett                    Pool         Wvtbl
 ```
 So its kind of like LSDJ, but with a Mixer on the left.
 
-## Try the pre-alpha
+## Try the alpha
 
 Download the PortMaster package and PDF manual from the [GitHub Releases page](https://github.com/paiheulevrai/Choochootracker/releases).
 
@@ -129,14 +130,15 @@ Find bugs or anything? Come discuss on Discord: https://discord.gg/Ut9vM6zgKU
 
 ## Current limits
 
-- Everything: working or it seems.
+- Everything is mostly working, you can make music.
 - there may still be some crashes and bugs
-- Visual identity will be finalized once bugs become so rare you collect them.
-- need to tweak the scaling of various controls 
+- Visual identity is not final
+- need to tweak the scaling of various controls (like linear vs expo, that kind of stuff)
+- Android has some audio glitches
 
 ## Why the train name?
 
-The first proof of concept was written during a train ride between Cahors and Montauban. The name stuck. Choo choo. Don't miss your stop.
+I wanted a mobile groovebox to make techno... but none of the available option ticked all the boxes, so I decided to make one. The first proof of concept was written during an Intercité train ride between Cahors and Montauban, so the name stuck. Choo choo, don't miss your stop.
 
 ## Credits and license
 

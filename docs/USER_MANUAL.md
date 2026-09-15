@@ -57,9 +57,10 @@ Mappings can be changed in **Settings > Key mapping**.
 
 Windows, web, and Android users can also use a game controller. On Android,
 touch controls appear automatically when no gamepad is connected: in portrait
-they sit below the tracker, with a D-pad, a compact action cluster, two live
-modulation pads, and momentary REC/DEL controls. Landscape puts the D-pad on
-the left and the action buttons on the right. Android projects and samples stay private to
+they sit below the tracker, with a square D-pad, A/EDIT, B/OPT, START/PLAY and
+SELECT/SHIFT controls, then a separate Live/Motion section with two modulation
+sticks and momentary REC/DEL controls. Landscape keeps the D-pad on the left
+and the action buttons on the right. Android projects and samples stay private to
 the app; use the Android file picker to import files and save WAV exports.
 
 ### Navigation
@@ -68,6 +69,7 @@ the app; use the Android file picker to import files and save WAV exports.
 - Hold **SELECT + [DIRECTION]** to move between screens.
 - Hold **OPT + [DIRECTION]** for screen-specific navigation.
 - On a value, use **EDIT + [LEFT/RIGHT]** for fine changes or **EDIT + [UP/DOWN]** for coarse changes.
+- On a Modulation **Destination**, **LEFT/RIGHT** cycles the available destinations directly; tap **EDIT** to open its grouped menu.
 - Tap **EDIT** to enter a value or activate a command.
 - Double-tap **EDIT** to create a new chain, phrase or instrument where supported.
 - Holding a direction repeats after the delay configured in Settings.
