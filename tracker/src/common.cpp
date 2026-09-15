@@ -17,7 +17,7 @@ void initDefaultAppSettings(void) {
   appSettings.screenWidth = 0; // 0 to auto-detect resolution
   appSettings.screenHeight = 0;
   appSettings.audioSampleRate = kAudioSampleRate;
-  appSettings.audioBufferSize = 2048;
+  appSettings.audioBufferSize = 4906;
   appSettings.aySampleDithering = 1; // Default: ON
   appSettings.doubleTapFrames = 20;
   appSettings.keyRepeatDelay = 16;
