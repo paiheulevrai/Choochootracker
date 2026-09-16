@@ -18,7 +18,7 @@ void initDefaultAppSettings(void) {
   appSettings.screenHeight = 0;
   appSettings.audioSampleRate = kAudioSampleRate;
 #ifdef WEB_BUILD
-  appSettings.audioBufferSize = 512;
+  appSettings.audioBufferSize = 1024;
 #else
   appSettings.audioBufferSize = 4906;
 #endif
@@ -360,7 +360,7 @@ int settingsLoad(void) {
 #ifdef WEB_BUILD
   // Browser audio and UI share a thread. Large saved buffers batch playback
   // updates and stall animations; 4906 is rounded up to 8192 by SDL/Web Audio.
-  appSettings.audioBufferSize = 512;
+  appSettings.audioBufferSize = 1024;
 #endif
   if (appSettings.braidsBits < 0 || appSettings.braidsBits > 6) appSettings.braidsBits = 6;
   if (appSettings.braidsDrift < 0 || appSettings.braidsDrift > 4) appSettings.braidsDrift = 0;

@@ -27,6 +27,7 @@ struct WebLoopContext {
   void (*onEvent)(MainLoopEventData eventData);
   int menu;
   bool stopped;
+  double lastDrawAt;
 };
 
 static void queueGamepadButton(WebLoopContext* context, int button, int down) {
@@ -112,6 +113,13 @@ static void webLoopFrame(void* userdata) {
   eventData.type = MainLoopEvent::tick;
   eventData.data.value = 0;
   context->onEvent(eventData);
+
+  // SDL's browser audio callbacks share the main thread with drawing. Keep
+  // input and app timers on requestAnimationFrame, but paint at about 30 Hz
+  // to leave audio more scheduling headroom. Allow for timer rounding.
+  const double now = emscripten_get_now();
+  if (now - context->lastDrawAt < 1000.0 / 30.0 - 1.0) return;
+  context->lastDrawAt = now;
   context->draw();
   gfxUpdateScreen();
 }
@@ -119,7 +127,7 @@ static void webLoopFrame(void* userdata) {
 void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData)) {
   assetsInit();
   static WebLoopContext context;
-  context = {draw, onEvent, 0, false};
+  context = {draw, onEvent, 0, false, 0.0};
   emscripten_set_main_loop_arg(webLoopFrame, &context, 0, 1);
 }
 

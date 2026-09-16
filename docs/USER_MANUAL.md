@@ -24,9 +24,10 @@ scales while keeping its original aspect ratio.
 
 ### Web
 
-The browser version uses a fixed 512-frame audio buffer to keep playback
-indicators responsive. Older saved buffer settings are adjusted automatically;
-projects and other settings are preserved.
+The browser version refreshes its display at about 30 FPS and uses a fixed
+1024-frame audio buffer to give audio more time between callbacks. Older saved
+buffer settings are adjusted automatically; projects and other settings are
+preserved. Input polling and app timers keep their usual cadence.
 
 ### Directory configuration
 
