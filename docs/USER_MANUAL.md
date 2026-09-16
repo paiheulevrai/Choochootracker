@@ -539,7 +539,7 @@ The Instrument Pool shows every instrument in the project and lets you reorder t
 
 Wavetable is an AY Plus software oscillator type. A project can contain up to 256 wavetables, each with 32 steps. All wavetable instruments share the same set of waves. This screen is where you edit them.
 
-AY volume levels are non-linear, so the Standard view waveform is drawn to match the actual output levels. Press **OPT + PLAY** to switch to the persisted **LFO view**: it draws the raw `0`–`15` steps linearly, with the centre line between `7` and `8` as the modulation zero point.
+AY volume levels are non-linear, so the Standard view waveform is drawn to match the actual output levels. Double-tap **OPT** to switch between the Standard view and the persisted **LFO view**, using the same shortcut as Song/Live Mode: the LFO view draws the raw `0`–`15` steps linearly, with the centre line between `7` and `8` as the modulation zero point.
 
 The screen has 2 logical rows. The top row contains the **Load** and **Save** buttons, while the 2nd contains the wavetable editor.
 

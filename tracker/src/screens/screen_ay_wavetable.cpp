@@ -448,7 +448,7 @@ static int onEdit(int col, int row, CellEditAction action) {
 }
 
 static int inputScreenNavigation(int keys, int tapCount) {
-  if (keys == (keyOpt | keyPlay)) {
+  if (keys == keyOpt && tapCount == 2) {
     appSettings.ayWavetableLfoView = !appSettings.ayWavetableLfoView;
     screenMessage(MESSAGE_TIME, appSettings.ayWavetableLfoView ? "LFO view" : "Standard view");
     fullRedraw();

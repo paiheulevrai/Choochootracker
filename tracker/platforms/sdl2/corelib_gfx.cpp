@@ -853,6 +853,7 @@ int gfxGetTouchGridPosition(int physicalX, int physicalY, int* col, int* row) {
 
 #ifdef TOUCH_INPUT
 static void drawFilledCircle(int cx, int cy, int radius, int color, int alpha) {
+#if SDL_VERSION_ATLEAST(2, 0, 18)
   constexpr int segments = 48;
   SDL_Vertex vertices[segments + 2];
   int indices[segments * 3];
@@ -868,8 +869,17 @@ static void drawFilledCircle(int cx, int cy, int radius, int color, int alpha) {
     }
   }
   SDL_RenderGeometry(renderer, NULL, vertices, segments + 2, indices, segments * 3);
+#else
+  SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff, alpha);
+  for (int y = -radius; y <= radius; ++y) {
+    int half = (int)sqrtf((float)(radius * radius - y * y));
+    SDL_Rect line = {cx - half, cy + y, half * 2 + 1, 1};
+    SDL_RenderFillRect(renderer, &line);
+  }
+#endif
 }
 
+#ifdef ANDROID_BUILD
 static void drawCircleOutline(int cx, int cy, int radius, int color) {
   SDL_SetRenderDrawColor(renderer, (color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff, 255);
   constexpr int segments = 48;
@@ -900,6 +910,7 @@ static int tintColor(int background, int foreground) {
     (((((background >> 8) & 0xff) * 3 + ((foreground >> 8) & 0xff)) / 4) << 8) |
     ((((background & 0xff) * 3 + (foreground & 0xff)) / 4));
 }
+#endif
 
 static void drawIcon(const uint8_t* iconData, int centerX, int y, int scale, int color) {
   if (!iconData) return;
