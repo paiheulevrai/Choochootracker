@@ -17,7 +17,11 @@ void initDefaultAppSettings(void) {
   appSettings.screenWidth = 0; // 0 to auto-detect resolution
   appSettings.screenHeight = 0;
   appSettings.audioSampleRate = kAudioSampleRate;
+#ifdef WEB_BUILD
+  appSettings.audioBufferSize = 512;
+#else
   appSettings.audioBufferSize = 4906;
+#endif
   appSettings.aySampleDithering = 1; // Default: ON
   appSettings.doubleTapFrames = 20;
   appSettings.keyRepeatDelay = 16;
@@ -353,6 +357,11 @@ int settingsLoad(void) {
 
   fclose(file);
   appSettings.audioSampleRate = kAudioSampleRate;
+#ifdef WEB_BUILD
+  // Browser audio and UI share a thread. Large saved buffers batch playback
+  // updates and stall animations; 4906 is rounded up to 8192 by SDL/Web Audio.
+  appSettings.audioBufferSize = 512;
+#endif
   if (appSettings.braidsBits < 0 || appSettings.braidsBits > 6) appSettings.braidsBits = 6;
   if (appSettings.braidsDrift < 0 || appSettings.braidsDrift > 4) appSettings.braidsDrift = 0;
   if (appSettings.braidsSignature < 0 || appSettings.braidsSignature > 4) appSettings.braidsSignature = 0;

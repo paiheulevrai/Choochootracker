@@ -22,6 +22,12 @@ Run `choochootracker.exe` with `SDL2.dll` and `libwinpthread-1.dll` in the same 
 Press **ALT + ENTER** to toggle fullscreen. The window is resizable; the image
 scales while keeping its original aspect ratio.
 
+### Web
+
+The browser version uses a fixed 512-frame audio buffer to keep playback
+indicators responsive. Older saved buffer settings are adjusted automatically;
+projects and other settings are preserved.
+
 ### Directory configuration
 
 | Folder | What it contains |
@@ -332,6 +338,9 @@ Global Braids settings are available in the app settings:
 ### aChChid
 
 **aChChid** is a monophonic acid bass engine based on Open303. `Square` and `Saw` use its native TB-303 oscillator, filter, envelope and accent behaviour. `Braids` replaces only the oscillator, then continues through the same 303 filter and amplifier path. It exposes Model, Timbre and Color instead of Fine tune. aChChid does not use ChooChooTracker's unified post-filter or ADSR.
+
+Cutoff is displayed in Hz: **EDIT + LEFT/RIGHT** changes it by 1 Hz, and
+**EDIT + UP/DOWN** changes it by 100 Hz. Decay is displayed in milliseconds.
 
 An `F` in the note volume column triggers an accent. `ASL` slides to that note from the previous pitch without retriggering the 303 envelope. `ASL 00` gives a `60 ms` glide. Notes without `ASL` always retrigger. Modulation destinations include Decay and Accent, plus Timbre and Color in Braids wave mode.
 

@@ -22,7 +22,8 @@ static void drawStatic() {
   if (isBraids()) { gfxPrint(0,8,"Model"); gfxPrint(0,9,"Timbre"); gfxPrint(0,10,"Color"); } else gfxPrint(0,8,"Fine");
   gfxPrint(20,7,"Cutoff"); gfxPrint(20,8,"Reso"); gfxPrint(20,9,"Env Mod"); gfxPrint(20,10,"Decay"); gfxPrint(20,11,"Accent");
 }
-static void drawCursor(int col,int row) { if(row<3) return instrumentCommonDrawCursor(col,row); gfxCursor(col ? 30 : 11, row+4, col ? 6 : 8); }
+// The track status panel starts at column 34; keep values and cursors before it.
+static void drawCursor(int col,int row) { if(row<3) return instrumentCommonDrawCursor(col,row); gfxCursor(col ? 28 : 11, row+4, col ? 6 : 8); }
 static void drawField(int col,int row,CellState state) {
   if(row<3) return instrumentCommonDrawField(col,row,state);
   InstrumentAChChid* a=instrument();
@@ -32,11 +33,11 @@ static void drawField(int col,int row,CellState state) {
   else if(isBraids() && row==4 && !col) gfxPrintf(11,8,"%02u %.6s",a->model,modelCatalogName(InstrumentType::Braids,a->model));
   else if(isBraids() && row==5 && !col) gfxPrintf(11,9,"%04u",(unsigned)((uint32_t)a->timbre*1023/32767));
   else if(isBraids() && row==6 && !col) gfxPrintf(11,10,"%04u",(unsigned)((uint32_t)a->color*1023/32767));
-  else if(col && row==3) gfxPrintf(30,7,"%5u",a->cutoff);
-  else if(col && row==4) gfxPrintf(30,8,"%3u",a->resonance);
-  else if(col && row==5) gfxPrintf(30,9,"%3u",a->envMod);
-  else if(col && row==6) gfxPrintf(30,10,"%4ums",a->decay);
-  else if(col && row==7) gfxPrintf(30,11,"%3u",a->accent);
+  else if(col && row==3) gfxPrintf(28,7,"%6u",a->cutoff);
+  else if(col && row==4) gfxPrintf(28,8,"%6u",a->resonance);
+  else if(col && row==5) gfxPrintf(28,9,"%6u",a->envMod);
+  else if(col && row==6) gfxPrintf(28,10,"%4ums",a->decay);
+  else if(col && row==7) gfxPrintf(28,11,"%6u",a->accent);
 }
 static int onEdit(int col,int row,CellEditAction action) {
   if(row<3) return instrumentCommonOnEdit(col,row,action);
