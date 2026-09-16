@@ -142,6 +142,9 @@ output directory, for example `releases/ChooChooTracker-1.0-code2-release.aab`.
 Upload that AAB to Play Console's Internal testing track. Complete the values
 and artwork in `docs/play-store-listing.md` before submission.
 
+For audio traces and the separately installed debug APK, see
+[Android audio diagnosis](android-audio-debugging.md).
+
 ## Validation
 
 ```sh

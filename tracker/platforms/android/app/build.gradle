@@ -60,7 +60,7 @@ android {
         applicationId "com.paiheulevrai.choochootracker"
         minSdk 26
         targetSdk 36
-        versionCode 7
+        versionCode 8
         versionName "1.0.4"
     }
 
@@ -90,6 +90,9 @@ android {
         debug {
             debuggable true
             jniDebuggable true
+            if (project.hasProperty('audioDiag')) {
+                applicationIdSuffix '.audiodiag'
+            }
         }
         release {
             minifyEnabled false

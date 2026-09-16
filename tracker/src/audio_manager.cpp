@@ -10,6 +10,9 @@
 #include "playback.h"
 #include "corelib_file.h"
 #include "synth/sample_voice.h"
+#ifdef ANDROID_BUILD
+#include "../platforms/android/audio_diagnostics.h"
+#endif
 
 static int aSampleRate;
 static int aBufferSize;
@@ -47,12 +50,20 @@ static void audioCallback(int16_t* buffer, int stereoSamples) {
 
   if (stereoSamples <= 0 || stereoSamples > aBufferSize ||
       !floatBuffer || !samplePreviewBuffer) {
+#ifdef ANDROID_BUILD
+    if (audioDiagnostics::enabled)
+      audioDiagnostics::invalidBuffers.fetch_add(1, std::memory_order_relaxed);
+#endif
     if (stereoSamples > aBufferSize) chipnomadSetRenderBufferOverflow(chipnomadState);
     memset(buffer, 0, stereoSamples > 0 ? stereoSamples * 2 * sizeof(*buffer) : 0);
     return;
   }
 
   if (chipnomadRender(chipnomadState, floatBuffer, stereoSamples) != stereoSamples) {
+#ifdef ANDROID_BUILD
+    if (audioDiagnostics::enabled)
+      audioDiagnostics::renderFailures.fetch_add(1, std::memory_order_relaxed);
+#endif
     memset(floatBuffer, 0, stereoSamples * 2 * sizeof(*floatBuffer));
   }
   samplePreviewVoice.render(samplePreviewBuffer, stereoSamples);

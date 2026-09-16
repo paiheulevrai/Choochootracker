@@ -19,6 +19,23 @@ public final class ChooChooTrackerActivity extends SDLActivity {
         return new String[] { "SDL2", "chipnomad" };
     }
 
+    @Override protected String[] getArguments() {
+        // OpenSL ES's fast output underruns on Pixel 7a even with a cheap sine
+        // callback. Prefer SDL's buffered AAudio path; retain older-device fallback.
+        nativeSetenv("SDL_AUDIODRIVER", "aaudio,openslES");
+        // ADB-only experiments, before SDL initializes audio. Release builds
+        // ignore these extras; no diagnostic controls enter the product UI.
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                && getIntent().getBooleanExtra("cct_audio_diag", false)) {
+            nativeSetenv("CCT_AUDIO_DIAG", "1");
+            nativeSetenv("CCT_AUDIO_TONE", getIntent().getBooleanExtra("cct_audio_tone", false) ? "1" : "0");
+            String driver = getIntent().getStringExtra("cct_audio_driver");
+            if ("openslES".equals(driver) || "aaudio".equals(driver))
+                nativeSetenv("SDL_AUDIODRIVER", driver);
+        }
+        return super.getArguments();
+    }
+
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         hideSystemBars();
