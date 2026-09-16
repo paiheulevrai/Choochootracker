@@ -27,10 +27,6 @@ static void fullRedraw(void) {
   gfxPrint(0, 8, "Chains have phrases");
   gfxPrint(0, 9, "Phrases play instruments");
   gfxPrint(0, 10, "Instruments make sound");
-#ifdef ANDROID_BUILD
-  gfxPrint(0, 11, "Low CPU can still have audio glitches");
-  gfxPrint(0, 12, "Report song + phone model if it crackles");
-#endif
   gfxPrint(0, 13, "Read the manual next time");
   gfxPrint(0, 14, "you are on a train.");
 
