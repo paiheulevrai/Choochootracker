@@ -68,6 +68,7 @@ Other platforms: the app is SDL2 based, it should compile anywhere.
 
 ## What it can do
 
+Synthesis
 - Eight fixed monophonic tracks (with independent instruments)
 - AY Classic, AY Plus, and crunchy AY Sample playback (from Chipnomad)
 - All 47 Braids engines, 24 stock Plaits engines, and 24 additional Plaits-Alt engines
@@ -81,6 +82,8 @@ Other platforms: the app is SDL2 based, it should compile anywhere.
 - Per-track volume, mute, solo, tiltEQ, Reverb send, and Delay send
 - Mutable Instruments Clouds meme lush reverb
 - Tick-synchronized filtered ping-pong delay
+
+Articulations
 - Three tracker FX columns per row
 - Added tracker FX inspired by Elektron and Nerdseq: Probability, modulo conditions, and per-track invididual playback speed
 - Synth engines parameters can be set by TrackFX, kinda like P-locks.
