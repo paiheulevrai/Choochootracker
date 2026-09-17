@@ -137,7 +137,6 @@ Find bugs or anything? Come discuss on Discord: https://discord.gg/Ut9vM6zgKU
 - there may still be some crashes and bugs
 - Visual identity is not final
 - need to tweak the scaling of various controls (like linear vs expo, that kind of stuff)
-- Android has some audio glitches
 
 ## Why the train name?
 
