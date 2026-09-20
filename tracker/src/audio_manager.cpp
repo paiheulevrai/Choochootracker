@@ -70,11 +70,12 @@ static void renderPreview(float* buffer, int frames) {
   else if (previewMode == PREVIEW_AY && ayPreviewState) chipnomadRender(ayPreviewState, buffer, frames);
   else if (previewMode == PREVIEW_SCWF) scwfPreviewVoice.render(buffer, frames);
   else if (previewMode == PREVIEW_BYOWTBL) {
-    uint8_t frameIndex[2] = {byowtblPreview.frameIndex[0], byowtblPreview.frameIndex[1]};
-    const double phase = (double)byowtblPreviewFrames / aSampleRate;
-    frameIndex[byowtblPreviewOscillator] = (uint8_t)(127.5 + 127.5 * sin(phase * previewTwoPi));
-    configureSCWFPreview(&byowtblPreview, byowtblPreview.frameSize, frameIndex);
-    scwfPreviewVoice.render(buffer, frames);
+    for (int i = 0; i < frames; ++i) {
+      const double phase = (double)(byowtblPreviewFrames + i) / aSampleRate;
+      scwfPreviewVoice.setWavetablePosition(byowtblPreviewOscillator,
+        (float)(127.5 + 127.5 * sin(phase * previewTwoPi)));
+      scwfPreviewVoice.render(buffer + i * 2, 1);
+    }
     byowtblPreviewFrames += frames;
   }
 }

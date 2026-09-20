@@ -22,6 +22,7 @@ class SCWFVoice {
   void noteOn();
   void noteOff();
   void kill();
+  void setWavetablePosition(int oscillator, float position);
   void render(float* output, size_t frames);
   bool active() const { return active_; }
   float envelopeLevel() const { return post_.envelopeLevel(); }

@@ -48,10 +48,7 @@ void SCWFVoice::configure(const InstrumentSCWF* instrument, float pitchCents,
     const InstrumentSample& oscillator = instrument_->oscillator[i];
     cycleFrames_[i] = frameSize && frameSize[i] ? frameSize[i] : oscillator.frameCount;
     if (cycleFrames_[i] > oscillator.frameCount) cycleFrames_[i] = oscillator.frameCount;
-    uint32_t tables = cycleFrames_[i] ? oscillator.frameCount / cycleFrames_[i] : 0;
-    float position = frameIndex && tables > 1 ? frameIndex[i] * (tables - 1) / 255.0f : 0.0f;
-    frameStart_[i] = (uint32_t)position * cycleFrames_[i];
-    frameBlend_[i] = position - (uint32_t)position;
+    setWavetablePosition(i, frameIndex ? frameIndex[i] : 0.0f);
     const double cents = i ? detuneCents : 0.0;
     step_[i] = oscillator.data && cycleFrames_[i]
       ? baseHz * pow(2.0, cents / 1200.0) / outputSampleRate_
@@ -64,6 +61,23 @@ void SCWFVoice::configure(const InstrumentSCWF* instrument, float pitchCents,
                     (sustain < 0 ? instrument_->sustain : sustain) / 255.0f,
                     scwfEnvelopeTime(release < 0 ? instrument_->release : release),
                     envelopeShape < 0 ? instrument_->envelopeShape : envelopeShape);
+}
+
+void SCWFVoice::setWavetablePosition(int oscillator, float position) {
+  if (!instrument_ || oscillator < 0 || oscillator > 1) return;
+  const InstrumentSample& source = instrument_->oscillator[oscillator];
+  uint32_t count = cycleFrames_[oscillator];
+  uint32_t tables = count ? source.frameCount / count : 0;
+  if (tables < 2) {
+    frameStart_[oscillator] = 0;
+    frameBlend_[oscillator] = 0.0f;
+    return;
+  }
+  float tablePosition = position * (tables - 1) / 255.0f;
+  if (tablePosition < 0.0f) tablePosition = 0.0f;
+  if (tablePosition > tables - 1) tablePosition = tables - 1;
+  frameStart_[oscillator] = (uint32_t)tablePosition * count;
+  frameBlend_[oscillator] = tablePosition - (uint32_t)tablePosition;
 }
 
 void SCWFVoice::noteOn() {
@@ -81,19 +95,43 @@ float SCWFVoice::sampleAt(int oscillator, double phase) const {
   if (!source.data || source.frameCount == 0) return 0.0f;
   phase -= floor(phase);
   uint32_t count = cycleFrames_[oscillator];
+  if (!count) return 0.0f;
   double position = phase * count;
   uint32_t frame = (uint32_t)position;
   uint32_t next = frame + 1 == count ? 0 : frame + 1;
   float fraction = (float)(position - frame);
-  float a = source.data[(frameStart_[oscillator] + frame) * source.channels] / 32768.0f;
-  float b = source.data[(frameStart_[oscillator] + next) * source.channels] / 32768.0f;
-  float value = a + (b - a) * fraction;
+  auto sampleFrame = [&](uint32_t start) {
+    float a = source.data[(start + frame) * source.channels] / 32768.0f;
+    float b = source.data[(start + next) * source.channels] / 32768.0f;
+    return a + (b - a) * fraction;
+  };
+
+  uint32_t currentFrame = frameStart_[oscillator];
+  float value = sampleFrame(currentFrame);
   if (!frameBlend_[oscillator]) return value;
-  uint32_t nextFrame = frameStart_[oscillator] + count;
-  if (nextFrame + count > source.frameCount) nextFrame = 0;
-  a = source.data[(nextFrame + frame) * source.channels] / 32768.0f;
-  b = source.data[(nextFrame + next) * source.channels] / 32768.0f;
-  return value + ((a + (b - a) * fraction) - value) * frameBlend_[oscillator];
+
+  // Monotone cubic Hermite interpolation smooths the frame morph without
+  // overshooting sharp wavetable frames.
+  uint32_t previousFrame = currentFrame >= count ? currentFrame - count : currentFrame;
+  uint32_t nextFrame = currentFrame + count;
+  if (nextFrame + count > source.frameCount) nextFrame = currentFrame;
+  uint32_t afterNextFrame = nextFrame + count;
+  if (afterNextFrame + count > source.frameCount) afterNextFrame = nextFrame;
+  float previous = sampleFrame(previousFrame);
+  float nextValue = sampleFrame(nextFrame);
+  float afterNext = sampleFrame(afterNextFrame);
+  auto tangent = [](float before, float after) {
+    return before * after <= 0.0f ? 0.0f : 2.0f * before * after / (before + after);
+  };
+  float slopeHere = tangent(value - previous, nextValue - value);
+  float slopeNext = tangent(nextValue - value, afterNext - nextValue);
+  float t = frameBlend_[oscillator];
+  float t2 = t * t;
+  float t3 = t2 * t;
+  return (2.0f * t3 - 3.0f * t2 + 1.0f) * value +
+         (t3 - 2.0f * t2 + t) * slopeHere +
+         (-2.0f * t3 + 3.0f * t2) * nextValue +
+         (t3 - t2) * slopeNext;
 }
 
 void SCWFVoice::render(float* output, size_t frames) {

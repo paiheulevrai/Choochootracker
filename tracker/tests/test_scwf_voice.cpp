@@ -58,7 +58,7 @@ TEST_CASE("2xSCWF reads a complete waveform once per requested period") {
   CHECK(risingCrossings == doctest::Approx(220).epsilon(0.01));
 }
 
-TEST_CASE("BYOWTBL linearly interpolates between independently selected frames") {
+TEST_CASE("BYOWTBL interpolates between independently selected frames") {
   int16_t frames[] = {0, 0, 0, 0, 16000, 16000, 16000, 16000};
   InstrumentSCWF instrument{};
   instrument.oscillator[0].data = frames;
@@ -66,14 +66,36 @@ TEST_CASE("BYOWTBL linearly interpolates between independently selected frames")
   instrument.oscillator[0].channels = 1;
   instrument.sustain = 255;
   uint16_t frameSize[] = {4, 0};
-  uint8_t frameIndex[] = {128, 0};
+  uint8_t frameIndex[] = {0, 0};
   SCWFVoice voice;
   float output[2]{};
   voice.init(48000.0f);
   voice.configure(&instrument, 6000.0f, 1.0f, 0, 0, 20000, 0, frameSize, frameIndex);
+  voice.setWavetablePosition(0, 127.5f);
   voice.noteOn();
   voice.render(output, 1);
   CHECK(output[0] == doctest::Approx(8000.0 / 32768.0).epsilon(0.01));
+}
+
+TEST_CASE("BYOWTBL cubic morph stays within adjacent frame values") {
+  int16_t frames[] = {0, 0, 0, 0, 16000, 16000, 16000, 16000,
+                      -16000, -16000, -16000, -16000};
+  InstrumentSCWF instrument{};
+  instrument.oscillator[0].data = frames;
+  instrument.oscillator[0].frameCount = 12;
+  instrument.oscillator[0].channels = 1;
+  instrument.sustain = 255;
+  uint16_t frameSize[] = {4, 0};
+  uint8_t frameIndex[] = {0, 0};
+  SCWFVoice voice;
+  voice.init(48000.0f);
+  voice.configure(&instrument, 6000.0f, 1.0f, 0, 0, 20000, 0, frameSize, frameIndex);
+  voice.setWavetablePosition(0, 63.75f);
+  voice.noteOn();
+  float output[2]{};
+  voice.render(output, 1);
+  CHECK(output[0] >= 0.0f);
+  CHECK(output[0] <= 16000.0f / 32768.0f);
 }
 
 TEST_CASE("BYOWTBL preview positions span distinct frames at C3") {
