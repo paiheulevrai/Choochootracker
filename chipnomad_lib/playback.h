@@ -30,6 +30,7 @@ enum class LiveQueueAction : uint8_t {
 
 struct PlaybackTableState {
   uint8_t tableIdx;
+  uint8_t baseSpeed;
   uint8_t rows[4];
   uint8_t counters[4];
   uint8_t speed[4];

@@ -516,9 +516,13 @@ Putting a `TIC` FX on the last table row sets the speed of that column and overr
 
 A 16-row table may look short next to a long Vortex Tracker instrument, but the `HOP` FX can create conditional loops such as "repeat these rows 5 times", as well as nested loops. With loops and independent FX column speeds, those 16 rows can go a surprisingly long way.
 
-### Keep a table running across notes
+### Retrigger mode
 
-Placing an instrument number in a phrase row starts that instrument's table again from row `00`, including when it is the same instrument as before. To trigger more notes while keeping the table at its current position, set the instrument only on the first note, then leave the Instrument column empty on subsequent note rows. Those notes still trigger normally, but the table keeps advancing.
+The `Retrig` field at the top of the Table screen selects when an already active table restarts. `Inst` is the default and compatible mode: a phrase row containing an instrument selects that instrument's default table and starts it at row `00`. `Phrase` restarts an active table when playback enters a phrase, `Chain` when it enters a chain, and `Free` leaves it running until the track stops or an explicit command replaces it.
+
+A structural mode never reaches backward in time. If a track has no active instrument table, the first phrase row that introduces an instrument activates its table at that exact row, even if it is row `4`, `8` or `F` of a phrase. Later instrument numbers do not replace an active `Phrase`, `Chain` or `Free` table. This makes tables useful as LFO-like automation without silently simulating earlier phrase steps.
+
+`TBL`, `TBX` and `RET` are always explicit actions: they select or restart immediately, whatever the mode. On a Phrase or Chain boundary, its restart happens before the new phrase row is read, so a `TBL` or `TBX` on that row has the final say. Table row `00` FX therefore run again normally; cumulative FX retain their usual accumulation.
 
 Tables `00-7F` are reserved for default instrument tables. Tables `80-FE` are intended for auxiliary tables started by the `TBX` effect. The lower range also works for auxiliary tables, but using it that way can cause unexpected conflicts and confusion.
 
@@ -586,8 +590,8 @@ Each FX has a 3-letter command and a hexadecimal value. The in-app help panel gi
 | `OFF` | `XX` ticks | Sends note-off after `XX` ticks and enters an ADSR release stage. |
 | `KIL` | `XX` ticks | Hard-kills the voice after `XX` ticks without running ADSR release. |
 | `TIC` | `XX` ticks | Sets table ticks per row. In a table it changes that FX column's speed. |
-| `TBL` | `00-FE`, `FF` off | Replaces the instrument table; `FF` stops it. |
-| `TBX` | `00-FE`, `FF` off | Starts an auxiliary table alongside the instrument table; `FF` stops it. |
+| `TBL` | `00-FE`, `FF` off | Replaces and restarts the instrument table immediately; `FF` stops it. |
+| `TBX` | `00-FE`, `FF` off | Starts or replaces an auxiliary table immediately; `FF` stops it. |
 | `THO` | row `XX` | Jumps all instrument-table columns to row `XX`. |
 | `TXH` | row `XX` | Jumps all auxiliary-table columns to row `XX`; it is not used from inside a table. |
 | `GRV` | groove `XX` | Selects a groove for the current track. |

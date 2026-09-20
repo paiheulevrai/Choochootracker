@@ -219,7 +219,10 @@ struct TableRow {
   uint8_t fx[4][2];
 };
 
+enum class TableRetriggerMode : uint8_t { instrument, phrase, chain, free };
+
 struct Table {
+  TableRetriggerMode retriggerMode;
   TableRow rows[16];
 };
 

@@ -248,6 +248,41 @@ TEST_CASE_FIXTURE(PlaybackFixture, "instrument table FX applies on the trigger r
   CHECK(state->playbackState.tracks[0].note.fx[fxBCF].fxValue == 90);
 }
 
+TEST_CASE_FIXTURE(PlaybackFixture, "table retrigger modes only replace an active Inst table") {
+  PlaybackState* playback = &state->playbackState;
+  PlaybackTrackState* track = &playback->tracks[0];
+  state->project.instruments[0].tableSpeed = 3;
+  state->project.instruments[1].tableSpeed = 5;
+  track->mode = PlaybackMode::phraseRow;
+
+  PhraseRow row;
+  memset(&row, EMPTY_VALUE_8, sizeof(row));
+  row.instrument = 0;
+  readPhraseRowDirect(playback, 0, &row, 0);
+  CHECK(track->note.instrumentTable.tableIdx == 0);
+  CHECK(track->note.instrumentTable.baseSpeed == 3);
+
+  state->project.tables[0].retriggerMode = TableRetriggerMode::phrase;
+  row.instrument = 1;
+  readPhraseRowDirect(playback, 0, &row, 0);
+  CHECK(track->note.instrumentTable.tableIdx == 0);
+
+  state->project.tables[0].retriggerMode = TableRetriggerMode::instrument;
+  readPhraseRowDirect(playback, 0, &row, 0);
+  CHECK(track->note.instrumentTable.tableIdx == 1);
+  CHECK(track->note.instrumentTable.baseSpeed == 5);
+
+  // TBL remains explicit, including FF which stops the active table.
+  row.instrument = EMPTY_VALUE_8;
+  row.fx[0][0] = fxTBL;
+  row.fx[0][1] = 2;
+  readPhraseRowDirect(playback, 0, &row, 0);
+  CHECK(track->note.instrumentTable.tableIdx == 2);
+  row.fx[0][1] = EMPTY_VALUE_8;
+  readPhraseRowDirect(playback, 0, &row, 0);
+  CHECK(track->note.instrumentTable.tableIdx == EMPTY_VALUE_8);
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "single note outputs to registers") {
   setInstrument(0, 15, 0, 15, 0);
 

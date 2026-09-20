@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "project.h"
+#include "project_io_common.h"
 #include "project_utils.h"
 #include "import/import_vt2.h"
 
@@ -359,6 +360,23 @@ TEST_CASE_FIXTURE(ProjectFixture, "phraseIsEmpty false with fx value") {
 
 TEST_CASE_FIXTURE(ProjectFixture, "tableIsEmpty true after init") {
   CHECK(tableIsEmpty(&p, 0));
+  CHECK(p.tables[0].retriggerMode == TableRetriggerMode::instrument);
+}
+
+TEST_CASE_FIXTURE(ProjectFixture, "an empty structural table is saved") {
+  p.tables[0].retriggerMode = TableRetriggerMode::free;
+  CHECK_FALSE(tableIsEmpty(&p, 0));
+  FILE* file = tmpfile();
+  REQUIRE(file != nullptr);
+  CHECK(saveTable(file, 0, &p.tables[0]) == 0);
+  rewind(file);
+  char header[64];
+  fgets(header, sizeof(header), file);
+  fgets(header, sizeof(header), file);
+  CHECK(std::strstr(header, "Retrig: Free") != nullptr);
+  fclose(file);
+  tableClear(&p.tables[0]);
+  CHECK(p.tables[0].retriggerMode == TableRetriggerMode::instrument);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "tableIsEmpty false with pitch flag") {

@@ -38,15 +38,24 @@ static int onEdit(int col, int row, CellEditAction action);
 
 static int columnX[] = {3, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34};
 
+static const char *retriggerModeName(TableRetriggerMode mode) {
+  switch (mode) {
+    case TableRetriggerMode::phrase: return "Phrase";
+    case TableRetriggerMode::chain: return "Chain";
+    case TableRetriggerMode::free: return "Free";
+    default: return "Inst";
+  }
+}
+
 static ScreenData screen = {
-  .rows = 16,
-  .cursorRow = 0,
+  .rows = 17,
+  .cursorRow = 1,
   .cursorCol = 0,
   .topRow = 0,
   .selectMode = 0,
-  .selectStartRow = 0,
+  .selectStartRow = 1,
   .selectStartCol = 0,
-  .selectAnchorRow = 0,
+  .selectAnchorRow = 1,
   .selectAnchorCol = 0,
   .playbackLevel = ScreenPlaybackLevel::none,
   .getColumnCount = getColumnCount,
@@ -68,13 +77,13 @@ static void init(void) {
   lastVolume = 15;
   lastFX[0] = 0;
   lastFX[1] = 0;
-  screen.cursorRow = 0;
+  screen.cursorRow = 1;
   screen.cursorCol = 0;
   screen.topRow = 0;
   screen.selectMode = 0;
-  screen.selectStartRow = 0;
+  screen.selectStartRow = 1;
   screen.selectStartCol = 0;
-  screen.selectAnchorRow = 0;
+  screen.selectAnchorRow = 1;
   screen.selectAnchorCol = 0;
   isFxEdit = 0;
 }
@@ -88,14 +97,23 @@ static void setup(int input) {
 }
 
 static int getColumnCount(int row) {
+  if (row == 0) return 1;
   return 11; // PitchFlag, Pitch, Volume, FX1, FX1 Value, FX2, FX2 Value, FX3, FX3 Value, FX4, FX4 Value
 }
 static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrintf(0, 0, "TABLE %02X", tableIdx);
+  gfxPrint(0, 1, "Retrig");
 }
 
 static void drawField(int col, int row, CellState state) {
+  if (row == 0) {
+    setCellColor(state, 0, 1);
+    gfxPrint(8, 1, "      ");
+    gfxPrint(8, 1, retriggerModeName(chipnomadState->project.tables[tableIdx].retriggerMode));
+    return;
+  }
+  row--;
   int x = columnX[col];
   int y = 3 + row;
 
@@ -129,9 +147,10 @@ static void drawField(int col, int row, CellState state) {
   }
 }
 static void drawRowHeader(int row, CellState state) {
+  if (row == 0) return;
   const ColorScheme cs = appSettings.colorScheme;
   gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
-  gfxPrintf(1, 3 + row, "%X", row);
+  gfxPrintf(1, 2 + row, "%X", row - 1);
 }
 
 static void drawColHeader(int col, CellState state) {
@@ -165,6 +184,11 @@ static void drawColHeader(int col, CellState state) {
 }
 
 static void drawCursor(int col, int row) {
+  if (row == 0) {
+    gfxCursor(8, 1, 6);
+    return;
+  }
+  row--;
   int width = 2;
   int x = columnX[col];
 
@@ -180,9 +204,10 @@ static void drawCursor(int col, int row) {
 }
 
 static void drawSelection(int col1, int row1, int col2, int row2) {
+  if (row1 == 0 || row2 == 0) return;
   int x = columnX[col1];
   int w = columnX[col2 + 1] - x - 1;
-  int y = 3 + row1;
+  int y = 2 + row1;
   int h = row2 - row1 + 1;
   if (col2 == 0 || col2 == 3 || col2 == 5 || col2 == 7  || col2 == 9) w++;
   gfxRect(x, y, w, h);
@@ -234,6 +259,17 @@ static int editCell(int col, int row, enum CellEditAction action) {
   int handled = 0;
   uint8_t maxVolume = 15;
 
+  if (row == 0) {
+    uint8_t mode = (uint8_t)chipnomadState->project.tables[tableIdx].retriggerMode;
+    handled = edit8noLast(action, &mode, 3, 0, 3);
+    if (handled) {
+      chipnomadState->project.tables[tableIdx].retriggerMode = (TableRetriggerMode)mode;
+      screenMessage(0, "Retrig %s", retriggerModeName((TableRetriggerMode)mode));
+    }
+    return handled;
+  }
+  row--;
+
   if (col == 0) {
     // Pitch flag (toggle between 0 and 1)
     handled = edit8noLast(action, &tableRows[row].pitchFlag, 1, 0, 1);
@@ -281,6 +317,17 @@ static int onEdit(int col, int row, CellEditAction action) {
   int startCol, startRow, endCol, endRow;
   getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
 
+  if (row == 0) {
+    if (action == CellEditAction::switchSelection || action == CellEditAction::copy ||
+        action == CellEditAction::cut || action == CellEditAction::paste ||
+        action == CellEditAction::multiIncrease || action == CellEditAction::multiDecrease ||
+        action == CellEditAction::multiIncreaseBig || action == CellEditAction::multiDecreaseBig) return 0;
+    return editCell(col, row, action);
+  }
+
+  // The retrigger field is configuration, never table data for a bulk edit.
+  if (startRow == 0 && screen.selectMode) return 0;
+
   if (action == CellEditAction::switchSelection) {
     return switchTableSelectionMode(&screen);
   } else if (action == CellEditAction::multiIncrease || action == CellEditAction::multiDecrease) {
@@ -291,7 +338,8 @@ static int onEdit(int col, int row, CellEditAction action) {
     if (startCol == 0 && endCol == 10) {
       // Rotation mode
       int direction = (action == CellEditAction::multiIncreaseBig) ? -1 : 1;
-      applyTableRotation(tableIdx, startRow, endRow, direction);
+      if (startRow == 0) return 0;
+      applyTableRotation(tableIdx, startRow - 1, endRow - 1, direction);
       fullRedraw();
       return 1;
     } else if (isSingleColumnSelection(&screen)) {
@@ -300,7 +348,7 @@ static int onEdit(int col, int row, CellEditAction action) {
         // FX type column: show FX selection
         int fxIdx = (startCol - 3) / 2;
         uint8_t instrumentIdx = getTableInstrumentIdx();
-        fxEditFullDraw(tableRows[screen.cursorRow].fx[fxIdx][0], instrumentIdx);
+        fxEditFullDraw(tableRows[screen.cursorRow - 1].fx[fxIdx][0], instrumentIdx);
         isFxEdit = 1;
         return 0;
       } else {
@@ -310,17 +358,19 @@ static int onEdit(int col, int row, CellEditAction action) {
     }
     return 0;
   } else if (action == CellEditAction::copy) {
-    copyTable(tableIdx, startCol, startRow, endCol, endRow, 0);
+    if (startRow == 0) return 0;
+    copyTable(tableIdx, startCol, startRow - 1, endCol, endRow - 1, 0);
     return 1;
   } else if (action == CellEditAction::cut) {
-    copyTable(tableIdx, startCol, startRow, endCol, endRow, 1);
+    if (startRow == 0) return 0;
+    copyTable(tableIdx, startCol, startRow - 1, endCol, endRow - 1, 1);
     return 1;
   } else if (action == CellEditAction::paste) {
-    const int rowsPasted = pasteTable(tableIdx, col, row);
+    const int rowsPasted = pasteTable(tableIdx, col, row - 1);
     if (rowsPasted > 0) {
       // Move cursor below pasted data, or to last row if paste extends to end
       int newRow = row + rowsPasted;
-      if (newRow > 15) newRow = 15;
+      if (newRow > 16) newRow = 16;
       screen.cursorRow = newRow;
     }
     fullRedraw();
@@ -378,7 +428,7 @@ static int inputScreenNavigation(int keys, int tapCount) {
 static int onInput(int isKeyDown, int keys, int tapCount) {
   if (isFxEdit) {
     int fxIdx = (screen.cursorCol - 3) / 2;
-    int result = fxEditInput(keys, tapCount, tableRows[screen.cursorRow].fx[fxIdx], lastFX);
+    int result = fxEditInput(keys, tapCount, tableRows[screen.cursorRow - 1].fx[fxIdx], lastFX);
     if (result) {
       isFxEdit = 0;
 
@@ -388,9 +438,9 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
         getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
 
         if (isSingleColumnSelection(&screen)) {
-          uint8_t selectedFX = tableRows[screen.cursorRow].fx[fxIdx][0];
+          uint8_t selectedFX = tableRows[screen.cursorRow - 1].fx[fxIdx][0];
           for (int r = startRow; r <= endRow; r++) {
-            tableRows[r].fx[fxIdx][0] = selectedFX;
+            if (r > 0) tableRows[r - 1].fx[fxIdx][0] = selectedFX;
           }
         }
       }

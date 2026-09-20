@@ -10,6 +10,9 @@
 #include "playback.h"
 #include "corelib_file.h"
 #include "synth/sample_voice.h"
+#include "synth/scwf_voice.h"
+#include "synth/sr_wavetable_loader.h"
+#include "import/import_wav.h"
 #ifdef ANDROID_BUILD
 #include "../platforms/android/audio_diagnostics.h"
 #endif
@@ -19,8 +22,62 @@ static int aBufferSize;
 static std::atomic<int> cpuLoadPercent{0};
 static SampleVoice samplePreviewVoice;
 static InstrumentSample samplePreview;
+static SCWFVoice scwfPreviewVoice;
+static InstrumentSCWF scwfPreview;
+static InstrumentBYOWTBL byowtblPreview;
+static ChipNomadState* ayPreviewState;
+static int previewMode;
+static int byowtblPreviewOscillator;
+static uint64_t byowtblPreviewFrames;
 static float* floatBuffer;
 static float* samplePreviewBuffer;
+
+enum { PREVIEW_NONE, PREVIEW_PCM, PREVIEW_AY, PREVIEW_SCWF, PREVIEW_BYOWTBL };
+static constexpr double previewTwoPi = 6.28318530717958647692;
+
+static void freeSCWFPreview(void) {
+  free(scwfPreview.oscillator[0].data);
+  free(scwfPreview.oscillator[1].data);
+  memset(&scwfPreview, 0, sizeof(scwfPreview));
+  free(byowtblPreview.oscillator[0].data);
+  free(byowtblPreview.oscillator[1].data);
+  memset(&byowtblPreview, 0, sizeof(byowtblPreview));
+}
+
+static void stopSamplePreview(void) {
+  samplePreviewVoice.kill();
+  scwfPreviewVoice.kill();
+  free(samplePreview.data);
+  memset(&samplePreview, 0, sizeof(samplePreview));
+  freeSCWFPreview();
+  if (ayPreviewState) chipnomadDestroy(ayPreviewState);
+  ayPreviewState = NULL;
+  previewMode = PREVIEW_NONE;
+  byowtblPreviewFrames = 0;
+}
+
+static void configureSCWFPreview(const InstrumentSCWF* instrument, const uint16_t* frameSize,
+                                 const uint8_t* frameIndex) {
+  scwfPreviewVoice.configure(instrument, 3600.0f, 1.0f,
+    scwfDetuneCents(instrument->detune), instrument->mix,
+    instrument->filterCutoffHz, instrument->filterResonance,
+    frameSize, frameIndex);
+}
+
+static void renderPreview(float* buffer, int frames) {
+  memset(buffer, 0, frames * 2 * sizeof(*buffer));
+  if (previewMode == PREVIEW_PCM) samplePreviewVoice.render(buffer, frames);
+  else if (previewMode == PREVIEW_AY && ayPreviewState) chipnomadRender(ayPreviewState, buffer, frames);
+  else if (previewMode == PREVIEW_SCWF) scwfPreviewVoice.render(buffer, frames);
+  else if (previewMode == PREVIEW_BYOWTBL) {
+    uint8_t frameIndex[2] = {byowtblPreview.frameIndex[0], byowtblPreview.frameIndex[1]};
+    const double phase = (double)byowtblPreviewFrames / aSampleRate;
+    frameIndex[byowtblPreviewOscillator] = (uint8_t)(127.5 + 127.5 * sin(phase * previewTwoPi));
+    configureSCWFPreview(&byowtblPreview, byowtblPreview.frameSize, frameIndex);
+    scwfPreviewVoice.render(buffer, frames);
+    byowtblPreviewFrames += frames;
+  }
+}
 
 static void updatePlaybackMuteFlags(void) {
   uint8_t trackEnabled[PROJECT_MAX_TRACKS];
@@ -66,7 +123,7 @@ static void audioCallback(int16_t* buffer, int stereoSamples) {
 #endif
     memset(floatBuffer, 0, stereoSamples * 2 * sizeof(*floatBuffer));
   }
-  samplePreviewVoice.render(samplePreviewBuffer, stereoSamples);
+  renderPreview(samplePreviewBuffer, stereoSamples);
   for (int i = 0; i < stereoSamples * 2; ++i) floatBuffer[i] += samplePreviewBuffer[i];
 
   // Convert float to int16_t
@@ -95,6 +152,7 @@ static int start(int sampleRate, int bufferSize) {
   cpuLoadPercent.store(0, std::memory_order_relaxed);
   memset(&samplePreview, 0, sizeof(samplePreview));
   samplePreviewVoice.init((float)sampleRate);
+  scwfPreviewVoice.init((float)sampleRate);
 
   free(floatBuffer);
   free(samplePreviewBuffer);
@@ -164,9 +222,7 @@ static void stop() {
   free(samplePreviewBuffer);
   floatBuffer = NULL;
   samplePreviewBuffer = NULL;
-  samplePreviewVoice.kill();
-  free(samplePreview.data);
-  samplePreview.data = NULL;
+  stopSamplePreview();
 }
 
 static void toggleTrackMute(int trackIdx) {
@@ -211,17 +267,15 @@ static int getCpuLoadPercent(void) {
   return cpuLoadPercent.load(std::memory_order_relaxed);
 }
 
-static void stopSamplePreview(void) {
+static void stopSamplePreviewLocked(void) {
   pause();
-  samplePreviewVoice.kill();
-  free(samplePreview.data);
-  memset(&samplePreview, 0, sizeof(samplePreview));
+  stopSamplePreview();
   resume();
 }
 
 static int previewSample(const char* path) {
   pause();
-  samplePreviewVoice.kill();
+  stopSamplePreview();
   char error[64];
   int result = sampleLoadWav16(path, &samplePreview, error, sizeof(error));
   if (!result) {
@@ -230,9 +284,102 @@ static int previewSample(const char* path) {
     samplePreview.filterCutoffHz = 20000;
     samplePreviewVoice.configure(&samplePreview, 0.0f, 1.0f, 100.0f, 0, 255, 0, 20000, 0);
     samplePreviewVoice.noteOn();
+    previewMode = PREVIEW_PCM;
   }
   resume();
   return result;
+}
+
+static int previewAYSample(const char* path, const InstrumentAYSample* settings) {
+  if (!settings) return 1;
+  pause();
+  stopSamplePreview();
+  uint16_t length, rate;
+  WavLoadResult wavResult;
+  uint8_t* data = loadWavFile(path, PROJECT_MAX_SAMPLE_SIZE, &length, &rate, &wavResult);
+  if (!data) { resume(); return 1; }
+  ayPreviewState = chipnomadCreate();
+  if (!ayPreviewState) { free(data); resume(); return 1; }
+  Project* project = &ayPreviewState->project;
+  project->tracksCount = project->chipsCount = 1;
+  project->tickRate = chipnomadState->project.tickRate;
+  project->chipType = chipnomadState->project.chipType;
+  project->chipSetup = chipnomadState->project.chipSetup;
+  project->linearPitch = chipnomadState->project.linearPitch;
+  project->pitchTable = chipnomadState->project.pitchTable;
+  project->instruments[0].type = InstrumentType::AYSample;
+  project->instruments[0].volume = 255;
+  project->instruments[0].chip.aySample = *settings;
+  InstrumentAYSample* sample = &project->instruments[0].chip.aySample;
+  sample->sampleData = data;
+  sample->fileLength = sample->sampleLength = length;
+  sample->sampleRate = rate;
+  sample->sampleStart = 0;
+  sample->sampleLoopStart = length;
+  ayPreviewState->aySampleDithering = chipnomadState->aySampleDithering;
+  chipnomadInitChips(ayPreviewState, aSampleRate, NULL);
+  if (chipnomadReserveRenderBuffers(ayPreviewState, aBufferSize)) {
+    chipnomadDestroy(ayPreviewState);
+    ayPreviewState = NULL;
+    resume();
+    return 1;
+  }
+  playbackPreviewNote(&ayPreviewState->playbackState, 0, 36, 0);
+  previewMode = PREVIEW_AY;
+  resume();
+  return 0;
+}
+
+static int previewSCWFCommon(const char* path, const InstrumentSCWF* settings,
+                             int oscillator, int byowtbl) {
+  if (!settings || oscillator < 0 || oscillator > 1) return 1;
+  pause();
+  // SCWF previews are intentionally toggled by START: the second press stops
+  // the currently sounding oscillator/table without reloading the WAV.
+  if ((byowtbl && previewMode == PREVIEW_BYOWTBL) || (!byowtbl && previewMode == PREVIEW_SCWF)) {
+    stopSamplePreview();
+    resume();
+    return 0;
+  }
+  stopSamplePreview();
+  char error[64];
+  InstrumentSCWF* preview = byowtbl ? static_cast<InstrumentSCWF*>(&byowtblPreview) : &scwfPreview;
+  *preview = *settings;
+  memset(&preview->oscillator[0], 0, sizeof(preview->oscillator[0]));
+  memset(&preview->oscillator[1], 0, sizeof(preview->oscillator[1]));
+  int loadResult = byowtbl
+    ? srWavetableLoadWav(path, &preview->oscillator[oscillator],
+        &byowtblPreview.frameSize[oscillator], &byowtblPreview.tableFrames[oscillator], error, sizeof(error))
+    : sampleLoadWav16(path, &preview->oscillator[oscillator], error, sizeof(error));
+  if (loadResult) {
+    freeSCWFPreview();
+    resume();
+    return 1;
+  }
+  preview->mix = oscillator ? 255 : 0;
+  scwfPreviewVoice.init((float)aSampleRate);
+  if (byowtbl) {
+    byowtblPreviewOscillator = oscillator;
+    byowtblPreviewFrames = 0;
+    uint8_t frameIndex[2] = {byowtblPreview.frameIndex[0], byowtblPreview.frameIndex[1]};
+    frameIndex[oscillator] = 127;
+    configureSCWFPreview(&byowtblPreview, byowtblPreview.frameSize, frameIndex);
+    previewMode = PREVIEW_BYOWTBL;
+  } else {
+    configureSCWFPreview(preview, NULL, NULL);
+    previewMode = PREVIEW_SCWF;
+  }
+  scwfPreviewVoice.noteOn();
+  resume();
+  return 0;
+}
+
+static int previewSCWF(const char* path, const InstrumentSCWF* settings, int oscillator) {
+  return previewSCWFCommon(path, settings, oscillator, 0);
+}
+
+static int previewBYOWTBL(const char* path, const InstrumentBYOWTBL* settings, int oscillator) {
+  return previewSCWFCommon(path, settings, oscillator, 1);
 }
 
 
@@ -248,5 +395,8 @@ struct AudioManager audioManager = {
   .toggleTrackSolo = toggleTrackSolo,
   .getCpuLoadPercent = getCpuLoadPercent,
   .previewSample = previewSample,
-  .stopSamplePreview = stopSamplePreview,
+  .previewAYSample = previewAYSample,
+  .previewSCWF = previewSCWF,
+  .previewBYOWTBL = previewBYOWTBL,
+  .stopSamplePreview = stopSamplePreviewLocked,
 };

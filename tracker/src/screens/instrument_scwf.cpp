@@ -41,9 +41,10 @@ static const char* shortFilename(const char* path, char* output, size_t maxLengt
   return output;
 }
 
-static void cancelled(void) { screenSetup(&screenInstrument, cInstrument); }
+static void cancelled(void) { audioManager.stopSamplePreview(); screenSetup(&screenInstrument, cInstrument); }
 
 static void loaded(const char* path) {
+  audioManager.stopSamplePreview();
   InstrumentSCWF* scwf = &chipnomadState->project.instruments[cInstrument].chip.scwf;
   char error[64];
   audioManager.pause();
@@ -60,6 +61,11 @@ static void loaded(const char* path) {
   }
   audioManager.resume();
   screenSetup(&screenInstrument, cInstrument);
+}
+
+static void preview(const char* path) {
+  const InstrumentSCWF* scwf = &chipnomadState->project.instruments[cInstrument].chip.scwf;
+  if (audioManager.previewSCWF(path, scwf, loadSlot)) screenMessage(MESSAGE_TIME, "Cannot preview WAV");
 }
 
 static int columns(int row) {
@@ -132,7 +138,7 @@ static int input(int isKeyDown, int keys, int) {
   if (input == PopupEditInput::hold) return 1;
   if (input == PopupEditInput::open) {
     loadSlot = row - 3;
-    fileBrowserSetup("LOAD SCWF OSC", ".wav", appSettings.scwfPath, loaded, cancelled);
+    fileBrowserSetupWithPreview("LOAD SCWF OSC", ".wav", appSettings.scwfPath, loaded, cancelled, preview);
     screenSetup(&screenFileBrowser, 0);
     return 1;
   }

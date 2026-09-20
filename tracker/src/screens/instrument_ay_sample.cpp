@@ -6,6 +6,7 @@
 #include "utils.h"
 #include "file_browser.h"
 #include "import/import_wav.h"
+#include "audio_manager.h"
 #include <string.h>
 
 // Preview configuration
@@ -87,6 +88,7 @@ void updateSamplePreview(void) {
 }
 
 static void onSampleLoaded(const char* path) {
+  audioManager.stopSamplePreview();
   InstrumentAYSample* smp = &chipnomadState->project.instruments[cInstrument].chip.aySample;
 
   // Load the WAV file
@@ -142,7 +144,13 @@ static void onSampleLoaded(const char* path) {
 }
 
 static void onSampleCancelled(void) {
+  audioManager.stopSamplePreview();
   screenSetup(&screenInstrument, cInstrument);
+}
+
+static void onSamplePreview(const char* path) {
+  const InstrumentAYSample* sample = &chipnomadState->project.instruments[cInstrument].chip.aySample;
+  if (audioManager.previewAYSample(path, sample)) screenMessage(MESSAGE_TIME, "Cannot preview WAV");
 }
 
 static int getColumnCount(int row) {
@@ -334,7 +342,8 @@ static int onEdit(int col, int row, CellEditAction action) {
   if (row == 3) {
     if (col == 0) {
       // Load sample
-      fileBrowserSetup("LOAD SAMPLE", ".wav", appSettings.samplePath, onSampleLoaded, onSampleCancelled);
+      fileBrowserSetupWithPreview("LOAD SAMPLE", ".wav", appSettings.samplePath,
+        onSampleLoaded, onSampleCancelled, onSamplePreview);
       screenSetup(&screenFileBrowser, 0);
     } else if (col == 1) {
       // Lift sample to zero

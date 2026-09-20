@@ -202,6 +202,7 @@ int8_t instrumentIsEmpty(Project* project, int instrument) {
 
 // Is table empty?
 int8_t tableIsEmpty(Project* project, int table) {
+  if (project->tables[table].retriggerMode != TableRetriggerMode::instrument) return 0;
   for (int c = 0; c < 16; c++) {
     if (project->tables[table].rows[c].pitchFlag != 0) return 0;
     if (project->tables[table].rows[c].pitchOffset != 0) return 0;
@@ -285,6 +286,7 @@ void instrumentClear(Instrument* instrument) {
 
 // Clear a single table with proper initialization
 void tableClear(Table* table) {
+  table->retriggerMode = TableRetriggerMode::instrument;
   for (int d = 0; d < 16; d++) {
     table->rows[d].pitchFlag = 0;
     table->rows[d].pitchOffset = 0;

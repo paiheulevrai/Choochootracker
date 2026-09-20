@@ -519,6 +519,25 @@ static int projectLoadInstruments(FILE* file, Project* p) {
   return 0;
 }
 
+static TableRetriggerMode tableRetriggerModeFromHeader(const char* line) {
+  const char* value = strstr(line, "Retrig: ");
+  if (!value) return TableRetriggerMode::instrument;
+  value += 8;
+  if (!strncmp(value, "Phrase", 6)) return TableRetriggerMode::phrase;
+  if (!strncmp(value, "Chain", 5)) return TableRetriggerMode::chain;
+  if (!strncmp(value, "Free", 4)) return TableRetriggerMode::free;
+  return TableRetriggerMode::instrument;
+}
+
+static const char* tableRetriggerModeName(TableRetriggerMode mode) {
+  switch (mode) {
+    case TableRetriggerMode::phrase: return "Phrase";
+    case TableRetriggerMode::chain: return "Chain";
+    case TableRetriggerMode::free: return "Free";
+    default: return "Inst";
+  }
+}
+
 static int loadTable(FILE* file, Table* table, Project* p) {
   // Skip opening ```
   char* line = peekLine(file);
@@ -569,6 +588,7 @@ static int projectLoadTables(FILE* file, Project* p) {
     if (line == NULL) return 1;
     if (strncmp(line, "### Table", 9)) break;
     if (sscanf(line, "### Table %X", &idx) != 1) return 1;
+    p->tables[idx].retriggerMode = tableRetriggerModeFromHeader(line);
     consumeLine(file);
     if (loadTable(file, &p->tables[idx], p)) return 1;
   }
@@ -1106,7 +1126,7 @@ static int projectSavePhrases(FILE* file, Project* project) {
 int saveTable(FILE* file, int idx, Table* table) {
   extern FXName fxNames[256];
 
-  fprintf(file, "\n### Table %X\n\n```\n", idx);
+  fprintf(file, "\n### Table %X (Retrig: %s)\n\n```\n", idx, tableRetriggerModeName(table->retriggerMode));
   for (int d = 0; d < 16; d++) {
     fprintf(file, "%c %s %s %s %s %s %s %s %s %s %s\n",
       table->rows[d].pitchFlag ? '=' : '~',
@@ -1308,6 +1328,7 @@ static int instrumentLoadInternal(FILE* file, Project* project, int instrumentId
     snprintf(projectFileError, 40, "Expected table, got: %.20s", line);
     return 1;
   }
+  project->tables[instrumentIdx].retriggerMode = tableRetriggerModeFromHeader(line);
   consumeLine(file);
   if (loadTable(file, &project->tables[instrumentIdx], project)) return 1;
 

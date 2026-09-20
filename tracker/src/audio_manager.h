@@ -21,6 +21,9 @@ struct AudioManager {
   void (*toggleTrackSolo)(int trackIdx);
   int (*getCpuLoadPercent)(void);
   int (*previewSample)(const char* path);
+  int (*previewAYSample)(const char* path, const InstrumentAYSample* settings);
+  int (*previewSCWF)(const char* path, const InstrumentSCWF* settings, int oscillator);
+  int (*previewBYOWTBL)(const char* path, const InstrumentBYOWTBL* settings, int oscillator);
   void (*stopSamplePreview)(void);
   uint8_t trackStates[PROJECT_MAX_TRACKS];
 };

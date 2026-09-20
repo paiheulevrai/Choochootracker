@@ -75,3 +75,28 @@ TEST_CASE("BYOWTBL linearly interpolates between independently selected frames")
   voice.render(output, 1);
   CHECK(output[0] == doctest::Approx(8000.0 / 32768.0).epsilon(0.01));
 }
+
+TEST_CASE("BYOWTBL preview positions span distinct frames at C3") {
+  int16_t frames[] = {0, 0, 0, 0, 16000, 16000, 16000, 16000};
+  InstrumentSCWF instrument{};
+  instrument.oscillator[0].data = frames;
+  instrument.oscillator[0].frameCount = 8;
+  instrument.oscillator[0].channels = 1;
+  instrument.sustain = 255;
+  uint16_t frameSize[] = {4, 0};
+  uint8_t first[] = {0, 0}, last[] = {255, 0};
+  float firstOutput[2]{}, lastOutput[2]{};
+
+  SCWFVoice voice;
+  voice.init(48000.0f);
+  voice.configure(&instrument, 4800.0f, 1.0f, 0, 0, 20000, 0, frameSize, first);
+  voice.noteOn();
+  voice.render(firstOutput, 1);
+  voice.configure(&instrument, 4800.0f, 1.0f, 0, 0, 20000, 0, frameSize, last);
+  voice.noteOn();
+  voice.render(lastOutput, 1);
+
+  CHECK(scwfFrequencyHz(4800) == doctest::Approx(130.8128).epsilon(0.001));
+  CHECK(firstOutput[0] == doctest::Approx(0.0));
+  CHECK(lastOutput[0] == doctest::Approx(16000.0 / 32768.0).epsilon(0.01));
+}

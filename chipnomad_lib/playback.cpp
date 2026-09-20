@@ -123,6 +123,7 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
 
 void tableInit(PlaybackState* state, int trackIdx, struct PlaybackTableState* table, int tableIdx, int row, int speed) {
   table->tableIdx = tableIdx;
+  table->baseSpeed = speed;
   if (tableIdx == EMPTY_VALUE_8) return;
 
   Project* p = state->p;
@@ -359,6 +360,16 @@ static void restartStructuralLFOs(PlaybackState* state, int trackIdx, int entere
       playbackModRestart(mod);
     }
   }
+
+  PlaybackTableState* tables[] = {&track->note.instrumentTable, &track->note.auxTable};
+  for (PlaybackTableState* table : tables) {
+    if (table->tableIdx == EMPTY_VALUE_8) continue;
+    TableRetriggerMode mode = state->p->tables[table->tableIdx].retriggerMode;
+    if ((enteredPhrase && mode == TableRetriggerMode::phrase) ||
+        (enteredChain && mode == TableRetriggerMode::chain)) {
+      tableInit(state, trackIdx, table, table->tableIdx, 0, table->baseSpeed);
+    }
+  }
 }
 
 void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRow, int skipDelCheck) {
@@ -373,6 +384,8 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
   uint8_t auxTableRow = EMPTY_VALUE_8;
   uint8_t instrumentTable = EMPTY_VALUE_8;
   uint8_t instrumentTableRow = EMPTY_VALUE_8;
+  int hasAuxTableFX = 0;
+  int hasInstrumentTableFX = 0;
 
   // Check for pending groove change
   if (track->pendingGrooveIdx != track->grooveIdx) {
@@ -396,8 +409,10 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
       return;
     } else if (fxType == fxTBL) {
       instrumentTable = fxValue;
+      hasInstrumentTableFX = 1;
     } else if (fxType == fxTBX) {
       auxTable = fxValue;
+      hasAuxTableFX = 1;
     } else if (fxType == fxTHO) {
       instrumentTableRow = fxValue & 0xf;
     } else if (fxType == fxTXH) {
@@ -405,8 +420,8 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     }
   }
 
-  if (instrumentTable != EMPTY_VALUE_8 && instrumentTableRow == EMPTY_VALUE_8) instrumentTableRow = 0;
-  if (auxTable != EMPTY_VALUE_8 && auxTableRow == EMPTY_VALUE_8) auxTableRow = 0;
+  if (hasInstrumentTableFX && instrumentTableRow == EMPTY_VALUE_8) instrumentTableRow = 0;
+  if (hasAuxTableFX && auxTableRow == EMPTY_VALUE_8) auxTableRow = 0;
 
   // Instrument
   if (instrument != EMPTY_VALUE_8) {
@@ -417,16 +432,22 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     resetNoteFX(state, trackIdx);
     resetOffsets(state, trackIdx);
 
-    // Reset AUX table
-    tableInit(state, trackIdx, &track->note.auxTable, EMPTY_VALUE_8, 0, 1);
+    // The historical instrument-triggered aux table stops on an instrument change.
+    if (track->note.auxTable.tableIdx == EMPTY_VALUE_8 ||
+        p->tables[track->note.auxTable.tableIdx].retriggerMode == TableRetriggerMode::instrument) {
+      tableInit(state, trackIdx, &track->note.auxTable, EMPTY_VALUE_8, 0, 1);
+    }
 
     // Initialize modulations
     initModulations(state, trackIdx, oldInstrument, instrument);
 
     // Setup instrument
     setupInstrument(state, trackIdx);
-    if (instrumentTable == EMPTY_VALUE_8) {
+    if (instrumentTable == EMPTY_VALUE_8 &&
+        (track->note.instrumentTable.tableIdx == EMPTY_VALUE_8 ||
+         p->tables[track->note.instrumentTable.tableIdx].retriggerMode == TableRetriggerMode::instrument)) {
       instrumentTable = instrument;
+      hasInstrumentTableFX = 1;
       if (instrumentTableRow == EMPTY_VALUE_8) {
         instrumentTableRow = 0;
       }
@@ -441,13 +462,14 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
   if (note != EMPTY_VALUE_8 && note != NOTE_OFF) resetInstrumentFX(track);
 
   // Init/hop tables
-  if (instrumentTable != EMPTY_VALUE_8) {
-    tableInit(state, trackIdx, &track->note.instrumentTable, instrumentTable, instrumentTableRow, p->instruments[instrument].tableSpeed);
+  if (hasInstrumentTableFX) {
+    int tableSpeed = instrument != EMPTY_VALUE_8 ? p->instruments[instrument].tableSpeed : 1;
+    tableInit(state, trackIdx, &track->note.instrumentTable, instrumentTable, instrumentTableRow, tableSpeed);
   } else if (instrumentTableRow != EMPTY_VALUE_8) {
     hopToTableRow(state, trackIdx, &track->note.instrumentTable, instrumentTableRow);
   }
 
-  if (auxTable != EMPTY_VALUE_8) {
+  if (hasAuxTableFX) {
     tableInit(state, trackIdx, &track->note.auxTable, auxTable, auxTableRow, 1);
   } else if (auxTableRow != EMPTY_VALUE_8) {
     hopToTableRow(state, trackIdx, &track->note.auxTable, auxTableRow);
