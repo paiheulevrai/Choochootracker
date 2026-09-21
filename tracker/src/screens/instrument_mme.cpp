@@ -34,22 +34,24 @@ static uint8_t* macro(InstrumentMME* m, int index) {
   uint8_t* values[] = {&m->waves, &m->interval, &m->amount, &m->flow, &m->feedback, &m->shaper};
   return index >= 0 && index < 6 ? values[index] : NULL;
 }
-static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) : row == 3 ? 1 : row <= 8 ? 2 : 1; }
+static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) : row == 3 ? 1 : row <= 8 ? 2 : row == 10 ? 5 : 1; }
 static void drawStatic(void) {
   instrumentCommonDrawStatic(); InstrumentMME* m = &chipnomadState->project.instruments[cInstrument].chip.mme;
   gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrint(0, 6, "Model"); gfxPrint(0, 7, "MME");
   gfxSetFgColor(appSettings.colorScheme.textDefault);
   for (int i = 0; i < 6; ++i) gfxPrint(0, 8 + i, macroName(m->model, i));
-  instrumentCommonDrawVoicePostStatic(0);
+  instrumentCommonDrawVoicePostStatic(1);
 }
 static void drawCursor(int col, int row) {
   if (row < 3) { instrumentCommonDrawCursor(col, row); return; }
+  if (row == 10) { instrumentCommonDrawVoicePostCursor(col, 9); return; }
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostCursor(col, row); return; }
   gfxCursor(11, row == 3 ? 6 : row + 4, row == 3 ? 28 : 7);
 }
 static void drawField(int col, int row, CellState state) {
   if (row < 3) { instrumentCommonDrawField(col, row, state); return; }
   InstrumentMME* m = &chipnomadState->project.instruments[cInstrument].chip.mme;
+  if (row == 10) { instrumentCommonDrawVoicePostField(col, 9, state, m); return; }
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostField(col, row, state, m); return; }
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   gfxClearRect(11, row == 3 ? 6 : row + 4, row == 3 ? 20 : 7, 1);
@@ -59,6 +61,7 @@ static void drawField(int col, int row, CellState state) {
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);
   InstrumentMME* m = &chipnomadState->project.instruments[cInstrument].chip.mme;
+  if (row == 10) { int ok = instrumentCommonOnEditVoicePost(col, 9, action, m); if (ok) projectModified = 1; return ok; }
   if (col && row >= 4 && row <= 8) { int ok = instrumentCommonOnEditVoicePost(col, row, action, m); if (ok) projectModified = 1; return ok; }
   int ok = row == 3 ? edit8noLast(action, (uint8_t*)&m->model, 1, 0, 6) :
     (macro(m, row - 4) ? edit8noLast(action, macro(m, row - 4), 16, 0, 255) : 0);
@@ -77,7 +80,7 @@ static int onInput(int isKeyDown, int keys, int) {
   return 0;
 }
 ScreenData screenInstrumentMME = {
-  .rows = 10, .cursorRow = 0, .cursorCol = 0, .topRow = 0, .selectMode = -1,
+  .rows = 11, .cursorRow = 0, .cursorCol = 0, .topRow = 0, .selectMode = -1,
   .selectStartRow = 0, .selectStartCol = 0, .selectAnchorRow = 0, .selectAnchorCol = 0,
   .playbackLevel = ScreenPlaybackLevel::none, .getColumnCount = columns, .drawStatic = drawStatic,
   .drawCursor = drawCursor, .drawSelection = NULL, .drawRowHeader = NULL, .drawColHeader = NULL,
