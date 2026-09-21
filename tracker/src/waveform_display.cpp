@@ -5,6 +5,7 @@
 #include "synth/braids_voice.h"
 #include "synth/plaits_voice.h"
 #include "synth/plaits_alt_voice.h"
+#include "synth/mme_voice.h"
 #include "common.h"
 #include <string.h>
 #include <stdlib.h>
@@ -430,6 +431,23 @@ void renderPlaitsPreview(Bitmap* bitmap, const InstrumentPlaits* instrument, int
   if (!instrument) { if (bitmap) gfxBitmapClear(bitmap); return; }
   if (alt) renderPlaitsPreviewVoice<PlaitsAltVoice>(bitmap, instrument);
   else renderPlaitsPreviewVoice<PlaitsVoice>(bitmap, instrument);
+}
+
+void renderMMEPreview(Bitmap* bitmap, const InstrumentMME* instrument) {
+  if (!instrument) { if (bitmap) gfxBitmapClear(bitmap); return; }
+  // The preview shows MME's oscillator interaction, not a potentially silent
+  // user envelope or filter setting.
+  InstrumentMME preview = *instrument;
+  preview.attack = preview.decay = preview.release = 0;
+  preview.sustain = 255;
+  preview.filterEnabled = 0;
+  float samples[768];
+  MMEVoice voice;
+  voice.init(48000.0f);
+  voice.configure(&preview, 6900.0f, 1.0f, 20000, 0);
+  voice.noteOn();
+  voice.render(samples, sizeof(samples) / sizeof(samples[0]));
+  renderFloatPreview(bitmap, samples, sizeof(samples) / sizeof(samples[0]));
 }
 
 void renderAYWavetablePreview(Bitmap* bitmap, uint8_t* wavetable, int isYM) {

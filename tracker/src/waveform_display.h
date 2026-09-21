@@ -11,6 +11,7 @@ extern "C" {
 struct InstrumentSCWF;
 struct InstrumentBraids;
 struct InstrumentPlaits;
+struct InstrumentMME;
 
 /**
  * @brief Initialize waveform display system
@@ -45,6 +46,7 @@ void renderSCWFPreview(Bitmap* bitmap, const struct InstrumentSCWF* instrument,
 /** VCO output preview for synth engines; rendered only by the instrument UI. */
 void renderBraidsPreview(Bitmap* bitmap, const struct InstrumentBraids* instrument);
 void renderPlaitsPreview(Bitmap* bitmap, const struct InstrumentPlaits* instrument, int alt);
+void renderMMEPreview(Bitmap* bitmap, const struct InstrumentMME* instrument);
 void renderFloatPreview(Bitmap* bitmap, const float* samples, uint32_t count);
 
 /**

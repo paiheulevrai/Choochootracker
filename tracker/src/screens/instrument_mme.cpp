@@ -2,8 +2,17 @@
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "model_catalog.h"
+#include "waveform_display.h"
 
 static int modelButtonDown;
+static Bitmap* previewBitmap;
+
+static void drawPreview(const InstrumentMME* mme) {
+  if (!previewBitmap) previewBitmap = gfxBitmapCreate(32, 3);
+  renderMMEPreview(previewBitmap, mme);
+  gfxSetFgColor(appSettings.colorScheme.textInfo);
+  gfxDrawBitmap(previewBitmap, 0, 16);
+}
 static void selectModel(int value) {
   chipnomadState->project.instruments[cInstrument].chip.mme.model = (MMEModel)value;
   projectModified = 1; screenSetup(&screenInstrument, cInstrument);
@@ -41,6 +50,7 @@ static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textDefault);
   for (int i = 0; i < 6; ++i) gfxPrint(0, 8 + i, macroName(m->model, i));
   instrumentCommonDrawVoicePostStatic(1);
+  drawPreview(m);
 }
 static void drawCursor(int col, int row) {
   if (row < 3) { instrumentCommonDrawCursor(col, row); return; }
