@@ -141,7 +141,7 @@ Profiling showed that all eight AY emulators were rendering even for empty, Brai
 
 -> Update from August 10: Skipping unused AY voices rendering dropped the empty project CPU load to 2%. Huge improvement.
 
-## Loquelic Iteritas-inspired dual oscillator
+## Complex Osc v2: Loquelic x EMX-1
 
 The existing Braids and Plaits instruments already cover parts of this sound
 space: Braids provides VOSIM, FM, feedback/chaotic FM, sync and ring-style
@@ -150,11 +150,17 @@ waveshaping. Neither exposes the Loquelic-style architecture as independent
 Pitch A/Pitch B controls with selectable oscillator sync, cross phase
 modulation, AM/ring blend and a final wavefolder.
 
-A small dedicated voice is therefore feasible and musically distinct. Start
-with the PM path: two band-limited oscillators, independent pitch offsets,
-one-way or bidirectional phase modulation, AM/ring blend, selectable sync and
-a final wavefolder. VOSIM and the summation-series path can follow if the PM
-voice proves useful. Do not reproduce Loquelic's variable-time aliasing
+A small dedicated voice is therefore feasible and musically distinct. Use the
+Loquelic-style two-oscillator architecture, but the EMX-1's mode-led control
+surface: Dual, Ring, Sync, Cross Mod, VPM and Waveshape. Give every mode six
+macros: Wave A, Wave B, Interval, Amount, Mix and Shape; their musical meaning
+may vary by mode (for example, Amount is balance in Dual and modulation depth
+in VPM). Keep the model selector separate, as Bogie does.
+
+Start with the PM path: two band-limited oscillators, independent pitch
+offsets, one-way or bidirectional phase modulation, AM/ring blend, selectable
+sync and a final wavefolder. VOSIM and the summation-series path can follow if
+the PM voice proves useful. Do not reproduce Loquelic's variable-time aliasing
 strategy initially: it is a deliberate hardware character, costly to fit into
 the fixed-rate tracker renderer, and not required for the core patchability.
 

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="2400" viewBox="0 0 1080 2400">
+  <title>ChooChooTracker, tracker layout in Material 3 dark mode</title>
+  <rect width="1080" height="2400" fill="#141218"/>
+  <text x="54" y="58" fill="#E6E0E9" font-family="Roboto,Arial,sans-serif" font-size="28">9:41</text>
+  <path d="M915 42h12m10 0h12m10 0h18" stroke="#E6E0E9" stroke-width="5" stroke-linecap="round"/>
+  <!-- Existing 4:3 tracker canvas: same content hierarchy and position. -->
+  <rect x="24" y="96" width="1032" height="774" rx="24" fill="#1D1B20"/>
+  <text x="56" y="164" fill="#D0BCFF" font-family="Roboto Mono,monospace" font-size="34" font-weight="700">INSTRUMENT 00</text>
+  <text x="56" y="244" fill="#E6E0E9" font-family="Roboto Mono,monospace" font-size="31">Type</text><text x="272" y="244" fill="#D0BCFF" font-family="Roboto Mono,monospace" font-size="31">Sample</text><text x="690" y="244" fill="#E6E0E9" font-family="Roboto Mono,monospace" font-size="31">Load   Save</text>
+  <text x="56" y="292" fill="#E6E0E9" font-family="Roboto Mono,monospace" font-size="31">Name</text><text x="272" y="292" fill="#E6E0E9" font-family="Roboto Mono,monospace" font-size="31">Dub kick</text>
+  <text x="56" y="340" fill="#E6E0E9" font-family="Roboto Mono,monospace" font-size="31">Transp.</text><text x="272" y="340" fill="#E6E0E9" font-family="Roboto Mono,monospace" font-size="31">On</text><text x="466" y="340" fill="#E6E0E9" font-family="Roboto Mono,monospace" font-size="31">Tbl.Tic 01</text><text x="750" y="340" fill="#E6E0E9" font-family="Roboto Mono,monospace" font-size="31">Vol FF</text>
+  <text x="56" y="430" fill="#D0BCFF" font-family="Roboto Mono,monospace" font-size="31" font-weight="700">SOURCE</text><text x="506" y="430" fill="#D0BCFF" font-family="Roboto Mono,monospace" font-size="31" font-weight="700">FILTER</text>
+  <g fill="#E6E0E9" font-family="Roboto Mono,monospace" font-size="31"><text x="56" y="480">Sample    0D3.WAV</text><text x="56" y="528">Pitch     −12 st</text><text x="56" y="576">Start     00</text><text x="56" y="624">End       A6</text><text x="56" y="672">Loop      Off</text><text x="56" y="720">Speed     100%</text><text x="506" y="480">Type      Off</text><text x="506" y="528">Mode      LP</text><text x="506" y="576">Slope     12 dB</text><text x="506" y="624">Cutoff    20000 Hz</text><text x="506" y="672">Reso      00</text></g>
+  <text x="56" y="790" fill="#D0BCFF" font-family="Roboto Mono,monospace" font-size="31" font-weight="700">ADSR</text><text x="218" y="790" fill="#E6E0E9" font-family="Roboto Mono,monospace" font-size="31">A00  D50  S00  R00   Shape 80</text>
+  <path d="M64 834 C88 760 108 850 144 810 S212 790 250 820 S326 830 368 800 S454 798 500 822 S590 830 640 808 S720 804 760 818" fill="none" stroke="#D0BCFF" stroke-width="4"/>
+  <!-- Existing control layout, only restyled as Material surfaces. -->
+  <rect x="46" y="914" width="460" height="460" rx="28" fill="#211F26" stroke="#79747E" stroke-width="2"/>
+  <path d="M276 946v396M78 1144h396" stroke="#49454F" stroke-width="2"/>
+  <g fill="#E6E0E9" font-family="Roboto,Arial,sans-serif" font-size="46" text-anchor="middle"><text x="276" y="1050">↑</text><text x="158" y="1160">←</text><text x="394" y="1160">→</text><text x="276" y="1282">↓</text></g>
+  <circle cx="836" cy="1036" r="126" fill="#F2B8B5"/><text x="836" y="1028" text-anchor="middle" fill="#601410" font-family="Roboto,Arial,sans-serif" font-size="28">A</text><text x="836" y="1070" text-anchor="middle" fill="#601410" font-family="Roboto,Arial,sans-serif" font-size="34" font-weight="500">EDIT</text>
+  <circle cx="664" cy="1288" r="118" fill="#D0BCFF"/><text x="664" y="1280" text-anchor="middle" fill="#381E72" font-family="Roboto,Arial,sans-serif" font-size="28">B</text><text x="664" y="1322" text-anchor="middle" fill="#381E72" font-family="Roboto,Arial,sans-serif" font-size="34" font-weight="500">OPT</text>
+  <rect x="792" y="1190" width="236" height="194" rx="28" fill="#4A4458"/><text x="910" y="1268" text-anchor="middle" fill="#E6E0E9" font-family="Roboto,Arial,sans-serif" font-size="29">START</text><text x="910" y="1312" text-anchor="middle" fill="#E6E0E9" font-family="Roboto,Arial,sans-serif" font-size="34" font-weight="500">PLAY</text>
+  <rect x="544" y="1420" width="250" height="168" rx="28" fill="#4A4458"/><text x="669" y="1488" text-anchor="middle" fill="#E6E0E9" font-family="Roboto,Arial,sans-serif" font-size="29">SELECT</text><text x="669" y="1532" text-anchor="middle" fill="#E6E0E9" font-family="Roboto,Arial,sans-serif" font-size="34" font-weight="500">SHIFT</text>
+  <path d="M46 1668h988" stroke="#49454F" stroke-width="2"/>
+  <!-- Live-motion controls stay in their original bottom band. -->
+  <circle cx="180" cy="1900" r="132" fill="#211F26" stroke="#79747E" stroke-width="2"/><circle cx="180" cy="1900" r="48" fill="#CAC4D0"/>
+  <circle cx="900" cy="1900" r="132" fill="#211F26" stroke="#79747E" stroke-width="2"/><circle cx="900" cy="1900" r="48" fill="#CAC4D0"/>
+  <rect x="380" y="1828" width="136" height="144" rx="18" fill="#4F378B"/><text x="448" y="1915" text-anchor="middle" fill="#FFFFFF" font-family="Roboto,Arial,sans-serif" font-size="30" font-weight="500">REC</text>
+  <rect x="564" y="1828" width="136" height="144" rx="18" fill="#4A4458"/><text x="632" y="1915" text-anchor="middle" fill="#E6E0E9" font-family="Roboto,Arial,sans-serif" font-size="30" font-weight="500">DEL</text>
+  <!-- Standard Android navigation. -->
+  <rect y="2184" width="1080" height="216" fill="#211F26"/><g fill="#CAC4D0" font-family="Roboto,Arial,sans-serif" font-size="23" text-anchor="middle"><text x="180" y="2330">Project</text><text x="540" y="2330">Instruments</text><text x="900" y="2330">Settings</text></g><circle cx="540" cy="2264" r="32" fill="#D0BCFF"/><path d="M524 2264h32m-16-16v32" stroke="#381E72" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -36,6 +36,6 @@
 ## Verification and commits
 
 - Run `make -f Makefile.test -j4` from `tracker` after engine changes.
-- Before an alpha commit, update `docs/USER_MANUAL.md` and the in-app help.
+- Before an alpha commit, update `docs/USER_MANUAL.md`. Never update in-app help.
 - The worktree can contain user changes and deletions. Stage only files that
   belong to the current task; never include unrelated deletions in a commit.

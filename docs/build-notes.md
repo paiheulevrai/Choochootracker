@@ -23,6 +23,38 @@ make -j4 choochooplayer
 Its self-contained package is written to `choochooplayer/build/windows/`.
 Run `launch-alf-dance.bat` there to preview the bundled `alf dance.cct` project.
 
+## Linux / Steam Deck (x86_64)
+
+For a native local test, use the existing Ubuntu-24.04 WSL distribution with
+`g++`, `make`, and `libsdl2-dev` installed. From `tracker` in that distribution:
+
+```sh
+make -j4 -f Makefile.linux linux-package \
+  COMMON_CFLAGS='-std=c++17 -Wall -g -Os -DTEST' VERSION=1.0.9-deck-test
+ldd build/linux/choochootracker
+tar -tzf build/linux/ChooChooTracker-$(date +%Y-%m-%d)-1.0.9-deck-test-Linux-x86_64.tar.gz
+```
+
+The archive includes the executable, runtime assets, manual, and licenses.
+SDL2 and its system dependencies must be available on the target. A build
+against Ubuntu 24.04 is a local compatibility test, not a Steam Linux Runtime
+compatibility guarantee; check dependencies and playback on the target Deck.
+
+Use SteamOS Devkit Client to pair the Deck and upload the extracted package.
+Set the launch command to `./chipnomad.sh` and disable Steam Play for this
+native build. The existing complete Windows package can also be tested with
+Steam Play enabled and `./choochootracker.exe` as its launch command. Local
+devkit testing does not require uploading a Steam store build.
+
+For the Deck test, set `audioBufferSize: 512` in the extracted application's
+`settings.txt` while it is closed, then relaunch. On the tested Deck with
+SteamOS 3.8.16 and Proton 11.0, PSY played cleanly and its scope, waveforms,
+and Table cursor became fluid at 512 frames. With the default 4906 frames
+at 48 kHz, those displays advanced in visible jumps despite a 60 FPS overlay:
+the engine processes about 102 ms of audio per callback. At 512 frames this
+falls to about 10.7 ms. This observation validates that test configuration;
+it does not establish a safe buffer size for every supported device.
+
 ## Web
 
 Emscripten is installed locally at `.tmp/emsdk`; do not search for or install
