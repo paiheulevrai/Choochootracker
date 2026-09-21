@@ -7,7 +7,7 @@
 
 struct InstrumentSCWF;
 
-#define SCWF_DETUNE_MAX 149
+#define SCWF_DETUNE_MAX 255
 int scwfDetuneCents(uint8_t value);
 double scwfFrequencyHz(int midiCents);
 

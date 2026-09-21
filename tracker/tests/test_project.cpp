@@ -226,7 +226,7 @@ TEST_CASE("v4 projects preserve LFO wavetable settings") {
   REQUIRE(projectSave(&saved, path) == 0);
   INFO(projectFileError);
   REQUIRE(projectLoad(&loaded, path) == 0);
-  CHECK(projectFileVersion == 4);
+  CHECK(projectFileVersion == 5);
   const Modulation& reloaded = loaded.instruments[0].modulation[2];
   CHECK(reloaded.p1 == static_cast<uint8_t>(LFOShape::wavetable));
   CHECK(reloaded.p2 == static_cast<uint8_t>(LFOTrigger::chain));

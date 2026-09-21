@@ -67,15 +67,20 @@ void DrumSynthVoice::render(float* output, size_t frames) {
         break;
       }
       case DrumSynthEngine::snare:
-        sample = oscillator(frequency_ * (.90f + tone * .35f) * (1.0f + sweep * 1.1f * fast), 1, 0) * (1.0f - noise * .65f);
-        sample += oscillator(frequency_ * (1.45f + fm * .55f), 0, 1) * .35f;
+        sample = oscillator(frequency_ * (.65f + tone * 1.05f) * (1.0f + sweep * 1.1f * fast), 1, 0) * (1.0f - noise * .75f);
+        sample += oscillator(frequency_ * (1.20f + fm * 1.50f), 0, 1) * (.12f + fm * .58f);
         sample += brightNoise * noise * .95f;
         break;
       case DrumSynthEngine::hat: {
-        static const float ratios[] = {1.0f, 1.342f, 1.807f, 2.413f, 2.731f, 3.119f};
+        // No fundamental: unequal mode lifetimes keep the bank from settling
+        // into a pitched square-wave chord.
+        static const float ratios[] = {1.18f, 1.56f, 2.17f, 2.87f, 3.73f, 4.61f};
         float metal = 0.0f, base = (180.0f + tone * 260.0f + frequency_ * .30f) * (1.0f + sweep * .75f * fast);
-        for (int o = 0; o < 6; ++o) metal += oscillator(base * (ratios[o] + fm * o * .075f), 2, o) * .13f;
-        sample = metal + brightNoise * noise * .32f;
+        for (int o = 0; o < 6; ++o) {
+          float modeDecay = expf(-age_ / (.025f + o * .020f + tone * .070f));
+          metal += oscillator(base * (ratios[o] + fm * (o + 1) * .20f), 2, o) * modeDecay * (.06f + fm * .06f);
+        }
+        sample = metal + brightNoise * noise * 1.25f;
         break;
       }
       case DrumSynthEngine::clap: {
@@ -83,23 +88,23 @@ void DrumSynthVoice::render(float* output, size_t frames) {
         float burst = age_ < .010f || (age_ > spacing && age_ < spacing + .010f) ||
           (age_ > spacing * 2.0f && age_ < spacing * 2.0f + .010f) ? 1.0f : .55f;
         sample = brightNoise * (0.25f + noise * .75f) * burst;
-        sample += oscillator(frequency_ * (3.0f + tone * 5.0f), 2, 0) * fm * .20f * fast;
+        sample += oscillator(frequency_ * (2.0f + tone * 8.0f), 2, 0) * fm * .55f * fast;
         break;
       }
       case DrumSynthEngine::tom:
         sample = oscillator(frequency_ * (.90f + tone * .35f) * (1.0f + sweep * 1.3f * fast), 0, 0);
-        sample += oscillator(frequency_ * 2.0f, 0, 1) * fm * .22f;
-        sample += brightNoise * noise * .28f * fast;
+        sample += oscillator(frequency_ * (1.6f + fm * 1.4f), 0, 1) * fm * .55f;
+        sample += brightNoise * noise * .55f * fast;
         break;
       case DrumSynthEngine::rim:
         sample = oscillator(frequency_ * (.85f + tone * .45f) * (1.0f + sweep * .25f), 1, 0) * .70f;
-        sample += oscillator(frequency_ * (2.25f + fm * 1.5f), 0, 1) * .32f;
-        sample += brightNoise * noise * .18f * fast;
+        sample += oscillator(frequency_ * (1.7f + fm * 2.5f), 0, 1) * (.10f + fm * .55f);
+        sample += brightNoise * noise * .50f * fast;
         break;
       case DrumSynthEngine::fm: {
         float ratio = .25f * powf(2.0f, tone * 2.5f);
         float mod = oscillator(frequency_ * ratio, 0, 1) * fm * 9.0f * fast;
-        sample = oscillator(frequency_ * (1.0f + sweep * 2.0f * fast + mod), 0, 0) * .85f + brightNoise * noise * .15f;
+        sample = oscillator(frequency_ * (1.0f + sweep * 2.0f * fast + mod), 0, 0) * .85f + brightNoise * noise * .45f;
         break;
       }
       case DrumSynthEngine::noise:
@@ -117,10 +122,13 @@ void DrumSynthVoice::render(float* output, size_t frames) {
         break;
       }
       case DrumSynthEngine::cymbal: {
-        static const float ratios[] = {1.0f, 1.223f, 1.707f, 2.147f, 2.917f, 3.611f};
+        static const float ratios[] = {1.31f, 1.79f, 2.41f, 3.16f, 4.07f, 5.23f};
         float metal = 0.0f, base = (250.0f + tone * 360.0f + frequency_ * .45f) * (1.0f + sweep * .90f * fast);
-        for (int o = 0; o < 6; ++o) metal += oscillator(base * (ratios[o] + fm * o * .06f), 2, o) * .11f;
-        sample = metal + brightNoise * (.18f + noise * .42f);
+        for (int o = 0; o < 6; ++o) {
+          float modeDecay = expf(-age_ / (.10f + o * .075f + tone * .70f));
+          metal += oscillator(base * (ratios[o] + fm * (o + 1) * .18f), 2, o) * modeDecay * (.05f + fm * .06f);
+        }
+        sample = metal + brightNoise * (.10f + noise * .90f);
         break;
       }
       case DrumSynthEngine::shaker:

@@ -7,6 +7,12 @@
 static int modelButtonDown;
 static Bitmap* previewBitmap;
 
+static const char* paraphonicChordName(uint16_t color) {
+  static const char* names[] = {"DETUNE", "OCT", "2/5/OCT", "MIN7", "MIN", "MIN9", "MIN11", "5TH", "SPREAD", "MAJ11", "MAJ9", "MAJ", "MAJ7", "SUS4", "DETUNE", "OCT+", "OCT++"};
+  int index = (int)((uint32_t)color * 17 / 32768);
+  return names[index > 16 ? 16 : index];
+}
+
 static void drawPreview(const InstrumentBraids* braids) {
   if (!previewBitmap) previewBitmap = gfxBitmapCreate(32, 3);
   renderBraidsPreview(previewBitmap, braids);
@@ -62,8 +68,12 @@ static void drawField(int col, int row, CellState state) {
   if (row == 3) gfxClearRect(11, 6, 29, 1); else gfxClearRect(col ? 26 : 11, row + 4, col ? 8 : 7, 1);
   switch (row) {
     case 3: gfxPrintf(12, 6, "%02d %s", b->model, modelCatalogName(InstrumentType::Braids, b->model)); break;
-    case 4: if (!col) gfxPrintf(11,8,"%04u",(unsigned)((uint32_t)b->timbre*1023/32767)); break;
-    case 5: if (!col) gfxPrintf(11,9,"%04u",(unsigned)((uint32_t)b->color*1023/32767)); break;
+    case 4: if (!col) gfxPrint(11,8,byteToHex(controlFromRange(b->timbre, 32767))); break;
+    case 5: if (!col) {
+      if (b->model == 40) gfxPrint(11,9,paraphonicChordName(b->color));
+      else gfxPrint(11,9,byteToHex(controlFromRange(b->color, 32767)));
+      break;
+    }
   }
 }
 

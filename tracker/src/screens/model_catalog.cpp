@@ -87,6 +87,17 @@ const SelectionItem braidsCategories[] = {
 };
 const int braidsCategoryCount = sizeof(braidsCategories) / sizeof(braidsCategories[0]);
 
+static const SelectionItem drumSynthDrums[] = {
+  LEAF("KICK", 0), LEAF("SNARE", 1), LEAF("HAT", 2), LEAF("CLAP", 3),
+  LEAF("TOM", 4), LEAF("RIM", 5), LEAF("COWBELL", 8), LEAF("CYMBAL", 9),
+  LEAF("SHAKER", 10), LEAF("CLAVE", 11)
+};
+static const SelectionItem drumSynthSynthetic[] = {LEAF("FM", 6), LEAF("NOISE", 7)};
+const SelectionItem drumSynthCategories[] = {
+  CATEGORY("DRUMS", drumSynthDrums), CATEGORY("SYNTHETIC", drumSynthSynthetic)
+};
+const int drumSynthCategoryCount = sizeof(drumSynthCategories) / sizeof(drumSynthCategories[0]);
+
 static bool catalogValid(const SelectionItem* categories, int count, int models) {
   bool seen[64] = {};
   for (int i = 0; i < count; ++i) {

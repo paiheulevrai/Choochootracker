@@ -96,7 +96,7 @@ static void drawField(int col, int row, CellState state) {
   else if (row == 4 && !col) gfxPrint(sourceValueX, 9, table->oscillator[1].path[0] ? shortFilename(table->oscillator[1].path, name) : "Load");
   else if (row == 5 && !col) gfxPrint(sourceValueX, 10, byteToHex(table->frameIndex[0]));
   else if (row == 6 && !col) gfxPrint(sourceValueX, 11, byteToHex(table->frameIndex[1]));
-  else if (row == 7 && !col) gfxPrintf(sourceValueX, 12, "+%03d ct", scwfDetuneCents(table->detune));
+  else if (row == 7 && !col) gfxPrint(sourceValueX, 12, byteToHex(table->detune));
   else if (row == 8 && !col) gfxPrint(sourceValueX, 13, byteToHex(table->mix));
 }
 
@@ -107,7 +107,7 @@ static int edit(int col, int row, CellEditAction action) {
   if (!handled && !col) {
     if (row == 5) handled = edit8noLast(action, &table->frameIndex[0], 8, 0, 255);
     else if (row == 6) handled = edit8noLast(action, &table->frameIndex[1], 8, 0, 255);
-    else if (row == 7) handled = edit8noLast(action, &table->detune, 1, 0, SCWF_DETUNE_MAX);
+    else if (row == 7) handled = edit8noLast(action, &table->detune, 16, 0, SCWF_DETUNE_MAX);
     else if (row == 8) handled = edit8noLast(action, &table->mix, 8, 0, 255);
   }
   if (handled) { projectModified = 1; screenFullRedraw(&screenInstrumentBYOWTBL); }

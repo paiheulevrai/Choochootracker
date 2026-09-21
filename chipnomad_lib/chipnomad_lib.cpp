@@ -398,9 +398,11 @@ static int instrumentFXCutoff(uint8_t value) {
   return (int)filterCutoffFromControl(value);
 }
 
-static float mixerGain(uint8_t value) {
+// Sends need to become audible earlier than master returns, while zero remains
+// a true off state and full scale remains unity.
+static float mixerSendGain(uint8_t value) {
   if (value == 0) return 0.0f;
-  return powf(10.0f, -60.0f * (100 - value) / 2000.0f);
+  return powf(10.0f, -36.0f * (100 - value) / 2000.0f);
 }
 
 static float phraseGain(const PlaybackTrackState* track, const Instrument* instrument) {
@@ -430,7 +432,7 @@ static float effectiveTrackSend(ChipNomadState* state, int trackIdx,
     }
   }
   value = clampInt(value, 0, 100);
-  return state->audioProject.perceptualEffects ? mixerGain((uint8_t)value) : value / 100.0f;
+  return state->audioProject.perceptualEffects ? mixerSendGain((uint8_t)value) : value / 100.0f;
 }
 
 static inline void mixTrackSample(ChipNomadState* state, int trackIdx,
@@ -1206,8 +1208,8 @@ static void updateAChChidVoices(ChipNomadState* state) {
         case 5: envMod += playbackModScaleToRange(mod->outValue, 100); break;
         case 6: decay += playbackModScaleToRange(mod->outValue, 1800); break;
         case 7: accent += playbackModScaleToRange(mod->outValue, 100); break;
-        case 8: if (a->wave == AChChidWave::braids) timbre += playbackModScaleToRange(mod->outValue, 16384); break;
-        case 9: if (a->wave == AChChidWave::braids) color += playbackModScaleToRange(mod->outValue, 16384); break;
+        case 8: if (a->wave == AChChidWave::braids) timbre += playbackModScaleToRange(mod->outValue, 32767); break;
+        case 9: if (a->wave == AChChidWave::braids) color += playbackModScaleToRange(mod->outValue, 32767); break;
       }
     }
     voice->configure((uint8_t)a->wave, a->fineTune, a->model, (uint16_t)clampInt(timbre, 0, 32767), (uint16_t)clampInt(color, 0, 32767),
@@ -1310,8 +1312,8 @@ static void updateBraidsVoices(ChipNomadState* state) {
           break;
         }
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
-        case 3: timbre += playbackModScaleToRange(mod->outValue, 16384); break;
-        case 4: color += playbackModScaleToRange(mod->outValue, 16384); break;
+        case 3: timbre += playbackModScaleToRange(mod->outValue, 32767); break;
+        case 4: color += playbackModScaleToRange(mod->outValue, 32767); break;
         case 5: cutoff += playbackModScaleToRange(mod->outValue, 20000); break;
         case 6: resonance += playbackModScaleToRange(mod->outValue, 255); break;
       }
@@ -1395,9 +1397,9 @@ static void updatePlaitsVoices(ChipNomadState* state) {
       switch (mod->modulation->destination) {
         case 1: gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
-        case 3: harmonics += playbackModScaleToRange(mod->outValue, 16384); break;
-        case 4: timbre += playbackModScaleToRange(mod->outValue, 16384); break;
-        case 5: morph += playbackModScaleToRange(mod->outValue, 16384); break;
+        case 3: harmonics += playbackModScaleToRange(mod->outValue, 32767); break;
+        case 4: timbre += playbackModScaleToRange(mod->outValue, 32767); break;
+        case 5: morph += playbackModScaleToRange(mod->outValue, 32767); break;
         case 6: auxMix += value; break;
         case 7: cutoff += playbackModScaleToRange(mod->outValue, 20000); break;
         case 8: resonance += value; break;
@@ -1472,9 +1474,9 @@ static void updatePlaitsAltVoices(ChipNomadState* state) {
       switch (mod->modulation->destination) {
         case 1: gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value * track->note.volume / (255.0f * 15.0f); break;
         case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
-        case 3: harmonics += playbackModScaleToRange(mod->outValue, 16384); break;
-        case 4: timbre += playbackModScaleToRange(mod->outValue, 16384); break;
-        case 5: morph += playbackModScaleToRange(mod->outValue, 16384); break;
+        case 3: harmonics += playbackModScaleToRange(mod->outValue, 32767); break;
+        case 4: timbre += playbackModScaleToRange(mod->outValue, 32767); break;
+        case 5: morph += playbackModScaleToRange(mod->outValue, 32767); break;
         case 6: auxMix += value; break;
         case 7: cutoff += playbackModScaleToRange(mod->outValue, 20000); break;
         case 8: resonance += value; break;

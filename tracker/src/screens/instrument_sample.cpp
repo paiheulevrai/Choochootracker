@@ -120,7 +120,7 @@ static void drawField(int col, int row, CellState state) {
     case 5: if(!col) gfxPrint(sourceValueX,9,byteToHex(sample->start)); break;
     case 6: if(!col) gfxPrint(sourceValueX,10,byteToHex(sample->end)); break;
     case 7: if(!col) { static const char* m[]={"Off","Loop","Ping"}; gfxPrint(sourceValueX,11,m[sample->loopMode<=2?sample->loopMode:0]); } break;
-    case 8: if(!col) gfxPrintf(sourceValueX,12,"%03u%%",sample->speedPercent); break;
+    case 8: if(!col) gfxPrint(sourceValueX,12,byteToHex(controlFromRange(sample->speedPercent, 500))); break;
   }
 }
 
@@ -140,7 +140,7 @@ static int onEdit(int col, int row, CellEditAction action) {
     case 5: handled=!col?edit8noLast(action,&sample->start,16,0,255):0; break;
     case 6: handled=!col?edit8noLast(action,&sample->end,16,0,255):0; break;
     case 7: handled=!col?edit8noLast(action,&sample->loopMode,1,0,2):0; break;
-    case 8: handled=!col?edit16withMinMax(action,&sample->speedPercent,25,0,500):0; break;
+    case 8: handled=!col?editNormalized16(action,&sample->speedPercent,500):0; break;
   }
   if (handled) projectModified = 1;
   if (handled && !col && (row == 5 || row == 6)) {

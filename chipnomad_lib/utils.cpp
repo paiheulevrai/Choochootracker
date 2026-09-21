@@ -72,6 +72,16 @@ int clampInt(int value, int min, int max) {
   return value;
 }
 
+uint8_t controlFromRange(int value, int max) {
+  if (max <= 0) return 0;
+  return (uint8_t)((clampInt(value, 0, max) * 255 + max / 2) / max);
+}
+
+int controlToRange(uint8_t control, int max) {
+  if (max <= 0) return 0;
+  return ((int)control * max + 127) / 255;
+}
+
 // Convert cents value to frequency in Hz
 float centsToFrequency(int cents) {
   // Clamp to MIDI range

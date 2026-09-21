@@ -16,6 +16,10 @@ int16_t clampInt16(int value, int16_t min, int16_t max);
 uint16_t clampUInt16(int value, uint16_t min, uint16_t max);
 int clampInt(int value, int min, int max);
 
+// User controls share this scale while projects retain native values.
+uint8_t controlFromRange(int value, int max);
+int controlToRange(uint8_t control, int max);
+
 // Convert cents value to frequency in Hz (with safeguards)
 float centsToFrequency(int cents);
 

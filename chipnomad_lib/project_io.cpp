@@ -11,7 +11,7 @@
 
 // Shared state
 char projectFileError[41];
-int projectFileVersion = 4;  // Default to current version
+int projectFileVersion = 5;  // Default to current version
 static char chipNames[][16] = { "AY8910" };
 
 // Peek/consume implementation - single global buffer (ChipNomad is single-threaded)
@@ -683,7 +683,9 @@ static int projectLoadInternal(FILE* file, Project* project) {
 
   // Detect version
   if (strlen(version) > 0) {
-    if (strncmp(version, " 4.0", 4) == 0) {
+    if (strncmp(version, " 5.0", 4) == 0) {
+      projectFileVersion = 5;
+    } else if (strncmp(version, " 4.0", 4) == 0) {
       projectFileVersion = 4;
     } else if (strncmp(version, " 3.0", 4) == 0) {
       projectFileVersion = 3;
@@ -928,6 +930,28 @@ static int projectLoadInternal(FILE* file, Project* project) {
   snprintf(projectFileError, 40, "Invalid wavetable data");
   if (projectLoadAYWavetables(file, &p)) { projectFree(&p); return 1; }
 
+  if (projectFileVersion < 5) {
+    auto oldCents = [](uint8_t value) {
+      if (!value) return 0;
+      if (value <= 127) return (int)(pow(200.0, (value - 1) / 126.0) + 0.5);
+      return ((int)value - 125) * 100;
+    };
+    auto newControl = [&](int cents) {
+      cents = cents > 2400 ? 2400 : cents;
+      if (cents <= 100) return (uint8_t)((cents + 2) / 5);
+      return (uint8_t)(20 + ((cents - 100) * 235 + 1150) / 2300);
+    };
+    auto convert = [&](uint8_t value) { return newControl(oldCents(value > 149 ? 149 : value)); };
+    for (int i = 0; i < PROJECT_MAX_INSTRUMENTS; ++i) {
+      Instrument* inst = &p.instruments[i];
+      if (inst->type == InstrumentType::SCWF) inst->chip.scwf.detune = convert(inst->chip.scwf.detune);
+      else if (inst->type == InstrumentType::BYOWTBL) inst->chip.byowtbl.detune = convert(inst->chip.byowtbl.detune);
+    }
+    for (int phrase = 0; phrase < PROJECT_MAX_PHRASES; ++phrase) for (int row = 0; row < 16; ++row) for (int fx = 0; fx < 3; ++fx)
+      if (p.phrases[phrase].rows[row].fx[fx][0] == fxSDT) p.phrases[phrase].rows[row].fx[fx][1] = convert(p.phrases[phrase].rows[row].fx[fx][1]);
+    for (int table = 0; table < PROJECT_MAX_TABLES; ++table) for (int row = 0; row < 16; ++row) for (int fx = 0; fx < 4; ++fx)
+      if (p.tables[table].rows[row].fx[fx][0] == fxSDT) p.tables[table].rows[row].fx[fx][1] = convert(p.tables[table].rows[row].fx[fx][1]);
+  }
   projectFree(project);
   *project = p;
   return 0;
@@ -1188,7 +1212,7 @@ static int projectSaveAYWavetables(FILE* file, Project* project) {
 }
 
 static int projectSaveInternal(FILE* file, Project* project) {
-  fprintf(file, "# ChooChooTracker Module 4.0\n\n");
+  fprintf(file, "# ChooChooTracker Module 5.0\n\n");
 
   fprintf(file, "- Title: %s\n", project->title);
   fprintf(file, "- Author: %s\n", project->author);
@@ -1274,7 +1298,7 @@ int instrumentSave(Project* project, const char* path, int instrumentIdx) {
     return 1;
   }
 
-  fprintf(file, "# ChipNomad Instrument 4.0\n\n");
+  fprintf(file, "# ChipNomad Instrument 5.0\n\n");
   instrumentSaveData(file, 0, &project->instruments[instrumentIdx]);
   saveTable(file, 0, &project->tables[instrumentIdx]);
 
@@ -1292,7 +1316,9 @@ static int instrumentLoadInternal(FILE* file, Project* project, int instrumentId
 
   // Detect version
   if (strlen(line) > 22) {
-    if (strncmp(line + 22, " 4.0", 4) == 0) {
+    if (strncmp(line + 22, " 5.0", 4) == 0) {
+      projectFileVersion = 5;
+    } else if (strncmp(line + 22, " 4.0", 4) == 0) {
       projectFileVersion = 4;
     } else if (strncmp(line + 22, " 3.0", 4) == 0) {
       projectFileVersion = 3;

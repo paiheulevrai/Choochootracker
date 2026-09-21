@@ -10,9 +10,8 @@ static float scwfEnvelopeTime(uint8_t value) {
 }
 
 int scwfDetuneCents(uint8_t value) {
-  if (!value) return 0;
-  if (value <= 127) return (int)(pow(200.0, (value - 1) / 126.0) + 0.5);
-  return (value - 125) * 100;
+  if (value <= 20) return value * 5;
+  return 100 + ((value - 20) * 2300 + 117) / 235;
 }
 
 double scwfFrequencyHz(int midiCents) {

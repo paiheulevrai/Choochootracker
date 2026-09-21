@@ -8,6 +8,18 @@ static int engineButtonDown;
 static Bitmap* previewBitmap;
 static bool isAlt(void);
 
+static const char* plaitsChordName(uint16_t harmonics) {
+  static const char* names[] = {"OCT", "5TH", "SUS4", "MIN", "MIN7", "MIN9", "MIN11", "6/9", "MAJ9", "MAJ7", "MAJ"};
+  int index = (int)((uint32_t)harmonics * 11 / 32768);
+  return names[index > 10 ? 10 : index];
+}
+
+static int usesChordNames(const InstrumentPlaits* p) {
+  // Plaits CHORD and the two Plaits-Alt chord engines use the stock 11-entry
+  // chord bank selected by Harmonics. The other macro controls stay continuous.
+  return (!isAlt() && p->engine == 14) || (isAlt() && (p->engine == 15 || p->engine == 17));
+}
+
 static void drawPreview(const InstrumentPlaits* plaits) {
   if (!previewBitmap) previewBitmap = gfxBitmapCreate(32, 3);
   renderPlaitsPreview(previewBitmap, plaits, isAlt());
@@ -110,9 +122,13 @@ static void drawField(int col, int row, CellState state) {
   else gfxClearRect(col ? 26 : 11, row + 4, col ? 8 : 7, 1);
   switch (row) {
     case 3: gfxPrintf(12, 6, "%02d %s", p->engine, modelCatalogName(isAlt() ? InstrumentType::PlaitsAlt : InstrumentType::Plaits, p->engine)); break;
-    case 4: if (!col) gfxPrintf(11, 8, "%04u", (unsigned)((uint32_t)p->harmonics * 1023 / 32767)); break;
-    case 5: if (!col) gfxPrintf(11, 9, "%04u", (unsigned)((uint32_t)p->timbre * 1023 / 32767)); break;
-    case 6: if (!col) gfxPrintf(11, 10, "%04u", (unsigned)((uint32_t)p->morph * 1023 / 32767)); break;
+    case 4: if (!col) {
+      if (usesChordNames(p)) gfxPrint(11, 8, plaitsChordName(p->harmonics));
+      else gfxPrint(11, 8, byteToHex(controlFromRange(p->harmonics, 32767)));
+      break;
+    }
+    case 5: if (!col) gfxPrint(11, 9, byteToHex(controlFromRange(p->timbre, 32767))); break;
+    case 6: if (!col) gfxPrint(11, 10, byteToHex(controlFromRange(p->morph, 32767))); break;
     case 7: if (!col) gfxPrint(11, 11, byteToHex(p->auxMix)); break;
     case 8: if (!col) gfxPrint(11, 12, p->envelopeMode == 0 ? "TRIG" : "VCA"); break;
   }

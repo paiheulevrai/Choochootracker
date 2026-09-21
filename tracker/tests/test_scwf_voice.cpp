@@ -29,9 +29,9 @@ TEST_CASE("2xSCWF mixes two forward-looping oscillators and keeps the detune sca
   double energy = 0.0;
   for (float sample : output) { CHECK(std::isfinite(sample)); energy += std::fabs(sample); }
   CHECK(energy > 0.0);
-  CHECK(scwfDetuneCents(1) == 1);
-  CHECK(scwfDetuneCents(127) == 200);
-  CHECK(scwfDetuneCents(128) == 300);
+  CHECK(scwfDetuneCents(1) == 5);
+  CHECK(scwfDetuneCents(20) == 100);
+  CHECK(scwfDetuneCents(21) == 110);
   CHECK(scwfDetuneCents(SCWF_DETUNE_MAX) == 2400);
   CHECK(scwfFrequencyHz(6900) == doctest::Approx(440.0));
 }

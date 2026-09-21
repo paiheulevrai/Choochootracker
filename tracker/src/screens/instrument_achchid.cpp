@@ -31,13 +31,13 @@ static void drawField(int col,int row,CellState state) {
   if(!col && row==3) gfxPrint(11,7,a->wave==AChChidWave::square?"Square":a->wave==AChChidWave::saw?"Saw":"Braids");
   else if(!isBraids() && row==4 && !col) gfxPrintf(11,8,"%+03d",a->fineTune);
   else if(isBraids() && row==4 && !col) gfxPrintf(11,8,"%02u %.6s",a->model,modelCatalogName(InstrumentType::Braids,a->model));
-  else if(isBraids() && row==5 && !col) gfxPrintf(11,9,"%04u",(unsigned)((uint32_t)a->timbre*1023/32767));
-  else if(isBraids() && row==6 && !col) gfxPrintf(11,10,"%04u",(unsigned)((uint32_t)a->color*1023/32767));
-  else if(col && row==3) gfxPrintf(28,7,"%6u",a->cutoff);
-  else if(col && row==4) gfxPrintf(28,8,"%6u",a->resonance);
-  else if(col && row==5) gfxPrintf(28,9,"%6u",a->envMod);
+  else if(isBraids() && row==5 && !col) gfxPrint(11,9,byteToHex(controlFromRange(a->timbre,32767)));
+  else if(isBraids() && row==6 && !col) gfxPrint(11,10,byteToHex(controlFromRange(a->color,32767)));
+  else if(col && row==3) gfxPrintf(28,7,"%u Hz",a->cutoff);
+  else if(col && row==4) gfxPrint(28,8,byteToHex(controlFromRange(a->resonance,100)));
+  else if(col && row==5) gfxPrint(28,9,byteToHex(controlFromRange(a->envMod,100)));
   else if(col && row==6) gfxPrintf(28,10,"%4ums",a->decay);
-  else if(col && row==7) gfxPrintf(28,11,"%6u",a->accent);
+  else if(col && row==7) gfxPrint(28,11,byteToHex(controlFromRange(a->accent,100)));
 }
 static int onEdit(int col,int row,CellEditAction action) {
   if(row<3) return instrumentCommonOnEdit(col,row,action);
@@ -48,10 +48,10 @@ static int onEdit(int col,int row,CellEditAction action) {
   else if(isBraids() && row==5 && !col) ok=editOscillatorParameter(action,&a->timbre);
   else if(isBraids() && row==6 && !col) ok=editOscillatorParameter(action,&a->color);
   else if(col && row==3) ok=edit16withMinMax(action,&a->cutoff,100,200,20000);
-  else if(col && row==4) ok=edit8noLast(action,&a->resonance,5,0,100);
-  else if(col && row==5) ok=edit8noLast(action,&a->envMod,5,0,100);
+  else if(col && row==4) ok=editNormalized8(action,&a->resonance,100);
+  else if(col && row==5) ok=editNormalized8(action,&a->envMod,100);
   else if(col && row==6) ok=edit16withMinMax(action,&a->decay,50,200,2000);
-  else if(col && row==7) ok=edit8noLast(action,&a->accent,5,0,100);
+  else if(col && row==7) ok=editNormalized8(action,&a->accent,100);
   if(ok){projectModified=1;screenFullRedraw(&screenInstrumentAChChid);} return ok;
 }
 static int onInput(int down,int keys,int taps) {

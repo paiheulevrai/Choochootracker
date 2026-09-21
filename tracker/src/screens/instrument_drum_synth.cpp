@@ -1,6 +1,22 @@
 #include "screen_instrument.h"
 #include "corelib_gfx.h"
 #include "utils.h"
+#include "model_catalog.h"
+
+static int engineButtonDown;
+
+static void selectEngine(int value) {
+  chipnomadState->project.instruments[cInstrument].chip.drumSynth.engine = (DrumSynthEngine)value;
+  projectModified = 1;
+  screenSetup(&screenInstrument, cInstrument);
+}
+static void cancelEngineSelection() { screenSetup(&screenInstrument, cInstrument); }
+static void openEngineSelection() {
+  InstrumentDrumSynth* d = &chipnomadState->project.instruments[cInstrument].chip.drumSynth;
+  selectionPopupSetup("BOGIE ENGINE", drumSynthCategories, drumSynthCategoryCount,
+    (int)d->engine, selectEngine, cancelEngineSelection);
+  screenSetup(&screenSelectionPopup, 0);
+}
 
 static const char* engineName(DrumSynthEngine e) {
   static const char* names[] = {"KICK", "SNARE", "HAT", "CLAP", "TOM", "RIM", "FM", "NOISE", "COWBELL", "CYMBAL", "SHAKER", "CLAVE"};
@@ -10,10 +26,21 @@ static const char* macroName(DrumSynthEngine e, int macro) {
   static const char* generic[] = {"Decay", "Tone", "Sweep", "Noise", "FM", "Drive"};
   static const char* kick[] = {"Decay", "Tone", "Sweep", "Click", "Harm", "Drive"};
   static const char* snare[] = {"Decay", "Tone", "Snap", "Wire", "Body", "Drive"};
-  static const char* hat[] = {"Decay", "Tone", "Reso", "Noise", "Metal", "Drive"};
-  static const char* fm[] = {"Decay", "Ratio", "M.Dec", "Noise", "Index", "Drive"};
+  static const char* hat[] = {"Decay", "Tone", "PitchEnv", "Noise", "Metal", "Drive"};
+  static const char* clap[] = {"Decay", "Tone", "Spacing", "Noise", "ToneMix", "Drive"};
+  static const char* tom[] = {"Decay", "Tone", "Sweep", "Noise", "Harm", "Drive"};
+  static const char* rim[] = {"Decay", "Tone", "Sweep", "Noise", "Ratio", "Drive"};
+  static const char* fm[] = {"Decay", "Ratio", "PitchEnv", "Noise", "Index", "Drive"};
+  static const char* noise[] = {"Decay", "OscPitch", "Color", "Level", "ToneMix", "Drive"};
+  static const char* cowbell[] = {"Decay", "Detune", "PitchEnv", "Noise", "CrossMod", "Drive"};
+  static const char* cymbal[] = {"Decay", "Tone", "PitchEnv", "Noise", "Metal", "Drive"};
+  static const char* shaker[] = {"Decay", "Rate", "Motion", "Noise", "ToneMix", "Drive"};
+  static const char* clave[] = {"Decay", "Tone", "PitchEnv", "Noise", "Ratio", "Drive"};
   const char* const* names = e == DrumSynthEngine::kick ? kick : e == DrumSynthEngine::snare ? snare :
-    e == DrumSynthEngine::hat ? hat : e == DrumSynthEngine::fm ? fm : generic;
+    e == DrumSynthEngine::hat ? hat : e == DrumSynthEngine::clap ? clap : e == DrumSynthEngine::tom ? tom :
+    e == DrumSynthEngine::rim ? rim : e == DrumSynthEngine::fm ? fm : e == DrumSynthEngine::noise ? noise :
+    e == DrumSynthEngine::cowbell ? cowbell : e == DrumSynthEngine::cymbal ? cymbal :
+    e == DrumSynthEngine::shaker ? shaker : e == DrumSynthEngine::clave ? clave : generic;
   return names[macro];
 }
 static uint8_t* macro(InstrumentDrumSynth* d, int index) {
@@ -55,11 +82,23 @@ static int onEdit(int col, int row, CellEditAction action) {
   if (ok) { projectModified = 1; screenFullRedraw(&screenInstrumentDrumSynth); }
   return ok;
 }
+static int onInput(int isKeyDown, int keys, int) {
+  if (screenInstrumentDrumSynth.cursorRow != 3) { engineButtonDown = 0; return 0; }
+  PopupEditInput input = popupEditInput(isKeyDown, keys, &engineButtonDown);
+  if (input == PopupEditInput::cycle) {
+    cycle8((uint8_t*)&chipnomadState->project.instruments[cInstrument].chip.drumSynth.engine,
+      keys == (keyEdit | keyRight) ? 1 : -1, 0, 11, 0);
+    projectModified = 1; screenFullRedraw(&screenInstrumentDrumSynth); return 1;
+  }
+  if (input == PopupEditInput::hold) return 1;
+  if (input == PopupEditInput::open) { openEngineSelection(); return 1; }
+  return 0;
+}
 ScreenData screenInstrumentDrumSynth = {
   .rows = 10, .cursorRow = 0, .cursorCol = 0, .topRow = 0, .selectMode = -1,
   .selectStartRow = 0, .selectStartCol = 0, .selectAnchorRow = 0, .selectAnchorCol = 0,
   .playbackLevel = ScreenPlaybackLevel::none, .getColumnCount = columns,
   .drawStatic = drawStatic, .drawCursor = drawCursor, .drawSelection = NULL,
   .drawRowHeader = NULL, .drawColHeader = NULL, .drawField = drawField, .onEdit = onEdit,
-  .onInput = NULL, .onRawInput = NULL, .isCellValid = NULL, .getLoopRange = NULL,
+  .onInput = onInput, .onRawInput = NULL, .isCellValid = NULL, .getLoopRange = NULL,
 };

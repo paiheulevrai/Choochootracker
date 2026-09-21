@@ -241,9 +241,20 @@ int edit16withMinMax(CellEditAction action, uint16_t* value, uint16_t bigStep, u
 }
 
 int editOscillatorParameter(CellEditAction action, uint16_t* value) {
-  uint16_t displayValue = (uint16_t)(((uint32_t)*value * 1023 + 16383) / 32767);
-  int handled = edit16withMinMax(action, &displayValue, 64, 0, 1023);
-  if (handled) *value = (uint16_t)(((uint32_t)displayValue * 32767 + 511) / 1023);
+  return editNormalized16(action, value, 32767);
+}
+
+int editNormalized8(CellEditAction action, uint8_t* value, uint8_t nativeMax) {
+  uint8_t control = controlFromRange(*value, nativeMax);
+  int handled = edit8noLast(action, &control, 16, 0, 255);
+  if (handled) *value = (uint8_t)controlToRange(control, nativeMax);
+  return handled;
+}
+
+int editNormalized16(CellEditAction action, uint16_t* value, uint16_t nativeMax) {
+  uint8_t control = controlFromRange(*value, nativeMax);
+  int handled = edit8noLast(action, &control, 16, 0, 255);
+  if (handled) *value = (uint16_t)controlToRange(control, nativeMax);
   return handled;
 }
 

@@ -101,11 +101,8 @@ static void drawField(int col, int row, CellState state) {
   char name[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
   if (row == 3 && !col) gfxPrint(sourceValueX,8,scwf->oscillator[0].path[0] ? shortFilename(scwf->oscillator[0].path, name, 7) : "Load");
   else if (row == 4 && !col) gfxPrint(sourceValueX,9,scwf->oscillator[1].path[0] ? shortFilename(scwf->oscillator[1].path, name, 7) : "Load");
-  else if (row == 5 && !col) {
-    int cents = scwfDetuneCents(scwf->detune);
-    if (cents <= 200) gfxPrintf(sourceValueX,10,"+%03d ct", cents);
-    else gfxPrintf(sourceValueX,10,"+%02d st", cents / 100);
-  } else if (row == 6 && !col) gfxPrint(sourceValueX,11,byteToHex(scwf->mix));
+  else if (row == 5 && !col) gfxPrint(sourceValueX,10,byteToHex(scwf->detune));
+  else if (row == 6 && !col) gfxPrint(sourceValueX,11,byteToHex(scwf->mix));
 }
 
 static int edit(int col, int row, CellEditAction action) {
@@ -117,7 +114,7 @@ static int edit(int col, int row, CellEditAction action) {
     return handled;
   }
   int handled = 0;
-  if (row == 5 && !col) handled = edit8noLast(action, &scwf->detune, 1, 0, SCWF_DETUNE_MAX);
+  if (row == 5 && !col) handled = edit8noLast(action, &scwf->detune, 16, 0, SCWF_DETUNE_MAX);
   if (row == 6 && !col) handled = edit8noLast(action, &scwf->mix, 8, 0, 255);
   if (handled) { projectModified = 1; screenFullRedraw(&screenInstrumentSCWF); }
   return handled;

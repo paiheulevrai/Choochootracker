@@ -70,9 +70,9 @@ static void drawField(int col, int row, CellState state) {
     }
     if (col < 0 || col >= 6 || row < 0 || row >= PROJECT_MAX_TRACKS) return;
     gfxPrintf(0, 3 + row, "T%d", row + 1);
-    if (col == 0) gfxPrintf(3, 3 + row, "%03d", chipnomadState->project.trackVolume[row]);
-    else if (col == 1) gfxPrintf(8, 3 + row, "%03d", chipnomadState->project.trackReverbSend[row]);
-    else if (col == 2) gfxPrintf(13, 3 + row, "%03d", chipnomadState->project.trackDelaySend[row]);
+    if (col == 0) gfxPrint(3, 3 + row, byteToHex(controlFromRange(chipnomadState->project.trackVolume[row], 100)));
+    else if (col == 1) gfxPrint(8, 3 + row, byteToHex(controlFromRange(chipnomadState->project.trackReverbSend[row], 100)));
+    else if (col == 2) gfxPrint(13, 3 + row, byteToHex(controlFromRange(chipnomadState->project.trackDelaySend[row], 100)));
     else if (col == 3) gfxPrint(18, 3 + row, byteToHex(chipnomadState->project.trackTilt[row]));
     else if (col == 4) gfxPrint(23, 3 + row, audioManager.trackStates[row] == TRACK_MUTED ? "*" : "-");
     else gfxPrint(26, 3 + row, audioManager.trackStates[row] == TRACK_SOLO ? "*" : "-");
@@ -83,15 +83,15 @@ static void drawField(int col, int row, CellState state) {
   if (row < 0 || row >= (mixerPage == 2 ? 5 : 4)) return;
   Project* p = &chipnomadState->project;
   if (mixerPage == 1) {
-    if (row == 0) gfxPrintf(12, 3, "%03d%%", p->reverbReturn);
-    else if (row == 1) gfxPrintf(12, 4, "%03d%%", p->reverbTime * 100 / 255);
-    else if (row == 2) gfxPrintf(12, 5, "%03d%%", p->reverbDamping * 100 / 255);
+    if (row == 0) gfxPrint(12, 3, byteToHex(controlFromRange(p->reverbReturn, 100)));
+    else if (row == 1) gfxPrint(12, 4, byteToHex(p->reverbTime));
+    else if (row == 2) gfxPrint(12, 5, byteToHex(p->reverbDamping));
     else gfxPrintf(12, 6, "%u Hz", p->reverbFilterCutoffHz);
   } else {
-    if (row == 0) gfxPrintf(12, 3, "%03d%%", p->delayReturn);
-    else if (row == 1) gfxPrintf(12, 4, "%03d%%", p->delayReverbSend);
+    if (row == 0) gfxPrint(12, 3, byteToHex(controlFromRange(p->delayReturn, 100)));
+    else if (row == 1) gfxPrint(12, 4, byteToHex(controlFromRange(p->delayReverbSend, 100)));
     else if (row == 2) gfxPrintf(12, 5, "%02X", p->delayTicks);
-    else if (row == 3) gfxPrintf(12, 6, "%03d%%", p->delayFeedback);
+    else if (row == 3) gfxPrint(12, 6, byteToHex(controlFromRange(p->delayFeedback, 95)));
     else gfxPrintf(12, 7, "%u Hz", p->delayFilterCutoffHz);
   }
 }
@@ -120,9 +120,9 @@ static int onEdit(int col, int row, CellEditAction action) {
       return 1;
     }
     if (col < 0 || col >= 6 || row < 0 || row >= PROJECT_MAX_TRACKS) return 0;
-    if (col == 0) handled = edit8noLast(action, &p->trackVolume[row], 10, 0, 100);
-    else if (col == 1) handled = edit8noLast(action, &p->trackReverbSend[row], 10, 0, 100);
-    else if (col == 2) handled = edit8noLast(action, &p->trackDelaySend[row], 10, 0, 100);
+    if (col == 0) handled = editNormalized8(action, &p->trackVolume[row], 100);
+    else if (col == 1) handled = editNormalized8(action, &p->trackReverbSend[row], 100);
+    else if (col == 2) handled = editNormalized8(action, &p->trackDelaySend[row], 100);
     else if (col == 3) handled = edit8noLast(action, &p->trackTilt[row], 16, 0, 255);
     else if (action == CellEditAction::tap) {
       if (col == 4) audioManager.toggleTrackMute(row); else audioManager.toggleTrackSolo(row);
@@ -130,15 +130,15 @@ static int onEdit(int col, int row, CellEditAction action) {
     }
   } else if (row >= 0 && row < (mixerPage == 2 ? 5 : 4)) {
     if (mixerPage == 1) {
-      if (row == 0) handled = edit8noLast(action, &p->reverbReturn, 10, 0, 100);
+      if (row == 0) handled = editNormalized8(action, &p->reverbReturn, 100);
       else if (row == 1) handled = edit8noLast(action, &p->reverbTime, 16, 0, 255);
       else if (row == 2) handled = edit8noLast(action, &p->reverbDamping, 16, 0, 255);
       else handled = editFilterCutoff(action, &p->reverbFilterCutoffHz);
     } else {
-      if (row == 0) handled = edit8noLast(action, &p->delayReturn, 10, 0, 100);
-      else if (row == 1) handled = edit8noLast(action, &p->delayReverbSend, 10, 0, 100);
+      if (row == 0) handled = editNormalized8(action, &p->delayReturn, 100);
+      else if (row == 1) handled = editNormalized8(action, &p->delayReverbSend, 100);
       else if (row == 2) handled = edit8noLast(action, &p->delayTicks, 4, 1, 255);
-      else if (row == 3) handled = edit8noLast(action, &p->delayFeedback, 10, 0, 95);
+      else if (row == 3) handled = editNormalized8(action, &p->delayFeedback, 95);
       else handled = editFilterCutoff(action, &p->delayFilterCutoffHz);
     }
   }
