@@ -361,6 +361,23 @@ static int loadInstrumentDrumSynth(FILE* file, Instrument* instrument) {
   }
 }
 
+static int loadInstrumentMME(FILE* file, Instrument* instrument) {
+  InstrumentMME* m = &instrument->chip.mme;
+  while (1) {
+    char* line = peekLine(file);
+    if (line == NULL || line[0] == '#') return 0;
+    if (strncmp(line, "- Model: ", 9) == 0) sscanf(line, "- Model: %hhu", (uint8_t*)&m->model);
+    else if (strncmp(line, "- Waves: ", 9) == 0) sscanf(line, "- Waves: %hhu", &m->waves);
+    else if (strncmp(line, "- Interval: ", 12) == 0) sscanf(line, "- Interval: %hhu", &m->interval);
+    else if (strncmp(line, "- Amount: ", 10) == 0) sscanf(line, "- Amount: %hhu", &m->amount);
+    else if (strncmp(line, "- Flow: ", 8) == 0) sscanf(line, "- Flow: %hhu", &m->flow);
+    else if (strncmp(line, "- Feedback: ", 12) == 0) sscanf(line, "- Feedback: %hhu", &m->feedback);
+    else if (strncmp(line, "- Shaper: ", 10) == 0) sscanf(line, "- Shaper: %hhu", &m->shaper);
+    else loadVoicePostSetting(line, m);
+    consumeLine(file);
+  }
+}
+
 static int loadModulation(FILE* file, Instrument* instrument) {
   for (int i = 0; i < 4; i++) {
     char* line = peekLine(file);
@@ -477,6 +494,9 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
       case InstrumentType::DrumSynth:
         if (loadInstrumentDrumSynth(file, instrument)) return 1;
         break;
+      case InstrumentType::MME:
+        if (loadInstrumentMME(file, instrument)) return 1;
+        break;
       default:
         break;
     }
@@ -495,6 +515,10 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
     InstrumentDrumSynth* d = &instrument->chip.drumSynth;
     if ((uint8_t)d->engine >= (uint8_t)DrumSynthEngine::totalCount) d->engine = DrumSynthEngine::kick;
     if (d->filterCutoffHz > 20000) d->filterCutoffHz = 20000;
+  } else if (instrument->type == InstrumentType::MME) {
+    InstrumentMME* m = &instrument->chip.mme;
+    if ((uint8_t)m->model >= (uint8_t)MMEModel::totalCount) m->model = MMEModel::ring;
+    if (m->filterCutoffHz > 20000) m->filterCutoffHz = 20000;
   }
 
   return 0;
@@ -663,6 +687,15 @@ static int saveInstrumentDrumSynth(FILE* file, Instrument* instrument) {
   return 0;
 }
 
+static int saveInstrumentMME(FILE* file, Instrument* instrument) {
+  InstrumentMME* m = &instrument->chip.mme;
+  fprintf(file, "- Model: %hhu\n", (uint8_t)m->model);
+  fprintf(file, "- Waves: %hhu\n", m->waves); fprintf(file, "- Interval: %hhu\n", m->interval);
+  fprintf(file, "- Amount: %hhu\n", m->amount); fprintf(file, "- Flow: %hhu\n", m->flow);
+  fprintf(file, "- Feedback: %hhu\n", m->feedback); fprintf(file, "- Shaper: %hhu\n", m->shaper);
+  saveVoicePostSettings(file, m); return 0;
+}
+
 // Save modulation data
 static int saveModulation(FILE* file, Instrument* instrument) {
   fprintf(file, "- Modulation:\n");
@@ -726,6 +759,9 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
       break;
     case InstrumentType::DrumSynth:
       saveInstrumentDrumSynth(file, instrument);
+      break;
+    case InstrumentType::MME:
+      saveInstrumentMME(file, instrument);
       break;
     default:
       break;

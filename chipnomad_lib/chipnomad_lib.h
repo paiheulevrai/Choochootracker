@@ -14,6 +14,7 @@ class PlaitsVoice;
 class PlaitsAltVoice;
 class AChChidVoice;
 class DrumSynthVoice;
+class MMEVoice;
 class AudioCommandQueue;
 
 constexpr int VOICE_MONITOR_SAMPLES = 256;
@@ -81,6 +82,7 @@ struct ChipNomadState {
   PlaitsAltVoice* plaitsAltVoices[PROJECT_MAX_TRACKS];
   AChChidVoice* achchidVoices[PROJECT_MAX_TRACKS];
   DrumSynthVoice* drumSynthVoices[PROJECT_MAX_TRACKS];
+  MMEVoice* mmeVoices[PROJECT_MAX_TRACKS];
   VoiceMonitor voiceMonitors[PROJECT_MAX_TRACKS];
   MasterEffects* masterEffects;
   AudioCommandQueue* audioCommands;

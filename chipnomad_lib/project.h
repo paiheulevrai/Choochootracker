@@ -164,6 +164,17 @@ enum FX {
   fxDCF, // Filter cutoff
   fxDRS, // Filter resonance
 
+  // MME FX. Appended to preserve project FX IDs.
+  fxMMD, // Model
+  fxMWV, // Waves
+  fxMIN, // Interval
+  fxMAM, // Amount
+  fxMFL, // Flow
+  fxMFB, // Feedback
+  fxMSH, // Shaper
+  fxMCF, // Filter cutoff
+  fxMRS, // Filter resonance
+
   // Total count - must be last
   fxTotalCount
 };

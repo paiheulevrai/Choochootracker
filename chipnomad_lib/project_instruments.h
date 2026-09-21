@@ -23,6 +23,7 @@ enum class InstrumentType : uint8_t {
   BYOWTBL = 9,
   AChChid = 10,
   DrumSynth = 11,
+  MME = 12,
   totalCount,
 };
 
@@ -203,6 +204,20 @@ struct InstrumentDrumSynth : InstrumentVoicePostSettings {
   uint8_t drive;
 };
 
+// Multi Modulation Engine: two internal oscillators coupled by a selectable
+// cross-modulation algorithm.  The six controls deliberately have a stable
+// position in the UI even though their musical interpretation varies by model.
+enum class MMEModel : uint8_t { ring, fold, cross, vpm, sync, logic, vocode, totalCount };
+struct InstrumentMME : InstrumentVoicePostSettings {
+  MMEModel model;
+  uint8_t waves;
+  uint8_t interval;
+  uint8_t amount;
+  uint8_t flow;
+  uint8_t feedback;
+  uint8_t shaper;
+};
+
 struct InstrumentPlaits : InstrumentVoicePostSettings {
   uint8_t engine;
   uint16_t harmonics;
@@ -253,6 +268,7 @@ union InstrumentChipData {
   InstrumentPlaits plaits;
   InstrumentAChChid achchid;
   InstrumentDrumSynth drumSynth;
+  InstrumentMME mme;
 };
 
 struct Instrument {
@@ -277,7 +293,7 @@ struct InstrumentFunctions {
 // This is metadata, not an audio abstraction: renderers keep their typed
 // paths while screens, validation and motion routing share this one catalogue.
 enum class InstrumentCategory : uint8_t { none, chip, sample, synth, drums };
-enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth };
+enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme };
 enum class InstrumentMotionValue : uint8_t { raw, speed, cutoff };
 
 static constexpr uint8_t instrumentNoFX = 0xff;

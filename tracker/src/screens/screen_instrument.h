@@ -27,5 +27,6 @@ extern ScreenData screenInstrumentBYOWTBL;
 extern ScreenData screenInstrumentPlaits;
 extern ScreenData screenInstrumentAChChid;
 extern ScreenData screenInstrumentDrumSynth;
+extern ScreenData screenInstrumentMME;
 
 #endif

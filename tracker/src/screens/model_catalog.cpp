@@ -98,6 +98,16 @@ const SelectionItem drumSynthCategories[] = {
 };
 const int drumSynthCategoryCount = sizeof(drumSynthCategories) / sizeof(drumSynthCategories[0]);
 
+static const SelectionItem mmeModulation[] = {
+  LEAF("RING", 0), LEAF("CROSS", 2), LEAF("VPM", 3), LEAF("SYNC", 4)
+};
+static const SelectionItem mmeTransform[] = {LEAF("FOLD", 1), LEAF("LOGIC", 5)};
+static const SelectionItem mmeSpectral[] = {LEAF("VOCODE", 6)};
+const SelectionItem mmeCategories[] = {
+  CATEGORY("MODULATION", mmeModulation), CATEGORY("TRANSFORM", mmeTransform), CATEGORY("SPECTRAL", mmeSpectral)
+};
+const int mmeCategoryCount = sizeof(mmeCategories) / sizeof(mmeCategories[0]);
+
 static bool catalogValid(const SelectionItem* categories, int count, int models) {
   bool seen[64] = {};
   for (int i = 0; i < count; ++i) {
@@ -114,7 +124,8 @@ static bool catalogValid(const SelectionItem* categories, int count, int models)
 bool modelCatalogsValid() {
   return catalogValid(plaitsCategories, plaitsCategoryCount, 24) &&
          catalogValid(plaitsAltCategories, plaitsAltCategoryCount, 24) &&
-         catalogValid(braidsCategories, braidsCategoryCount, 47);
+         catalogValid(braidsCategories, braidsCategoryCount, 47) &&
+         catalogValid(mmeCategories, mmeCategoryCount, (int)MMEModel::totalCount);
 }
 
 const char* modelCatalogName(InstrumentType type, int value) {

@@ -55,6 +55,7 @@ FXGroup fxGroups[] = {
   {"Bogie FX", NULL, 0, 8, InstrumentType::DrumSynth},
   {"ADSR / Trigger FX", fxNamesEnvelope, 0, 7, InstrumentType::none},
   {"Modulation FX", fxNamesModulation, 0, 5, InstrumentType::none},
+  {"MME FX", NULL, 0, 8, InstrumentType::MME},
 };
 int fxGroupCount = sizeof(fxGroups) / sizeof(FXGroup);
 
@@ -80,6 +81,15 @@ void fillFXNames() {
     FXName* names = instrumentGroupNames[(int)type];
     fxGroups[group].fxList = names;
     fxGroups[group].count = definition->fxCount;
+    for (int i = 0; i < definition->fxCount; ++i) {
+      names[i].fx = (FX)definition->fxList[i].fx;
+      strcpy(names[i].name, definition->fxList[i].name);
+    }
+  }
+  {
+    const InstrumentDefinition* definition = getInstrumentDefinition(InstrumentType::MME);
+    FXName* names = instrumentGroupNames[(int)InstrumentType::MME];
+    fxGroups[15].fxList = names; fxGroups[15].count = definition->fxCount;
     for (int i = 0; i < definition->fxCount; ++i) {
       names[i].fx = (FX)definition->fxList[i].fx;
       strcpy(names[i].name, definition->fxList[i].name);

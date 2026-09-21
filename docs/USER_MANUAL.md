@@ -9,6 +9,7 @@ It follows the classic LSDj workflow and navigation system, with several sound d
 - PCM samples, single-cycle waveforms and wavetable oscillators, with a multimode filter
 - aChChid, a versatile acid synth based on Open303
 - Bogie, a native 12-model drum synthesiser with a multimode filter
+- MME, a two-oscillator multi-modulation synthesiser with a multimode filter
 
 ## 1. Installation and files
 
@@ -354,6 +355,14 @@ Its six macros are **Decay**, **Tone**, **Sweep**, **Noise**, **FM** and **Drive
 Every model can use the shared LP/BP/HP multimode filter, with Clean, Classic, Aggro or Acid character, `12`/`24 dB` slope, cutoff and resonance. Bogie supports all of its active macros plus Volume, Pitch, Cutoff and Resonance as modulation and motion-recording destinations. Use short Decay with Cowbell for sharp phonk attacks; increase FM for a harder, more metallic bell.
 
 On the Modulation screen, press **EDIT** on a source to choose a family (Envelopes, LFO or Sticks), then its source. **Left** and **Right** still cycle sources directly.
+
+### MME
+
+**MME** (Multi Modulation Engine) is a two-oscillator synth dedicated to interactions between oscillators. Its models are `Ring`, `Fold`, `Cross`, `VPM`, `Sync`, `Logic` and `Vocode`. Both oscillators are internal and follow tracker notes; `Interval` sets their relationship.
+
+The six macros are **Waves**, **Interval**, **Amount**, **Flow**, **Feedback** and **Shaper**. Waves selects musical A/B waveform pairs. Amount controls the model's core interaction, Flow changes its direction or algorithm variant, and Feedback is bounded but becomes deliberately wild at the end of its range. Shaper is a shared final stage which moves from clean through saturation to wavefolding.
+
+MME uses the shared LP/BP/HP multimode filter and ADSR. All six macros, Cutoff and Resonance are available to modulation and motion recording. Hold **EDIT** on Model to open the model popup.
 
 ### Subtractive engines
 
@@ -878,4 +887,4 @@ Adjust Repeat delay and Repeat speed in Settings. If a single press moves twice,
 
 ## 14. Credits and licensing
 
-ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. The aChChid engine uses Open303 by Robin Schmidt, copyright 2009, under the MIT License. Bogie is an original native implementation. See the packaged license files for exact attribution.
+ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP, Warps-derived MME DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. The aChChid engine uses Open303 by Robin Schmidt, copyright 2009, under the MIT License. Bogie is an original native implementation. See the packaged license files for exact attribution.

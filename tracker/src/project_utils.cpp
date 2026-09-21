@@ -81,6 +81,8 @@ const char* instrumentTypeName(InstrumentType type) {
       return "aChChid";
     case InstrumentType::DrumSynth:
       return "Bogie";
+    case InstrumentType::MME:
+      return "MME";
     case InstrumentType::none:
       return "None";
     default:

@@ -10,6 +10,7 @@
 #include "synth/plaits_alt_voice.h"
 #include "synth/achchid_voice.h"
 #include "synth/drum_synth_voice.h"
+#include "synth/mme_voice.h"
 #include "synth/master_effects.h"
 #include <math.h>
 #include <atomic>
@@ -25,6 +26,7 @@ static void updatePlaitsVoices(ChipNomadState* state);
 static void updatePlaitsAltVoices(ChipNomadState* state);
 static void updateAChChidVoices(ChipNomadState* state);
 static void updateDrumSynthVoices(ChipNomadState* state);
+static void updateMMEVoices(ChipNomadState* state);
 static void applyVoiceEvents(ChipNomadState* state);
 static int hasAudioRateModulation(const ChipNomadState* state);
 static void updateAudioRateModulations(ChipNomadState* state);
@@ -500,6 +502,8 @@ ChipNomadState* chipnomadCreate(void) {
     state->achchidVoices[i]->init(96000.0f);
     state->drumSynthVoices[i] = new DrumSynthVoice();
     state->drumSynthVoices[i]->init(96000.0f);
+    state->mmeVoices[i] = new MMEVoice();
+    state->mmeVoices[i]->init(96000.0f);
   }
 
   return state;
@@ -524,6 +528,7 @@ void chipnomadDestroy(ChipNomadState* state) {
     delete state->plaitsAltVoices[i];
     delete state->achchidVoices[i];
     delete state->drumSynthVoices[i];
+    delete state->mmeVoices[i];
   }
 
   if (state->ownsProjectResources) projectFree(&state->project);
@@ -566,6 +571,7 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
     state->plaitsAltVoices[i]->init((float)sampleRate);
     state->achchidVoices[i]->init((float)sampleRate);
     state->drumSynthVoices[i]->init((float)sampleRate);
+    state->mmeVoices[i]->init((float)sampleRate);
   }
 
   // Use provided factory or default
@@ -691,6 +697,7 @@ static void updateAudioRateModulations(ChipNomadState* state) {
   updatePlaitsAltVoices(state);
   updateAChChidVoices(state);
   updateDrumSynthVoices(state);
+  updateMMEVoices(state);
 }
 
 static int advancePlaybackFrame(ChipNomadState* state) {
@@ -709,7 +716,7 @@ static int advancePlaybackFrame(ChipNomadState* state) {
   motionRecordFrame(state);
   if (allTracksStopped) playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
   updateSampleVoices(state); updateSCWFVoices(state); updateBraidsVoices(state);
-  updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); updateDrumSynthVoices(state); applyVoiceEvents(state);
+  updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); updateDrumSynthVoices(state); updateMMEVoices(state); applyVoiceEvents(state);
   if (state->audioOverload > 0) state->audioOverload--;
   for (int i = 0; i < PROJECT_MAX_TRACKS; ++i)
     if (state->trackClipping[i] > 0) state->trackClipping[i]--;
@@ -817,6 +824,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
     renderMonoVoiceTracks(state, state->plaitsAltVoices, output, frames);
     renderMonoVoiceTracks(state, state->achchidVoices, output, frames);
     renderMonoVoiceTracks(state, state->drumSynthVoices, output, frames);
+    renderMonoVoiceTracks(state, state->mmeVoices, output, frames);
     processMasterMix(state, output, frames);
     samplesLeft -= frames;
     state->frameSampleCounter -= (float)frames;
@@ -991,6 +999,11 @@ static void applyVoiceEvents(ChipNomadState* state) {
       case InstrumentType::DrumSynth:
         if (track->note.noteKilled) state->drumSynthVoices[trackIdx]->kill();
         else if (track->note.noteTriggered) state->drumSynthVoices[trackIdx]->noteOn();
+        break;
+      case InstrumentType::MME:
+        if (track->note.noteKilled) state->mmeVoices[trackIdx]->kill();
+        else if (track->note.noteTriggered) state->mmeVoices[trackIdx]->noteOn();
+        else if (track->note.noteReleased) state->mmeVoices[trackIdx]->noteOff();
         break;
       default: break;
     }
@@ -1261,6 +1274,62 @@ static void updateDrumSynthVoices(ChipNomadState* state) {
     configured.fm = (uint8_t)clampInt(fm, 0, 255); configured.drive = (uint8_t)clampInt(drive, 0, 255);
     int cents = track->note.pitchFinal == EMPTY_VALUE_8 ? 6000 :
       (project->linearPitch ? project->pitchTable.values[track->note.pitchFinal] : (track->note.pitchFinal + 12) * 100) + track->note.fineOffset + pitchModulation;
+    voice->configure(&configured, (float)cents, gain < 0.0f ? 0.0f : gain,
+      (uint16_t)clampInt(cutoff, 20, 20000), (uint8_t)clampInt(resonance, 0, 255));
+  }
+}
+
+static void updateMMEVoices(ChipNomadState* state) {
+  Project* project = &state->audioProject;
+  PlaybackState* playback = &state->playbackState;
+  for (int trackIdx = 0; trackIdx < project->tracksCount; ++trackIdx) {
+    PlaybackTrackState* track = &playback->tracks[trackIdx];
+    MMEVoice* voice = state->mmeVoices[trackIdx];
+    if (track->note.instrument == EMPTY_VALUE_8 ||
+        project->instruments[track->note.instrument].type != InstrumentType::MME) { voice->kill(); continue; }
+    InstrumentMME* m = &project->instruments[track->note.instrument].chip.mme;
+    int model = (int)m->model, waves = m->waves, interval = m->interval, amount = m->amount;
+    int flow = m->flow, feedback = m->feedback, shaper = m->shaper;
+    int cutoff = m->filterCutoffHz, resonance = m->filterResonance, pitch = 0;
+    float gain = phraseGain(track, &project->instruments[track->note.instrument]);
+    if (track->note.fx[fxMMD].isOn) model = track->note.fx[fxMMD].fxValue;
+    waves = slewEngineFX(track, fxMWV, track->note.fx[fxMWV].isOn ? track->note.fx[fxMWV].fxValue : waves);
+    interval = slewEngineFX(track, fxMIN, track->note.fx[fxMIN].isOn ? track->note.fx[fxMIN].fxValue : interval);
+    amount = slewEngineFX(track, fxMAM, track->note.fx[fxMAM].isOn ? track->note.fx[fxMAM].fxValue : amount);
+    flow = slewEngineFX(track, fxMFL, track->note.fx[fxMFL].isOn ? track->note.fx[fxMFL].fxValue : flow);
+    feedback = slewEngineFX(track, fxMFB, track->note.fx[fxMFB].isOn ? track->note.fx[fxMFB].fxValue : feedback);
+    shaper = slewEngineFX(track, fxMSH, track->note.fx[fxMSH].isOn ? track->note.fx[fxMSH].fxValue : shaper);
+    cutoff = instrumentFXCutoff(slewEngineFX(track, fxMCF, track->note.fx[fxMCF].isOn ? track->note.fx[fxMCF].fxValue : filterControlFromCutoff(cutoff)));
+    resonance = slewEngineFX(track, fxMRS, track->note.fx[fxMRS].isOn ? track->note.fx[fxMRS].fxValue : resonance);
+    for (int i = 0; i < 4; ++i) {
+      PlaybackModState* mod = &track->note.modulation[i]; if (!mod->modulation) continue;
+      int value = playbackModScaleToRange(mod->outValue, 255);
+      switch (mod->modulation->destination) {
+        case 1: gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value / 255.0f; break;
+        case 2: pitch += playbackModScaleToRange(mod->outValue, 1200); break;
+        case 3: waves += value; break; case 4: interval += value; break; case 5: amount += value; break;
+        case 6: flow += value; break; case 7: feedback += value; break; case 8: shaper += value; break;
+        case 9: cutoff += playbackModScaleToRange(mod->outValue, 20000); break; case 10: resonance += value; break;
+      }
+    }
+    InstrumentMME configured = *m;
+    configured.model = (MMEModel)clampInt(model, 0, (int)MMEModel::totalCount - 1);
+    configured.waves = (uint8_t)clampInt(waves, 0, 255); configured.interval = (uint8_t)clampInt(interval, 0, 255);
+    configured.amount = (uint8_t)clampInt(amount, 0, 255); configured.flow = (uint8_t)clampInt(flow, 0, 255);
+    configured.feedback = (uint8_t)clampInt(feedback, 0, 255); configured.shaper = (uint8_t)clampInt(shaper, 0, 255);
+    int attack = configured.attack, decay = configured.decay, sustain = configured.sustain, release = configured.release;
+    int shape = configured.envelopeShape, triggerDecay = 0, triggerColor = 0;
+    if (track->note.fx[fxEAT].isOn) attack = track->note.fx[fxEAT].fxValue;
+    if (track->note.fx[fxEDC].isOn) decay = track->note.fx[fxEDC].fxValue;
+    if (track->note.fx[fxESU].isOn) sustain = track->note.fx[fxESU].fxValue;
+    if (track->note.fx[fxERL].isOn) release = track->note.fx[fxERL].fxValue;
+    if (track->note.fx[fxESH].isOn) shape = track->note.fx[fxESH].fxValue;
+    applyVoicePostModulations(track, InstrumentType::MME, &attack, &decay, &sustain, &release,
+                              &shape, &triggerDecay, &triggerColor);
+    configured.attack = (uint8_t)attack; configured.decay = (uint8_t)decay; configured.sustain = (uint8_t)sustain;
+    configured.release = (uint8_t)release; configured.envelopeShape = (uint8_t)shape;
+    int cents = track->note.pitchFinal == EMPTY_VALUE_8 ? 6000 :
+      (project->linearPitch ? project->pitchTable.values[track->note.pitchFinal] : (track->note.pitchFinal + 12) * 100) + track->note.fineOffset + pitch;
     voice->configure(&configured, (float)cents, gain < 0.0f ? 0.0f : gain,
       (uint16_t)clampInt(cutoff, 20, 20000), (uint8_t)clampInt(resonance, 0, 255));
   }
