@@ -28,5 +28,6 @@ extern ScreenData screenInstrumentPlaits;
 extern ScreenData screenInstrumentAChChid;
 extern ScreenData screenInstrumentDrumSynth;
 extern ScreenData screenInstrumentMME;
+extern ScreenData screenInstrumentSintered;
 
 #endif

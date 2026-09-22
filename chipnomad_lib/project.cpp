@@ -56,6 +56,7 @@ FXGroup fxGroups[] = {
   {"ADSR / Trigger FX", fxNamesEnvelope, 0, 7, InstrumentType::none},
   {"Modulation FX", fxNamesModulation, 0, 5, InstrumentType::none},
   {"MME FX", NULL, 0, 8, InstrumentType::MME},
+  {"Sintered FX", NULL, 0, 8, InstrumentType::Sintered},
 };
 int fxGroupCount = sizeof(fxGroups) / sizeof(FXGroup);
 
@@ -94,6 +95,12 @@ void fillFXNames() {
       names[i].fx = (FX)definition->fxList[i].fx;
       strcpy(names[i].name, definition->fxList[i].name);
     }
+  }
+  {
+    const InstrumentDefinition* definition = getInstrumentDefinition(InstrumentType::Sintered);
+    FXName* names = instrumentGroupNames[(int)InstrumentType::Sintered];
+    fxGroups[16].fxList = names; fxGroups[16].count = definition->fxCount;
+    for (int i = 0; i < definition->fxCount; ++i) { names[i].fx = (FX)definition->fxList[i].fx; strcpy(names[i].name, definition->fxList[i].name); }
   }
 
   // Fill FX names from all groups

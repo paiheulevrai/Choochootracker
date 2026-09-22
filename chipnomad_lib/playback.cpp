@@ -289,7 +289,7 @@ void handleNoteOff(PlaybackState* state, int trackIdx) {
 
   int isModernVoice = instType == InstrumentType::Braids ||
     instType == InstrumentType::Plaits || instType == InstrumentType::PlaitsAlt || instType == InstrumentType::Sample ||
-    instType == InstrumentType::DrumSynth || instType == InstrumentType::MME;
+    instType == InstrumentType::DrumSynth || instType == InstrumentType::MME || instType == InstrumentType::Sintered;
 
   int hasVolumeADSR = 0;
 
@@ -780,6 +780,7 @@ static void handleInstrument(PlaybackState* state, int trackIdx) {
   case InstrumentType::AChChid:
   case InstrumentType::DrumSynth:
   case InstrumentType::MME:
+  case InstrumentType::Sintered:
     break;
   case InstrumentType::none:
     break;

@@ -38,6 +38,7 @@ static SelectionItem instrumentTypeSynth[] = {
 };
 static SelectionItem instrumentTypeDrums[] = {
   {NULL, (int)InstrumentType::DrumSynth, NULL, 0},
+  {NULL, (int)InstrumentType::Sintered, NULL, 0},
 };
 static SelectionItem instrumentTypeSample[] = {
   {NULL, (int)InstrumentType::SCWF, NULL, 0},
@@ -46,13 +47,13 @@ static SelectionItem instrumentTypeSample[] = {
 };
 static const SelectionItem instrumentTypeCategories[] = {
   {"CHIP", -1, instrumentTypeChip, 3},
-  {"DRUMS", -1, instrumentTypeDrums, 1},
+  {"DRUMS", -1, instrumentTypeDrums, 2},
   {"SAMPLE", -1, instrumentTypeSample, 3},
   {"SYNTH", -1, instrumentTypeSynth, 5},
 };
 
 static const InstrumentType instrumentTypesQuickCycle[] = {
-  InstrumentType::none, InstrumentType::DrumSynth,
+  InstrumentType::none, InstrumentType::DrumSynth, InstrumentType::Sintered,
   InstrumentType::AY1, InstrumentType::AY2, InstrumentType::AYSample,
   InstrumentType::SCWF, InstrumentType::BYOWTBL, InstrumentType::Sample,
   InstrumentType::AChChid, InstrumentType::Braids,
@@ -256,6 +257,7 @@ static ScreenData* instrumentScreen(void) {
     &screenInstrumentAYSample, &screenInstrumentBraids, &screenInstrumentSample,
     &screenInstrumentSCWF, &screenInstrumentBYOWTBL, &screenInstrumentPlaits, &screenInstrumentAChChid,
     &screenInstrumentDrumSynth, &screenInstrumentMME,
+    &screenInstrumentSintered,
   };
   InstrumentScreenKind kind = getInstrumentDefinition(chipnomadState->project.instruments[cInstrument].type)->screen;
   ScreenData* data = screens[(int)kind];
@@ -270,7 +272,7 @@ static void init(void) {
   screenInstrumentNone.cursorRow = 0;
   screenInstrumentNone.cursorCol = 0;
   SelectionItem* groups[] = {instrumentTypeChip, instrumentTypeSample, instrumentTypeSynth, instrumentTypeDrums};
-  const int counts[] = {3, 3, 5, 1};
+  const int counts[] = {3, 3, 5, 2};
   for (int group = 0; group < 4; ++group)
     for (int item = 0; item < counts[group]; ++item)
       groups[group][item].label = getInstrumentDefinition((InstrumentType)groups[group][item].value)->uiName;
@@ -525,7 +527,7 @@ void instrumentCommonDrawLivePreview(void) {
   gfxDrawBitmap(livePreviewBitmap, 0, 16);
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
   InstrumentVoicePostSettings* post = voicePostSettings(instrument, instrument->type);
-  if (post && instrument->type != InstrumentType::DrumSynth &&
+  if (post && instrument->type != InstrumentType::DrumSynth && instrument->type != InstrumentType::Sintered &&
       ((instrument->type != InstrumentType::Plaits &&
                 instrument->type != InstrumentType::PlaitsAlt) ||
                instrument->chip.plaits.envelopeMode != 0)) {

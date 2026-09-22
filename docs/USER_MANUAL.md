@@ -10,6 +10,7 @@ It follows the classic LSDj workflow and navigation system, with several sound d
 - aChChid, a versatile acid synth based on Open303
 - Bogie, a native 12-model drum synthesiser with a multimode filter
 - MME, a two-oscillator multi-modulation synthesiser with a multimode filter
+- Sintered, a native six-model experimental digital drum synthesiser
 
 ## 1. Installation and files
 
@@ -355,6 +356,12 @@ Its six macros are **Decay**, **Tone**, **Sweep**, **Noise**, **FM** and **Drive
 Every model can use the shared LP/BP/HP multimode filter, with Clean, Classic, Aggro or Acid character, `12`/`24 dB` slope, cutoff and resonance. Bogie supports all of its active macros plus Volume, Pitch, Cutoff and Resonance as modulation and motion-recording destinations. Use short Decay with Cowbell for sharp phonk attacks; increase FM for a harder, more metallic bell.
 
 On the Modulation screen, press **EDIT** on a source to choose a family (Envelopes, LFO or Sticks), then its source. **Left** and **Right** still cycle sources directly.
+
+### Sintered
+
+**Sintered** is a native one-shot digital percussion synth. Notes set its fundamental pitch; its six models are `Knot`, `Shard`, `Burst`, `Comb`, `Logic` and `Melt`. Every model has **Decay**, **Mod** and **Motion**, plus three model-specific controls: Knot uses Ratio/Spread/Fold, Shard Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush and Melt Ratio/Chaos/Drive. **Mod** is always the internal coupling depth.
+
+Motion is an internal macro envelope, not pitch glide: values below `80` use an AD shape, `80` disables it, and values above `80` use a decay-only shape. Moving farther from the centre makes the envelope faster. Its destinations are fixed per model, so Sintered stays predictable in tracker patterns: Knot animates Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. All models reset their state on a note trigger and bound internal feedback for repeatable hits.
 
 ### MME
 
@@ -717,6 +724,14 @@ The value is interpreted as a signed `8-bit` relative change (`01` adds `1`, `FF
 | `DCF` | `00-FF` | Filter cutoff, mapped logarithmically. |
 | `DRS` | `00-FF` | Filter resonance. |
 
+### Sintered FX
+
+| FX | Value | Meaning |
+|---|---|---|
+| `SMD` | `00-05` | Selects the Sintered model until the next trigger. |
+| `SDC`, `SMP`, `SMA`, `SMB`, `SMO`, `SMC` | `00-FF` | Override Decay, Mod, the first two model macros, Motion or the final model macro until the next trigger. |
+| `SCF`, `SRS` | `00-FF` | Filter cutoff and resonance. |
+
 ### Plaits FX
 
 | FX | Value | Meaning |
@@ -887,4 +902,4 @@ Adjust Repeat delay and Repeat speed in Settings. If a single press moves twice,
 
 ## 14. Credits and licensing
 
-ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP, Warps-derived MME DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. The aChChid engine uses Open303 by Robin Schmidt, copyright 2009, under the MIT License. Bogie is an original native implementation. See the packaged license files for exact attribution.
+ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP, Warps-derived MME DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. The aChChid engine uses Open303 by Robin Schmidt, copyright 2009, under the MIT License. Bogie and Sintered are original native implementations. See the packaged license files for exact attribution.

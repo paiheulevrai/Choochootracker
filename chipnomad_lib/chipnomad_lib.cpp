@@ -11,6 +11,7 @@
 #include "synth/achchid_voice.h"
 #include "synth/drum_synth_voice.h"
 #include "synth/mme_voice.h"
+#include "synth/sintered_voice.h"
 #include "synth/master_effects.h"
 #include <math.h>
 #include <atomic>
@@ -27,6 +28,7 @@ static void updatePlaitsAltVoices(ChipNomadState* state);
 static void updateAChChidVoices(ChipNomadState* state);
 static void updateDrumSynthVoices(ChipNomadState* state);
 static void updateMMEVoices(ChipNomadState* state);
+static void updateSinteredVoices(ChipNomadState* state);
 static void applyVoiceEvents(ChipNomadState* state);
 static int hasAudioRateModulation(const ChipNomadState* state);
 static void updateAudioRateModulations(ChipNomadState* state);
@@ -504,6 +506,8 @@ ChipNomadState* chipnomadCreate(void) {
     state->drumSynthVoices[i]->init(96000.0f);
     state->mmeVoices[i] = new MMEVoice();
     state->mmeVoices[i]->init(96000.0f);
+    state->sinteredVoices[i] = new SinteredVoice();
+    state->sinteredVoices[i]->init(96000.0f);
   }
 
   return state;
@@ -529,6 +533,7 @@ void chipnomadDestroy(ChipNomadState* state) {
     delete state->achchidVoices[i];
     delete state->drumSynthVoices[i];
     delete state->mmeVoices[i];
+    delete state->sinteredVoices[i];
   }
 
   if (state->ownsProjectResources) projectFree(&state->project);
@@ -572,6 +577,7 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
     state->achchidVoices[i]->init((float)sampleRate);
     state->drumSynthVoices[i]->init((float)sampleRate);
     state->mmeVoices[i]->init((float)sampleRate);
+    state->sinteredVoices[i]->init((float)sampleRate);
   }
 
   // Use provided factory or default
@@ -698,6 +704,7 @@ static void updateAudioRateModulations(ChipNomadState* state) {
   updateAChChidVoices(state);
   updateDrumSynthVoices(state);
   updateMMEVoices(state);
+  updateSinteredVoices(state);
 }
 
 static int advancePlaybackFrame(ChipNomadState* state) {
@@ -716,7 +723,7 @@ static int advancePlaybackFrame(ChipNomadState* state) {
   motionRecordFrame(state);
   if (allTracksStopped) playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
   updateSampleVoices(state); updateSCWFVoices(state); updateBraidsVoices(state);
-  updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); updateDrumSynthVoices(state); updateMMEVoices(state); applyVoiceEvents(state);
+  updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); updateDrumSynthVoices(state); updateMMEVoices(state); updateSinteredVoices(state); applyVoiceEvents(state);
   if (state->audioOverload > 0) state->audioOverload--;
   for (int i = 0; i < PROJECT_MAX_TRACKS; ++i)
     if (state->trackClipping[i] > 0) state->trackClipping[i]--;
@@ -825,6 +832,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples) {
     renderMonoVoiceTracks(state, state->achchidVoices, output, frames);
     renderMonoVoiceTracks(state, state->drumSynthVoices, output, frames);
     renderMonoVoiceTracks(state, state->mmeVoices, output, frames);
+    renderMonoVoiceTracks(state, state->sinteredVoices, output, frames);
     processMasterMix(state, output, frames);
     samplesLeft -= frames;
     state->frameSampleCounter -= (float)frames;
@@ -1004,6 +1012,10 @@ static void applyVoiceEvents(ChipNomadState* state) {
         if (track->note.noteKilled) state->mmeVoices[trackIdx]->kill();
         else if (track->note.noteTriggered) state->mmeVoices[trackIdx]->noteOn();
         else if (track->note.noteReleased) state->mmeVoices[trackIdx]->noteOff();
+        break;
+      case InstrumentType::Sintered:
+        if (track->note.noteKilled) state->sinteredVoices[trackIdx]->kill();
+        else if (track->note.noteTriggered) state->sinteredVoices[trackIdx]->noteOn();
         break;
       default: break;
     }
@@ -1328,6 +1340,50 @@ static void updateMMEVoices(ChipNomadState* state) {
                               &shape, &triggerDecay, &triggerColor);
     configured.attack = (uint8_t)attack; configured.decay = (uint8_t)decay; configured.sustain = (uint8_t)sustain;
     configured.release = (uint8_t)release; configured.envelopeShape = (uint8_t)shape;
+    int cents = track->note.pitchFinal == EMPTY_VALUE_8 ? 6000 :
+      (project->linearPitch ? project->pitchTable.values[track->note.pitchFinal] : (track->note.pitchFinal + 12) * 100) + track->note.fineOffset + pitch;
+    voice->configure(&configured, (float)cents, gain < 0.0f ? 0.0f : gain,
+      (uint16_t)clampInt(cutoff, 20, 20000), (uint8_t)clampInt(resonance, 0, 255));
+  }
+}
+
+static void updateSinteredVoices(ChipNomadState* state) {
+  Project* project = &state->audioProject;
+  PlaybackState* playback = &state->playbackState;
+  for (int trackIdx = 0; trackIdx < project->tracksCount; ++trackIdx) {
+    PlaybackTrackState* track = &playback->tracks[trackIdx];
+    SinteredVoice* voice = state->sinteredVoices[trackIdx];
+    if (track->note.instrument == EMPTY_VALUE_8 ||
+        project->instruments[track->note.instrument].type != InstrumentType::Sintered) { voice->kill(); continue; }
+    InstrumentSintered* s = &project->instruments[track->note.instrument].chip.sintered;
+    int model = (int)s->model, decay = s->decay, mod = s->mod, a = s->a, b = s->b, motion = s->motion, c = s->c;
+    int cutoff = s->filterCutoffHz, resonance = s->filterResonance, pitch = 0;
+    float gain = phraseGain(track, &project->instruments[track->note.instrument]);
+    if (track->note.fx[fxSMDL].isOn) model = track->note.fx[fxSMDL].fxValue;
+    decay = slewEngineFX(track, fxSDC, track->note.fx[fxSDC].isOn ? track->note.fx[fxSDC].fxValue : decay);
+    mod = slewEngineFX(track, fxSMD, track->note.fx[fxSMD].isOn ? track->note.fx[fxSMD].fxValue : mod);
+    a = slewEngineFX(track, fxSA, track->note.fx[fxSA].isOn ? track->note.fx[fxSA].fxValue : a);
+    b = slewEngineFX(track, fxSB, track->note.fx[fxSB].isOn ? track->note.fx[fxSB].fxValue : b);
+    motion = slewEngineFX(track, fxSMO, track->note.fx[fxSMO].isOn ? track->note.fx[fxSMO].fxValue : motion);
+    c = slewEngineFX(track, fxSC, track->note.fx[fxSC].isOn ? track->note.fx[fxSC].fxValue : c);
+    cutoff = instrumentFXCutoff(slewEngineFX(track, fxSCF3, track->note.fx[fxSCF3].isOn ? track->note.fx[fxSCF3].fxValue : filterControlFromCutoff(cutoff)));
+    resonance = slewEngineFX(track, fxSRS3, track->note.fx[fxSRS3].isOn ? track->note.fx[fxSRS3].fxValue : resonance);
+    for (int i = 0; i < 4; ++i) {
+      PlaybackModState* stateMod = &track->note.modulation[i]; if (!stateMod->modulation) continue;
+      int value = playbackModScaleToRange(stateMod->outValue, 255);
+      switch (stateMod->modulation->destination) {
+        case 1: gain = modulationIsAdditive(stateMod->modulation->type) ? gain + value / 255.0f : value / 255.0f; break;
+        case 2: pitch += playbackModScaleToRange(stateMod->outValue, 1200); break;
+        case 3: decay += value; break; case 4: mod += value; break; case 5: a += value; break;
+        case 6: b += value; break; case 7: motion += value; break; case 8: c += value; break;
+        case 9: cutoff += playbackModScaleToRange(stateMod->outValue, 20000); break; case 10: resonance += value; break;
+      }
+    }
+    InstrumentSintered configured = *s;
+    configured.model = (SinteredModel)clampInt(model, 0, (int)SinteredModel::totalCount - 1);
+    configured.decay = (uint8_t)clampInt(decay, 0, 255); configured.mod = (uint8_t)clampInt(mod, 0, 255);
+    configured.a = (uint8_t)clampInt(a, 0, 255); configured.b = (uint8_t)clampInt(b, 0, 255);
+    configured.motion = (uint8_t)clampInt(motion, 0, 255); configured.c = (uint8_t)clampInt(c, 0, 255);
     int cents = track->note.pitchFinal == EMPTY_VALUE_8 ? 6000 :
       (project->linearPitch ? project->pitchTable.values[track->note.pitchFinal] : (track->note.pitchFinal + 12) * 100) + track->note.fineOffset + pitch;
     voice->configure(&configured, (float)cents, gain < 0.0f ? 0.0f : gain,

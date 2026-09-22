@@ -24,6 +24,7 @@ enum class InstrumentType : uint8_t {
   AChChid = 10,
   DrumSynth = 11,
   MME = 12,
+  Sintered = 13,
   totalCount,
 };
 
@@ -218,6 +219,17 @@ struct InstrumentMME : InstrumentVoicePostSettings {
   uint8_t shaper;
 };
 
+enum class SinteredModel : uint8_t { knot, shard, burst, comb, logic, melt, totalCount };
+struct InstrumentSintered : InstrumentVoicePostSettings {
+  SinteredModel model;
+  uint8_t decay;
+  uint8_t mod;
+  uint8_t a;
+  uint8_t b;
+  uint8_t motion;
+  uint8_t c;
+};
+
 struct InstrumentPlaits : InstrumentVoicePostSettings {
   uint8_t engine;
   uint16_t harmonics;
@@ -269,6 +281,7 @@ union InstrumentChipData {
   InstrumentAChChid achchid;
   InstrumentDrumSynth drumSynth;
   InstrumentMME mme;
+  InstrumentSintered sintered;
 };
 
 struct Instrument {
@@ -293,7 +306,7 @@ struct InstrumentFunctions {
 // This is metadata, not an audio abstraction: renderers keep their typed
 // paths while screens, validation and motion routing share this one catalogue.
 enum class InstrumentCategory : uint8_t { none, chip, sample, synth, drums };
-enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme };
+enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme, sintered };
 enum class InstrumentMotionValue : uint8_t { raw, speed, cutoff };
 
 static constexpr uint8_t instrumentNoFX = 0xff;

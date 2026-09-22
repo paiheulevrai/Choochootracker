@@ -378,6 +378,23 @@ static int loadInstrumentMME(FILE* file, Instrument* instrument) {
   }
 }
 
+static int loadInstrumentSintered(FILE* file, Instrument* instrument) {
+  InstrumentSintered* s = &instrument->chip.sintered;
+  while (1) {
+    char* line = peekLine(file);
+    if (line == NULL || line[0] == '#') return 0;
+    if (strncmp(line, "- Model: ", 9) == 0) sscanf(line, "- Model: %hhu", (uint8_t*)&s->model);
+    else if (strncmp(line, "- Sintered decay: ", 18) == 0) sscanf(line, "- Sintered decay: %hhu", &s->decay);
+    else if (strncmp(line, "- Mod: ", 7) == 0) sscanf(line, "- Mod: %hhu", &s->mod);
+    else if (strncmp(line, "- A: ", 5) == 0) sscanf(line, "- A: %hhu", &s->a);
+    else if (strncmp(line, "- B: ", 5) == 0) sscanf(line, "- B: %hhu", &s->b);
+    else if (strncmp(line, "- Motion: ", 10) == 0) sscanf(line, "- Motion: %hhu", &s->motion);
+    else if (strncmp(line, "- C: ", 5) == 0) sscanf(line, "- C: %hhu", &s->c);
+    else loadVoicePostSetting(line, s);
+    consumeLine(file);
+  }
+}
+
 static int loadModulation(FILE* file, Instrument* instrument) {
   for (int i = 0; i < 4; i++) {
     char* line = peekLine(file);
@@ -497,6 +514,9 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
       case InstrumentType::MME:
         if (loadInstrumentMME(file, instrument)) return 1;
         break;
+      case InstrumentType::Sintered:
+        if (loadInstrumentSintered(file, instrument)) return 1;
+        break;
       default:
         break;
     }
@@ -519,6 +539,10 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
     InstrumentMME* m = &instrument->chip.mme;
     if ((uint8_t)m->model >= (uint8_t)MMEModel::totalCount) m->model = MMEModel::ring;
     if (m->filterCutoffHz > 20000) m->filterCutoffHz = 20000;
+  } else if (instrument->type == InstrumentType::Sintered) {
+    InstrumentSintered* s = &instrument->chip.sintered;
+    if ((uint8_t)s->model >= (uint8_t)SinteredModel::totalCount) s->model = SinteredModel::knot;
+    if (s->filterCutoffHz > 20000) s->filterCutoffHz = 20000;
   }
 
   return 0;
@@ -696,6 +720,15 @@ static int saveInstrumentMME(FILE* file, Instrument* instrument) {
   saveVoicePostSettings(file, m); return 0;
 }
 
+static int saveInstrumentSintered(FILE* file, Instrument* instrument) {
+  InstrumentSintered* s = &instrument->chip.sintered;
+  fprintf(file, "- Model: %hhu\n", (uint8_t)s->model);
+  fprintf(file, "- Sintered decay: %hhu\n", s->decay); fprintf(file, "- Mod: %hhu\n", s->mod);
+  fprintf(file, "- A: %hhu\n", s->a); fprintf(file, "- B: %hhu\n", s->b);
+  fprintf(file, "- Motion: %hhu\n", s->motion); fprintf(file, "- C: %hhu\n", s->c);
+  saveVoicePostSettings(file, s); return 0;
+}
+
 // Save modulation data
 static int saveModulation(FILE* file, Instrument* instrument) {
   fprintf(file, "- Modulation:\n");
@@ -762,6 +795,9 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
       break;
     case InstrumentType::MME:
       saveInstrumentMME(file, instrument);
+      break;
+    case InstrumentType::Sintered:
+      saveInstrumentSintered(file, instrument);
       break;
     default:
       break;

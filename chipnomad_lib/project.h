@@ -175,6 +175,17 @@ enum FX {
   fxMCF, // Filter cutoff
   fxMRS, // Filter resonance
 
+  // Sintered FX. Appended to preserve project FX IDs.
+  fxSMDL, // Model
+  fxSDC, // Decay
+  fxSMD, // Mod
+  fxSA, // A
+  fxSB, // B
+  fxSMO, // Motion
+  fxSC, // C
+  fxSCF3, // Filter cutoff
+  fxSRS3, // Filter resonance
+
   // Total count - must be last
   fxTotalCount
 };

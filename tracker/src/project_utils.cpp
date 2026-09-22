@@ -83,6 +83,8 @@ const char* instrumentTypeName(InstrumentType type) {
       return "Bogie";
     case InstrumentType::MME:
       return "MME";
+    case InstrumentType::Sintered:
+      return "Sintered";
     case InstrumentType::none:
       return "None";
     default:

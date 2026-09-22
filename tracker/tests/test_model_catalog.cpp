@@ -26,5 +26,6 @@ TEST_CASE("model names come from the catalog") {
   CHECK(strcmp(modelCatalogName(InstrumentType::Braids, 46), "DIGI-MOD") == 0);
   CHECK(strcmp(modelCatalogName(InstrumentType::Plaits, 5), "WAVE TERRAIN") == 0);
   CHECK(strcmp(modelCatalogName(InstrumentType::PlaitsAlt, 23), "PHASE FLOCK") == 0);
+  CHECK(strcmp(modelCatalogName(InstrumentType::Sintered, 5), "MELT") == 0);
   CHECK(strcmp(modelCatalogName(InstrumentType::Plaits, 24), "UNKNOWN") == 0);
 }

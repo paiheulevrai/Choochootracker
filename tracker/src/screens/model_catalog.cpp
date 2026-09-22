@@ -108,6 +108,11 @@ const SelectionItem mmeCategories[] = {
 };
 const int mmeCategoryCount = sizeof(mmeCategories) / sizeof(mmeCategories[0]);
 
+static const SelectionItem sinteredCore[] = {LEAF("KNOT", 0), LEAF("SHARD", 1), LEAF("BURST", 2)};
+static const SelectionItem sinteredExperimental[] = {LEAF("COMB", 3), LEAF("LOGIC", 4), LEAF("MELT", 5)};
+const SelectionItem sinteredCategories[] = {CATEGORY("CORE", sinteredCore), CATEGORY("EXPERIMENTAL", sinteredExperimental)};
+const int sinteredCategoryCount = sizeof(sinteredCategories) / sizeof(sinteredCategories[0]);
+
 static bool catalogValid(const SelectionItem* categories, int count, int models) {
   bool seen[64] = {};
   for (int i = 0; i < count; ++i) {
@@ -125,7 +130,8 @@ bool modelCatalogsValid() {
   return catalogValid(plaitsCategories, plaitsCategoryCount, 24) &&
          catalogValid(plaitsAltCategories, plaitsAltCategoryCount, 24) &&
          catalogValid(braidsCategories, braidsCategoryCount, 47) &&
-         catalogValid(mmeCategories, mmeCategoryCount, (int)MMEModel::totalCount);
+         catalogValid(mmeCategories, mmeCategoryCount, (int)MMEModel::totalCount) &&
+         catalogValid(sinteredCategories, sinteredCategoryCount, (int)SinteredModel::totalCount);
 }
 
 const char* modelCatalogName(InstrumentType type, int value) {
@@ -143,6 +149,10 @@ const char* modelCatalogName(InstrumentType type, int value) {
     case InstrumentType::PlaitsAlt:
       categories = plaitsAltCategories;
       categoryCount = plaitsAltCategoryCount;
+      break;
+    case InstrumentType::Sintered:
+      categories = sinteredCategories;
+      categoryCount = sinteredCategoryCount;
       break;
     default:
       return "UNKNOWN";

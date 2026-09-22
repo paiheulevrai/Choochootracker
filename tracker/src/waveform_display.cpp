@@ -6,6 +6,7 @@
 #include "synth/plaits_voice.h"
 #include "synth/plaits_alt_voice.h"
 #include "synth/mme_voice.h"
+#include "synth/sintered_voice.h"
 #include "common.h"
 #include <string.h>
 #include <stdlib.h>
@@ -158,7 +159,7 @@ Bitmap* waveformDisplayGetBitmap(int trackIdx) {
   if (track->note.instrument != EMPTY_VALUE_8) {
     InstrumentType type = chipnomadState->project.instruments[track->note.instrument].type;
     if (type == InstrumentType::Braids || type == InstrumentType::AChChid || type == InstrumentType::Sample ||
-        type == InstrumentType::Plaits || type == InstrumentType::PlaitsAlt || type == InstrumentType::MME) {
+        type == InstrumentType::Plaits || type == InstrumentType::PlaitsAlt || type == InstrumentType::MME || type == InstrumentType::Sintered) {
       return drawVoiceWaveform(trackIdx);
     }
   }

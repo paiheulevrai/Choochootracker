@@ -14,6 +14,8 @@ extern const SelectionItem drumSynthCategories[];
 extern const int drumSynthCategoryCount;
 extern const SelectionItem mmeCategories[];
 extern const int mmeCategoryCount;
+extern const SelectionItem sinteredCategories[];
+extern const int sinteredCategoryCount;
 
 bool modelCatalogsValid();
 const char* modelCatalogName(InstrumentType type, int value);
