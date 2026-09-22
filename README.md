@@ -94,6 +94,7 @@ Articulations
 - LFO can retrig on phrase & chains start (in addition to standard lfo trigs)
 - Joystick modulation , that can be live recorded as trackFX 
 - Tracker tables (4 FX slots per table row), grooves, chains, and songs
+- Decoupled tables: tracker tables can be free running, or reset on phrase/chain.
 
 ## One tracker, many engines
 
