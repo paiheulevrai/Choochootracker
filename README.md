@@ -160,4 +160,5 @@ Mad respects to the people I stole ideas from:
 - Thomas, the absolute beast behind Nedseq
 - The people at Elektron who boldly put user workflow and speed first, and also whoever invented P-locks and trig conditions.
 - Whoever invented the menu navigation style of vintage RPGs
+- the Noise Engineering team, who inspired the MME engine
 - All musicians who I saw playing live sets on gameboys and other constrained hardware rigs.
