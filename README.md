@@ -77,6 +77,7 @@ Synthesis
 - Dual wavetable oscillator: bring your own Serum wavetables !
 - Achchid: acid engine (open303 based) that can take Braids as VCO
 - Bogie: In-house drum synth with 12 VA/FM models (including cowbells).
+- MME: Multi Modulation Engine. An aggressive voice inspired by the Loquelic Iteritas, but with Mutable Warps algos
 - Multimode LP/HP/BP 12/24dB filters for all new synth/sample engines
 - Several filter flavours inspired by analog synths
 - Per-track volume, mute, solo, tiltEQ, Reverb send, and Delay send
