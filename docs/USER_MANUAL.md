@@ -516,9 +516,13 @@ LFO trigger types:
 
 ### Motion recording
 
-- Hold **STICK LIVE** (`L1` by default) to apply stick modulation without changing the phrase.
+- **STICK LIVE** (`L1` by default) applies stick modulation without changing the phrase. In **Settings > Stick live mode**, `HOLD` (the default) enables it while held; `TOGGLE` enables it on one press and disables it on the next. Releasing the button in `TOGGLE` leaves it enabled.
 - During playback, hold **MOTION RECORD** (`L2`) to apply stick modulation and record changed destinations as absolute FX values.
 - Hold **MOTION ERASE** (`R2`) to remove matching destination FX from the current row.
+
+The bottom-right `~` indicates active Stick live. Record (`*`, or `!` for overflow) and Erase (`x`) take indicator priority and remain momentary in both modes. Both enable live stick processing while held; releasing them leaves a separately enabled live toggle intact.
+
+The mode is saved with application settings, but the live toggle always starts off on launch. Changing modes clears the toggle: `HOLD` follows any currently held Stick live button, while `TOGGLE` waits for a fresh press.
 
 Motion recording writes track FX into the phrase currently playing. It updates matching FX first, then uses empty slots from right to left. It never overwrites a different FX. If all 3 slots are full, that motion is not recorded on the step. A `!` in the bottom-right corner means that more destinations changed than the 3 FX columns could hold.
 
@@ -877,6 +881,7 @@ Use **Save** before changing instrument types or loading another project.
 - **AY Quality** changes AY/YM emulation quality only.
 - **Sample dithering** controls AY Sample dithering only.
 - **Braids BITS / DRFT / SIGN** apply globally to every Braids instrument.
+- **Stick live mode** selects `HOLD` or `TOGGLE` for the existing mapped Stick live button.
 - **Key mapping**, **Load font**, and **Edit color theme** customise the interface. ChipNomad fonts and themes should work.
 - **Quit ChooChooTracker** exits cleanly.
 
