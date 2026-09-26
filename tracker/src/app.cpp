@@ -34,7 +34,10 @@ static int tapCount;
 static int keyRepeatCount;
 static int motionRecordHeld;
 static int motionEraseHeld;
+// One bit per mapped input, plus one for logical input. Overlapping delivery
+// of the same press must be released completely before toggling again.
 static int motionLiveHeld;
+static int motionLiveLatched;
 static int quickHelpSelectHeld;
 static int quickHelpSelectAlone;
 static int audioProjectDirty;
@@ -68,10 +71,17 @@ static int isMotionRecordTrigger(InputCode input) {
   return 0;
 }
 
-static int isMotionLiveTrigger(InputCode input) {
+static int motionLiveInputMask(InputCode input) {
+  if (input.deviceType == InputDeviceType::logical)
+    return input.code == keyMotionLive ? 1 << 3 : 0;
+  int mask = 0;
   for (int i = 0; i < 3; i++)
-    if (appSettings.keyMapping.keyMotionLive[i].deviceType == input.deviceType && appSettings.keyMapping.keyMotionLive[i].code == input.code) return 1;
-  return 0;
+    if (appSettings.keyMapping.keyMotionLive[i].deviceType == input.deviceType && appSettings.keyMapping.keyMotionLive[i].code == input.code) mask |= 1 << i;
+  return mask;
+}
+
+static int motionLiveActive(void) {
+  return appSettings.stickLiveMode == StickLiveMode::toggle ? motionLiveLatched : motionLiveHeld != 0;
 }
 
 static int isMotionEraseTrigger(InputCode input) {
@@ -82,7 +92,15 @@ static int isMotionEraseTrigger(InputCode input) {
 
 static void updateMotionRecordMode(void) {
   chipnomadSetMotionRecordMode(motionRecordHeld, motionEraseHeld);
-  chipnomadSetLiveStickEnabled(motionLiveHeld || motionRecordHeld || motionEraseHeld);
+  chipnomadSetLiveStickEnabled(motionLiveActive() || motionRecordHeld || motionEraseHeld);
+}
+
+void appSetStickLiveMode(StickLiveMode mode) {
+  if (mode != StickLiveMode::toggle) mode = StickLiveMode::hold;
+  if (appSettings.stickLiveMode == mode) return;
+  appSettings.stickLiveMode = mode;
+  motionLiveLatched = 0;
+  updateMotionRecordMode();
 }
 
 /**
@@ -244,6 +262,7 @@ void appSetup(void) {
   motionRecordHeld = 0;
   motionEraseHeld = 0;
   motionLiveHeld = 0;
+  motionLiveLatched = 0;
   quickHelpSelectHeld = 0;
   quickHelpSelectAlone = 0;
   updateMotionRecordMode();
@@ -374,7 +393,7 @@ void appDraw(void) {
   } else if (motionRecordHeld) {
     gfxSetFgColor(realtimeOverflow ? cs.warning : cs.textTitles);
     gfxPrint(39, 19, realtimeOverflow ? "!" : "*");
-  } else if (motionLiveHeld) {
+  } else if (motionLiveActive()) {
     gfxSetFgColor(cs.textTitles);
     gfxPrint(39, 19, "~");
   } else {
@@ -411,9 +430,11 @@ void appOnEvent(MainLoopEventData eventData) {
       updateMotionRecordMode();
       break;
     }
-    if (!rawInputActive && (isMotionLiveTrigger(eventData.data.input) ||
-        (eventData.data.input.deviceType == InputDeviceType::logical && eventData.data.input.code == keyMotionLive))) {
-      motionLiveHeld = 1;
+    int liveInputMask = motionLiveInputMask(eventData.data.input);
+    if (!rawInputActive && liveInputMask) {
+      if (!motionLiveHeld && appSettings.stickLiveMode == StickLiveMode::toggle)
+        motionLiveLatched = !motionLiveLatched;
+      motionLiveHeld |= liveInputMask;
       updateMotionRecordMode();
       break;
     }
@@ -485,9 +506,9 @@ void appOnEvent(MainLoopEventData eventData) {
       updateMotionRecordMode();
       break;
     }
-    if (!rawInputActive && (isMotionLiveTrigger(eventData.data.input) ||
-        (eventData.data.input.deviceType == InputDeviceType::logical && eventData.data.input.code == keyMotionLive))) {
-      motionLiveHeld = 0;
+    int liveInputMask = motionLiveInputMask(eventData.data.input);
+    if (!rawInputActive && liveInputMask) {
+      motionLiveHeld &= ~liveInputMask;
       updateMotionRecordMode();
       break;
     }

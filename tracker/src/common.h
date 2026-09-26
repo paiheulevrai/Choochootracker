@@ -46,6 +46,8 @@ struct KeyMapping {
   InputCode keyMotionErase[3];
 };
 
+enum class StickLiveMode { hold, toggle };
+
 struct AppSettings {
   int screenWidth;
   int screenHeight;
@@ -64,6 +66,7 @@ struct AppSettings {
   int pitchConflictWarning;
   int quickHelpReleaseSeen;
   int ayWavetableLfoView;
+  StickLiveMode stickLiveMode;
   KeyMapping keyMapping;
   ColorScheme colorScheme;
   char themeName[THEME_NAME_LENGTH + 1];

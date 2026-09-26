@@ -12,6 +12,7 @@ extern "C" {
 void appSetup(void);
 void appCleanup(void);
 void appDraw(void);
+void appSetStickLiveMode(StickLiveMode mode);
 void appOnEvent(MainLoopEventData eventData);
 
 // Raw input callback for key mapping screen

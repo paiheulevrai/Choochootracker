@@ -54,7 +54,9 @@ CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/physical_modelling/*.cc) \
                         $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/speech/*.cc)
 
-TRACKER_SRC_SOURCES = src/string_utils.cpp \
+TRACKER_SRC_SOURCES = src/app.cpp \
+                      src/screens/screen_settings.cpp \
+                      src/string_utils.cpp \
                       src/common.cpp \
                       src/copy_paste.cpp \
                       src/project_utils.cpp \
