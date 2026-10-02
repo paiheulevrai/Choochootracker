@@ -63,7 +63,6 @@ static void updateSamplePreview(const InstrumentSample* sample) {
   Bitmap* markers = ensurePreviewBitmap(&sampleSliceMarkerBitmap);
   Bitmap* startMarker = ensurePreviewBitmap(&sampleStartMarkerBitmap);
   Bitmap* endMarker = ensurePreviewBitmap(&sampleEndMarkerBitmap);
-
   // Calculate actual start/end positions in frames
   uint32_t frameCount = sample->frameCount;
   uint32_t startFrame = frameCount ? (uint64_t)sample->start * (frameCount - 1) / 255 : 0;
@@ -94,7 +93,6 @@ static void updateSamplePreview(const InstrumentSample* sample) {
       }
     }
   }
-
   // Create end marker bitmap (single vertical line)
   if (endMarker) {
     gfxBitmapClear(endMarker);
@@ -107,7 +105,6 @@ static void updateSamplePreview(const InstrumentSample* sample) {
       }
     }
   }
-
   // Adjust waveform brightness
   // - Active area (between start/end): waveform at 255 (light blue)
   // - Inactive area (before start, after end): ONLY waveform pixels greyed to 48, background stays 0
@@ -129,7 +126,6 @@ static void updateSamplePreview(const InstrumentSample* sample) {
       }
     }
   }
-
   // Create slice markers
   if (markers) gfxBitmapClear(markers);
   if (markers && slices && markers->widthPixels > 0) {
@@ -160,25 +156,21 @@ static void updateSamplePreview(const InstrumentSample* sample) {
 static void drawSamplePreview(void) {
   // Clear the waveform area and space for frame
   gfxClearRect(0, previewRow, previewWidth, previewHeight);
-
   // Draw the waveform with light blue color for active area
   if (samplePreviewBitmap) {
     gfxSetFgColor(0xADD8E6); // Light blue
     gfxDrawBitmap(samplePreviewBitmap, 0, previewRow);
   }
-
   // Draw start marker (yellow) - always shown
   if (sampleStartMarkerBitmap) {
     gfxSetFgColor(0xFFFF00); // Yellow
     gfxDrawBitmap(sampleStartMarkerBitmap, 0, previewRow);
   }
-
   // Draw end marker (orange) - always shown
   if (sampleEndMarkerBitmap) {
     gfxSetFgColor(0xFFA500); // Orange
     gfxDrawBitmap(sampleEndMarkerBitmap, 0, previewRow);
   }
-
   // Draw the slice markers on top
   if (sampleSliceMarkerBitmap) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
@@ -228,7 +220,11 @@ static void settingsDrawField(int col, int row, CellState state) {
   gfxClearRect(valueX, fieldRow0 + row, valueWidth, 1);
   if (row == 0) gfxPrint(valueX, fieldRow0, byteToHex(sample->start));
   else if (row == 1) gfxPrint(valueX, fieldRow0 + 1, byteToHex(sample->end));
-  else gfxPrint(valueX, fieldRow0 + 2, sliceLabels[sliceToIndex(sample->slice)]);
+  else if (row == 2) {
+    // Slice is inert while Stretch drives the duration: dim it.
+    if (sample->stretchMode != 0) gfxSetFgColor(appSettings.colorScheme.textEmpty);
+    gfxPrint(valueX, fieldRow0 + 2, sliceLabels[sliceToIndex(sample->slice)]);
+  }
 }
 
 static int settingsOnEdit(int col, int row, CellEditAction action) {
@@ -238,10 +234,14 @@ static int settingsOnEdit(int col, int row, CellEditAction action) {
   if (row == 0) handled = edit8noLast(action, &sample->start, 16, 0, 255);
   else if (row == 1) handled = edit8noLast(action, &sample->end, 16, 0, 255);
   else if (row == 2) {
+    // Slice is inert while Stretch drives the duration.
+    if (sample->stretchMode != 0) return 0;
     uint8_t index = (uint8_t)sliceToIndex(sample->slice);
     handled = edit8noLast(action, &index, 1, 0, sliceCount - 1);
     if (handled) {
       sample->slice = sliceValues[index];
+      // Stretch and Slice are mutually exclusive: enabling one disables the other.
+      if (sample->slice) sample->stretchMode = 0;
       projectModified = 1;
       updateSamplePreview(sample);
       drawSamplePreview();
@@ -254,6 +254,13 @@ static int settingsOnEdit(int col, int row, CellEditAction action) {
     drawSamplePreview();
   }
   return handled;
+}
+
+// Slice is inert while Stretch drives the duration: skip it in navigation.
+static int settingsIsCellValid(int col, int row) {
+  (void)col;
+  if (row == 2 && currentSample()->stretchMode != 0) return 0;
+  return 1;
 }
 
 static ScreenData screenSampleSettingsData = {
@@ -277,7 +284,7 @@ static ScreenData screenSampleSettingsData = {
   .onEdit = settingsOnEdit,
   .onInput = NULL,
   .onRawInput = NULL,
-  .isCellValid = NULL,
+  .isCellValid = settingsIsCellValid,
   .getLoopRange = NULL,
 };
 
@@ -286,6 +293,11 @@ static void setup(int input) {
 }
 
 static void fullRedraw(void) {
+  // The cursor persists across screens: if it is parked on Slice while Stretch
+  // is active, move it up so it never rests on a disabled cell.
+  if (screenSampleSettingsData.cursorRow == 2 && currentSample()->stretchMode != 0) {
+    screenSampleSettingsData.cursorRow = 1;
+  }
   screenFullRedraw(&screenSampleSettingsData);
 }
 

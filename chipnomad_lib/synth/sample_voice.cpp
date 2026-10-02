@@ -45,6 +45,12 @@ void SampleVoice::init(float outputSampleRate) {
   startFrame_ = 0;
   endFrame_ = 0;
   active_ = false;
+  useStretch_ = false;
+#if defined(PORTMASTER_BUILD) || defined(ANDROID_BUILD) || defined(WEB_BUILD)
+  stretch_.init(outputSampleRate_, true);
+#else
+  stretch_.init(outputSampleRate_, false);
+#endif
   post_.init(outputSampleRate_);
 }
 
@@ -72,16 +78,24 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
                             float gain, float speedPercent, uint8_t start, uint8_t end, uint8_t loopMode,
                             uint16_t cutoffHz, uint8_t resonance, int attack, int decay,
                             int sustain, int release, int envelopeShape, uint8_t sliceCount,
-                            uint8_t sliceIndex) {
+                            uint8_t sliceIndex, uint8_t stretchMode, float tickRateHz) {
   sample_ = sample;
   post_.setGain(gain);
   if (!sample_ || !sample_->data || sample_->frameCount == 0) return;
+
+  // Stretch mode bypasses the granular speedPercent path entirely: the
+  // stretcher applies pitch via transpose and drives its own source cursor.
+  useStretch_ = stretchMode != 0 && sliceCount == 0;
+  if (useStretch_) {
+    stretch_.configure(sample, stretchMode, tickRateHz, pitchCents / 100.0f, start, end);
+  }
 
   uint32_t startFrame;
   uint32_t endFrame;
   sliceCount = sampleNormalizeSlice(sliceCount);
   if (sliceCount) {
-    // Slices divide the selected playback window.
+    // When slicing is enabled, divide the LOOP REGION (start to end) into slices
+    // This ensures slices follow the start/end markers
     uint32_t loopStartFrame = (uint32_t)((uint64_t)start * (sample_->frameCount - 1) / 255);
     uint32_t loopEndFrame = end == 255
       ? sample_->frameCount
@@ -92,9 +106,11 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
       loopEndFrame = swap + 1;
     }
     uint32_t loopLength = loopEndFrame > loopStartFrame ? loopEndFrame - loopStartFrame : sample_->frameCount;
+
     uint32_t sliceStart, sliceEnd;
     sampleSliceFrames(loopLength, sliceCount, sliceIndex, &sliceStart, &sliceEnd);
 
+    // Map slice to absolute frame positions within the loop region
     startFrame_ = loopStartFrame + sliceStart;
     endFrame_ = loopStartFrame + sliceEnd;
     reverse_ = false;
@@ -126,6 +142,16 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
 
 void SampleVoice::noteOn() {
   if (!sample_ || !sample_->data || endFrame_ <= startFrame_) return;
+  if (useStretch_) {
+    // A new note always restarts the stretched playback from the top of the
+    // source window: tracks are monophonic, so a retrigger must kill the
+    // previous playhead and every note keeps its full stretch length.
+    // (Stretch enabled mid-note WITHOUT a retrigger lazy-primes in render().)
+    stretch_.noteOn();
+    active_ = true;
+    post_.noteOn(true);
+    return;
+  }
   position_ = startFrame_;
   direction_ = reverse_ ? -1 : 1;
   grainExhausted_ = false;
@@ -199,12 +225,30 @@ void SampleVoice::noteOff() {
 
 void SampleVoice::kill() {
   active_ = false;
+  stretch_.reset();
   post_.kill();
 }
 
 void SampleVoice::render(float* output, size_t frames) {
   memset(output, 0, frames * 2 * sizeof(float));
   if (!active_ || !sample_ || !sample_->data) return;
+
+  if (useStretch_) {
+    // Stretch enabled mid-note (per-tick configure, no new noteOn): prime now.
+    if (!stretch_.primed()) stretch_.noteOn();
+    if (!stretch_.process(output, frames)) { kill(); return; }
+    // One-shot material: when the stretcher has drained its tail the note is
+    // over, matching the plain path's behavior on source exhaustion.
+    if (!stretch_.active()) { kill(); return; }
+    for (size_t i = 0; i < frames; i++) {
+      if (!post_.envelopeActive()) { kill(); break; }
+      for (int channel = 0; channel < 2; channel++) {
+        output[i * 2 + channel] = post_.process(output[i * 2 + channel], channel);
+      }
+    }
+    if (!post_.envelopeActive()) kill();
+    return;
+  }
 
   for (size_t i = 0; i < frames; i++) {
     if (!post_.envelopeActive()) { kill(); break; }

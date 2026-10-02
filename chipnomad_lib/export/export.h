@@ -61,5 +61,32 @@ class ExporterWAV : public Exporter {
     void cancel() override;
 };
 
+// Bounce selection: which region of the project to render
+struct ExportSelection {
+  int level; // 0 = song, 1 = chain, 2 = phrase
+  int startSongRow, endSongRow;
+  int startChainRow, endChainRow;
+  int startPhraseRow, endPhraseRow;
+  uint8_t trackMask; // Bit per track (song level); chain/phrase use one track
+};
+
+// Renders only a selected region (song rows / chain rows / phrase rows).
+// Unselected tracks are muted (song level); playback stops (notes killed)
+// when the region ends, so the file length matches the selection. Every
+// selected track is included: at song level a track whose first chain is
+// later in the region waits silently and joins when its song row arrives.
+class ExporterSelectionWAV : public ExporterWAV {
+  public:
+    ExporterSelectionWAV(const char* path, Project* project, const ExportSelection& selection,
+                         int sampleRate, int bitDepth, float mixVolume);
+};
+
+// Length of the audio a selection bounce will render, measured in phrase
+// rows (16th notes): one phrase = 16 rows, one beat = 4 rows. Song level
+// returns the longest selected track timeline (empty song rows keep a
+// track waiting 16 rows each); chain level counts consecutive non-empty
+// chain rows from the start row; phrase level is the selected row span.
+int exportSelectionLengthRows(const Project* project, const ExportSelection& selection);
+
 
 #endif // __CHIPNOMAD_LIB__EXPORT_H__

@@ -2,6 +2,7 @@
 #include <string.h>
 #include "screens.h"
 #include "screen_settings.h"
+#include "screen_export.h"
 #include "chipnomad_lib.h"
 #include "corelib_gfx.h"
 #include "corelib_file.h"
@@ -641,6 +642,36 @@ static int inputSelectMode(ScreenData* screen, int keys, int tapCount) {
       shallowClonePressed = 0;
       screenFullRedraw(screen);
       redrawn = 1;
+    } else if (keys == keyEdit && tapCount == 2 && screen->getLoopRange != NULL) {
+      // Double-tap A: bounce the selection to audio
+      LoopRange range = screen->getLoopRange();
+      if (range.enabled) {
+        ExportSelection selection = {};
+        selection.level = range.level;
+        selection.startSongRow = range.startSongRow;
+        selection.endSongRow = range.endSongRow;
+        selection.startChainRow = range.startChainRow;
+        selection.endChainRow = range.endChainRow;
+        selection.startPhraseRow = range.startPhraseRow;
+        selection.endPhraseRow = range.endPhraseRow;
+
+        if (range.level == 0) {
+          // Song selection columns are tracks
+          int startCol, startRow, endCol, endRow;
+          getSelectionBounds(screen, &startCol, &startRow, &endCol, &endRow);
+          selection.trackMask = 0;
+          for (int t = startCol; t <= endCol; t++) {
+            selection.trackMask |= (uint8_t)(1u << t);
+          }
+        } else {
+          // Chain/phrase bounce the currently viewed track
+          selection.trackMask = (uint8_t)(1u << *pSongTrack);
+        }
+
+        exportBounceBegin(selection);
+        return 1;
+      }
+      handled = 1;
     } else if (keys & keyOpt) {
       optPressed = 1;
     }

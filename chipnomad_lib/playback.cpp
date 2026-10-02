@@ -443,6 +443,7 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
   int hasInstrumentTableFX = 0;
   uint8_t chordValue = EMPTY_VALUE_8;
 
+
   if (instrument != EMPTY_VALUE_8 || note != EMPTY_VALUE_8) {
     track->achchidGateTicks = 0;
     track->achchidGateCounter = 0;
@@ -664,6 +665,14 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
               if (targetChainIdx != EMPTY_VALUE_16) {
                 uint16_t targetPhraseIdx = p->chains[targetChainIdx].rows[0].phrase;
                 if (targetPhraseIdx != EMPTY_VALUE_16) {
+                  // Bounce: SNG jump landing past the end of the selected song
+                  // region stops the track instead of playing outside it
+                  if (state->stopRange.enabled && state->stopRange.level == 0 &&
+                      newSongRow > state->stopRange.endSongRow) {
+                    resetTrack(state, trackIdx);
+                    return;
+                  }
+
                   // Valid target, perform jump and read from new position
                   track->songRow = newSongRow;
                   track->chainRow = 0;
@@ -709,6 +718,14 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
             // Conditional jump with loop counter
             track->fxAuxState[phraseRow][i]++;
             if (track->fxAuxState[phraseRow][i] <= loopCount) {
+              // Bounce: HOP target outside the selected phrase region stops the track
+              if (state->stopRange.enabled && state->stopRange.level == 2 &&
+                  track->songRow != EMPTY_VALUE_16 &&
+                  (targetRow < state->stopRange.startPhraseRow || targetRow > state->stopRange.endPhraseRow)) {
+                resetTrack(state, trackIdx);
+                return;
+              }
+
               // Reset nested loop counters when hopping backwards
               if (targetRow < phraseRow) {
                 for (int c = targetRow; c < phraseRow; c++) {
@@ -728,6 +745,10 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
       // Safeguard for phrase in chain
       resetTrack(state, trackIdx);
     }
+  } else if (state->stopRange.enabled && state->stopRange.level == 0 &&
+             track->songRow < state->stopRange.endSongRow) {
+    // Offline bounce: the track is waiting on an empty song cell for its
+    // first chain later in the selected region - stay silent this frame
   } else {
     // Safeguard for chain in song
     resetTrack(state, trackIdx);
@@ -990,6 +1011,14 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
     return stopped;
   }
 
+  // Stop boundary (offline bounce): end of the selected phrase region
+  if (state->stopRange.enabled && state->stopRange.level == 2 &&
+      track->songRow != EMPTY_VALUE_16 &&
+      track->phraseRow == state->stopRange.endPhraseRow) {
+    resetTrack(state, trackIdx);
+    return 1;
+  }
+
   track->phraseRow++;
 
   if (track->phraseRow >= 16) {
@@ -1014,6 +1043,14 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
       resetTrackFXAuxState(state, trackIdx);
       restartStructuralLFOs(state, trackIdx, 1, 1);
       return stopped;
+    }
+
+    // Stop boundary (offline bounce): end of the selected chain region
+    if (state->stopRange.enabled && state->stopRange.level == 1 &&
+        track->songRow != EMPTY_VALUE_16 &&
+        track->chainRow == state->stopRange.endChainRow) {
+      resetTrack(state, trackIdx);
+      return 1;
     }
 
     if (track->queue.liveAction == LiveQueueAction::normal ||
@@ -1048,32 +1085,57 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
             return stopped;
           }
 
+          // Stop boundary (offline bounce): end of the selected song region
+          if (state->stopRange.enabled && state->stopRange.level == 0 &&
+              track->songRow != EMPTY_VALUE_16 &&
+              track->songRow == state->stopRange.endSongRow) {
+            resetTrack(state, trackIdx);
+            return 1;
+          }
+
           // Next song row
           int songRow = track->songRow + 1;
           track->chainRow = 0;
-          if (songRow >= PROJECT_MAX_LENGTH || p->song[songRow][trackIdx] == EMPTY_VALUE_16) {
-            if (track->loop) {
-              while (songRow > 0) {
-                songRow--;
-                if (p->song[songRow][trackIdx] == EMPTY_VALUE_16) {
-                  songRow++;
-                  break;
-                }
-              }
-            } else {
-              songRow = -1;
-            }
-          }
-          if (songRow < 0 || p->song[songRow][trackIdx] == EMPTY_VALUE_16) {
-            resetTrack(state, trackIdx);
-            stopped = 1;
-          } else {
+          // Offline bounce: a track whose first chain is later in the selected
+          // region waits silently through empty song rows instead of stopping
+          if (state->stopRange.enabled && state->stopRange.level == 0 &&
+              songRow < PROJECT_MAX_LENGTH && songRow <= state->stopRange.endSongRow &&
+              p->song[songRow][trackIdx] == EMPTY_VALUE_16) {
             track->songRow = songRow;
             enteredChain = 1;
+          } else {
+            if (songRow >= PROJECT_MAX_LENGTH || p->song[songRow][trackIdx] == EMPTY_VALUE_16) {
+              if (track->loop) {
+                while (songRow > 0) {
+                  songRow--;
+                  if (p->song[songRow][trackIdx] == EMPTY_VALUE_16) {
+                    songRow++;
+                    break;
+                  }
+                }
+              } else {
+                songRow = -1;
+              }
+            }
+            if (songRow < 0 || p->song[songRow][trackIdx] == EMPTY_VALUE_16) {
+              resetTrack(state, trackIdx);
+              stopped = 1;
+            } else {
+              track->songRow = songRow;
+              enteredChain = 1;
+            }
           }
         } else {
           track->chainRow = chainRow;
         }
+      } else if (state->stopRange.enabled && state->stopRange.level == 0 &&
+                 track->songRow < state->stopRange.endSongRow) {
+        // Offline bounce: a track sitting on an empty song cell waits silently
+        // and moves to the next row, so it can join at its first chain in the
+        // selected region
+        track->songRow++;
+        track->chainRow = 0;
+        enteredChain = 1;
       } else {
         resetTrack(state, trackIdx);
       }
@@ -1167,6 +1229,7 @@ void playbackInit(PlaybackState* state, Project* project) {
 
   // Initialize loop range as disabled
   state->loopRange.enabled = 0;
+  state->stopRange.enabled = 0;
 
   // TODO: Properly initialize other global chip states, but for now it's AY only
   for (int c = 0; c < PROJECT_MAX_CHIPS; c++) {
@@ -1185,6 +1248,10 @@ void playbackSetLoopRange(PlaybackState* state, LoopRange range) {
   state->loopRange = range;
   if (range.enabled)
     for (int i = 0; i < PROJECT_MAX_TRACKS; ++i) state->tracks[i].queue.liveAction = LiveQueueAction::none;
+}
+
+void playbackSetStopRange(PlaybackState* state, StopRange range) {
+  state->stopRange = range;
 }
 
 void playbackClearLoopRange(PlaybackState* state) {
@@ -1230,7 +1297,7 @@ void playbackStartChain(PlaybackState* state, int trackIdx, int songRow, int cha
   }
 }
 
-void playbackStartPhrase(PlaybackState* state, int trackIdx, int songRow, int chainRow, int loop) {
+void playbackStartPhrase(PlaybackState* state, int trackIdx, int songRow, int chainRow, int loop, int startPhraseRow) {
   if (playbackIsPlaying(state)) return;
 
   state->scaleRoot = state->p->scaleRoot;
@@ -1241,7 +1308,7 @@ void playbackStartPhrase(PlaybackState* state, int trackIdx, int songRow, int ch
   track->queue.mode = PlaybackMode::phrase;
   track->queue.songRow = songRow;
   track->queue.chainRow = chainRow;
-  track->queue.phraseRow = 0;
+  track->queue.phraseRow = startPhraseRow;
   track->queue.loop = loop;
 }
 

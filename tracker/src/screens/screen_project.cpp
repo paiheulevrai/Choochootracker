@@ -9,6 +9,7 @@
 #include "version.h"
 #include "audio_manager.h"
 #include "file_browser.h"
+#include "export_path.h"
 #include "import/import_vt2.h"
 #include "import/import_midi.h"
 #include "string_utils.h"
@@ -75,6 +76,8 @@ int projectLoadFromPath(const char* path) {
 
     // Store filename without extension
     extractFilenameWithoutExtension(path, appSettings.projectFilename, FILENAME_LENGTH + 1);
+    // The loaded project's export folder (if any) is adopted on next export
+    exportResetFolderTracking();
     settingsSave();
 
     // Reset all screen states (including song position)
@@ -114,6 +117,9 @@ static void onProjectSaved(const char* folderPath) {
     projectModified = 0; // Clear modified flag after saving
     strncpy(appSettings.projectPath, folderPath, PATH_LENGTH);
     appSettings.projectPath[PATH_LENGTH] = 0;
+    // If exports were made under a previous project name, move that folder
+    // to match the name the project was just saved with
+    exportSyncFolderWithProjectName();
     settingsSave();
   }
   screenSetup(&screenProject, 0);
@@ -135,6 +141,7 @@ static void doNewProject(void) {
   audioManager.replaceProject(&replacement);
   projectModified = 0;
   appSettings.projectFilename[0] = 0;
+  exportResetFolderTracking();
   settingsSave();
   screensInitAll();
   screenSetup(projectReturnScreen, 0);

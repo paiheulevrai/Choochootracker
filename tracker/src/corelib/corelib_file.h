@@ -45,6 +45,14 @@ int fileDirectoryExists(const char* path);
 // Returns 0 on success, -1 on failure
 int fileCreateDirectory(const char* path);
 
+// Create a directory tree, including all missing parent levels
+// Returns 0 on success (or if the directory already exists), -1 on failure
+int fileCreateDirectoryRecursive(const char* path);
+
+// Rename (move) a file or directory
+// Returns 0 on success, -1 on failure
+int fileRename(const char* oldPath, const char* newPath);
+
 // Delete a file
 // Returns 0 on success, -1 on failure
 int fileDelete(const char* path);

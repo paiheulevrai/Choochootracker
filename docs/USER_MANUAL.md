@@ -195,6 +195,25 @@ Select one Song row across several columns to queue or stop those tracks togethe
 - **OPT + SHIFT**: mute the current track or selected columns (release **OPT** first to keep the mute active)
 - **OPT + PLAY**: solo the current track or selected columns (release **OPT** first to keep the solo active)
 - **OPT + [LEFT/RIGHT]**: solo every track to the left or right of the current track
+- Select a range, then double-tap **EDIT**: open the BOUNCE TO SAMPLE screen (see Bounce below)
+
+#### Bounce
+
+Select a range of Song rows and columns, then double-tap **EDIT** to open the BOUNCE TO SAMPLE screen. The bounce includes every selected track: tracks whose first chain starts later in the selection wait silently and join at their first chain, so the file contains all selected tracks' chains.
+
+The screen offers:
+
+- **File name**: edit with the character keyboard. When the screen opens, the next free sequence number (`001`, `002`, ...) is proposed here: the first number whose `.wav` file does not exist yet in the export folder. Edit it freely — the name is used as-is. If a file with that name already exists, a `_001`, `_002`, ... suffix is added so existing files are never overwritten. The counter resets when you load or create a project.
+- **Sample rate** and **Bit depth**: the same options as the export screen
+- **Include in a sample name**: three checkboxes that prepend context tags to the file name when **Start** is pressed (all off by default):
+  - **[BPM]** — the project's current tempo, e.g. `[120]`
+  - **[Key]** — the project's root note and scale, e.g. `[Cmaj]`, `[F#min Pent]`
+  - **[Bars:Beats:16ths]** — the rendered length of the bounce: one phrase equals one bar (16 sixteenths), a beat is 4 sixteenths. Full phrases show only bars, e.g. `[2]`; partial phrases show `[0:2]` (two beats) or `[0:1:3]` (one beat plus three sixteenths). For multi-track bounces the longest track decides. A selection ending mid-beat counts one sixteenth less: the last selected row is the cut point, so its note-off lands at the end of the previous sixteenth.
+  - Tags are applied in the order `[BPM][Key][Length]` before the file name.
+- **Start**: render the selection to a WAV file in the export folder (see *Export location* under Project screen)
+- **Cancel**: return without bouncing
+
+While the bounce renders, **OPT** cancels it. When the bounce completes or is cancelled, the screen you bounced from returns.
 
 On desktop, key jazz also brings direct hex-index typing plus Phrase-style
 Shift+arrows selection, Delete/Backspace/Insert and Ctrl+C/X/V here — see
@@ -211,6 +230,7 @@ An asterisk (`*`) appears next to a chain that is reused in the project. You can
 - **OPT + [LEFT/RIGHT]**: move between tracks
 - **OPT + [UP/DOWN]**: move between chains in the current track
 - Select a range, then use **SHIFT + EDIT**: clone phrases
+- Select a range, then double-tap **EDIT**: open the BOUNCE TO SAMPLE screen for the selected chain rows of the current track (see Bounce under Song)
 
 On desktop, key jazz also brings direct hex-index typing here — see
 [Key jazz](#key-jazz-desktop-only).
@@ -237,6 +257,7 @@ The FX selector shows common commands plus those supported by the instrument on 
 - **OPT + [UP/DOWN]**: move between phrases in the current chain
 - Select a range in the instrument column, then use **SHIFT + EDIT**: clone instruments
 - Select a range, then use **EDIT + [UP/DOWN]**: rotate the phrase rows
+- Select a range, then double-tap **EDIT**: open the BOUNCE TO SAMPLE screen for the selected phrase rows of the current track (see Bounce under Song)
 
 ### Key jazz (desktop only)
 
@@ -971,6 +992,21 @@ The 1st repeat follows the stereo input. Later feedback crosses between the left
 ## 11. Project screen
 
 The Project screen provides **Load**, **Save**, **New**, **Export**, **Manage** and **Scale** commands, along with filename, title and author metadata.
+
+### Export location
+
+Exports, stems and bounces are written to a per-project folder inside the app's preexisting samples directory:
+
+- **Default**: `<app folder>/samples/Exports/<project name>/`. While the project is unnamed, the folder is `current-project`.
+- On the web build the default is `/user/samples/Exports/<project name>/`.
+- On Android the samples folder is inside the app's private workspace.
+
+The **Folder** row on the EXPORT screen shows the active destination:
+
+- Tap **EDIT** to pick a custom folder with the folder browser. The chosen folder is used exactly as selected (no project subfolder is added) and is remembered in settings.
+- **EDIT + OPT** (clear) resets to the default location.
+
+When a named project is saved under a new name, the default export folder is renamed to match, keeping previously exported files with the project. Renaming does not apply to a custom folder, and the folder is not renamed by autosave. If a folder with the target name already exists, both folders are kept. If the tracker lost track of the folder (for example after a restart), saving a named project renames the existing `current-project` folder instead. Instruments keep working after a rename: loaded sample paths that point into the renamed folder are updated automatically.
 
 **Load** also accepts `.mid`/`.midi` files, imported as a new project: notes are grouped by MIDI channel (one channel per track, up to the track count), quantized to 4 rows per beat, and placed on a single default AY instrument - MIDI program numbers have no chiptune equivalent, so pick real instruments afterward. Only the file's first tempo is used (one global tick rate, no per-section tempo changes). The Export screen's **MIDI** row does the reverse: writes the current arrangement's notes, volume and tempo/groove as a Standard MIDI File (one MIDI track per tracker track); [MIDI Out](#midi-out) instruments and other per-row FX beyond volume and the global groove have no MIDI equivalent and are not translated.
 On desktop, key jazz lets you type the filename, title and author directly on the keyboard instead of using the on-screen virtual keyboard — see [Key jazz](#key-jazz-desktop-only).

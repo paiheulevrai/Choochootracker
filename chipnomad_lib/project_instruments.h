@@ -255,6 +255,7 @@ struct InstrumentSample : InstrumentVoicePostSettings {
   uint8_t end;
   uint8_t loopMode; // 0: off, 1: loop, 2: ping-pong
   uint8_t slice; // 0: off, else even divisions 2/4/8/16/32
+  uint8_t stretchMode; // 0: off, 1: 1 beat, 2: 2 beats, 3: 1 bar, 4: 2 bars, 5: 4 bars, 6: 8 bars
 };
 
 // 2xSCWF is a pair of forward-looping, one-cycle PCM waveforms.  It shares

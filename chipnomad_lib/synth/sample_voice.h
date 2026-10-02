@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "voice_post_processor.h"
+#include "stretch_processor.h"
 
 struct InstrumentSample;
 
@@ -14,7 +15,7 @@ class SampleVoice {
                  float speedPercent, uint8_t start, uint8_t end, uint8_t loopMode, uint16_t cutoffHz,
                  uint8_t resonance, int attack = -1, int decay = -1, int sustain = -1,
                  int release = -1, int envelopeShape = -1, uint8_t sliceCount = 0,
-                 uint8_t sliceIndex = 0);
+                 uint8_t sliceIndex = 0, uint8_t stretchMode = 0, float tickRateHz = 50.0f);
   void noteOn();
   void noteOff();
   void kill();
@@ -41,6 +42,8 @@ class SampleVoice {
   uint32_t startFrame_;
   uint32_t endFrame_;
   bool active_;
+  StretchProcessor stretch_;
+  bool useStretch_;
   bool advancePosition();
   float sampleAt(double position, int channel) const;
   float grainSampleAt(double position, int channel) const;

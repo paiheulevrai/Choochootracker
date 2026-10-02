@@ -13,7 +13,8 @@ BUILD_DIR = build/tests
 # Include paths
 INCLUDES = -I. -Isrc -Isrc/corelib -Isrc/screens -Isrc/import -Itests/mocks -Iexternal \
            -I../chipnomad_lib -I../chipnomad_lib/chips -I../chipnomad_lib/external/ayumi \
-           -I../chipnomad_lib/external/mutable -I../chipnomad_lib/external/open303/Source/DSPCode
+           -I../chipnomad_lib/external/mutable -I../chipnomad_lib/external/open303/Source/DSPCode \
+           -I../chipnomad_lib/external/signalsmith
 
 # Test executable
 TEST_EXECUTABLE = $(BUILD_DIR)/run_tests$(if $(filter Windows_NT,$(OS)),.exe,)
@@ -66,6 +67,7 @@ TRACKER_SRC_SOURCES = src/app.cpp \
                       src/screens/screen_midi_channel_map.cpp \
                       src/string_utils.cpp \
                       src/common.cpp \
+                      src/export_path.cpp \
                       src/copy_paste.cpp \
                       src/project_utils.cpp \
                       src/pitch_table_utils.cpp \

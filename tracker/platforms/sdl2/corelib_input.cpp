@@ -47,7 +47,9 @@ static KeyboardLayout detectKeyboardLayout(void) {
       localeLower[i] = tolower(localeLower[i]);
     }
 
-    // QWERTZ regions
+    // QWERTZ regions. Polish is intentionally excluded: the common Polish
+    // layout ("Polish programmers", the pl_PL default) is QWERTY, and binding
+    // OPT to Y there left the B key unmapped (broke SELECT+OPT selection).
     if (strstr(localeLower, "de_") || strstr(localeLower, "de.") ||
         strstr(localeLower, "_at") || strstr(localeLower, ".at") ||
         strstr(localeLower, "_ch") || strstr(localeLower, ".ch") ||

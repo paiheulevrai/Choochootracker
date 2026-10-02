@@ -1235,7 +1235,13 @@ static void updateSampleVoices(ChipNomadState* state) {
     for (int slot = 0; slot < track->chordVoiceCount; ++slot) {
       int voicePitchCents = pitchCents;
       uint8_t voiceSliceIndex = sliceIndex;
-      if (track->chordPitchFinal[slot] != EMPTY_VALUE_8) {
+      if (sliceCount) {
+        uint8_t pitch = track->chordPitchFinal[slot] != EMPTY_VALUE_8 ? track->chordPitchFinal[slot] : track->note.pitchFinal;
+        if (pitch != EMPTY_VALUE_8) {
+          voiceSliceIndex = pitch;
+          if (voiceSliceIndex >= sliceCount) voiceSliceIndex = sliceCount - 1;
+        }
+      } else if (track->chordPitchFinal[slot] != EMPTY_VALUE_8) {
         int noteCents = project->linearPitch ? project->pitchTable.values[track->chordPitchFinal[slot]]
           : track->chordPitchFinal[slot] * 100;
         int rootCents = project->linearPitch ? project->pitchTable.values[track->chordPitchFinal[0]]
@@ -1245,7 +1251,7 @@ static void updateSampleVoices(ChipNomadState* state) {
       }
       voices[slot]->configure(sample, (float)voicePitchCents, gain / track->chordVoiceCount, (float)speedPercent, start, end, (uint8_t)loopMode,
                               (uint16_t)cutoff, (uint8_t)resonance, attack, decay, sustain, release, shape,
-                              sliceCount, voiceSliceIndex);
+                              sliceCount, voiceSliceIndex, sample->stretchMode, project->tickRate);
     }
   }
 }

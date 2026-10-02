@@ -106,6 +106,8 @@ void initDefaultAppSettings(void) {
 #endif
   appSettings.projectPath[PATH_LENGTH] = '\0';
   appSettings.samplePath[PATH_LENGTH] = '\0';
+  appSettings.exportPath[0] = '\0'; // Empty = use the default export location
+  appSettings.exportLastFolder[0] = '\0';
   appSettings.ayWavetablePath[PATH_LENGTH] = '\0';
   appSettings.scwfPath[PATH_LENGTH] = '\0';
   appSettings.srWavetablePath[PATH_LENGTH] = '\0';
@@ -230,6 +232,8 @@ int settingsSave(void) {
   fprintf(file, "fontPath: %s\n", appSettings.fontPath);
   fprintf(file, "fontFolderPath: %s\n", appSettings.fontFolderPath);
   fprintf(file, "samplePath: %s\n", appSettings.samplePath);
+  fprintf(file, "exportPath: %s\n", appSettings.exportPath);
+  fprintf(file, "exportLastFolder: %s\n", appSettings.exportLastFolder);
   fprintf(file, "ayWavetablePath: %s\n", appSettings.ayWavetablePath);
   fprintf(file, "scwfPath: %s\n", appSettings.scwfPath);
   fprintf(file, "srWavetablePath: %s\n", appSettings.srWavetablePath);
@@ -406,6 +410,12 @@ int settingsLoad(void) {
     } else if (strncmp(line, "samplePath: ", 12) == 0) {
       strncpy(appSettings.samplePath, line + 12, PATH_LENGTH);
       appSettings.samplePath[PATH_LENGTH] = 0;
+    } else if (strncmp(line, "exportPath: ", 12) == 0) {
+      strncpy(appSettings.exportPath, line + 12, PATH_LENGTH);
+      appSettings.exportPath[PATH_LENGTH] = 0;
+    } else if (strncmp(line, "exportLastFolder: ", 18) == 0) {
+      strncpy(appSettings.exportLastFolder, line + 18, FILENAME_LENGTH);
+      appSettings.exportLastFolder[FILENAME_LENGTH] = 0;
     } else if (strncmp(line, "ayWavetablePath: ", 17) == 0) {
       strncpy(appSettings.ayWavetablePath, line + 17, PATH_LENGTH);
       appSettings.ayWavetablePath[PATH_LENGTH] = 0;
