@@ -89,6 +89,7 @@ extern const AppScreen screenProject;
 extern const AppScreen screenProjectLoad;
 extern const AppScreen screenProjectSave;
 extern const AppScreen screenConfirm;
+extern const AppScreen screenSaveChoice;
 extern const AppScreen screenPitchTable;
 extern const AppScreen screenScale;
 extern const AppScreen screenFileBrowser;
@@ -133,6 +134,8 @@ void screenMessage(int time, const char* format, ...);
 // screenTitle draws through its own gfxTitle* calls (see screenDraw()), so it
 // needs this to show a message instead of the normal gfxPrint-based banner.
 const char* screenGetActiveMessage(void);
+// Clear the message bar immediately (timed or not) and stop its timer.
+void screenClearMessage(void);
 void screensInitAll(void);
 void drawScreenMap(void);
 enum ScreenPlaybackLevel screenGetPlaybackLevel(const AppScreen* screen);
@@ -141,6 +144,7 @@ enum ScreenPlaybackLevel screenGetPlaybackLevel(const AppScreen* screen);
 void screenFullRedraw(ScreenData* screen);
 void screenDrawOverlays(ScreenData* screen);
 int screenInput(ScreenData* screen, int isKeyDown, int keys, int tapCount);
+void screenClearOptPressed(void);
 int screenTouchTap(int col, int row);
 enum TouchAdjustResult { touchAdjustNone, touchAdjustCoarse, touchAdjustFine };
 TouchAdjustResult screenTouchAdjust(int col, int row);
@@ -153,6 +157,10 @@ LoopRange screenGetLoopRange(const AppScreen* screen);
 
 // Confirmation dialog
 void confirmSetup(const char* message, void (*confirmCallback)(void), void (*cancelCallback)(void));
+
+// Save-destination dialog (sample WAV cues vs project bounds)
+void saveChoiceSetup(const char* sampleName, void (*onSample)(void),
+                     void (*onProject)(void), void (*onCancel)(void));
 
 // Common edit functions
 int edit16withLimit(CellEditAction action, uint16_t* value, uint16_t* lastValue, uint16_t bigStep, uint16_t max);

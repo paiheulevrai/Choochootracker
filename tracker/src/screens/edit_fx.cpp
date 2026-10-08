@@ -2,6 +2,7 @@
 #include "corelib_gfx.h"
 #include "help.h"
 #include "chord.h"
+#include "synth/sample_voice.h"
 #include <algorithm>
 
 // State for FX selection screen
@@ -105,6 +106,8 @@ static bool isFXAvailable(enum FX fx, uint8_t instrumentIdx, int isTable) {
   if(fx==fxFBR||(fx>=fxFET&&fx<=fxFLD))return false;
   if((fx>=fxFO1&&fx<=fxFO6)||fx==fxFFB)return false; // Retired personal commands.
   if (isTable && (fx == fxSCL || fx == fxCRD)) return false;
+  // Note Lock pins note entry to the project scale, so SCL is not offered.
+  if (fx == fxSCL && chipnomadState->project.scaleMode != 0) return false;
   InstrumentType instrumentType = getInstrumentType(instrumentIdx);
   const Instrument* instrument = instrumentIdx != EMPTY_VALUE_8 && instrumentIdx < PROJECT_MAX_INSTRUMENTS
     ? &chipnomadState->project.instruments[instrumentIdx] : NULL;
@@ -134,10 +137,12 @@ static void stepFX(uint8_t* fx, int direction, uint8_t instrumentIdx, int isTabl
 
 static int visibleFXCount(const FXGroup* group) {
   const Instrument* instrument = getCurrentInstrument();
+  int hideSCL = !currentIsTable && chipnomadState->project.scaleMode != 0;
   int count = 0;
   for (int i = 0; i < group->count; ++i) {
     if (!insertFXAvailable(group->fxList[i].fx)) continue;
     if (currentIsTable && (group->fxList[i].fx == fxSCL || group->fxList[i].fx == fxCRD)) continue;
+    if (hideSCL && group->fxList[i].fx == fxSCL) continue;
     if(group->fxList[i].fx>=fxFBR && group->fxList[i].fx<=fxLEN && (!instrument || !instrumentFXAvailableForInstrument(instrument,group->fxList[i].fx)))continue;
     if (!instrument || group->instType != InstrumentType::DrumSynth || instrumentFXAvailableForInstrument(instrument, group->fxList[i].fx)) ++count;
   }
@@ -146,9 +151,11 @@ static int visibleFXCount(const FXGroup* group) {
 
 static const FXName* visibleFXAt(const FXGroup* group, int visibleIndex) {
   const Instrument* instrument = getCurrentInstrument();
+  int hideSCL = !currentIsTable && chipnomadState->project.scaleMode != 0;
   for (int i = 0; i < group->count; ++i) {
     if (!insertFXAvailable(group->fxList[i].fx)) continue;
     if (currentIsTable && (group->fxList[i].fx == fxSCL || group->fxList[i].fx == fxCRD)) continue;
+    if (hideSCL && group->fxList[i].fx == fxSCL) continue;
     if(group->fxList[i].fx>=fxFBR && group->fxList[i].fx<=fxLEN && (!instrument || !instrumentFXAvailableForInstrument(instrument,group->fxList[i].fx)))continue;
     if (instrument && group->instType == InstrumentType::DrumSynth && !instrumentFXAvailableForInstrument(instrument, group->fxList[i].fx)) continue;
     if (visibleIndex-- == 0) return &group->fxList[i];
@@ -236,6 +243,53 @@ int editFXValue(CellEditAction action, uint8_t* fx, uint8_t* lastFX, int isTable
     int handled = edit8noLast(action, &fx[1], 1, 0, 0x10);
     screenMessage(0, "%s", contextualFXHint(fx, isTable, instrumentIdx));
     return handled;
+  }
+
+  // SLI cycles through the instrument's live slice count (1..count), so a
+  // value can never point at an empty slice. 00 keeps the normal note
+  // mapping.
+  if (fx[0] == fxSLI) {
+    uint8_t sliceCount = 0;
+    if (instrumentIdx != EMPTY_VALUE_8 && instrumentIdx < PROJECT_MAX_INSTRUMENTS) {
+      const Instrument* instrument = &chipnomadState->project.instruments[instrumentIdx];
+      if (instrument->type == InstrumentType::Sample)
+        sliceCount = sampleDecodeSliceCount(instrument->chip.sample.slice);
+    }
+    if (sliceCount) {
+      int isNotMultiAction = action != CellEditAction::multiIncrease && action != CellEditAction::multiDecrease &&
+        action != CellEditAction::multiIncreaseBig && action != CellEditAction::multiDecreaseBig;
+      action = convertMultiAction(action);
+      int handled = 1;
+      switch (action) {
+        case CellEditAction::clear:
+          fx[1] = 0;
+          break;
+        case CellEditAction::tap:
+          if (fx[1] == 0) fx[1] = lastFX[1] && lastFX[1] <= sliceCount ? lastFX[1] : 1;
+          break;
+        case CellEditAction::increase:
+          fx[1] = fx[1] >= sliceCount ? 1 : fx[1] + 1;
+          break;
+        case CellEditAction::decrease:
+          fx[1] = fx[1] <= 1 ? sliceCount : fx[1] - 1;
+          break;
+        case CellEditAction::increaseBig:
+        case CellEditAction::decreaseBig:
+          // Same cycle: the slice list is short, big steps add nothing.
+          fx[1] = action == CellEditAction::increaseBig
+            ? (fx[1] >= sliceCount ? 1 : fx[1] + 1)
+            : (fx[1] <= 1 ? sliceCount : fx[1] - 1);
+          break;
+        default:
+          handled = 0;
+          break;
+      }
+      if (handled && isNotMultiAction) lastFX[1] = fx[1];
+      screenMessage(0, "%s", contextualFXHint(fx, isTable, instrumentIdx));
+      return handled;
+    }
+    // No slicing on this instrument: fall through to the generic editor so
+    // the value stays inert but still editable.
   }
 
   uint8_t bigStep = 16;

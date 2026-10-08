@@ -116,6 +116,12 @@ extern ChipNomadState* chipnomadState;
 
 extern int projectModified; // Flag to track if the project has unsaved changes
 
+// Set while the sample settings screen is playing a full sample back in
+// LAZY mode (tap PLAY toggles it). Guards the app-level auto-stop so the
+// preview survives the PLAY key release, and arms EDIT to drop slices at
+// the playback marker.
+extern int sampleLazyPlaybackActive;
+
 // Set at startup when an autosave file exists but failed to load, so the
 // title screen can warn instead of silently offering to "continue" into the
 // demo project it fell back to.

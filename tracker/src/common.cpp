@@ -159,6 +159,7 @@ int* pSongTrack;
 int* pChainRow;
 ChipNomadState* chipnomadState;
 int projectModified = 0;
+int sampleLazyPlaybackActive = 0;
 int autosaveLoadFailed = 0;
 
 int settingsSave(void) {

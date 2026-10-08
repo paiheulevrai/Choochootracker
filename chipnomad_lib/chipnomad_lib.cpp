@@ -262,6 +262,12 @@ class AudioCommandQueue {
         case kStartChain: playbackStartChain(playback, command.a, command.b, command.c, command.d); break;
         case kStartPhrase: playbackStartPhrase(playback, command.a, command.b, command.c, command.d); break;
         case kStartPhraseRow: playbackStartPhraseRow(playback, command.a, const_cast<PhraseRow*>(&command.row)); break;
+        case kStartPhraseRowFull:
+          // Set the bypass AFTER playbackStartPhraseRow: resetTrack inside
+          // clears the flag, so setting it first would be undone.
+          playbackStartPhraseRow(playback, command.a, const_cast<PhraseRow*>(&command.row));
+          playback->tracks[command.a].sliceBypass = 1;
+          break;
         case kQueuePhrase: playbackQueuePhrase(playback, command.a, command.b, command.c); break;
         case kStartLiveChain: playbackStartLiveChain(playback, command.a, command.b); break;
         case kQueueLiveChain: playbackQueueLiveChain(playback, command.a, command.b, command.c); break;
@@ -350,7 +356,9 @@ class AudioCommandQueue {
   template <typename T> struct Slot { T value; std::atomic<int> state{kFree}; };
   struct Settings { uint64_t trackMask = ~UINT64_C(0); LoopRange loopRange{}; uint8_t loopDirty = 0; };
   struct AudioCommand { uint8_t type; int a, b, c, d; PhraseRow row; InstrumentOPLL patch; InstrumentOPL opl; InstrumentSimpleChip simple; InstrumentDX7 dx7; InstrumentFourOp fourOp; InstrumentSID sid; };
-  enum CommandType { kStartSong, kStartChain, kStartPhrase, kStartPhraseRow, kQueuePhrase, kPreviewNote, kStopPreview, kClearTrackFX, kStartLiveChain, kQueueLiveChain, kSetScale, kChipPreview, kOPLPreview, kSimplePreview };
+  // kStartPhraseRowFull is appended after upstream's preview commands so the
+  // raw command IDs 14/15/16 used by applyCommands keep their meaning.
+  enum CommandType { kStartSong, kStartChain, kStartPhrase, kStartPhraseRow, kQueuePhrase, kPreviewNote, kStopPreview, kClearTrackFX, kStartLiveChain, kQueueLiveChain, kSetScale, kChipPreview, kOPLPreview, kSimplePreview, kStartPhraseRowFull = 17 };
   static constexpr unsigned int kSlotCount = 3;
   static constexpr unsigned int kCommandCapacity = 64;
 
@@ -1028,6 +1036,16 @@ int chipnomadQueuePlaybackStartPhrase(ChipNomadState* state, int trackIdx, int s
 }
 int chipnomadQueuePlaybackStartPhraseRow(ChipNomadState* state, int trackIdx, const PhraseRow* row) {
   return state && state->audioCommands && row ? state->audioCommands->pushCommand(3, trackIdx, 0, 0, 0, row) : 0;
+}
+// Full-sample one-shot preview of a LAZY sample: same as StartPhraseRow but
+// sets the track's sliceBypass flag so the voice ignores slice mapping and
+// the row's note pitch, playing the whole region at the sample's original
+// pitch and speed.
+int chipnomadQueuePlaybackStartPhraseRowFull(ChipNomadState* state, int trackIdx, const PhraseRow* row) {
+  // kStartPhraseRowFull is appended after upstream's preview commands; the
+  // numeric value must match the enum (raw IDs 14/15/16 are taken). The enum
+  // is private, so the raw literal is used, matching upstream's own pushes.
+  return state && state->audioCommands && row ? state->audioCommands->pushCommand(17, trackIdx, 0, 0, 0, row) : 0;
 }
 int chipnomadQueuePlaybackQueuePhrase(ChipNomadState* state, int trackIdx, int songRow, int chainRow) {
   return state && state->audioCommands ? state->audioCommands->pushCommand(4, trackIdx, songRow, chainRow) : 0;
@@ -1707,7 +1725,12 @@ static void updateSampleVoices(ChipNomadState* state) {
     int loopMode = sample->loopMode;
     uint8_t start = sample->start;
     uint8_t end = sample->end;
-    uint8_t sliceCount = sampleNormalizeSlice(sample->slice);
+    // D3 (updated): LAZY slices now map chromatically like EQUAL/AUTO. The
+    // only exception is the one-shot full-sample preview (kStartPhraseRowFull
+    // sets sliceBypass), which plays the whole region at the sample's
+    // original pitch - the row's note is ignored entirely.
+    uint8_t sliceCount = track->sliceBypass ? 0
+      : (sampleActsAsSliced(sample) ? sampleDecodeSliceCount(sample->slice) : 0);
     uint8_t sliceIndex = 0;
     int cutoff = sample->filterCutoffHz;
     int resonance = sample->filterResonance;
@@ -1717,9 +1740,14 @@ static void updateSampleVoices(ChipNomadState* state) {
     if (sliceCount) {
       uint8_t pitch = track->chordPitchFinal[0] != EMPTY_VALUE_8 ? track->chordPitchFinal[0] : track->note.pitchFinal;
       if (pitch != EMPTY_VALUE_8) {
-        sliceIndex = pitch;
-        if (sliceIndex >= sliceCount) sliceIndex = sliceCount - 1;
+        // Notes map chromatically from C-0 and wrap around: note N selects
+        // slice N % count, so runs past the last slice cycle back to the
+        // first one instead of sticking on the last slice.
+        sliceIndex = pitch % sliceCount;
       }
+    } else if (track->sliceBypass) {
+      // Full-sample preview: no note transposition - the sample plays at
+      // its original pitch regardless of the row's note.
     } else if (track->chordPitchFinal[0] != EMPTY_VALUE_8) {
       int rootNote = project->pitchTable.octaveSize * 4;
       if (rootNote >= project->pitchTable.length) rootNote = 0;
@@ -1739,7 +1767,20 @@ static void updateSampleVoices(ChipNomadState* state) {
     if (track->note.fx[fxSCF].isOn) cutoff = instrumentFXCutoff(track->note.fx[fxSCF].fxValue);
     if (track->note.fx[fxSRS].isOn) resonance = track->note.fx[fxSRS].fxValue;
     if (track->note.fx[fxSSP].isOn) speedPercent = track->note.fx[fxSSP].fxValue * 500 / 255;
-    if (track->note.fx[fxSLP].isOn) loopMode = track->note.fx[fxSLP].fxValue;
+    // SPL playback modes: 00 forward, 01 reverse, 02 loop, 03 ping-pong.
+    uint8_t forceReverse = 0;
+    if (track->note.fx[fxSLP].isOn) {
+      uint8_t playbackMode = track->note.fx[fxSLP].fxValue;
+      forceReverse = playbackMode == 1 ? 1 : 0;
+      loopMode = playbackMode == 3 ? 2 : (playbackMode == 2 ? 1 : 0);
+    }
+    // SLI plays the numbered slice regardless of the note pitch (sliced
+    // instruments only; 00 keeps the normal note mapping).
+    int sliOverride = track->note.fx[fxSLI].isOn && sliceCount &&
+      track->note.fx[fxSLI].fxValue >= 1;
+    uint8_t sliSlice = sliOverride
+      ? (uint8_t)((track->note.fx[fxSLI].fxValue - 1) % sliceCount) : 0;
+    if (sliOverride) sliceIndex = sliSlice;
     for (int i = 0; i < 4; i++) {
       PlaybackModState* mod = &track->note.modulation[i];
       if (!mod->modulation) continue;
@@ -1790,9 +1831,10 @@ static void updateSampleVoices(ChipNomadState* state) {
       if (sliceCount) {
         uint8_t pitch = track->chordPitchFinal[slot] != EMPTY_VALUE_8 ? track->chordPitchFinal[slot] : track->note.pitchFinal;
         if (pitch != EMPTY_VALUE_8) {
-          voiceSliceIndex = pitch;
-          if (voiceSliceIndex >= sliceCount) voiceSliceIndex = sliceCount - 1;
+          // Same wrap-around mapping as the main slice index above.
+          voiceSliceIndex = pitch % sliceCount;
         }
+        if (sliOverride) voiceSliceIndex = sliSlice;
       } else if (track->chordPitchFinal[slot] != EMPTY_VALUE_8) {
         int noteCents = project->linearPitch ? project->pitchTable.values[track->chordPitchFinal[slot]]
           : track->chordPitchFinal[slot] * 100;
@@ -1804,7 +1846,7 @@ static void updateSampleVoices(ChipNomadState* state) {
       voices[slot]->configure(sample, (float)voicePitchCents, gain / track->chordVoiceCount, (float)speedPercent, start, end, (uint8_t)loopMode,
                               (uint16_t)cutoff, (uint8_t)resonance, attack, decay, sustain, release, shape,
                               sliceCount, voiceSliceIndex, sample->stretchMode, project->tickRate,
-                              sample->speedAlgorithm);
+                              sample->speedAlgorithm, forceReverse);
     }
   }
 }

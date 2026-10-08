@@ -54,7 +54,15 @@ static void onSampleLoaded(const char* path) {
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
   char error[64];
   audioManager.pause();
-  if (sampleLoadWav16(path, &instrument->chip.sample, error, sizeof(error))) {
+  // Cue-aware load (Phase 4): a WAV written by SAVE TO SAMPLE carries its
+  // slice points as cue chunks. They only seed the editor when the
+  // instrument has no slice mode yet - a project reload must keep its own
+  // stored bounds (the .cct slice line is parsed before the WAV load).
+  uint32_t cueFrames[PROJECT_SAMPLE_MAX_SLICES];
+  uint8_t cueCount = 0;
+  const int loadResult = sampleLoadWav16Cues(path, &instrument->chip.sample, cueFrames,
+                                             &cueCount, error, sizeof(error));
+  if (loadResult) {
     screenMessage(MESSAGE_TIME * 3, "%s", error);
   } else {
     // A fresh sample starts with the full playback region: the previous
@@ -63,6 +71,14 @@ static void onSampleLoaded(const char* path) {
     // Region when the Sample Edit screen is entered.
     instrument->chip.sample.start = 0;
     instrument->chip.sample.end = 255;
+    if (cueCount > 0 && sampleDecodeSliceMode(instrument->chip.sample.slice) == sliceModeOff) {
+      // Cues seed an AUTO-mode sample with manual bounds: the sentinel
+      // count matches the cue count and playback stays full-sample until
+      // the user picks a mode (AUTO/EQUAL act as sliced, LAZY ignores).
+      InstrumentSample* sample = &instrument->chip.sample;
+      for (uint8_t i = 0; i < cueCount; ++i) sample->sliceBounds[i] = cueFrames[i];
+      sample->slice = sampleEncodeSlice(sliceModeAuto, cueCount);
+    }
     const char* separator = strrchr(path, PATH_SEPARATOR);
     const char* filename = separator ? separator + 1 : path;
     if (!instrument->name[0]) {
@@ -190,7 +206,9 @@ static int onEdit(int col, int row, CellEditAction action) {
       handled = edit8noLast(action, &index, 1, 0, 6);
       if (handled) {
         sample->stretchMode = index;
-        // Stretch and Slice are mutually exclusive: enabling one disables the other.
+        // Stretch and Slice are mutually exclusive: enabling one disables
+        // the other (the sentinel's mode resets to Off; bounds stay in
+        // memory so toggling back restores them).
         if (sample->stretchMode) sample->slice = 0;
         projectModified = 1;
         // Repaint the dimmed Speed field and the new Stretch value.

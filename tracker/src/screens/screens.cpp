@@ -158,6 +158,13 @@ const char* screenGetActiveMessage(void) {
   return messageBuffer;
 }
 
+void screenClearMessage(void) {
+  ScreenOverlayCoordinates overlay;
+  messageTimer = -1;
+  messageBuffer[0] = '\0';
+  gfxClearRect(0, 19, 40, 1);
+}
+
 void screensInitAll(void) {
   screenTitle.init();
   screenSong.init();
@@ -608,6 +615,12 @@ static int inputNormalMode(ScreenData* screen, int keys, int tapCount) {
 
 static int optPressed = 0;
 static int shallowClonePressed = 0;
+
+// Lets a screen cancel the pending copy-on-Opt-release when it consumes an
+// Opt combo itself (e.g. the phrase screen's selection fill).
+void screenClearOptPressed(void) {
+  optPressed = 0;
+}
 
 static void moveCursorToSelectionStart(ScreenData* screen) {
   int startCol, startRow, endCol, endRow;

@@ -126,6 +126,7 @@ TEST_CASE("scale project settings survive save and load") {
   std::strcpy(saved.pitchTable.noteNames[0], "C-4");
   saved.pitchTable.values[0] = 1000;
   saved.scaleApply = 0;
+  saved.scaleMode = 1;
   saved.scaleTracksMask = 0xa5;
   saved.scaleRoot = 9;
   saved.scalePreset = scaleCustom;
@@ -134,10 +135,51 @@ TEST_CASE("scale project settings survive save and load") {
   REQUIRE(projectSave(&saved, path) == 0);
   REQUIRE(projectLoad(&loaded, path) == 0);
   CHECK(loaded.scaleApply == 0);
+  CHECK(loaded.scaleMode == 1);
   CHECK(loaded.scaleTracksMask == 0xa5);
   CHECK(loaded.scaleRoot == 9);
   CHECK(loaded.scalePreset == scaleCustom);
   CHECK(loaded.scaleCustomMask == 0x0491);
+}
+
+TEST_CASE("legacy scale line without mode field loads as Quantizer") {
+  Project saved, loaded;
+  projectInit(&saved);
+  projectInit(&loaded);
+  saved.chipsCount = 1;
+  saved.tracksCount = 1;
+  saved.chipType = ChipType::AY;
+  saved.tickRate = 50;
+  saved.pitchTable.length = 1;
+  saved.pitchTable.octaveSize = 12;
+  std::strcpy(saved.pitchTable.name, "Test");
+  std::strcpy(saved.pitchTable.noteNames[0], "C-4");
+  saved.pitchTable.values[0] = 1000;
+  const char* path = "build/tests/scale_io_legacy.cct";
+  REQUIRE(projectSave(&saved, path) == 0);
+  // Rewrite the current 6-field Scale line into the pre-Note-Lock layout:
+  // apply,root,preset,customMask,tracksMask (no mode field).
+  {
+    std::ifstream in(path);
+    REQUIRE(in.is_open());
+    std::string text, lineBuf;
+    while (std::getline(in, lineBuf)) {
+      if (lineBuf.rfind("- Scale: ", 0) == 0) lineBuf = "- Scale: 1,5,3,2741,165";
+      text += lineBuf;
+      text += '\n';
+    }
+    in.close();
+    std::ofstream out(path);
+    REQUIRE(out.is_open());
+    out << text;
+  }
+  REQUIRE(projectLoad(&loaded, path) == 0);
+  CHECK(loaded.scaleApply == 1);
+  CHECK(loaded.scaleMode == 0);
+  CHECK(loaded.scaleRoot == 5);
+  CHECK(loaded.scalePreset == scaleDorian);
+  CHECK(loaded.scaleCustomMask == 0x0ab5);
+  CHECK(loaded.scaleTracksMask == 0xa5);
 }
 
 TEST_CASE("a project with fewer than 8 tracks survives save and load") {
@@ -429,7 +471,7 @@ TEST_CASE("v4 projects preserve LFO wavetable settings") {
   REQUIRE(projectSave(&saved, path) == 0);
   INFO(projectFileError);
   REQUIRE(projectLoad(&loaded, path) == 0);
-  CHECK(projectFileVersion == 6);
+  CHECK(projectFileVersion == 7);
   const Modulation& reloaded = loaded.instruments[0].modulation[2];
   CHECK(reloaded.p1 == static_cast<uint8_t>(LFOShape::wavetable));
   CHECK(reloaded.p2 == static_cast<uint8_t>(LFOTrigger::chain));
@@ -452,8 +494,10 @@ TEST_CASE("phrase FX groups put the active engine after Track FX") {
   CHECK(std::strcmp(fxGroups[1].name, "Track FX") == 0);
   CHECK(fxGroups[1].columns == 4);
   CHECK(fxGroups[1].fxList[3].fx == fxCRD);
-  // SST is the current sample-start control; STA remains a legacy playback alias.
-  CHECK(getInstrumentDefinition(InstrumentType::Sample)->fxList[1].fx == fxSST);
+  // Merged sample FX order keeps SPL/SLI first (our fork's saved-project
+  // numeric values); SST is the sample-start control, STA a legacy alias.
+  CHECK(getInstrumentDefinition(InstrumentType::Sample)->fxList[3].fx == fxSST);
+  CHECK(getInstrumentDefinition(InstrumentType::Sample)->fxList[4].fx == fxSTA);
   CHECK(fxGroups[2].instType == InstrumentType::AY1);
   CHECK(fxGroups[11].instType == InstrumentType::AChChid);
   CHECK(fxGroups[12].instType == InstrumentType::DrumSynth);

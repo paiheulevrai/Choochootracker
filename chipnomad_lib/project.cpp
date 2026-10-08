@@ -185,6 +185,7 @@ void projectInit(Project* p) {
   p->signedTrackSpeed = 1;
   p->perceptualEffects = 1;
   p->scaleApply = 1;
+  p->scaleMode = 0;
   p->scaleTracksMask = 0xff;
   p->scaleRoot = 0;
   p->scalePreset = scaleChromatic;

@@ -20,6 +20,16 @@ TEST_CASE("quantizer rounds down with root and octave wrap") {
   CHECK(scaleQuantizeNote(0, 1, 1u << 11, 96) == 0); // clamp below the first matching note
 }
 
+TEST_CASE("snap up raises to the next scale note and never leaves the scale") {
+  uint16_t major = scalePresetMask(scaleMajor);
+  CHECK(scaleSnapNoteUp(3, 0, major, 96) == 4);    // D# -> E in C major
+  CHECK(scaleSnapNoteUp(1, 0, major, 96) == 2);    // C# -> D
+  CHECK(scaleSnapNoteUp(2, 0, major, 96) == 2);    // In-scale note stays
+  CHECK(scaleSnapNoteUp(94, 0, major, 96) == 95);  // A# -> B at the top
+  CHECK(scaleSnapNoteUp(85, 0, 1, 96) == 84);      // Nothing above: settle below
+  CHECK(scaleSnapNoteUp(96, 0, major, 96) == 96);  // Out of range stays untouched
+}
+
 TEST_CASE("SCL changes runtime scale without changing phrase data") {
   Project project;
   projectInit(&project);
@@ -110,6 +120,100 @@ TEST_CASE("lowest track SCL command wins during a playback frame") {
   readPhraseRowDirect(&state, 1, &second, 0);
   CHECK(state.scalePreset == scaleMajor);
   CHECK(state.scaleRoot == 0);
+}
+
+TEST_CASE("note lock mode bypasses playback quantization of plain notes") {
+  Project project;
+  projectInit(&project);
+  project.pitchTable.octaveSize = 12;
+  project.pitchTable.length = 96;
+  project.scaleApply = 1;
+  project.scalePreset = scaleMajor;
+  project.scaleMode = 1;
+  PlaybackState state = {};
+  playbackInit(&state, &project);
+  state.tracks[0].mode = PlaybackMode::phraseRow;
+
+  PhraseRow row = {};
+  row.note = 3; // D# would be snapped to D by the quantizer
+  row.instrument = EMPTY_VALUE_8;
+  row.volume = EMPTY_VALUE_8;
+  for (int i = 0; i < 3; ++i) row.fx[i][0] = EMPTY_VALUE_8;
+  readPhraseRowDirect(&state, 0, &row, 0);
+  CHECK(state.tracks[0].note.pitchBase == 3);
+}
+
+TEST_CASE("note lock mode still quantizes CRD chord notes") {
+  Project project;
+  projectInit(&project);
+  project.pitchTable.octaveSize = 12;
+  project.pitchTable.length = 96;
+  project.scaleApply = 1;
+  project.scalePreset = scaleMinor;
+  project.scaleMode = 1;
+
+  PlaybackState state = {};
+  playbackInit(&state, &project);
+  state.tracks[0].mode = PlaybackMode::phraseRow;
+
+  PhraseRow row = {};
+  row.note = 36;
+  row.instrument = EMPTY_VALUE_8;
+  row.volume = EMPTY_VALUE_8;
+  for (int i = 0; i < 3; ++i) row.fx[i][0] = EMPTY_VALUE_8;
+  row.fx[0][0] = fxCRD;
+  row.fx[0][1] = 0x01; // Minor, root position
+  readPhraseRowDirect(&state, 0, &row, 0);
+  CHECK(state.tracks[0].chordVoiceCount == 3);
+  CHECK(state.tracks[0].chordPitchBase[0] == 36);
+  CHECK(state.tracks[0].chordPitchBase[1] == 39);
+  CHECK(state.tracks[0].chordPitchBase[2] == 43);
+}
+
+TEST_CASE("playback start seeds runtime scale from project settings") {
+  Project project;
+  projectInit(&project);
+  project.pitchTable.octaveSize = 12;
+  project.pitchTable.length = 96;
+  project.scaleRoot = 5;
+  project.scalePreset = scaleDorian;
+  PlaybackState state = {};
+  playbackInit(&state, &project);
+  CHECK(state.scaleRoot == 5);
+  CHECK(state.scalePreset == scaleDorian);
+  project.scaleRoot = 9;
+  project.scalePreset = scaleMajor;
+  playbackStartSong(&state, 0, 0, 1);
+  CHECK(state.scaleRoot == 9);
+  CHECK(state.scalePreset == scaleMajor);
+}
+
+TEST_CASE("SCL command is inert in note lock mode") {
+  Project project;
+  projectInit(&project);
+  project.pitchTable.octaveSize = 12;
+  project.pitchTable.length = 96;
+  project.scaleApply = 1;
+  project.scaleMode = 1;
+  project.scalePreset = scaleChromatic;
+  project.scaleRoot = 0;
+
+  PlaybackState state = {};
+  playbackInit(&state, &project);
+  state.tracks[0].mode = PlaybackMode::phraseRow;
+
+  PhraseRow row = {};
+  row.note = 3; // D#
+  row.instrument = EMPTY_VALUE_8;
+  row.volume = EMPTY_VALUE_8;
+  for (int i = 0; i < 3; ++i) row.fx[i][0] = EMPTY_VALUE_8;
+  row.fx[0][0] = fxSCL;
+  row.fx[0][1] = 0x10; // Major, C
+
+  readPhraseRowDirect(&state, 0, &row, 0);
+  CHECK(state.scalePreset == scaleChromatic);
+  CHECK(state.scaleRoot == 0);
+  CHECK(state.tracks[0].note.pitchBase == 3);
 }
 
 } // TEST_SUITE

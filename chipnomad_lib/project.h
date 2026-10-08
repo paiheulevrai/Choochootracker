@@ -207,6 +207,10 @@ enum FX {
   // Track insert addresses: appended; existing and reserved IDs remain stable.
   fxF11, fxF12, fxF13, fxF14, fxF15, fxF16, fxF17, fxF18, fxF21, fxF22, fxF23, fxF24, fxF25, fxF26, fxF27, fxF28,
 
+  // Sample slice select: plays the numbered slice regardless of the note.
+  // Appended to preserve project FX IDs.
+  fxSLI,
+
   // Native tone controls append IDs to preserve existing projects.
   fxFBR, fxFFB,
   fxCMD, fxCNR, fxCND, fxCNS, fxCSP, fxCSS, fxCSD, fxCEI, fxCEP, fxCED,
@@ -263,6 +267,7 @@ enum ScalePreset : uint8_t {
 const char* scalePresetName(ScalePreset preset);
 uint16_t scalePresetMask(ScalePreset preset);
 uint8_t scaleQuantizeNote(uint8_t note, uint8_t root, uint16_t mask, uint16_t pitchCount);
+uint8_t scaleSnapNoteUp(uint8_t note, uint8_t root, uint16_t mask, uint16_t pitchCount);
 
 struct FXName {
   enum FX fx;
@@ -383,8 +388,12 @@ struct Project {
   uint8_t signedTrackSpeed;
   uint8_t perceptualEffects;
 
-  // Global 12-TET playback quantizer. Phrase data always stays chromatic.
+  // Global 12-TET scale engine. Phrase data always stays chromatic.
+  // scaleMode: 0 = Quantizer (playback quantization, SCL FX active), 1 =
+  // Note Lock (entry locked to scale notes, SCL FX inert, quantization
+  // bypassed).
   uint8_t scaleApply;
+  uint8_t scaleMode;
   uint8_t scaleTracksMask;
   uint8_t scaleRoot;
   ScalePreset scalePreset;
@@ -407,6 +416,10 @@ struct Project {
   uint8_t delayTicks;
   uint8_t delayFeedback;
   uint16_t delayFilterCutoffHz;
+  // Sample save destination preference (Phase 4): 0 = ask every time,
+  // 1 = write slice points into the WAV (cue chunks), 2 = keep them in the
+  // project only. Set by the save dialog's "don't ask again" checkbox.
+  uint8_t sampleSaveChoice;
   MidiCCMapping midiCCMappings[PROJECT_MAX_MIDI_CC_MAPPINGS];
 
   PitchTable pitchTable;

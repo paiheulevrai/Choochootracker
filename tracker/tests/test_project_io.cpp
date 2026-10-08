@@ -124,7 +124,7 @@ TEST_CASE_FIXTURE(TestFixture, "projectSave_uses_version_6_0") {
   char firstLine[256];
   char* readResult = fgets(firstLine, sizeof(firstLine), file);
   CHECK(readResult != nullptr);
-  CHECK(std::strstr(firstLine, "# ChooChooTracker Module 6.0") != nullptr);
+  CHECK(std::strstr(firstLine, "# ChooChooTracker Module 7.0") != nullptr);
   fclose(file);
 }
 
@@ -442,7 +442,7 @@ TEST_CASE("phrase volume supports the full 00-7F range and an empty value") {
   const char* path = "build/tests/phrase_volume_range.cct";
   REQUIRE(projectSave(&saved, path) == 0);
   REQUIRE(projectLoad(&loaded, path) == 0);
-  CHECK(projectFileVersion == 6);
+  CHECK(projectFileVersion == 7);
   CHECK(loaded.phrases[0].rows[0].volume == 0);
   CHECK(loaded.phrases[0].rows[1].volume == 0x40);
   CHECK(loaded.phrases[0].rows[2].volume == PHRASE_VOLUME_MAX);

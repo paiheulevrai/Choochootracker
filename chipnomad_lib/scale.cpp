@@ -39,3 +39,17 @@ uint8_t scaleQuantizeNote(uint8_t note, uint8_t root, uint16_t mask, uint16_t pi
   }
   return 0;
 }
+
+// Mirror of scaleQuantizeNote that snaps upward. When no scale note exists
+// above, the note settles on the closest scale note below so the result is
+// always in scale.
+uint8_t scaleSnapNoteUp(uint8_t note, uint8_t root, uint16_t mask, uint16_t pitchCount) {
+  if (pitchCount == 0 || note >= pitchCount || mask == 0) return note;
+  root %= 12;
+  for (int candidate = note; candidate < pitchCount; ++candidate) {
+    int degree = (candidate - root) % 12;
+    if (degree < 0) degree += 12;
+    if (mask & (1u << degree)) return (uint8_t)candidate;
+  }
+  return scaleQuantizeNote(note, root, mask, pitchCount);
+}

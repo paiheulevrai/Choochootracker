@@ -29,7 +29,7 @@ TEST_CASE("FourOp patch file ownership and malformed load are transactional"){
   REQUIRE(!projectSave(a.get(),"test_four_op.cct"));REQUIRE(!projectLoad(b.get(),"test_four_op.cct"));CHECK(!memcmp(&p,&b->instruments[5].chip.fourOp,sizeof(p)));
   p.algorithm=8;CHECK_FALSE(validFourOp(type,p));REQUIRE(!instrumentSave(a.get(),"test_four_op.cni",5));auto before=std::make_unique<Project>(*b);CHECK(instrumentLoad(b.get(),"test_four_op.cni",8)!=0);CHECK(!memcmp(before.get(),b.get(),sizeof(Project)));
  }
- CHECK(sizeof(Instrument)==696) /* upstream sample stretch/speed fields */;CHECK(int(InstrumentType::GenesisFM)==25);CHECK(int(InstrumentType::ArcadeFM)==26);std::remove("test_four_op.cni");std::remove("test_four_op.cct");projectFree(a.get());projectFree(b.get());
+ CHECK(sizeof(Instrument)==1208) /* merged: our InstrumentSample (autoSensitivity + 64 sliceBounds) grows the union; includes upstream sample stretch/speed fields */;CHECK(int(InstrumentType::GenesisFM)==25);CHECK(int(InstrumentType::ArcadeFM)==26);std::remove("test_four_op.cni");std::remove("test_four_op.cct");projectFree(a.get());projectFree(b.get());
 }
 TEST_CASE("FourOp all original factory patches load and render"){
  auto p=std::make_unique<Project>();projectInit(p.get());int count=0;std::vector<float> audio(96000);

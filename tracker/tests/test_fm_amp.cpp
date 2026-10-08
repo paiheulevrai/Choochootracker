@@ -84,7 +84,7 @@ TEST_CASE("FM tone extension rejects out of range and duplicate controls") {
 }
 TEST_CASE("Native macros append IDs and expose only supported controls") {
  CHECK(genericModFirstInsert==29);CHECK(genericModFMBrightness==45);
- CHECK(fxFBR==fxF28+1);CHECK(fxTotalCount<255);fillFXNames();
+ CHECK(fxSLI==fxF28+1);CHECK(fxFBR==fxSLI+1);CHECK(fxTotalCount<255); /* merged: our fxSLI keeps its pre-merge ID between fxF28 and upstream's native FX block */fillFXNames();
  for(int type=0;type<int(InstrumentType::totalCount);++type) {
   Instrument i{};getInstrumentFunctions(InstrumentType(type)).init(&i);
   for(int g=genericModFMBrightness;g<genericModInstrumentPan;++g) {

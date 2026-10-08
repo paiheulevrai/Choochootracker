@@ -254,6 +254,9 @@ struct InstrumentPlaits : InstrumentVoicePostSettings {
 
 #define PROJECT_SAMPLE_PATH_LENGTH 255
 
+// Maximum number of slices per sample (all slice modes, plan decision D7).
+#define PROJECT_SAMPLE_MAX_SLICES 64
+
 struct InstrumentSample : InstrumentVoicePostSettings {
   char path[PROJECT_SAMPLE_PATH_LENGTH + 1];
   uint32_t sampleRate;
@@ -265,9 +268,15 @@ struct InstrumentSample : InstrumentVoicePostSettings {
   uint8_t start;
   uint8_t end;
   uint8_t loopMode; // 0: off, 1: loop, 2: ping-pong
-  uint8_t slice; // 0: off, else even divisions 2/4/8/16/32
+  // Slice sentinel (see sample_voice.h): 0 off, 1..64 EQUAL, 65..128 AUTO,
+  // 129..192 LAZY (value - 64/128 is the slice count).
+  uint8_t slice;
   uint8_t stretchMode; // 0: off, 1: 1 beat, 2: 2 beats, 3: 1 bar, 4: 2 bars, 5: 4 bars, 6: 8 bars
   uint8_t speedAlgorithm; // 0: dirty granular playback, 1: clean Signalsmith stretch
+  uint8_t autoSensitivity; // AUTO transient detection strength, 1..99 (50 = default)
+  // Manual slice boundaries in frames (start of each slice; the last slice
+  // ends at the loop end marker). Empty (all zero) = even/auto placement.
+  uint32_t sliceBounds[PROJECT_SAMPLE_MAX_SLICES];
 };
 
 // Playback window mapping: Start/End are stored as 0-255 normalized values;

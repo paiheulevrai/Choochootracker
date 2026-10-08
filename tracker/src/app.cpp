@@ -307,8 +307,11 @@ static bool inputBranchNavigation(int keys) {
 }
 
 static void appInput(int isKeyDown, int keys, int tapCount) {
-  // Stop phrase row and preview
-  if (chipnomadGetPlaybackStatus(chipnomadState)->tracks[*pSongTrack].mode == PlaybackMode::phraseRow && keys == 0) {
+  // Stop phrase row and preview. While the sample settings screen is doing
+  // a LAZY full-sample playback (tap PLAY toggles it), the PLAY release
+  // must not kill the preview - the screen owns the preview's lifetime.
+  if (chipnomadGetPlaybackStatus(chipnomadState)->tracks[*pSongTrack].mode == PlaybackMode::phraseRow && keys == 0 &&
+      !sampleLazyPlaybackActive) {
     chipnomadQueuePlaybackStop(chipnomadState);
   }
   // Let screen handle input first, then try global playback if not handled

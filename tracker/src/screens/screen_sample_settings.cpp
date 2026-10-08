@@ -9,6 +9,7 @@
 #include "screen_enter_name.h"
 #include "synth/sample_voice.h"
 #include "synth/sample_ops.h"
+#include "synth/sample_transient.h"
 #include "audio_manager.h"
 #include <stdio.h>
 #include <string.h>
@@ -37,10 +38,23 @@ static constexpr int previewRow = 3;
 static constexpr int previewWidth = 32;
 static constexpr int previewHeight = 8;
 static constexpr int fieldRow0 = 12;
-static const char* sliceLabels[] = {"Off", "2", "4", "8", "16", "32"};
 static const char* speedAlgorithmLabels[] = {"Dirty", "Clean"};
-static const uint8_t sliceValues[] = {0, 2, 4, 8, 16, 32};
-static constexpr int sliceCount = 6;
+
+// Slice row: one row hosting four value cells - Mode / Count / Slice /
+// Frame. The label sits at x=0; values start at x=6. No per-cell labels,
+// per the "only value boxes" rule.
+static constexpr int sliceModeX = 6;
+static constexpr int sliceModeW = 5;   // OFF / EQUAL / AUTO / LAZY
+static constexpr int sliceNumX = 12;
+static constexpr int sliceNumW = 2;    // total slice count
+static constexpr int sliceBrowseX = 15;
+static constexpr int sliceBrowseW = 2; // current slice index, 1-indexed
+static constexpr int sliceFrameX = 18;
+static constexpr int sliceFrameW = 6;  // start frame of the current slice
+static const char* sliceModeLabels[] = {"OFF", "EQUAL", "AUTO", "LAZY"};
+// Session-only "current slice" being edited (0-based index into
+// sliceBounds). Never saved with the project.
+static int currentSlice;
 
 // Process toolbox: one selected operation plus GO/UNDO buttons. The op is
 // cycled with Edit+Left/Right; Edit+Opt clears it to "none".
@@ -69,17 +83,27 @@ static int pendingDirtyRestore;
 // the folder browser.
 static char saveAsName[64];
 
+// Stashed slice setting captured when leaving EQUAL/AUTO for LAZY: the
+// sentinel (mode + count) and the bounds array. Switching back restores
+// it verbatim - no detection re-run, no confirmation dialog. Keyed by
+// instrument index so one sample's stash never leaks into another.
+static int sliceStashInstrument = -1;
+static uint8_t sliceStashSlice;
+static uint32_t sliceStashBounds[PROJECT_SAMPLE_MAX_SLICES];
+
 static Bitmap* samplePreviewBitmap;
 static Bitmap* sampleSliceMarkerBitmap;
 static Bitmap* sampleStartMarkerBitmap;
 static Bitmap* sampleEndMarkerBitmap;
 static Bitmap* sampleSelectionBitmap;
+static Bitmap* sampleSliceBandBitmap;
+static Bitmap* samplePlaybackMarkerBitmap;
 
-static int sliceToIndex(uint8_t slice) {
-  for (int i = 1; i < sliceCount; ++i) {
-    if (sliceValues[i] == slice) return i;
-  }
-  return 0;
+// Total slice count for the current sentinel (0 when off). Legacy samples
+// (sentinel set, bounds empty) still report the sentinel count - the
+// preview falls back to the even division for them.
+static uint8_t sampleSliceDivisions(const InstrumentSample* sample) {
+  return sampleDecodeSliceCount(sample->slice);
 }
 
 static const char* sampleFilename(const char* path) {
@@ -108,6 +132,70 @@ static InstrumentSample* currentSample(void) {
   return &chipnomadState->project.instruments[cInstrument].chip.sample;
 }
 
+// Contextual combo hints (session-only): while the cursor rests on a Slice
+// row cell, draw() shows a hint for that cell in the message bar. Every
+// Slice cell has one persistent hint, re-issued every frame: the mode
+// cell's hint is bound to the active slice mode (switches instantly when
+// the mode changes, disappears when the mode turns OFF), the other cells
+// show their fixed combo description. All hints pause while any other
+// message is active.
+static int hintCursorRow = -1;
+static int hintCursorCol = -1;
+// Text the hint system last put in the message bar ("" = none). The bar is
+// shared with action feedback, so draw() compares the active message
+// against this to tell our hint apart from a foreign message.
+static char hintOwnedText[48];
+
+// Advance the hint for the given cell. Called from draw() when the message
+// bar is empty or holds the hint we set. ownsBar tells whether the bar
+// currently shows our hint (a persistent hint re-arms every frame; a
+// foreign message pauses everything until it expires).
+static void settingsUpdateHint(int row, int col, int ownsBar) {
+  const int changed = row != hintCursorRow || col != hintCursorCol;
+  if (changed) {
+    hintCursorRow = row;
+    hintCursorCol = col;
+  }
+  const char* issued = NULL;
+  if (row == 2 && col == 0) {
+    // Slice mode cell: describe what the active mode does. The mode name
+    // is already in the cell, so the hint carries only the description;
+    // it is bound to the mode (re-issued every frame so a mode switch
+    // swaps the text immediately), and OFF clears the bar.
+    const SliceMode mode = sampleDecodeSliceMode(currentSample()->slice);
+    static const char* modeHints[] = {
+      "Divides sample in equal parts",
+      "Divides sample based on transients",
+      "Press Play and add slices with EDIT",
+    };
+    if (mode >= sliceModeEqual && mode <= sliceModeLazy) {
+      issued = modeHints[mode - 1];
+    }
+  } else if (row == 2 && col == 1) {
+    // Slice count box: single static hint.
+    issued = "Adjust the number of slices";
+  } else if (row == 2 && col == 2) {
+    // Slice browser box: single static hint.
+    issued = "Browse slices";
+  } else if (row == 2 && col == 3) {
+    // Slice frame cell: single static hint.
+    issued = "Adjust slice start";
+  }
+  if (issued) {
+    if (!ownsBar || changed) {
+      screenMessage(2, "%s", issued);
+      // Copy the bar text (post-truncation) so the ownership comparison
+      // next frame matches exactly what is displayed.
+      snprintf(hintOwnedText, sizeof(hintOwnedText), "%s",
+               screenGetActiveMessage());
+    }
+  } else if (hintOwnedText[0]) {
+    // No hint for this cell (e.g. the mode turned OFF): drop our hint.
+    screenClearMessage();
+    hintOwnedText[0] = '\0';
+  }
+}
+
 static Bitmap* ensurePreviewBitmap(Bitmap** bitmap) {
   if (*bitmap && ((*bitmap)->widthChars != previewWidth || (*bitmap)->heightChars != previewHeight)) {
     gfxBitmapFree(*bitmap);
@@ -115,10 +203,6 @@ static Bitmap* ensurePreviewBitmap(Bitmap** bitmap) {
   }
   if (!*bitmap) *bitmap = gfxBitmapCreate(previewWidth, previewHeight);
   return *bitmap;
-}
-
-static uint8_t sampleSliceDivisions(const InstrumentSample* sample) {
-  return sampleNormalizeSlice(sample->slice);
 }
 
 // Which marker the view window follows: 0 none, 1 Start, 2 End,
@@ -156,6 +240,24 @@ static SampleEditorSelection editorSelection;
 // Set while a fine adjustment (EDIT+LEFT/RIGHT) holds the zoomed view in;
 // releasing EDIT drops the view back to the full sample. Session-only.
 static int zoomHoldActive;
+
+// Set after a LAZY playback-drop consumed an EDIT press; re-armed on the
+// EDIT release. Key repeat re-fires onInput with isKeyDown=1, so without
+// this guard a held EDIT would machine-gun slices at the repeat rate.
+static int lazyEditArmed;
+
+// Latch for the LAZY playback flag: set once the draw loop has OBSERVED the
+// preview actually running (phrase row + active voice). Until then the
+// auto-clear in draw() is suppressed - the queued start command takes a
+// frame or two to reach the audio thread, and clearing the flag on that
+// first frame broke the marker and the app-level key-up guard.
+static int lazyPlaybackSeenActive;
+
+// Set while an A-tap slice preview (EDIT tap on the Number or Frame cell)
+// is sounding. Hold-preview semantics come from app.cpp's auto-stop on
+// keys==0 release; this flag only guards re-entry (a second tap while the
+// preview still sounds restarts it) and the navigation stop.
+static int slicePreviewActive;
 
 // Smallest zoomed window in frames
 static constexpr uint32_t kMinViewSpan = 8;
@@ -260,7 +362,8 @@ static void updateSamplePreview(const InstrumentSample* sample, const SampleEdit
   Bitmap* startMarker = ensurePreviewBitmap(&sampleStartMarkerBitmap);
   Bitmap* endMarker = ensurePreviewBitmap(&sampleEndMarkerBitmap);
   Bitmap* selectionBand = ensurePreviewBitmap(&sampleSelectionBitmap);
-  if (!waveform || !markers || !startMarker || !endMarker || !selectionBand) return;
+  Bitmap* sliceBand = ensurePreviewBitmap(&sampleSliceBandBitmap);
+  if (!waveform || !markers || !startMarker || !endMarker || !selectionBand || !sliceBand) return;
 
   // Calculate actual start/end positions in frames
   uint32_t frameCount = sample->frameCount;
@@ -321,21 +424,68 @@ static void updateSamplePreview(const InstrumentSample* sample, const SampleEdit
       }
     }
   }
-  // Create slice markers
+  // Create slice markers (2px wide, dark orange): markers come from
+  // sliceBounds when populated (manual edits, AUTO detection); legacy
+  // samples with empty bounds keep the even division of the loop region.
+  // The active slice gets a black background band over its frame range for
+  // visual separation (color coding TBD); its start marker is drawn
+  // brighter (255) than the others (160).
   gfxBitmapClear(markers);
+  const int boundsPopulated = sample->sliceBounds[0] != 0 ||
+    (slices > 1 && sample->sliceBounds[1] != 0);
   if (slices) {
-    // When in slice mode, slice markers divide the loop region (start to end)
-    // This ensures slices follow the start/end markers
-    uint32_t loopLength = endFrame > startFrame ? (endFrame - startFrame) : frameCount;
-    if (loopLength == 0) loopLength = frameCount;
-
-    // Draw slice markers within the loop region; markers outside the view
-    // window are skipped cleanly
-    for (int i = 1; i < slices; ++i) {
-      uint32_t position = startFrame + (uint32_t)((uint64_t)loopLength * i / slices);
+    for (int i = 0; i < slices; ++i) {
+      uint32_t position;
+      if (boundsPopulated) {
+        position = sample->sliceBounds[i];
+      } else {
+        // Even division of the loop region (start to end markers)
+        uint32_t loopLength = endFrame > startFrame ? (endFrame - startFrame) : frameCount;
+        if (loopLength == 0) loopLength = frameCount;
+        position = startFrame + (uint32_t)((uint64_t)loopLength * i / slices);
+      }
       int x = frameToPixel(position, view, width, 0);
       if (x < 0) continue;
-      for (int y = 0; y < height; ++y) markers->data[y * width + x] = 255;
+      const uint8_t brightness = i == currentSlice ? 255 : 160;
+      for (int y = 0; y < height; ++y) {
+        markers->data[y * width + x] = brightness;
+        if (x + 1 < width) markers->data[y * width + x + 1] = brightness;
+      }
+    }
+  }
+  // Active-slice band: opaque background over the columns covered by the
+  // current slice's frame range. Drawn in black UNDER the waveform: the
+  // waveform's opaque pixels cover the band, its transparent background
+  // lets the band show through. The frame range is kept for the selection
+  // fill below, which skips these columns so the band stays pure black
+  // (the tint would otherwise wash it out to near-background).
+  gfxBitmapClear(sliceBand);
+  uint32_t sliceStart = 0;
+  uint32_t sliceEnd = 0;
+  int sliceHasRange = 0;
+  if (currentSlice >= 0 && currentSlice < slices) {
+    sliceStart = boundsPopulated
+      ? sample->sliceBounds[currentSlice]
+      : startFrame + (uint32_t)((uint64_t)(endFrame > startFrame ? (endFrame - startFrame) : frameCount) * currentSlice / slices);
+    if (boundsPopulated) {
+      sliceEnd = currentSlice + 1 < slices ? sample->sliceBounds[currentSlice + 1] : endFrame;
+    } else {
+      uint32_t loopLength = endFrame > startFrame ? (endFrame - startFrame) : frameCount;
+      if (loopLength == 0) loopLength = frameCount;
+      sliceEnd = startFrame + (uint32_t)((uint64_t)loopLength * (currentSlice + 1) / slices);
+    }
+    if (sliceEnd > frameCount) sliceEnd = frameCount;
+    if (sliceStart < sliceEnd) {
+      sliceHasRange = 1;
+      for (int x = 0; x < width; x++) {
+        uint32_t columnStart = view->viewStart + (uint64_t)x * viewSpan / width;
+        uint32_t columnEnd = view->viewStart + (uint64_t)(x + 1) * viewSpan / width;
+        if (columnEnd > view->viewEnd) columnEnd = view->viewEnd;
+        if (columnEnd <= sliceStart || columnStart >= sliceEnd) continue;
+        for (int y = 0; y < height; y++) {
+          sliceBand->data[y * width + x] = 255;
+        }
+      }
     }
   }
   // Selection band + handles: dim fill over columns overlapping
@@ -348,6 +498,10 @@ static void updateSamplePreview(const InstrumentSample* sample, const SampleEdit
       uint32_t columnEnd = view->viewStart + (uint64_t)(x + 1) * viewSpan / width;
       if (columnEnd > view->viewEnd) columnEnd = view->viewEnd;
       if (columnEnd <= selection->start || columnStart >= selection->end) continue;
+      // Skip the active slice's columns: its black band must not be
+      // washed out by the tint (this is what keeps it maximally dark
+      // and distinct from the tinted rest of the preview).
+      if (sliceHasRange && columnEnd > sliceStart && columnStart < sliceEnd) continue;
       for (int y = 0; y < height; y++) selectionBand->data[y * width + x] = 96;
     }
     int selStartX = frameToPixel(selection->start, view, width, 0);
@@ -364,6 +518,13 @@ static void updateSamplePreview(const InstrumentSample* sample, const SampleEdit
 static void drawSamplePreview(void) {
   // Clear the waveform area and space for frame
   gfxClearRect(0, previewRow, previewWidth, previewHeight);
+  // Draw the slice band in black UNDER the waveform: the waveform's opaque
+  // pixels cover the band, its transparent background lets the band show
+  // through.
+  if (sampleSliceBandBitmap) {
+    gfxSetFgColor(0x000000); // Black
+    gfxDrawBitmap(sampleSliceBandBitmap, 0, previewRow);
+  }
   // Draw the waveform with light blue color for active area
   if (samplePreviewBitmap) {
     gfxSetFgColor(0xADD8E6); // Light blue
@@ -385,17 +546,18 @@ static void drawSamplePreview(void) {
     gfxSetFgColor(0xFFA500); // Orange
     gfxDrawBitmap(sampleEndMarkerBitmap, 0, previewRow);
   }
-  // Draw the slice markers on top
+  // Draw the slice markers on top (dark orange, 2px wide)
   if (sampleSliceMarkerBitmap) {
-    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxSetFgColor(0xFF8C00); // Dark orange
     gfxDrawBitmap(sampleSliceMarkerBitmap, 0, previewRow);
   }
 }
 
 static int settingsColumnCount(int row) {
-  // Region/Select rows: START + END; Process row: op + GO + UNDO; File row:
-  // action + GO
+  // Region/Select rows: START + END; Slice row: Mode + Count + Slice +
+  // Frame; Process row: op + GO + UNDO; File row: action + GO
   if (row == 0 || row == 1) return 2;
+  if (row == 2) return 4;
   if (row == 4) return 3;
   if (row == 5) return 2;
   return 1;
@@ -446,13 +608,18 @@ static void settingsDrawStatic(void) {
 static void settingsDrawCursor(int col, int row) {
   if (row == 0 || row == 1) {
     gfxCursor(col == 0 ? selValX : selEndValX, fieldRow0 + row, selValWidth);
+  } else if (row == 2) {
+    // Slice row: Mode / Count / Slice / Frame cells
+    const int x = col == 0 ? sliceModeX : col == 1 ? sliceNumX :
+                  col == 2 ? sliceBrowseX : sliceFrameX;
+    const int w = col == 0 ? sliceModeW : col == 1 ? sliceNumW :
+                  col == 2 ? sliceBrowseW : sliceFrameW;
+    gfxCursor(x, fieldRow0 + row, w);
   } else if (row == 4) {
     gfxCursor(col == 0 ? valueX : col == 1 ? goX : undoX, fieldRow0 + row,
               col == 0 ? opWidth : col == 1 ? goWidth : undoWidth);
   } else if (row == 5) {
     gfxCursor(col == 0 ? valueX : fileGoX, fieldRow0 + row, col == 0 ? opWidth : fileGoWidth);
-  } else if (row == 3) {
-    gfxCursor(valueX, fieldRow0 + row, sliceWidth);
   } else {
     gfxCursor(valueX, fieldRow0 + row, sliceWidth);
   }
@@ -527,11 +694,62 @@ static void settingsDrawField(int col, int row, CellState state) {
     }
     return;
   }
-  // Row 2: Slice
-  gfxClearRect(valueX, fieldRow0 + row, sliceWidth, 1);
-  // Slice is inert while Stretch drives the duration: dim it.
-  if (sample->stretchMode != 0) gfxSetFgColor(appSettings.colorScheme.textEmpty);
-  gfxPrint(valueX, fieldRow0 + row, sliceLabels[sliceToIndex(sample->slice)]);
+  // Row 2: Slice - Mode / Count / Slice / Frame cells. All four are inert
+  // while Stretch drives the duration: dim them. While the LAZY
+  // playback-drop is armed, the Frame cell dims too - slices are being
+  // placed by the playback marker, not edited by hand.
+  {
+    const SliceMode mode = sampleDecodeSliceMode(sample->slice);
+    const uint8_t count = sampleDecodeSliceCount(sample->slice);
+    const int dimmed = sample->stretchMode != 0 ||
+      (sampleLazyPlaybackActive && mode == sliceModeLazy && col == 3);
+    if (col == 0) {
+      gfxClearRect(sliceModeX, fieldRow0 + row, sliceModeW, 1);
+      if (dimmed) gfxSetFgColor(appSettings.colorScheme.textEmpty);
+      gfxPrint(sliceModeX, fieldRow0 + row, sliceModeLabels[mode <= sliceModeLazy ? mode : 0]);
+    } else if (col == 1) {
+      // Count box: the total number of slices, always live. Shows "-"
+      // in OFF. In LAZY it stays bright (it counts the hand-placed
+      // slices) but is display-only: the cursor skips the cell.
+      gfxClearRect(sliceNumX, fieldRow0 + row, sliceNumW, 1);
+      if (dimmed || mode == sliceModeOff) {
+        gfxSetFgColor(appSettings.colorScheme.textEmpty);
+      }
+      char text[8];
+      if (mode == sliceModeOff) {
+        gfxPrint(sliceNumX, fieldRow0 + row, "-");
+      } else {
+        snprintf(text, sizeof(text), "%02d", count);
+        gfxPrint(sliceNumX, fieldRow0 + row, text);
+      }
+    } else if (col == 2) {
+      // Slice browser box: the 1-indexed current slice. The browsed slice
+      // is also indicated on the waveform by its brighter marker and the
+      // black band.
+      gfxClearRect(sliceBrowseX, fieldRow0 + row, sliceBrowseW, 1);
+      if (dimmed || mode == sliceModeOff) gfxSetFgColor(appSettings.colorScheme.textEmpty);
+      char text[8];
+      if (mode == sliceModeOff) {
+        gfxPrint(sliceBrowseX, fieldRow0 + row, "-");
+      } else {
+        snprintf(text, sizeof(text), "%02d", currentSlice + 1);
+        gfxPrint(sliceBrowseX, fieldRow0 + row, text);
+      }
+    } else {
+      gfxClearRect(sliceFrameX, fieldRow0 + row, sliceFrameW, 1);
+      if (dimmed || mode == sliceModeOff) gfxSetFgColor(appSettings.colorScheme.textEmpty);
+      char text[16];
+      const int32_t frame = sampleSliceStartFrame(sample, (uint8_t)currentSlice,
+                                                  sample->start, sample->end);
+      if (frame < 0) {
+        gfxPrint(sliceFrameX, fieldRow0 + row, "------");
+      } else {
+        snprintf(text, sizeof(text), "%06X", (unsigned)frame);
+        gfxPrint(sliceFrameX, fieldRow0 + row, text);
+      }
+    }
+    return;
+  }
 }
 
 // Clamp the selection to the sample, swap inverted handles and update the
@@ -575,8 +793,10 @@ static void settingsRepaintAfterOp(void) {
   drawFilenameRow();
   drawSamplePreview();
   for (int row = 0; row < 3; ++row) {
-    settingsDrawField(0, row, CellState::normal);
-    if (row < 2) settingsDrawField(1, row, CellState::normal);
+    const int cols = row == 2 ? 3 : 2;
+    for (int col = 0; col < cols; ++col) {
+      settingsDrawField(col, row, CellState::normal);
+    }
   }
   settingsDrawField(0, 3, CellState::normal);
   settingsDrawField(0, 4, CellState::normal);
@@ -674,7 +894,9 @@ static void settingsCancelDialog(void) {
 }
 
 // Save: overwrite the WAV the sample was loaded from, after confirmation.
-static void settingsDoSave(void) {
+// SAVE TO PROJECT: plain WAV write, slice data stays in the .cct (the
+// existing behavior).
+static void settingsDoSaveToProject(void) {
   InstrumentSample* sample = currentSample();
   char error[128];
   audioManager.pause();
@@ -689,12 +911,67 @@ static void settingsDoSave(void) {
   settingsReturnFromDialog(0);
 }
 
+// SAVE TO SAMPLE: same WAV write, plus one cue point per slice start so
+// the chops travel inside the file (visible as markers in DAWs). The cue
+// frames come from sliceBounds when populated; legacy samples with an
+// empty bounds array fall back to the even division of the loop region.
+static void settingsDoSaveToSample(void) {
+  InstrumentSample* sample = currentSample();
+  uint32_t cueFrames[PROJECT_SAMPLE_MAX_SLICES];
+  uint8_t cueCount = 0;
+  const uint8_t count = sampleDecodeSliceCount(sample->slice);
+  if (count > 0) {
+    const uint32_t startFrame = sampleMarkerToStartFrame(sample->frameCount, sample->start);
+    const uint32_t endFrame = sampleMarkerToEndFrame(sample->frameCount, sample->end);
+    const int boundsPopulated = sample->sliceBounds[0] != 0 ||
+      (count > 1 && sample->sliceBounds[1] != 0);
+    for (uint8_t i = 0; i < count; ++i) {
+      if (boundsPopulated) {
+        cueFrames[cueCount++] = sample->sliceBounds[i];
+      } else {
+        uint32_t loopLength = endFrame > startFrame ? (endFrame - startFrame) : sample->frameCount;
+        if (loopLength == 0) loopLength = sample->frameCount;
+        cueFrames[cueCount++] = startFrame + (uint32_t)((uint64_t)loopLength * i / count);
+      }
+    }
+  }
+  char error[128];
+  audioManager.pause();
+  int result = sampleSaveWav16WithCues(sample, sample->path, cueFrames, cueCount,
+                                       error, sizeof(error));
+  audioManager.resume();
+  if (result != 0) {
+    screenMessage(MESSAGE_TIME_ERROR, "%s", error);
+    settingsReturnFromDialog(1);
+    return;
+  }
+  screenMessage(MESSAGE_TIME, "Saved %s", shortSampleFilename(sample->path, 24));
+  settingsReturnFromDialog(0);
+}
+
 static void settingsRunSave(void) {
   InstrumentSample* sample = currentSample();
   if (!sample->path[0]) return;
+  // Sliced samples ask where the chops should live (Phase 4): inside the
+  // WAV as cue chunks, or in the project only. The per-project preference
+  // ("don't ask again") skips the dialog; samples without slices keep the
+  // plain overwrite confirmation.
+  const uint8_t choice = chipnomadState->project.sampleSaveChoice;
+  if (sampleDecodeSliceMode(sample->slice) != sliceModeOff) {
+    if (choice == 0) {
+      saveChoiceSetup(sample->path, settingsDoSaveToSample, settingsDoSaveToProject,
+                      settingsCancelDialog);
+      screenSetup(&screenSaveChoice, 0);
+    } else if (choice == 1) {
+      settingsDoSaveToSample();
+    } else {
+      settingsDoSaveToProject();
+    }
+    return;
+  }
   char message[128];
   snprintf(message, sizeof(message), "Overwrite %s?", shortSampleFilename(sample->path, 48));
-  confirmSetup(message, settingsDoSave, settingsCancelDialog);
+  confirmSetup(message, settingsDoSaveToProject, settingsCancelDialog);
   screenSetup(&screenConfirm, 0);
 }
 
@@ -743,6 +1020,351 @@ static void settingsRunSaveAs(void) {
   sampleBasenameSansExt(sample->path, initialName, sizeof(initialName));
   enterNameSetup("SAVE SAMPLE", "File name:", initialName, settingsSaveAsNameEntered, settingsCancelDialog);
   screenSetup(&screenEnterName, 0);
+}
+
+// --- Slice row (Phase 1): Mode / Number / Frame --------------------------
+
+// Repaints everything a slice edit can invalidate: the four Slice cells,
+// the preview and (after mode switches) the Stretch row on the instrument
+// screen is handled there - here only the editor's own fields matter.
+static void settingsRepaintSlice(InstrumentSample* sample, int focusCol) {
+  updateSamplePreview(sample, &editorView, &editorSelection);
+  drawSamplePreview();
+  for (int col = 0; col < 4; ++col) {
+    settingsDrawField(col, 2, col == focusCol ? CellState::focus : CellState::normal);
+  }
+}
+
+// Clamp the session-only current slice into the live count.
+static void settingsClampCurrentSlice(const InstrumentSample* sample) {
+  const uint8_t count = sampleDecodeSliceCount(sample->slice);
+  if (count == 0) {
+    currentSlice = 0;
+  } else if (currentSlice >= count) {
+    currentSlice = count - 1;
+  }
+}
+
+// A-tap slice preview (EDIT tap on the Number or Frame cell): plays the
+// currently selected slice as a one-shot phrase row, in every slice mode.
+// The row's note IS the slice index (0-based) - sliced samples map notes
+// chromatically to slices, so C-0 plays slice 0, C#0 slice 1, and so on.
+// fxSLP=0 forces one-shot playback; the preview stops when the key is
+// released (app.cpp auto-stop) or another preview replaces it.
+static void settingsSlicePreviewCurrent(InstrumentSample* sample) {
+  if (sample->stretchMode != 0) return;
+  if (!sample->data || sample->frameCount == 0) return;
+  if (sampleDecodeSliceMode(sample->slice) == sliceModeOff) return;
+  if (sampleLazyPlaybackActive) return; // LAZY playback-drop owns EDIT
+  PhraseRow row;
+  memset(&row, 0, sizeof(row));
+  row.note = (uint8_t)currentSlice;
+  row.instrument = cInstrument;
+  row.volume = PHRASE_VOLUME_MAX;
+  row.fx[0][0] = fxSLP;
+  row.fx[0][1] = 0; // one-shot
+  row.fx[1][0] = EMPTY_VALUE_8;
+  row.fx[1][1] = EMPTY_VALUE_8;
+  row.fx[2][0] = EMPTY_VALUE_8;
+  row.fx[2][1] = EMPTY_VALUE_8;
+  chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
+  chipnomadQueuePlaybackStartPhraseRow(chipnomadState, *pSongTrack, &row);
+  slicePreviewActive = 1;
+}
+
+// LAZY playback-drop (Phase 3): while the full sample is playing back
+// (tap PLAY toggles it), every EDIT click drops a slice at the playback
+// marker's position. The marker is read straight from the track's sample
+// voice - the same tolerated cross-thread pattern as the voice monitors.
+static void settingsDropSliceAtPlayback(InstrumentSample* sample) {
+  const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
+  SampleVoice* voice = chipnomadState->sampleVoices[*pSongTrack][0];
+  if (playback->tracks[*pSongTrack].mode != PlaybackMode::phraseRow || !voice || !voice->active() ||
+      playback->tracks[*pSongTrack].note.instrument != cInstrument) {
+    screenMessage(MESSAGE_TIME, "Not playing");
+    return;
+  }
+  if (!sample->data || sample->frameCount == 0) return;
+  int frame = (int)voice->playbackFrame();
+  if (frame < 0) frame = 0;
+  if (frame >= (int)sample->frameCount) frame = (int)sample->frameCount - 1;
+  // Keep slices at least 50 ms apart so rapid EDIT taps don't pile up
+  // micro-slices on top of each other.
+  uint32_t minGap = sample->sampleRate / 20;
+  if (minGap == 0) minGap = 1;
+  const int index = sampleSliceInsertAtFrameGapped(sample, (uint32_t)frame, minGap);
+  if (index < 0) {
+    screenMessage(MESSAGE_TIME, "Too close to slice");
+    return;
+  }
+  currentSlice = index;
+  projectModified = 1;
+  // The repaint covers all four Slice cells: the Count box shows the
+  // incremented count immediately and the browser follows the dropped
+  // slice.
+  settingsRepaintSlice(sample, -1);
+}
+
+// EDIT+OPT (CellEditAction::clear) deletes the current slice - universal
+// across the Slice browser and Frame cells. The first slice cannot be
+// deleted (there is no previous slice to join into); deleting the last
+// remaining slice turns the mode off.
+static int settingsSliceDeleteCurrent(InstrumentSample* sample) {
+  const uint8_t count = sampleDecodeSliceCount(sample->slice);
+  if (count == 0) return 0;
+  if (currentSlice == 0) {
+    screenMessage(MESSAGE_TIME, "Cannot delete first slice");
+    return 0;
+  }
+  const int next = sampleSliceDelete(sample, (uint8_t)currentSlice);
+  if (next < 0) {
+    // Deleting the last slice turned the mode off (or nothing changed).
+    if (sampleDecodeSliceMode(sample->slice) != sliceModeOff) return 0;
+    currentSlice = 0;
+  } else {
+    currentSlice = next;
+  }
+  settingsClampCurrentSlice(sample);
+  projectModified = 1;
+  settingsRepaintSlice(sample, -1);
+  return 1;
+}
+
+// AUTO initializer (Phase 2): runs the spectral-flux detection and stores
+// the onsets as bounds. Sensitivity is derived from the requested slice
+// count - more slices need a more sensitive threshold to find that many
+// onsets (1..99, 50 at the default count of 4). Detection is a destructive
+// op (it overwrites sliceBounds), so it goes through the process-op undo
+// pattern: pause audio, snapshot, detect, resume. The "DETECTING..." message
+// is flushed to the screen before the synchronous pass so the user sees
+// feedback during longer analyses.
+static void settingsRunAutoDetect(InstrumentSample* sample, uint8_t count) {
+  int sensitivity = 50 + (count - 4) * 4;
+  if (sensitivity < 1) sensitivity = 1;
+  if (sensitivity > 99) sensitivity = 99;
+  sample->autoSensitivity = (uint8_t)sensitivity;
+  screenMessage(MESSAGE_TIME, "DETECTING...");
+  gfxUpdateScreen();
+  audioManager.pause();
+  const int error = sampleOpPrepareUndo(sample, &editorUndo);
+  if (error == 0) {
+    sampleSliceInitAuto(sample, count);
+  }
+  audioManager.resume();
+  if (error != 0) {
+    sampleOpFreeUndo(&editorUndo);
+    screenMessage(MESSAGE_TIME_ERROR, "Detection failed");
+    return;
+  }
+  projectModified = 1;
+  sampleDirtyToDisk = 1;
+  settingsClampCurrentSlice(sample);
+  settingsRepaintSlice(sample, -1);
+  screenMessage(MESSAGE_TIME, "Detected %d slices", sampleDecodeSliceCount(sample->slice));
+}
+
+// Mode cell (col 0): cycle Off / EQUAL / AUTO / LAZY. Switching to a mode
+// initializes the bounds (EQUAL: even division; AUTO: spectral-flux
+// detection; LAZY: single whole-loop slice). Leaving EQUAL/AUTO for LAZY
+// stashes the chops; leaving LAZY to EQUAL/AUTO restores the stash
+// verbatim, so no confirmation dialog is needed anywhere.
+static int settingsSliceModeEdit(InstrumentSample* sample, CellEditAction action) {
+  SliceMode mode = sampleDecodeSliceMode(sample->slice);
+  uint8_t nextMode = (uint8_t)mode;
+  if (action == CellEditAction::clear) {
+    if (mode == sliceModeOff) return 0;
+    nextMode = sliceModeOff;
+  } else if (action == CellEditAction::increase || action == CellEditAction::increaseBig ||
+             action == CellEditAction::tap || action == CellEditAction::doubleTap) {
+    nextMode = mode == sliceModeLazy ? sliceModeOff : (SliceMode)(mode + 1);
+  } else if (action == CellEditAction::decrease || action == CellEditAction::decreaseBig) {
+    nextMode = mode == sliceModeOff ? sliceModeLazy : (SliceMode)(mode - 1);
+  } else {
+    return 0;
+  }
+  if (nextMode == (uint8_t)mode) return 0;
+
+  if (nextMode == sliceModeLazy) {
+    // Leaving EQUAL/AUTO for LAZY: stash the chops so switching back
+    // restores them verbatim - the setting is never lost, so no
+    // confirmation is needed.
+    if (mode == sliceModeEqual || mode == sliceModeAuto) {
+      sliceStashInstrument = cInstrument;
+      sliceStashSlice = sample->slice;
+      memcpy(sliceStashBounds, sample->sliceBounds, sizeof(sliceStashBounds));
+    }
+    sampleSliceInitLazy(sample);
+  } else if (mode == sliceModeLazy && sliceStashInstrument == cInstrument &&
+             (nextMode == sliceModeEqual || nextMode == sliceModeAuto)) {
+    // Back from LAZY: restore the stashed setting instead of
+    // re-initializing (no detection re-run, no even re-division). The
+    // stashed mode wins over the cycled-to one - this is the "move back".
+    sample->slice = sliceStashSlice;
+    memcpy(sample->sliceBounds, sliceStashBounds, sizeof(sample->sliceBounds));
+    sliceStashInstrument = -1;
+  } else if (nextMode == sliceModeOff) {
+    // Off keeps the bounds in memory so toggling back restores them.
+    sample->slice = 0;
+  } else if (nextMode == sliceModeAuto) {
+    // AUTO: detect transients with the current sensitivity. The count
+    // defaults to the previous count or 4.
+    uint8_t count = sampleDecodeSliceCount(sample->slice);
+    if (count == 0) count = 4;
+    settingsRunAutoDetect(sample, count);
+    // settingsRunAutoDetect already repainted; skip the shared repaint.
+    if (nextMode != sliceModeOff) sample->stretchMode = 0;
+    return 1;
+  } else {
+    // EQUAL: even division. The count defaults to the previous count or 4.
+    uint8_t count = sampleDecodeSliceCount(sample->slice);
+    if (count == 0) count = 4;
+    sampleSliceInitEven(sample, (SliceMode)nextMode, count);
+  }
+  // Stretch and Slice are mutually exclusive: enabling one disables the other.
+  if (nextMode != sliceModeOff) sample->stretchMode = 0;
+  settingsClampCurrentSlice(sample);
+  projectModified = 1;
+  settingsRepaintSlice(sample, 0);
+  return 1;
+}
+
+// Count box (col 1): EDIT+Left/Right steps the slice count by one
+// (clamped 1..64), EDIT+Up/Down cycles through the power-of-two counts
+// 2,4,8,16,32,64 with wrap-around. Every change recalculates the
+// division: EQUAL re-divides the Start/End window evenly, AUTO re-runs
+// detection with the new count (sensitivity derived from it). In LAZY the
+// cell is display-only (the cursor skips it); the handler stays inert in
+// LAZY and OFF as a fallback.
+static int settingsSliceCountEdit(InstrumentSample* sample, CellEditAction action) {
+  const SliceMode mode = sampleDecodeSliceMode(sample->slice);
+  if (mode == sliceModeOff || mode == sliceModeLazy) return 0;
+  if (action == CellEditAction::increase || action == CellEditAction::decrease ||
+      action == CellEditAction::increaseBig || action == CellEditAction::decreaseBig) {
+    const uint8_t count = sampleDecodeSliceCount(sample->slice);
+    static const uint8_t kSliceSteps[] = {2, 4, 8, 16, 32, 64};
+    int next = -1;
+    if (action == CellEditAction::increase) {
+      next = count < PROJECT_SAMPLE_MAX_SLICES ? count + 1 : PROJECT_SAMPLE_MAX_SLICES;
+    } else if (action == CellEditAction::decrease) {
+      next = count > 1 ? count - 1 : 1;
+    } else if (action == CellEditAction::increaseBig) {
+      // Cycle up through 2,4,8,16,32,64 with wrap-around; count 0/1
+      // enters at 2.
+      next = 2;
+      for (size_t i = 0; i < sizeof(kSliceSteps) / sizeof(kSliceSteps[0]); ++i) {
+        if ((int)kSliceSteps[i] > count) {
+          next = kSliceSteps[i];
+          break;
+        }
+      }
+    } else {
+      // Cycle down through 64,32,16,8,4,2 with wrap-around; count 0/1
+      // wraps to 64.
+      next = 64;
+      for (int i = (int)(sizeof(kSliceSteps) / sizeof(kSliceSteps[0])) - 1; i >= 0; --i) {
+        if ((int)kSliceSteps[i] < count) {
+          next = kSliceSteps[i];
+          break;
+        }
+      }
+    }
+    if (next == count) return 0;
+    if (mode == sliceModeAuto) {
+      settingsRunAutoDetect(sample, (uint8_t)next);
+    } else {
+      sampleSliceInitEven(sample, mode, (uint8_t)next);
+      settingsClampCurrentSlice(sample);
+      projectModified = 1;
+      settingsRepaintSlice(sample, 1);
+    }
+    return 1;
+  }
+  return 0;
+}
+
+// Slice browser box (col 2): EDIT+Left/Right navigates the current slice
+// by one, EDIT+Up/Down jumps by four (clamped, no wrap) - the row's
+// small-step/big-step convention. The view recenters on the browsed
+// slice's start when zoomed.
+static int settingsSliceBrowseEdit(InstrumentSample* sample, CellEditAction action) {
+  const SliceMode mode = sampleDecodeSliceMode(sample->slice);
+  const uint8_t count = sampleDecodeSliceCount(sample->slice);
+  if (mode == sliceModeOff) return 0;
+  if (action == CellEditAction::increase || action == CellEditAction::decrease ||
+      action == CellEditAction::increaseBig || action == CellEditAction::decreaseBig) {
+    if (count == 0) return 0;
+    const int up = action == CellEditAction::increase || action == CellEditAction::increaseBig;
+    const int step = action == CellEditAction::increaseBig || action == CellEditAction::decreaseBig ? 4 : 1;
+    int next = currentSlice + (up ? step : -step);
+    if (next < 0) next = 0;
+    if (next >= count) next = count - 1;
+    if (next == currentSlice) return 0;
+    currentSlice = next;
+    // Recenter the zoomed view on the new slice's start (the full view
+    // shows every marker anyway).
+    if (editorView.viewEnd - editorView.viewStart < sample->frameCount) {
+      const int32_t frame = sampleSliceStartFrame(sample, (uint8_t)currentSlice,
+                                                  sample->start, sample->end);
+      if (frame >= 0) zoomToMarker(sample, &editorView, (uint32_t)frame);
+    }
+    settingsRepaintSlice(sample, 2);
+    return 1;
+  }
+  return 0;
+}
+
+// Frame cell (col 2): EDIT+Left/Right nudges the current slice's start by
+// +-10 frames (zoomed fine steps of +-1 while EDIT is held); EDIT+Up/Down
+// moves by +-100.
+static int settingsSliceFrameEdit(InstrumentSample* sample, CellEditAction action) {
+  const SliceMode mode = sampleDecodeSliceMode(sample->slice);
+  if (mode == sliceModeOff) return 0;
+  if (action == CellEditAction::increase || action == CellEditAction::decrease ||
+      action == CellEditAction::increaseBig || action == CellEditAction::decreaseBig) {
+    const int fine = action == CellEditAction::increase || action == CellEditAction::decrease;
+    const int up = action == CellEditAction::increase || action == CellEditAction::increaseBig;
+    const int32_t delta = (up ? 1 : -1) * (fine ? 10 : 100);
+    const int32_t frame = sampleSliceNudge(sample, (uint8_t)currentSlice, delta);
+    if (frame < 0) return 0;
+    // Fine steps zoom onto the nudged marker so the waveform shows exactly
+    // what is being adjusted; coarse steps return to the full view (the
+    // zoom holds while EDIT stays down, like the Region/Select rows).
+    if (fine) {
+      editorView.anchor = kViewAnchorNone;
+      zoomToMarker(sample, &editorView, (uint32_t)frame);
+      zoomHoldActive = 1;
+    } else {
+      zoomOutFull(sample, &editorView);
+      zoomHoldActive = 0;
+    }
+    projectModified = 1;
+    settingsRepaintSlice(sample, 3);
+    return 1;
+  }
+  return 0;
+}
+
+// Dispatch for the four Slice row cells. EDIT+OPT (clear) deletes the
+// current slice from the Slice browser and Frame cells (the first slice
+// cannot be deleted - there is no previous slice to join into). EDIT
+// tap/double-tap on those cells previews the current slice (works in
+// every slice mode).
+static int settingsOnEditSlice(int col, CellEditAction action, InstrumentSample* sample) {
+  // Slice is inert while Stretch drives the duration.
+  if (sample->stretchMode != 0) return 0;
+  if (action == CellEditAction::clear && col >= 2) {
+    // EDIT+OPT deletes the current slice from the browser or Frame cell
+    return settingsSliceDeleteCurrent(sample);
+  }
+  if ((action == CellEditAction::tap || action == CellEditAction::doubleTap) && col >= 2) {
+    settingsSlicePreviewCurrent(sample);
+    settingsDrawField(2, 2, CellState::focus);
+    return 1;
+  }
+  if (col == 0) return settingsSliceModeEdit(sample, action);
+  if (col == 1) return settingsSliceCountEdit(sample, action);
+  if (col == 2) return settingsSliceBrowseEdit(sample, action);
+  return settingsSliceFrameEdit(sample, action);
 }
 
 static int settingsOnEdit(int col, int row, CellEditAction action) {
@@ -831,7 +1453,7 @@ static int settingsOnEdit(int col, int row, CellEditAction action) {
     }
     marker = col == 0 ? kViewAnchorStart : kViewAnchorEnd;
   } else if (row == 1) {
-    // Select row: processing-selection handles. Fine steps move fifteen
+    // Select row: processing-selection handles. Fine steps move twenty
     // frames and zoom onto the handle; coarse steps jump frameCount/64 (min 16)
     // and return to the full-sample view. Tap copies the matching Region
     // marker position; clear empties the whole selection. Start/End are
@@ -851,8 +1473,8 @@ static int settingsOnEdit(int col, int row, CellEditAction action) {
       editorSelection.end = 0;
       handled = 1;
     } else {
-      // Fine steps move fifteen frames; coarse steps jump frameCount/64 (min 16)
-      uint32_t step = 15;
+      // Fine steps move twenty frames; coarse steps jump frameCount/64 (min 16)
+      uint32_t step = 20;
       if (action == CellEditAction::increaseBig || action == CellEditAction::decreaseBig) {
         step = frameCount / 64;
         if (step < 16) step = 16;
@@ -889,19 +1511,7 @@ static int settingsOnEdit(int col, int row, CellEditAction action) {
     }
     return handled;
   } else if (row == 2) {
-    // Slice is inert while Stretch drives the duration.
-    if (sample->stretchMode != 0) return 0;
-    uint8_t index = (uint8_t)sliceToIndex(sample->slice);
-    handled = edit8noLast(action, &index, 1, 0, sliceCount - 1);
-    if (handled) {
-      sample->slice = sliceValues[index];
-      // Stretch and Slice are mutually exclusive: enabling one disables the other.
-      if (sample->slice) sample->stretchMode = 0;
-      projectModified = 1;
-      updateSamplePreview(sample, &editorView, &editorSelection);
-      drawSamplePreview();
-    }
-    return handled;
+    return settingsOnEditSlice(col, action, sample);
   }
   if (handled) {
     projectModified = 1;
@@ -924,11 +1534,15 @@ static int settingsOnEdit(int col, int row, CellEditAction action) {
   return handled;
 }
 
-// Slice is inert while Stretch drives the duration: skip it in navigation.
-// Save needs a file path, Save As needs sample data.
+// Slice is inert while Stretch drives the duration: skip all four of its
+// cells in navigation. In LAZY the Count box is display-only: touch taps
+// on it are rejected (keyboard navigation skips the cell before the
+// framework sees it). Save needs a file path, Save As needs sample data.
 static int settingsIsCellValid(int col, int row) {
   InstrumentSample* sample = currentSample();
   if (row == 2 && sample->stretchMode != 0) return 0;
+  if (row == 2 && col == 1 &&
+      sampleDecodeSliceMode(sample->slice) == sliceModeLazy) return 0;
   if (row == 5 && col == 0) {
     return fileAction == 0 ? sample->path[0] != 0 : (sample->data != NULL && sample->frameCount > 0);
   }
@@ -967,18 +1581,39 @@ static void setup(int input) {
   // with the default markers - so the process tools act on the region out
   // of the box. Both are session-only editor state, re-derived on every
   // entry; the undo slot is dropped too - undo never survives leaving the
-  // screen. The dirty flag is restored from pendingDirtyRestore when a
-  // dialog round trip re-enters.
+  // screen, and neither does the LAZY stash. The dirty flag is restored
+  // from pendingDirtyRestore when a dialog round trip re-enters.
   InstrumentSample* sample = currentSample();
   sampleOpFreeUndo(&editorUndo);
+  sliceStashInstrument = -1;
   zoomOutFull(sample, &editorView);
   editorSelection.start = sampleMarkerToStartFrame(sample->frameCount, sample->start);
   editorSelection.end = sampleMarkerToEndFrame(sample->frameCount, sample->end);
   editorSelection.active = 1;
   sampleEditorNormalizeState(sample, &editorSelection, &editorView);
   zoomHoldActive = 0;
+  // LAZY playback never survives leaving the screen (or a dialog round
+  // trip): the preview is stopped on the way out and the flag resets here.
+  if (sampleLazyPlaybackActive) {
+    chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
+    sampleLazyPlaybackActive = 0;
+  }
+  lazyEditArmed = 1;
+  slicePreviewActive = 0;
+  // Hint state never survives leaving the screen either.
+  hintCursorRow = -1;
+  hintCursorCol = -1;
+  hintOwnedText[0] = '\0';
   sampleDirtyToDisk = pendingDirtyRestore;
   pendingDirtyRestore = 0;
+  // Legacy AUTO sentinel with empty bounds (old project saved before
+  // bounds existed): populate them here on the UI thread, never on the
+  // audio thread (detection allocates). The sentinel count is the target.
+  if (sampleDecodeSliceMode(sample->slice) == sliceModeAuto &&
+      sample->sliceBounds[0] == 0 &&
+      !(sampleDecodeSliceCount(sample->slice) > 1 && sample->sliceBounds[1] != 0)) {
+    settingsRunAutoDetect(sample, sampleDecodeSliceCount(sample->slice));
+  }
 }
 
 static void fullRedraw(void) {
@@ -993,26 +1628,128 @@ static void fullRedraw(void) {
       !settingsIsCellValid(screenSampleSettingsData.cursorCol, 4)) {
     screenSampleSettingsData.cursorRow = 1;
   }
+  // Clamp the Slice row cursor into the 4 cells (older sessions may have
+  // parked it beyond).
+  if (screenSampleSettingsData.cursorRow == 2 &&
+      screenSampleSettingsData.cursorCol > 3) {
+    screenSampleSettingsData.cursorCol = 3;
+  }
+  // In LAZY the Count box is display-only: a session parked on it lands
+  // on the Slice browser instead.
+  if (screenSampleSettingsData.cursorRow == 2 &&
+      screenSampleSettingsData.cursorCol == 1 &&
+      sampleDecodeSliceMode(currentSample()->slice) == sliceModeLazy) {
+    screenSampleSettingsData.cursorCol = 2;
+  }
+  settingsClampCurrentSlice(currentSample());
   screenFullRedraw(&screenSampleSettingsData);
 }
 
 static void draw(void) {
+  InstrumentSample* sample = currentSample();
+  const int wasActive = sampleLazyPlaybackActive;
+  const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
+  SampleVoice* voice = chipnomadState->sampleVoices[*pSongTrack][0];
+  // Slice row combo hints: the bar is ours when it is empty or shows the
+  // hint we set; a foreign message (action feedback, error) pauses the
+  // hints until it expires.
+  const char* activeMessage = screenGetActiveMessage();
+  if (activeMessage[0] == '\0') {
+    settingsUpdateHint(screenSampleSettingsData.cursorRow,
+                       screenSampleSettingsData.cursorCol, 0);
+  } else if (strcmp(activeMessage, hintOwnedText) == 0) {
+    settingsUpdateHint(screenSampleSettingsData.cursorRow,
+                       screenSampleSettingsData.cursorCol, 1);
+  } else {
+    hintOwnedText[0] = '\0';
+  }
+  if (sampleLazyPlaybackActive) {
+    // The preview can end on its own (one-shot sample finished, or the
+    // track was stopped from elsewhere): drop the flag when the phrase row
+    // is gone or the voice went silent. The flag is only trusted after the
+    // playback has been OBSERVED active at least once - right after the
+    // PLAY press the audio thread has not processed the queued command yet,
+    // so the status still shows no phrase row and the voice is inactive.
+    // Clearing on that first frame killed the marker and disarmed the
+    // app-level key-up guard (which then stopped the preview on PLAY
+    // release - the "playback only while PLAY is held" bug).
+    if (lazyPlaybackSeenActive) {
+      if (playback->tracks[*pSongTrack].mode != PlaybackMode::phraseRow || !voice || !voice->active()) {
+        sampleLazyPlaybackActive = 0;
+      }
+    } else if (playback->tracks[*pSongTrack].mode == PlaybackMode::phraseRow &&
+               voice && voice->active()) {
+      lazyPlaybackSeenActive = 1;
+    }
+  } else {
+    lazyPlaybackSeenActive = 0;
+  }
+  if (sampleLazyPlaybackActive) {
+    // Cheap per-frame repaint: the waveform/slice bitmaps are cached, so
+    // only the marker column is drawn on top of the cached preview.
+    drawSamplePreview();
+    Bitmap* marker = ensurePreviewBitmap(&samplePlaybackMarkerBitmap);
+    if (marker) {
+      gfxBitmapClear(marker);
+      double pos = voice ? voice->playbackFrame() : -1.0;
+      if (pos < 0) pos = 0;
+      if (pos >= (double)sample->frameCount) pos = (double)sample->frameCount - 1;
+      const int x = frameToPixel((uint32_t)pos, &editorView, marker->widthPixels, 0);
+      if (x >= 0) {
+        for (int y = 0; y < marker->heightPixels; ++y) {
+          marker->data[y * marker->widthPixels + x] = 255;
+          if (x + 1 < marker->widthPixels) marker->data[y * marker->widthPixels + x + 1] = 255;
+        }
+        gfxSetFgColor(0x00FF00); // Green
+        gfxDrawBitmap(marker, 0, previewRow);
+      }
+    }
+  }
+  if (wasActive != sampleLazyPlaybackActive) {
+    // The Frame cell dims while the playback-drop is armed; repaint the
+    // Slice row so the dim appears/disappears (drawField only fires on
+    // edits and full redraws otherwise).
+    for (int col = 0; col < 4; ++col) {
+      const int focused = screenSampleSettingsData.cursorRow == 2 &&
+        screenSampleSettingsData.cursorCol == col;
+      settingsDrawField(col, 2, focused ? CellState::focus : CellState::normal);
+    }
+  }
 }
 
-static int inputScreenNavigation(int keys) {
-  if (keys == keyOpt || keys == (keyLeft | keyShift)) {
+static int inputScreenNavigation(int isKeyDown, int keys) {
+  // Leaving the screen stops the LAZY preview and clears the flag: the
+  // next screen's setup() never touches it, so without this the app-level
+  // auto-stop guard would stay armed forever (and the preview would keep
+  // sounding over the new screen). Key-down only: key-up events carry the
+  // still-held buttons, so releasing a direction while B is held must not
+  // fire the navigation.
+  if (isKeyDown && sampleLazyPlaybackActive &&
+      (keys == keyOpt || keys == (keyLeft | keyShift) || keys == (keyRight | keyShift) ||
+       keys == (keyDown | keyShift) || keys == (keyUp | keyShift))) {
+    chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
+    sampleLazyPlaybackActive = 0;
+  }
+  // Leaving the screen also stops a running A-tap slice preview.
+  if (isKeyDown && slicePreviewActive &&
+      (keys == keyOpt || keys == (keyLeft | keyShift) || keys == (keyRight | keyShift) ||
+       keys == (keyDown | keyShift) || keys == (keyUp | keyShift))) {
+    chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
+    slicePreviewActive = 0;
+  }
+  if (isKeyDown && (keys == keyOpt || keys == (keyLeft | keyShift))) {
     screenSetup(&screenInstrument, cInstrument);
     return 1;
   }
-  if (keys == (keyRight | keyShift)) {
+  if (isKeyDown && keys == (keyRight | keyShift)) {
     screenSetup(&screenTable, cInstrument);
     return 1;
   }
-  if (keys == (keyDown | keyShift)) {
+  if (isKeyDown && keys == (keyDown | keyShift)) {
     screenSetup(&screenInstrumentPool, cInstrument);
     return 1;
   }
-  if (keys == (keyUp | keyShift)) {
+  if (isKeyDown && keys == (keyUp | keyShift)) {
     screenSetup(&screenModulation, cInstrument);
     return 1;
   }
@@ -1034,7 +1771,92 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
       drawSamplePreview();
     }
   }
-  if (inputScreenNavigation(keys)) return 1;
+  // Re-arm the LAZY playback-drop on the EDIT release (see lazyEditArmed).
+  if (!isKeyDown && !(keys & keyEdit)) lazyEditArmed = 1;
+  // The A-tap slice preview ends with the key: app.cpp stops the phrase row
+  // on the keys==0 release (hold-preview semantics); the flag follows.
+  if (!isKeyDown && keys == 0) slicePreviewActive = 0;
+  if (inputScreenNavigation(isKeyDown, keys)) return 1;
+  // LAZY playback (Phase 3): tap PLAY toggles a full-sample playback that
+  // keeps running after the key is released, and while it runs every EDIT
+  // click drops a slice at the playback marker. SHIFT+PLAY is left alone:
+  // it falls through to the app-level handler and starts phrase playback
+  // like on every other screen. Both intercepts only apply when the sample
+  // is in LAZY mode; everything else falls through to the normal screen
+  // input.
+  InstrumentSample* sample = currentSample();
+  if (sampleDecodeSliceMode(sample->slice) == sliceModeLazy && sample->data && sample->frameCount > 0) {
+    if (keys == keyPlay && isKeyDown) {
+      if (sampleLazyPlaybackActive) {
+        // Second PLAY press stops the one-shot playback.
+        chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
+        sampleLazyPlaybackActive = 0;
+      } else if (!chipnomadGetPlaybackStatus(chipnomadState)->isPlaying) {
+        // One-shot full-sample playback at the sample's original pitch: a
+        // custom phrase row with fxSLP=0 forces loopMode 0 (one-shot) on
+        // the sample voice regardless of the sample's own loop setting, so
+        // the playback runs once from the start and stops by itself. The
+        // Full command sets the track's sliceBypass flag so the voice
+        // ignores slice mapping (LAZY slices map chromatically now) and
+        // the row's note pitch; the root note keeps the row valid on its
+        // own (the first sequencer note used to leak in here and stretch
+        // the preview to match it).
+        PhraseRow row;
+        memset(&row, 0, sizeof(row));
+        int rootNote = chipnomadState->project.pitchTable.octaveSize * 4;
+        if (rootNote >= chipnomadState->project.pitchTable.length) rootNote = 0;
+        row.note = (uint8_t)rootNote;
+        row.instrument = cInstrument;
+        row.volume = PHRASE_VOLUME_MAX;
+        row.fx[0][0] = fxSLP;
+        row.fx[0][1] = 0; // one-shot
+        row.fx[1][0] = EMPTY_VALUE_8;
+        row.fx[1][1] = EMPTY_VALUE_8;
+        row.fx[2][0] = EMPTY_VALUE_8;
+        row.fx[2][1] = EMPTY_VALUE_8;
+        chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
+        chipnomadQueuePlaybackStartPhraseRowFull(chipnomadState, *pSongTrack, &row);
+        sampleLazyPlaybackActive = 1;
+      }
+      // While the song is playing, PLAY falls through and stops it.
+      else return 0;
+      return 1;
+    }
+    if (sampleLazyPlaybackActive && isKeyDown && keys == keyEdit && lazyEditArmed &&
+        (tapCount == 1 || tapCount == 2)) {
+      settingsDropSliceAtPlayback(sample);
+      lazyEditArmed = 0;
+      return 1;
+    }
+  }
+  // LAZY: the Count box is display-only (hand-placed slices have no
+  // division to recalculate), so the cursor skips it: horizontal moves
+  // step over col 1 and a vertical entry from the Select row lands on
+  // the Slice browser. The intercept runs before the framework
+  // navigation - its dead-cell recovery moves up a row instead of aside -
+  // and repaints the affected cells itself (row/col headers are no-ops).
+  if (isKeyDown && sampleDecodeSliceMode(sample->slice) == sliceModeLazy) {
+    const int fromRow = screenSampleSettingsData.cursorRow;
+    const int fromCol = screenSampleSettingsData.cursorCol;
+    int toRow = fromRow;
+    int toCol = -1;
+    if (fromRow == 2 && fromCol == 0 && keys == keyRight) {
+      toCol = 2;
+    } else if (fromRow == 2 && fromCol == 2 && keys == keyLeft) {
+      toCol = 0;
+    } else if (fromRow == 1 && fromCol == 1 && keys == keyDown) {
+      toRow = 2;
+      toCol = 2;
+    }
+    if (toCol >= 0) {
+      screenSampleSettingsData.cursorRow = toRow;
+      screenSampleSettingsData.cursorCol = toCol;
+      settingsDrawField(fromCol, fromRow, CellState::normal);
+      settingsDrawField(toCol, toRow, CellState::focus);
+      settingsDrawCursor(toCol, toRow);
+      return 1;
+    }
+  }
   return screenInput(&screenSampleSettingsData, isKeyDown, keys, tapCount);
 }
 

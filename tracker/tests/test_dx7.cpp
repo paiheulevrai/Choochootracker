@@ -125,7 +125,7 @@ TEST_CASE("DX7 native files own full patch and wrapper without bank") {
   REQUIRE(instrumentSave(a.get(),"test_dx7.cni",7)==0);REQUIRE(instrumentLoad(b.get(),"test_dx7.cni",9)==0);CHECK(memcmp(&p,&b->instruments[9].chip.dx7,sizeof(p))==0);
   std::remove("test_dx7.cni");REQUIRE(projectSave(a.get(),"test_dx7.cct")==0);REQUIRE(projectLoad(b.get(),"test_dx7.cct")==0);CHECK(memcmp(&p,&b->instruments[7].chip.dx7,sizeof(p))==0);
   DX7Part x,y;x.init(48000);y.init(48000);x.voices[0].configure(&p,6423,1);y.voices[0].configure(&b->instruments[7].chip.dx7,6423,1);x.voices[0].noteOn();y.voices[0].noteOn();std::vector<float> v(4096),w(4096);x.render(v.data(),v.size());y.render(w.data(),w.size());CHECK(v==w);
-  CHECK(sizeof(InstrumentDX7)<=512); /* Six-operator live values; overall Instrument size stays unchanged. */CHECK(sizeof(Instrument)==696) /* upstream sample stretch/speed fields */;CHECK(int(InstrumentType::DX7)==24);
+  CHECK(sizeof(InstrumentDX7)<=512); /* Six-operator live values; overall Instrument size stays unchanged. */CHECK(sizeof(Instrument)==1208) /* merged: our InstrumentSample (autoSensitivity + 64 sliceBounds) grows the union; includes upstream sample stretch/speed fields */;CHECK(int(InstrumentType::DX7)==24);
   std::remove("test_dx7.cct");projectFree(a.get());projectFree(b.get());
 }
 TEST_CASE("DX7 audition owns its patch and never mutates project") {

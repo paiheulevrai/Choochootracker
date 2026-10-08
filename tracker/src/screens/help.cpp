@@ -6,6 +6,7 @@
 #include "corelib_gfx.h"
 #include "common.h"
 #include "misc.h"
+#include "synth/sample_voice.h"
 
 // Helper function to get modulation type name
 static const char* getModulationTypeName(ModulationType type) {
@@ -366,7 +367,25 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     case fxSCF: snprintf(buffer, bufferSize, "Sample cutoff %hhu", fx[1]); break;
     case fxSRS: snprintf(buffer, bufferSize, "Sample resonance %hhu", fx[1]); break;
     case fxSSP: snprintf(buffer, bufferSize, "Sample speed %hhu", fx[1]); break;
-    case fxSLP: snprintf(buffer, bufferSize, "Sample loop mode %hhu", fx[1]); break;
+    case fxSLP: {
+      static const char* playbackModes[] = {"forward", "reverse", "loop", "ping-pong"};
+      snprintf(buffer, bufferSize, "Sample playback: %s",
+        fx[1] <= 3 ? playbackModes[fx[1]] : "?");
+      break;
+    }
+    case fxSLI: {
+      const Instrument* instrument = instrumentIdx != EMPTY_VALUE_8 &&
+        instrumentIdx < PROJECT_MAX_INSTRUMENTS
+        ? &chipnomadState->project.instruments[instrumentIdx] : NULL;
+      if (instrument && instrument->type == InstrumentType::Sample) {
+        uint8_t count = sampleDecodeSliceCount(instrument->chip.sample.slice);
+        if (count) snprintf(buffer, bufferSize, "Play slice %hhu of %hhu", fx[1], count);
+        else snprintf(buffer, bufferSize, "Slicing disabled");
+      } else {
+        snprintf(buffer, bufferSize, "Slice %hhu (sample only)", fx[1]);
+      }
+      break;
+    }
     case fxSDT: snprintf(buffer, bufferSize, "2xSCWF detune %hhu", fx[1]); break;
     case fxSMX: snprintf(buffer, bufferSize, "2xSCWF oscillator mix %hhu", fx[1]); break;
     case fxSCF2: snprintf(buffer, bufferSize, "2xSCWF cutoff %hhu", fx[1]); break;
@@ -458,7 +477,7 @@ static void initFxHelpText() {
   fxHelpText[fxTXH] = "Aux Table Hop\nJumps to specific\naux table row";
   fxHelpText[fxGRV] = "Track Groove\nSets groove for this track only";
   fxHelpText[fxGGR] = "Global Groove\nSets groove for all tracks";
-  fxHelpText[fxSCL] = "Scale / Root\nSCL XY: X is scale\nY is root C through B";
+  fxHelpText[fxSCL] = "Scale / Root\nSCL XY: X is scale\nY is root C through B\nQuantizer mode only";
   fxHelpText[fxCRD] = "Chord\nCRD XY: X is inversion\nY selects a fixed chord";
   fxHelpText[fxHOP] = "Hop\nHops to phrase/table row X times";
   fxHelpText[fxSNG] = "Song Hop\nHops in song by N rows";
@@ -529,7 +548,8 @@ static void initFxHelpText() {
   fxHelpText[fxSCF] = "Sample Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
   fxHelpText[fxSRS] = "Sample Resonance FX\nOverrides resonance until\nthe next note trigger";
   fxHelpText[fxSSP] = "Sample Speed FX\n00-FF maps to 0-500 percent\nuntil the next note trigger";
-  fxHelpText[fxSLP] = "Sample Loop FX\n00 off, 01 loop, 02 ping-pong\nuntil the next note trigger";
+  fxHelpText[fxSLP] = "Sample Playback FX\n00 forward, 01 reverse\n02 loop, 03 ping-pong\nuntil the next note trigger";
+  fxHelpText[fxSLI] = "Sample Slice FX\nPlays the numbered slice\nregardless of the note;\n01 = first slice. Needs\nslice mode enabled";
   fxHelpText[fxSDT] = "Stereo Osc Detune FX\nSets detune between oscillators\nuntil the next note trigger";
   fxHelpText[fxSMX] = "Stereo Osc Mix FX\nSets oscillator A/B mix\nuntil the next note trigger";
   fxHelpText[fxSCF2] = "Stereo Osc Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";

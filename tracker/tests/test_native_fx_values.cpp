@@ -137,7 +137,8 @@ TEST_CASE("Native songs use the same direct volume scale as upstream format 6") 
   getInstrumentFunctions(InstrumentType::AY1).init(&p->instruments[0]);
   REQUIRE(projectSave(p.get(),path.string().c_str())==0);
   REQUIRE(projectLoad(q.get(),path.string().c_str())==0);
-  CHECK(projectFileVersion==6);CHECK(q->phrases[0].rows[0].volume==15);
+  CHECK(projectFileVersion==7); /* merged: this fork writes plain projects as 7.0 (SLP redefinition + 6-field Scale) */
+  CHECK(q->phrases[0].rows[0].volume==15);
   CHECK(q->phrases[0].rows[3].volume==75);CHECK(q->phrases[0].rows[4].volume==EMPTY_VALUE_16);
   projectFree(p.get());projectFree(q.get());std::filesystem::remove(path);
 }

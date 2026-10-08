@@ -55,8 +55,231 @@ void SampleVoice::init(float outputSampleRate) {
 }
 
 uint8_t sampleNormalizeSlice(uint8_t slice) {
-  if (slice == 2 || slice == 4 || slice == 8 || slice == 16 || slice == 32) return slice;
+  // Accept any count 1..64: EQUAL/AUTO use power-of-2 counts, but LAZY
+  // slices are hand-placed and may use any count.
+  if (slice >= 1 && slice <= 64) return slice;
   return 0;
+}
+
+uint8_t sampleEncodeSlice(SliceMode mode, uint8_t count) {
+  if (mode == sliceModeOff) return 0;
+  if (count < 1) count = 1;
+  if (count > 64) count = 64;
+  switch (mode) {
+    case sliceModeEqual: return (uint8_t)(0 + count);
+    case sliceModeAuto: return (uint8_t)(64 + count);
+    case sliceModeLazy: return (uint8_t)(128 + count);
+    default: return 0;
+  }
+}
+
+SliceMode sampleDecodeSliceMode(uint8_t slice) {
+  if (slice == 0) return sliceModeOff;
+  if (slice <= 64) return sliceModeEqual;
+  if (slice <= 128) return sliceModeAuto;
+  if (slice <= 192) return sliceModeLazy;
+  return sliceModeOff; // 193..255 reserved
+}
+
+uint8_t sampleDecodeSliceCount(uint8_t slice) {
+  switch (sampleDecodeSliceMode(slice)) {
+    case sliceModeEqual: return slice;
+    case sliceModeAuto: return (uint8_t)(slice - 64);
+    case sliceModeLazy: return (uint8_t)(slice - 128);
+    default: return 0;
+  }
+}
+
+uint8_t sampleNormalizeSliceEx(uint8_t slice) {
+  if (slice <= 192) return slice;
+  return 0;
+}
+
+int sampleActsAsSliced(const InstrumentSample* sample) {
+  if (!sample) return 0;
+  const SliceMode mode = sampleDecodeSliceMode(sample->slice);
+  return mode != sliceModeOff;
+}
+
+// --- Slice bounds editing (Phase 1, universal editing model) -------------
+
+uint8_t sampleSliceBoundCount(const InstrumentSample* sample) {
+  if (!sample) return 0;
+  if (sampleDecodeSliceMode(sample->slice) == sliceModeOff) return 0;
+  return sampleDecodeSliceCount(sample->slice);
+}
+
+// Loop region in frames shared by the bounds helpers: swaps inverted
+// markers and falls back to the whole sample for an empty region (same
+// rules as SampleVoice::configure).
+static void sampleSliceLoopRegion(const InstrumentSample* sample, uint8_t start, uint8_t end,
+                                  uint32_t* loopStart, uint32_t* loopEnd) {
+  uint32_t s = sampleMarkerToStartFrame(sample->frameCount, start);
+  uint32_t e = sampleMarkerToEndFrame(sample->frameCount, end);
+  if (s > e) {
+    uint32_t swap = s;
+    s = e;
+    e = swap + 1;
+  }
+  if (e <= s) e = sample->frameCount;
+  *loopStart = s;
+  *loopEnd = e;
+}
+
+uint8_t sampleSliceInitEven(InstrumentSample* sample, SliceMode mode, uint8_t count) {
+  if (!sample) return 0;
+  if (count < 1) count = 1;
+  if (count > PROJECT_SAMPLE_MAX_SLICES) count = PROJECT_SAMPLE_MAX_SLICES;
+  uint32_t loopStart = 0;
+  uint32_t loopEnd = sample->frameCount;
+  if (sample->frameCount > 0) {
+    sampleSliceLoopRegion(sample, sample->start, sample->end, &loopStart, &loopEnd);
+  }
+  const uint32_t loopLength = loopEnd > loopStart ? loopEnd - loopStart : 0;
+  memset(sample->sliceBounds, 0, sizeof(sample->sliceBounds));
+  for (uint8_t i = 0; i < count; ++i) {
+    sample->sliceBounds[i] = loopStart + (uint32_t)((uint64_t)loopLength * i / count);
+  }
+  sample->slice = sampleEncodeSlice(mode, count);
+  return count;
+}
+
+uint8_t sampleSliceInitLazy(InstrumentSample* sample) {
+  if (!sample) return 0;
+  memset(sample->sliceBounds, 0, sizeof(sample->sliceBounds));
+  sample->slice = sampleEncodeSlice(sliceModeLazy, 1);
+  return 1;
+}
+
+int sampleSliceSplit(InstrumentSample* sample, uint8_t index) {
+  if (!sample) return -1;
+  const uint8_t count = sampleSliceBoundCount(sample);
+  if (count == 0 || index >= count) return -1;
+  if (count >= PROJECT_SAMPLE_MAX_SLICES) return -1;
+  // The last slice ends at the loop end marker; use it as the right edge
+  // when splitting the final slice.
+  uint32_t loopEnd = sample->frameCount;
+  if (sample->frameCount > 0) {
+    uint32_t loopStart = 0;
+    sampleSliceLoopRegion(sample, sample->start, sample->end, &loopStart, &loopEnd);
+  }
+  const uint32_t left = sample->sliceBounds[index];
+  const uint32_t right = index + 1 < count ? sample->sliceBounds[index + 1] : loopEnd;
+  if (right <= left + 1) return -1; // nothing to split
+  const uint32_t mid = left + (right - left) / 2;
+  for (int i = count; i > (int)index + 1; --i) {
+    sample->sliceBounds[i] = sample->sliceBounds[i - 1];
+  }
+  sample->sliceBounds[index + 1] = mid;
+  sample->slice = sampleEncodeSlice(sampleDecodeSliceMode(sample->slice), (uint8_t)(count + 1));
+  return index + 1;
+}
+
+int sampleSliceDelete(InstrumentSample* sample, uint8_t index) {
+  if (!sample) return -1;
+  const uint8_t count = sampleSliceBoundCount(sample);
+  if (count == 0 || index >= count) return -1;
+  if (count == 1) {
+    // Deleting the last slice turns slicing off; keep the bounds in memory
+    // so toggling back to a mode can restore them (plan §4.2 task 2).
+    sample->slice = 0;
+    return -1;
+  }
+  for (uint8_t i = index; i < count - 1; ++i) {
+    sample->sliceBounds[i] = sample->sliceBounds[i + 1];
+  }
+  sample->sliceBounds[count - 1] = 0;
+  sample->slice = sampleEncodeSlice(sampleDecodeSliceMode(sample->slice), (uint8_t)(count - 1));
+  return index > 0 ? index - 1 : 0;
+}
+
+int sampleSliceInsertAtFrame(InstrumentSample* sample, uint32_t frame) {
+  if (!sample) return -1;
+  const uint8_t count = sampleSliceBoundCount(sample);
+  if (count == 0 || count >= PROJECT_SAMPLE_MAX_SLICES) return -1;
+  uint32_t loopStart = 0;
+  uint32_t loopEnd = sample->frameCount;
+  if (sample->frameCount > 0) {
+    sampleSliceLoopRegion(sample, sample->start, sample->end, &loopStart, &loopEnd);
+  }
+  if (frame < loopStart || frame >= loopEnd) return -1;
+  // Find the insertion point (bounds are kept sorted ascending) and reject
+  // frames that duplicate an existing bound.
+  uint8_t insertAt = count;
+  for (uint8_t i = 0; i < count; ++i) {
+    if (sample->sliceBounds[i] == frame) return -1;
+    if (sample->sliceBounds[i] > frame) {
+      insertAt = i;
+      break;
+    }
+  }
+  for (int i = count; i > (int)insertAt; --i) {
+    sample->sliceBounds[i] = sample->sliceBounds[i - 1];
+  }
+  sample->sliceBounds[insertAt] = frame;
+  sample->slice = sampleEncodeSlice(sampleDecodeSliceMode(sample->slice), (uint8_t)(count + 1));
+  return insertAt;
+}
+
+int sampleSliceInsertAtFrameGapped(InstrumentSample* sample, uint32_t frame,
+                                   uint32_t minGapFrames) {
+  if (!sample) return -1;
+  const uint8_t count = sampleSliceBoundCount(sample);
+  if (count == 0 || count >= PROJECT_SAMPLE_MAX_SLICES) return -1;
+  uint32_t loopStart = 0;
+  uint32_t loopEnd = sample->frameCount;
+  if (sample->frameCount > 0) {
+    sampleSliceLoopRegion(sample, sample->start, sample->end, &loopStart, &loopEnd);
+  }
+  if (frame < loopStart || frame >= loopEnd) return -1;
+  // Reject frames too close to an existing bound (or to the loop start, so
+  // the first slice never collapses to nothing).
+  if (frame - loopStart < minGapFrames) return -1;
+  for (uint8_t i = 0; i < count; ++i) {
+    const uint32_t bound = sample->sliceBounds[i];
+    if (frame > bound ? frame - bound < minGapFrames : bound - frame < minGapFrames) {
+      return -1;
+    }
+  }
+  return sampleSliceInsertAtFrame(sample, frame);
+}
+
+int32_t sampleSliceNudge(InstrumentSample* sample, uint8_t index, int32_t delta) {
+  if (!sample) return -1;
+  const uint8_t count = sampleSliceBoundCount(sample);
+  if (count == 0 || index >= count) return -1;
+  uint32_t loopEnd = sample->frameCount;
+  if (sample->frameCount > 0) {
+    uint32_t loopStart = 0;
+    sampleSliceLoopRegion(sample, sample->start, sample->end, &loopStart, &loopEnd);
+  }
+  const uint32_t left = index > 0 ? sample->sliceBounds[index - 1] : 0;
+  const uint32_t right = index + 1 < count ? sample->sliceBounds[index + 1] : loopEnd;
+  int64_t next = (int64_t)sample->sliceBounds[index] + delta;
+  if (next < (int64_t)left) next = left;
+  if (next > (int64_t)right) next = right;
+  if (next == (int64_t)sample->sliceBounds[index]) return -1;
+  sample->sliceBounds[index] = (uint32_t)next;
+  return (int32_t)next;
+}
+
+int32_t sampleSliceStartFrame(const InstrumentSample* sample, uint8_t index,
+                              uint8_t start, uint8_t end) {
+  if (!sample) return -1;
+  const uint8_t count = sampleSliceBoundCount(sample);
+  if (count == 0 || index >= count) return -1;
+  // Populated bounds win; legacy samples (all bounds zero) fall back to the
+  // even division of the loop region.
+  if (sample->sliceBounds[0] != 0 || (count > 1 && sample->sliceBounds[1] != 0)) {
+    return (int32_t)sample->sliceBounds[index];
+  }
+  uint32_t loopStart = 0;
+  uint32_t loopEnd = sample->frameCount;
+  if (sample->frameCount > 0) {
+    sampleSliceLoopRegion(sample, start, end, &loopStart, &loopEnd);
+  }
+  const uint32_t loopLength = loopEnd > loopStart ? loopEnd - loopStart : 0;
+  return (int32_t)(loopStart + (uint32_t)((uint64_t)loopLength * index / count));
 }
 
 void sampleSliceFrames(uint32_t frameCount, uint8_t sliceCount, uint8_t sliceIndex,
@@ -79,7 +302,7 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
                             uint16_t cutoffHz, uint8_t resonance, int attack, int decay,
                             int sustain, int release, int envelopeShape, uint8_t sliceCount,
                             uint8_t sliceIndex, uint8_t stretchMode, float tickRateHz,
-                            uint8_t speedAlgorithm) {
+                            uint8_t speedAlgorithm, uint8_t forceReverse) {
   sample_ = sample;
   post_.setGain(gain);
   if (!sample_ || !sample_->data || sample_->frameCount == 0) return;
@@ -89,11 +312,23 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
   useStretch_ = sliceCount == 0 &&
     (stretchMode != 0 || (speedAlgorithm == 1 && speedPercent != 0));
   if (useStretch_) {
-    stretch_.configure(sample, stretchMode, speedPercent, tickRateHz, pitchCents / 100.0f, start, end);
+    // The stretcher derives reverse playback from the marker order; swap
+    // the markers when SPL 01 forces reverse on an ascending window.
+    uint8_t stretchStart = start;
+    uint8_t stretchEnd = end;
+    if (forceReverse && start <= end) {
+      stretchStart = end;
+      stretchEnd = start;
+    }
+    stretch_.configure(sample, stretchMode, speedPercent, tickRateHz, pitchCents / 100.0f, stretchStart, stretchEnd);
   }
 
   uint32_t startFrame;
   uint32_t endFrame;
+  // Phase 1: sliceCount arrives already decoded from the sentinel by the
+  // caller. Samples with populated sliceBounds play their stored boundaries
+  // (manual edits, AUTO detection); legacy samples with empty bounds keep
+  // the even-division fallback.
   sliceCount = sampleNormalizeSlice(sliceCount);
   if (sliceCount) {
     // When slicing is enabled, divide the LOOP REGION (start to end) into slices
@@ -107,19 +342,39 @@ void SampleVoice::configure(const InstrumentSample* sample, float pitchCents,
     }
     uint32_t loopLength = loopEndFrame > loopStartFrame ? loopEndFrame - loopStartFrame : sample_->frameCount;
 
-    uint32_t sliceStart, sliceEnd;
-    sampleSliceFrames(loopLength, sliceCount, sliceIndex, &sliceStart, &sliceEnd);
+    const int boundsPopulated = sample_->sliceBounds[0] != 0 ||
+      (sliceCount > 1 && sample_->sliceBounds[1] != 0);
+    if (boundsPopulated && sliceIndex < sliceCount) {
+      // Stored boundaries: this slice starts at its bound and ends at the
+      // next bound (the loop end for the last slice).
+      startFrame_ = sample_->sliceBounds[sliceIndex];
+      endFrame_ = sliceIndex + 1 < sliceCount ? sample_->sliceBounds[sliceIndex + 1]
+                                              : loopEndFrame;
+      reverse_ = forceReverse != 0;
+    } else {
+      uint32_t sliceStart, sliceEnd;
+      sampleSliceFrames(loopLength, sliceCount, sliceIndex, &sliceStart, &sliceEnd);
 
-    // Map slice to absolute frame positions within the loop region
-    startFrame_ = loopStartFrame + sliceStart;
-    endFrame_ = loopStartFrame + sliceEnd;
-    reverse_ = false;
+      // Map slice to absolute frame positions within the loop region
+      startFrame_ = loopStartFrame + sliceStart;
+      endFrame_ = loopStartFrame + sliceEnd;
+      reverse_ = forceReverse != 0;
+    }
   } else {
     startFrame = sampleMarkerToStartFrame(sample_->frameCount, start);
     endFrame = sampleMarkerToEndFrame(sample_->frameCount, end);
-    reverse_ = start > end;
-    startFrame_ = reverse_ ? endFrame - 1 : startFrame;
-    endFrame_ = reverse_ ? startFrame + 1 : endFrame;
+    // SPL 01 forces reverse regardless of the marker order; the legacy
+    // Start > End marker convention still applies when not forced. The
+    // window is stored ascending either way - reverse playback walks it
+    // from the high end down (see noteOn).
+    reverse_ = forceReverse != 0 || start > end;
+    if (startFrame > endFrame) {
+      uint32_t swap = startFrame;
+      startFrame = endFrame;
+      endFrame = swap;
+    }
+    startFrame_ = startFrame;
+    endFrame_ = endFrame;
   }
   if (endFrame_ <= startFrame_) endFrame_ = startFrame_ + 1;
   if (endFrame_ > sample_->frameCount) endFrame_ = sample_->frameCount;
@@ -150,7 +405,7 @@ void SampleVoice::noteOn() {
     post_.noteOn(true);
     return;
   }
-  position_ = startFrame_;
+  position_ = reverse_ ? (double)endFrame_ - 1.0 : startFrame_;
   direction_ = reverse_ ? -1 : 1;
   grainExhausted_ = false;
   grainPosition_[0] = reverse_ ? endFrame_ - 1 : startFrame_;
@@ -190,7 +445,9 @@ float SampleVoice::grainSampleAt(double position, int channel) const {
     return 0.0f;
   }
   uint32_t frame = (uint32_t)position;
-  uint32_t next = frame + 1 < endFrame_ ? frame + 1 : frame;
+  uint32_t next = direction_ > 0
+    ? (frame + 1 < endFrame_ ? frame + 1 : frame)
+    : (frame > startFrame_ ? frame - 1 : frame);
   int sourceChannel = sample_->channels == 1 ? 0 : channel;
   float a = sample_->data[frame * sample_->channels + sourceChannel] / 32768.0f;
   float b = sample_->data[next * sample_->channels + sourceChannel] / 32768.0f;
@@ -256,7 +513,9 @@ void SampleVoice::render(float* output, size_t frames) {
           grainPosition_[grain] = nextGrainPosition_;
           nextGrainPosition_ += direction_ * step_ * grainHop_ * timeStretch_;
           grainAge_[grain] = 0;
-          if (loopMode_ == 0 && nextGrainPosition_ >= endFrame_) grainExhausted_ = true;
+          if (loopMode_ == 0 && (reverse_
+            ? nextGrainPosition_ <= startFrame_
+            : nextGrainPosition_ >= endFrame_)) grainExhausted_ = true;
         }
       }
       for (int channel = 0; channel < 2; ++channel) {
@@ -270,9 +529,11 @@ void SampleVoice::render(float* output, size_t frames) {
       }
       grainAge_[0]++;
       grainAge_[1]++;
+      double head0 = grainPosition_[0] + direction_ * step_ * grainAge_[0];
+      double head1 = grainPosition_[1] + direction_ * step_ * grainAge_[1];
       if (grainExhausted_ && loopMode_ == 0 &&
-          grainPosition_[0] + step_ * grainAge_[0] >= endFrame_ &&
-          grainPosition_[1] + step_ * grainAge_[1] >= endFrame_) { kill(); break; }
+          (reverse_ ? head0 <= startFrame_ && head1 <= startFrame_
+                    : head0 >= endFrame_ && head1 >= endFrame_)) { kill(); break; }
     } else {
       for (int channel = 0; channel < 2; channel++) {
         output[i * 2 + channel] = post_.process(sampleAt(position_, channel), channel);
@@ -296,8 +557,10 @@ static uint32_t readU32(FILE* file, bool* ok) {
     ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
 }
 
-int sampleLoadWav16File(FILE* file, const char* path, InstrumentSample* sample,
-                        char* error, size_t errorSize) {
+int sampleLoadWav16FileCues(FILE* file, const char* path, InstrumentSample* sample,
+                            uint32_t* outCueFrames, uint8_t* outCueCount,
+                            char* error, size_t errorSize) {
+  if (outCueCount) *outCueCount = 0;
   if (!file) { snprintf(error, errorSize, "Cannot open WAV"); return 1; }
   char id[4];
   bool ok = fread(id, 1, 4, file) == 4 && !memcmp(id, "RIFF", 4);
@@ -306,6 +569,11 @@ int sampleLoadWav16File(FILE* file, const char* path, InstrumentSample* sample,
   uint16_t format = 0, channels = 0, bits = 0;
   uint32_t sampleRate = 0, dataSize = 0;
   long dataOffset = 0;
+  // Cue points from the `cue ` chunk (Phase 4): sample offsets of the slice
+  // starts written by sampleSaveWav16WithCues. Only the first 64 are kept
+  // (the slice cap); the rest are skipped.
+  uint32_t cueFrames[PROJECT_SAMPLE_MAX_SLICES];
+  uint8_t cueCount = 0;
 
   while (ok && fread(id, 1, 4, file) == 4) {
     uint32_t size = readU32(file, &ok);
@@ -321,6 +589,22 @@ int sampleLoadWav16File(FILE* file, const char* path, InstrumentSample* sample,
     } else if (!memcmp(id, "data", 4)) {
       dataOffset = ftell(file);
       dataSize = size;
+    } else if (!memcmp(id, "cue ", 4) && size >= 4) {
+      const uint32_t numCues = readU32(file, &ok);
+      // Each cue point record is 24 bytes: dwIdentifier, dwPosition,
+      // fccChunk (4 bytes), dwChunkStart, dwBlockStart, dwSampleOffset.
+      // Only dwSampleOffset (the last field) matters here.
+      for (uint32_t i = 0; ok && i < numCues && i < 1024; ++i) {
+        (void)readU32(file, &ok);  // cue id
+        (void)readU32(file, &ok);  // position
+        if (fread(id, 1, 4, file) != 4) ok = false;
+        (void)readU32(file, &ok);  // chunk start
+        (void)readU32(file, &ok);  // block start
+        const uint32_t offset = readU32(file, &ok);
+        if (ok && cueCount < PROJECT_SAMPLE_MAX_SLICES) {
+          cueFrames[cueCount++] = offset;
+        }
+      }
     }
     if (fseek(file, nextChunk, SEEK_SET) != 0) ok = false;
   }
@@ -374,17 +658,33 @@ int sampleLoadWav16File(FILE* file, const char* path, InstrumentSample* sample,
   sample->sampleRate = sampleRate;
   sample->channels = (uint8_t)channels;
   sampleStorePath(path, sample);
+  if (outCueFrames && outCueCount) {
+    memcpy(outCueFrames, cueFrames, cueCount * sizeof(uint32_t));
+    *outCueCount = cueCount;
+  }
   error[0] = 0;
   return 0;
 }
 
-int sampleLoadWav16(const char* path, InstrumentSample* sample,
-                    char* error, size_t errorSize) {
+int sampleLoadWav16File(FILE* file, const char* path, InstrumentSample* sample,
+                        char* error, size_t errorSize) {
+  return sampleLoadWav16FileCues(file, path, sample, NULL, NULL, error, errorSize);
+}
+
+int sampleLoadWav16Cues(const char* path, InstrumentSample* sample,
+                        uint32_t* outCueFrames, uint8_t* outCueCount,
+                        char* error, size_t errorSize) {
   FILE* file = fopen(path, "rb");
   if (!file) { snprintf(error, errorSize, "Cannot open WAV"); return 1; }
-  int result = sampleLoadWav16File(file, path, sample, error, errorSize);
+  int result = sampleLoadWav16FileCues(file, path, sample, outCueFrames, outCueCount,
+                                       error, errorSize);
   fclose(file);
   return result;
+}
+
+int sampleLoadWav16(const char* path, InstrumentSample* sample,
+                    char* error, size_t errorSize) {
+  return sampleLoadWav16Cues(path, sample, NULL, NULL, error, errorSize);
 }
 
 static void writeU16(FILE* file, uint16_t value, bool* ok) {
@@ -398,8 +698,9 @@ static void writeU32(FILE* file, uint32_t value, bool* ok) {
   if (fwrite(bytes, 1, 4, file) != 4) *ok = false;
 }
 
-int sampleSaveWav16(const InstrumentSample* sample, const char* path,
-                    char* error, size_t errorSize) {
+int sampleSaveWav16WithCues(const InstrumentSample* sample, const char* path,
+                            const uint32_t* cueFrames, uint8_t cueCount,
+                            char* error, size_t errorSize) {
   if (!sample->data || sample->frameCount == 0) {
     snprintf(error, errorSize, "No sample to save");
     return 1;
@@ -417,9 +718,14 @@ int sampleSaveWav16(const InstrumentSample* sample, const char* path,
   const uint16_t channels = sample->channels >= 2 ? 2 : 1;
   const uint16_t bits = 16;
   const uint32_t dataBytes = (uint32_t)sample->frameCount * channels * 2;
+  // `cue ` chunk: 4-byte count + 24 bytes per cue point (standard cue
+  // record: id, position, "data" chunk id, chunk start, block start,
+  // sample offset). Written between fmt and data.
+  const uint8_t cues = cueFrames && cueCount ? cueCount : 0;
+  const uint32_t cueChunkSize = cues ? 4 + 24u * cues : 0;
   bool ok = true;
   fwrite("RIFF", 1, 4, file);
-  writeU32(file, 36 + dataBytes, &ok);
+  writeU32(file, 36 + dataBytes + cueChunkSize, &ok);
   fwrite("WAVE", 1, 4, file);
   fwrite("fmt ", 1, 4, file);
   writeU32(file, 16, &ok);            // fmt chunk size
@@ -429,6 +735,19 @@ int sampleSaveWav16(const InstrumentSample* sample, const char* path,
   writeU32(file, sample->sampleRate * channels * 2, &ok); // byte rate
   writeU16(file, channels * 2, &ok);  // block align
   writeU16(file, bits, &ok);
+  if (cues) {
+    fwrite("cue ", 1, 4, file);
+    writeU32(file, cueChunkSize, &ok);
+    writeU32(file, cues, &ok);
+    for (uint8_t i = 0; ok && i < cues; ++i) {
+      writeU32(file, i, &ok);         // dwIdentifier (cue id)
+      writeU32(file, 0, &ok);         // dwPosition
+      fwrite("data", 1, 4, file);     // fccChunk: cue points into the data chunk
+      writeU32(file, 0, &ok);         // dwChunkStart
+      writeU32(file, 0, &ok);         // dwBlockStart
+      writeU32(file, cueFrames[i], &ok);  // dwSampleOffset
+    }
+  }
   fwrite("data", 1, 4, file);
   writeU32(file, dataBytes, &ok);
   if (ok && fwrite(sample->data, sizeof(int16_t), (size_t)sample->frameCount * channels, file) !=
@@ -444,4 +763,9 @@ int sampleSaveWav16(const InstrumentSample* sample, const char* path,
   }
   error[0] = 0;
   return 0;
+}
+
+int sampleSaveWav16(const InstrumentSample* sample, const char* path,
+                    char* error, size_t errorSize) {
+  return sampleSaveWav16WithCues(sample, path, NULL, 0, error, errorSize);
 }

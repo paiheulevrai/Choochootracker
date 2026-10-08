@@ -43,6 +43,8 @@ class StretchProcessor {
   // voice lazy-prime when Stretch is enabled mid-note without retriggering
   // after a one-shot drain has finished.
   bool primed() const { return primed_; }
+  // Current read position in source sample frames (for the playback marker).
+  double sourcePosition() const { return sourcePosition_; }
 
  private:
   static constexpr size_t kMaxBlockFrames = 8192;

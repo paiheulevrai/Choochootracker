@@ -126,6 +126,14 @@ struct PlaybackTrackState {
   // engine, which is the only layer that knows about real MIDI I/O.
   uint8_t midiCCPending[4];
   uint8_t midiCCValue[4];
+
+  // One-shot full-sample preview of a LAZY sample (kStartPhraseRowFull):
+  // forces sliceCount 0 in updateSampleVoices so the voice plays the whole
+  // region instead of mapping the row's note to a slice, and skips the
+  // note transposition so the sample plays at its original pitch and
+  // speed. Cleared by resetTrack so every stop path restores normal slice
+  // mapping.
+  uint8_t sliceBypass;
 };
 
 struct MidiCCRuntime {

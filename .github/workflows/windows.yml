@@ -36,10 +36,11 @@ jobs:
           export PATH=/ucrt64/bin:/usr/bin:$PATH
           make -C tracker -j4 windows
           mkdir -p releases
-          archive_ref=${GITHUB_REF_NAME:-manual}
-          archive_ref=${archive_ref//\//-}
           cd tracker/build/windows
-          zip -qr "../../../releases/ChooChooTracker-${archive_ref}-Windows.zip" .
+          # GITHUB_REF_NAME contains a slash on pull_request events ("NN/merge"),
+          # which breaks the zip output path. Sanitize it to a flat name.
+          ZIP_REF=$(echo "${GITHUB_REF_NAME:-manual}" | tr '/' '-')
+          zip -qr ../../../releases/ChooChooTracker-${ZIP_REF}-Windows.zip .
       - uses: actions/upload-artifact@v4
         with:
           name: choochootracker-windows
