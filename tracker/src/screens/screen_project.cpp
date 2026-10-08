@@ -60,7 +60,7 @@ int projectLoadFromPath(const char* path) {
       loadResult = projectLoadMidi(&replacement, path);
     } else if (strcasecmp(ext, ".m8s") == 0) {
       // Import a Dirtywave M8 song (structure and notes only)
-      loadResult = projectLoadM8S(&replacement, path);
+      loadResult = projectLoadM8SWithSamples(&replacement, path, appSettings.samplePath);
     } else if (strcasecmp(ext, ".cct") == 0) {
       // Load ChooChooTracker native format
       loadResult = projectLoad(&replacement, path);

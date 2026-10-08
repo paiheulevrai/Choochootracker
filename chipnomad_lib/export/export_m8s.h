@@ -13,8 +13,11 @@
 //
 // Limitations (v1):
 // - Per-row FX are not exported; phrase FX columns are left empty.
-// - Instruments are not converted: phrase rows keep their instrument
-//   numbers and use whatever the template defines in those slots.
+// - Instruments are not converted, except Braids (to MacroSynth) and Sample
+//   (to Sampler, path /Samples/<file name>, the WAV must be copied to the
+//   M8 by hand). Their records are taken from a template instrument of the
+//   same type; without one the slot is left as it is. All other instruments
+//   keep whatever the template defines in their slots.
 // - The tempo is derived from the tick rate assuming the default 6-tick
 //   groove; per-track grooves and tempo effects are ignored.
 // - The M8 has 255 phrases: a chain referencing a phrase numbered 255 or
