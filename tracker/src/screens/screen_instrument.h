@@ -41,6 +41,7 @@ extern ScreenData screenInstrumentSintered;
 extern ScreenData screenInstrumentMidi;
 extern ScreenData screenInstrumentOPLL;
 extern ScreenData screenInstrumentOPL;
+bool fmEditSupported(InstrumentType type);
 extern ScreenData screenInstrumentSimpleChip;
 
 #endif

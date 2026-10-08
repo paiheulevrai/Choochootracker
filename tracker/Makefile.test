@@ -66,7 +66,7 @@ CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/external/msfa/*.cc) ../chipn
                         $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/speech/*.cc)
 
 TRACKER_SRC_SOURCES = src/screens/user_preset_browser.cpp src/user_presets.cpp src/fm_catalog.cpp src/app.cpp src/support_report.cpp src/version.cpp \
-                      src/screens/instrument_fm_controls.cpp src/screens/instrument_opl.cpp src/screens/instrument_simple_chip.cpp \
+                      src/screens/instrument_fm_controls.cpp src/screens/instrument_opl.cpp src/screens/screen_fm_edit.cpp src/screens/instrument_simple_chip.cpp \
                       src/screens/screen_insert_fx.cpp \
                       src/screens/edit_fx.cpp src/screens/help.cpp src/misc.cpp \
                       src/screens/selection_popup.cpp \

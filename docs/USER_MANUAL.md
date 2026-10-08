@@ -1360,6 +1360,25 @@ platform so the same song has the same bounded note allocation. It does not
 change other instruments' polyphony. Preset audition is disabled during playback.
 The limit was selected from R36H measurements and validated in mixed playback.
 
+#### FM operator editor
+
+Genesis FM, Arcade FM, OPL2, OPL3, OPLL and VRC7 instruments have an **EDIT**
+button to the right of Fine ct. It opens a table of the patch parameters:
+
+- Genesis FM / Arcade FM: algorithm, feedback, pan, AMS, PMS, operator mask and
+  LFO settings, then MUL, DT, TL, KS, AR, D1R, D2R, RR and D1L for the four
+  operators, plus SSG (Genesis) or DT2 and AM (Arcade).
+- OPL2 / OPL3: feedback, connection and pan per voice, deep vibrato and tremolo,
+  then MUL, TL, AR, DR, SL, RR, waveform, KSL, VIB, TRM, SUS and KSR per
+  operator. On OPL3 the mode (2op, 4op, dual) can be changed here.
+- OPLL / VRC7: the custom tone registers (feedback, MUL, TL, KSL, AR, DR, SL,
+  RR, waveforms, AM, VIB, EG, KSR). Editing a ROM preset turns it into
+  "Custom".
+
+Left/Right and the usual edit keys change values; the instrument keeps playing
+as usual so you can hear changes. OPT or Left+Shift returns to the instrument
+screen. DX7 and SID have no operator editor.
+
 Genesis FM (YM2612) and Arcade FM (YM2151) now use the same FM Bank/Preset
 browser, EDIT+PLAY audition, confirm/cancel and fine-tune controls. Genesis now
 has **73 presets**: the original 24 and 49 supported melodic programs from

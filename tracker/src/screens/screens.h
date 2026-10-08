@@ -100,6 +100,7 @@ extern const AppScreen screenPhrase;
 extern const AppScreen screenGroove;
 extern const AppScreen screenInstrument;
 extern const AppScreen screenSampleSettings;
+extern const AppScreen screenFMEdit;
 extern const AppScreen screenInstrumentPool;
 extern const AppScreen screenModulation;
 extern const AppScreen screenInsertFX;

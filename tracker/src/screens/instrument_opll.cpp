@@ -26,7 +26,7 @@ static void openPresets() {
     programs, 15, current()->chip.opll.program, selectPreset, cancelPreset, true, previewPreset);
   screenSetup(&screenSelectionPopup, 0);
 }
-static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) : row == 5 ? 2 : row == 7 ? 5 : 1; }
+static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) : row == 4 || row == 5 ? 2 : row == 7 ? 5 : 1; }
 static void drawStatic() {
   instrumentCommonDrawStatic();
   instrumentFMAmpDrawStatic();
@@ -36,6 +36,7 @@ static void drawStatic() {
 }
 static void drawCursor(int col, int row) {
   if (row == 5) { instrumentFMToneDrawCursor(col); return; }
+  if (row == 4 && col == 1) { gfxCursor(16, 9, 4); return; }
   if (row >= 6) { instrumentFMAmpDrawCursor(col, row - 6); return; }
   if (row < 3) instrumentCommonDrawCursor(col, row);
   else gfxCursor(9, row == 3 ? 7 : 9, row == 3 ? 27 : 4);
@@ -44,9 +45,13 @@ static void drawField(int col, int row, CellState state) {
   if (row == 5) { instrumentFMToneDrawField(col, state); return; }
   if (row >= 6) { instrumentFMAmpDrawField(col, row - 6, state); return; }
   if (row < 3) { instrumentCommonDrawField(col, row, state); return; }
+  if (row == 4 && col == 1) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textInfo);
+    gfxClearRect(16, 9, 4, 1); gfxPrint(16, 9, "EDIT"); return;
+  }
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  gfxClearRect(9, row == 3 ? 7 : 9, 30, 1);
-  if (row == 3) gfxPrintf(9, 7, "%02d %.27s", current()->chip.opll.program, opllPresetName(current()->type, current()->chip.opll.program));
+  gfxClearRect(9, row == 3 ? 7 : 9, row == 3 ? 30 : 6, 1);
+  if (row == 3) gfxPrintf(9, 7, "%02d %.27s", current()->chip.opll.program, current()->chip.opll.program ? opllPresetName(current()->type, current()->chip.opll.program) : "Custom");
   else gfxPrintf(9, 9, "%+04d", current()->chip.opll.fineTune);
   instrumentFMRefreshStaticWaveform();
 }
@@ -59,6 +64,7 @@ static int onEdit(int col, int row, CellEditAction action) {
     if (!edit8noLast(action, &program, 1, 1, 15)) return 0;
     selectPreset(program); return 1;
   }
+  if (row == 4 && col == 1) { screenSetup(&screenFMEdit, cInstrument); return 1; }
   int value = current()->chip.opll.fineTune;
   action = convertMultiAction(action);
   if (action == CellEditAction::clear) value = 0;
