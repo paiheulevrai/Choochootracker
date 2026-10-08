@@ -105,7 +105,8 @@ class RenderWorkerPool {
     workReady_.notify_all();
     execute(jobs, count, frames); // The audio callback is also a renderer.
     std::unique_lock<std::mutex> lock(mutex_);
-    done_.wait(lock, [this, count] { return completed_.load(std::memory_order_acquire) == count; });
+    // Also wait for workers to leave execute(): a late one must not touch the next batch.
+    done_.wait(lock, [this, count] { return completed_.load(std::memory_order_acquire) == count && active_ == 0; });
   }
  private:
   void execute(RenderJob* jobs, int count, int frames) {
@@ -114,7 +115,12 @@ class RenderWorkerPool {
       if (index >= count) break;
       RenderJob& job = jobs[index];
       job.render(job.voice, scratch(job.scratchIndex), frames);
-      if (completed_.fetch_add(1, std::memory_order_release) + 1 == count) done_.notify_one();
+      if (completed_.fetch_add(1, std::memory_order_release) + 1 == count) {
+        // Taking the mutex first stops the notification from landing between the
+        // waiter's predicate check and its sleep, which would hang the audio callback.
+        { std::lock_guard<std::mutex> lock(mutex_); }
+        done_.notify_one();
+      }
     }
   }
   void worker() {
@@ -126,7 +132,10 @@ class RenderWorkerPool {
       seen = generation_;
       RenderJob* jobs = jobs_;
       int count = count_, frames = frames_;
+      ++active_;
       lock.unlock(); execute(jobs, count, frames); lock.lock();
+      --active_;
+      done_.notify_one();
     }
   }
   void stop() {
@@ -136,7 +145,7 @@ class RenderWorkerPool {
     workers_.clear();
   }
   float* scratch_ = NULL;
-  int samples_ = 0, count_ = 0, frames_ = 0;
+  int samples_ = 0, count_ = 0, frames_ = 0, active_ = 0;
   RenderJob* jobs_ = NULL;
   std::vector<std::thread> workers_;
   std::mutex mutex_;
