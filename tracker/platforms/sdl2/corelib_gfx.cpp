@@ -1124,6 +1124,15 @@ int gfxGetTouchGridPosition(int physicalX, int physicalY, int* col, int* row) {
       physicalX >= viewport.x + viewport.w || physicalY >= viewport.y + viewport.h) return 0;
   logicalX = (physicalX - viewport.x) * logicalW / viewport.w;
   logicalY = (physicalY - viewport.y) * logicalH / viewport.h;
+#elif defined(WEB_BUILD)
+  // SDL can report browser pointer positions in HiDPI backing-store pixels.
+  // Convert back into the fixed tracker logical coordinate system before hit testing.
+  int outputW = 0, outputH = 0;
+  if (renderer) SDL_GetRendererOutputSize(renderer, &outputW, &outputH);
+  if (outputW > 0 && outputH > 0) {
+    logicalX = physicalX * logicalW / outputW;
+    logicalY = physicalY * logicalH / outputH;
+  }
 #endif
   if (!charW || !charH || logicalX < offsetX || logicalY < offsetY) return 0;
   int gridX = (logicalX - offsetX) / charW;
