@@ -1,0 +1,64 @@
+<section class="basics" id="cloning" aria-labelledby="cloning-title">
+ <div class="section-label"><span>ARRANGE</span><a href="#contents">CONTENTS ↑</a></div>
+ <h2 id="cloning-title">Cloning.</h2>
+ <p class="clone-intro">Make a new version of the part you want to change. Select it, clone it, then edit the new copy. Choo Choo gives the copy a new number.</p>
+ <p class="clone-key">A <strong>chain</strong> arranges phrases. A <strong>phrase</strong> holds notes. An <strong>instrument</strong> makes the sound.</p>
+ <h3 class="clone-question" id="clone-question">What do you want to change?</h3>
+ <div class="clone-tabs" role="tablist" aria-labelledby="clone-question">
+  <button type="button" role="tab" id="clone-tab-order" aria-controls="clone-order" aria-selected="false" tabindex="-1">The order<span>Clone a chain</span></button>
+  <button type="button" role="tab" id="clone-tab-notes" aria-controls="clone-notes" aria-selected="true" tabindex="0">The notes<span>Clone a phrase</span></button>
+  <button type="button" role="tab" id="clone-tab-sound" aria-controls="clone-sound" aria-selected="false" tabindex="-1">The sound<span>Clone an instrument</span></button>
+ </div>
+ <div class="clone-panel" id="clone-order" role="tabpanel" aria-labelledby="clone-tab-order" tabindex="0" hidden>
+  <div class="clone-panel-heading"><p class="clone-location">IN SONG</p><h3>Same phrases. A different sequence.</h3></div>
+  <div class="clone-columns">
+   <div><ol class="clone-steps">
+    <li>Select the chain cell you want to vary: hold <strong>SELECT</strong>, press <strong>OPT</strong>, then release both.</li>
+    <li>Hold <strong>SELECT</strong> and press <strong>EDIT</strong> once. Release both. The cell now has a new chain number.</li>
+    <li>Open that chain with <strong>SELECT + RIGHT</strong>. Change its phrase order or transpositions.</li>
+   </ol><a class="clone-example-link" href="#song">See the Song controls and examples →</a></div>
+   <div class="clone-result"><h4>What you get</h4><p>A new chain that still uses the same phrases.</p>
+    <div class="clone-numbers" aria-label="Example: original chain 00 and new chain 04 both use phrases 00 and 01">
+     <div><span class="clone-row-label">Original</span><span>Chain 00</span><span aria-hidden="true">→</span><span>Phrases 00, 01</span></div>
+     <div><span class="clone-row-label">New copy</span><strong>Chain 04</strong><span aria-hidden="true">→</span><span>Phrases 00, 01</span></div>
+    </div><p class="clone-shared">Changing the notes inside those phrases still changes every use of them. Choose <strong>The notes</strong> to make the notes independent too.</p>
+   </div>
+  </div>
+  <details class="clone-more"><summary>What does “shallow clone” mean?</summary><p>This is a shallow clone: the chain is new, but the phrases it points to are shared. A deep clone also creates new phrases. Find that option under <strong>The notes</strong>.</p></details>
+ </div>
+ <div class="clone-panel" id="clone-notes" role="tabpanel" aria-labelledby="clone-tab-notes" tabindex="0">
+  <div class="clone-panel-heading"><p class="clone-location">IN CHAIN</p><h3>A new melody or rhythm.</h3></div>
+  <div class="clone-columns">
+   <div><ol class="clone-steps">
+    <li>Select the phrase cell you want to vary: hold <strong>SELECT</strong>, press <strong>OPT</strong>, then release both.</li>
+    <li>Hold <strong>SELECT</strong> and press <strong>EDIT</strong> once. Release both. The cell now has a new phrase number.</li>
+    <li>Open that phrase with <strong>SELECT + RIGHT</strong>. Edit its notes and FX.</li>
+   </ol><a class="clone-example-link" href="#chain">See the Chain controls and examples →</a></div>
+   <div class="clone-result"><h4>What you get</h4><p>Independent notes and FX, using the same sounds.</p>
+    <div class="clone-numbers" aria-label="Example: original phrase 00 and new phrase 04 both use instrument 00">
+     <div><span class="clone-row-label">Original</span><span>Phrase 00</span><span aria-hidden="true">→</span><span>Instrument 00</span></div>
+     <div><span class="clone-row-label">New copy</span><strong>Phrase 04</strong><span aria-hidden="true">→</span><span>Instrument 00</span></div>
+    </div><p class="clone-shared">Instrument settings are still shared. If the chain itself is reused elsewhere, clone the chain in Song first.</p>
+   </div>
+  </div>
+  <details class="clone-more"><summary>Want different notes across a whole chain? Use a deep clone.</summary><p>Start in <strong>Song</strong> and select the chain cell. Then:</p><ol><li>Hold <strong>SELECT</strong> and press <strong>EDIT</strong> once to clone the chain.</li><li>Release <strong>EDIT</strong> only. Keep <strong>SELECT</strong> held.</li><li>Press <strong>EDIT</strong> again to clone the phrases inside the new chain. Release both.</li></ol><p>You now have a new chain and new phrases. The instruments are still shared.</p><a href="#song">See the deep-clone example in Song →</a></details>
+ </div>
+ <div class="clone-panel" id="clone-sound" role="tabpanel" aria-labelledby="clone-tab-sound" tabindex="0" hidden>
+  <div class="clone-panel-heading"><p class="clone-location">IN PHRASE</p><h3>The same notes with a different sound.</h3></div>
+  <div class="clone-columns">
+   <div><ol class="clone-steps">
+    <li>Move to the <strong>I</strong> column. Hold <strong>SELECT</strong>, press <strong>OPT</strong>, then release both. Use UP / DOWN to select only the instrument cells you want to change.</li>
+    <li>Hold <strong>SELECT</strong> and press <strong>EDIT</strong> once. Release both. The selected instrument numbers change to new slots.</li>
+    <li>Open a new instrument with <strong>SELECT + RIGHT</strong>. Change its sound settings.</li>
+   </ol><a class="clone-example-link" href="#phrase">See the Phrase controls and examples →</a></div>
+   <div class="clone-result"><h4>What you get</h4><p>A new instrument and a copy of its default table.</p>
+    <div class="clone-numbers" aria-label="Example: original instrument 00 uses table 00; new instrument 05 uses a new table 05">
+     <div><span class="clone-row-label">Original</span><span>Instrument 00</span><span aria-hidden="true">→</span><span>Table 00</span></div>
+     <div><span class="clone-row-label">New copy</span><strong>Instrument 05</strong><span aria-hidden="true">→</span><strong>Table 05</strong></div>
+    </div><p class="clone-shared">Each distinct instrument in the selection is cloned once. If the phrase is reused elsewhere, clone the phrase in Chain first.</p>
+   </div>
+  </div>
+  <details class="clone-more"><summary>Want to choose the destination instrument slot yourself?</summary><p>In <strong>Instrument</strong> or <strong>Instrument Pool</strong>, use <strong>SELECT + OPT</strong> to copy the sound. Move to an empty slot and use <strong>SELECT + EDIT</strong> to paste it.</p><p>This also copies the default table. Set the new instrument number in Phrase yourself; this method does not update the notes’ instrument references.</p><a href="#instrument-pool">See the Instrument Pool examples →</a></details>
+ </div>
+ <details class="clone-more clone-common"><summary>Why not just copy and paste?</summary><p>Copying a Song or Chain cell repeats its existing number. Both places still use the same chain or phrase. Cloning gives you a new number and a separate copy at the level you chose.</p><p>To keep both versions in the arrangement, copy/paste the original cells first, then clone the cells for your variation.</p><p>Cloning needs free slots. Referenced sample files and other external resources are not duplicated. The numbers above are examples; Choo Choo chooses available slots.</p></details>
+</section>

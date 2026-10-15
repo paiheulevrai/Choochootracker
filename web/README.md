@@ -9,6 +9,11 @@ Use the [central build instructions](../tracker/README.md#web--vercel) to
 generate `web/dist`. The checked-in Emscripten SDK lives in `.tmp/emsdk`; use
 MSYS2 Bash rather than native Windows `make`.
 
+The visual guide is maintained in `docs/user-guide/`. The `web-deploy` target
+and Vercel build copy its HTML and assets to `web/dist/user-guide/`; run
+`sh docs/user-guide/publish.sh` from the repository root to refresh only the
+guide without rebuilding WebAssembly.
+
 To preview the generated bundle:
 
 ```bash

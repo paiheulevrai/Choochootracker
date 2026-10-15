@@ -75,12 +75,18 @@ TEST_CASE_FIXTURE(ProjectFixture, "projectInit defaults to Clouds with usable Be
 TEST_CASE("Beads reverb settings survive save and load") {
   Project saved, loaded;
   projectInit(&saved); projectInit(&loaded);
+  // Match the valid project setup used by the other save/load fixtures.
+  saved.chipsCount = 1;
+  saved.tracksCount = 1;
+  saved.chipType = ChipType::AY;
+  std::strcpy(saved.pitchTable.name, "Beads test");
   saved.reverbAlgorithm = 1;
   saved.beadsReverbTime = 77;
   saved.beadsReverbTone = 201;
   saved.beadsReverbHighpassCutoffHz = 900;
   const char* path = "build/tests/beads_reverb_io.cct";
   REQUIRE(projectSave(&saved, path) == 0);
+  INFO(projectFileError);
   REQUIRE(projectLoad(&loaded, path) == 0);
   CHECK(loaded.reverbAlgorithm == 1);
   CHECK(loaded.beadsReverbTime == 77);

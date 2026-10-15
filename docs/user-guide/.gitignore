@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.validation/
+.venv/
+node_modules/
+Choo-Choo-User-Guide.html
+pages.json
+*.zip
