@@ -27,6 +27,8 @@
 .oO[ AY / BRAIDS / PLAITS / SAMPLES / SYNTHS / DRUMSYNTHS / 303 ]Oo.
 ````
 
+**[Open the visual user guide](https://choochootracker.vercel.app/user-guide/)** — screen-by-screen help, screenshots and looping control examples.
+
 ## Screenshots
 
 <p align="center">
@@ -126,6 +128,8 @@ This is an early build. Save often and don't get too attached to your projects.
 Find bugs or anything? Come discuss on Discord: https://discord.gg/Ut9vM6zgKU
 
 ## Documentation
+
+- [Visual user guide](https://choochootracker.vercel.app/user-guide/) · [Source and offline use](docs/user-guide/README.md)
 
 - [User manual](docs/USER_MANUAL.md)
 - [User manual PDF](docs/ChooChooTracker-User-Manual.pdf)

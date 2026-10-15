@@ -1,0 +1,146 @@
+[
+  {
+    "page": "phrase",
+    "control": "OPT + LEFT, with notes selected",
+    "description": "The selected note cells receive successive fixed rhythm patterns.",
+    "id": "phrase-ref-01"
+  },
+  {
+    "page": "phrase",
+    "control": "OPT + RIGHT, with notes selected",
+    "description": "Each press replaces the selected notes with another random rhythm.",
+    "id": "phrase-ref-02"
+  },
+  {
+    "page": "phrase",
+    "control": "OPT + UP, with notes selected",
+    "description": "Existing note pitches change; the pattern keeps its occupied steps.",
+    "id": "phrase-ref-03"
+  },
+  {
+    "page": "phrase",
+    "control": "OPT + DOWN, with notes selected",
+    "description": "The existing notes are redistributed as a chord pattern.",
+    "id": "phrase-ref-04"
+  },
+  {
+    "page": "phrase",
+    "control": "OPT + UP, with only volumes selected",
+    "description": "Only the selected volume column changes.",
+    "id": "phrase-ref-05"
+  },
+  {
+    "page": "phrase",
+    "control": "EDIT + UP / DOWN, with full-width selection",
+    "description": "The full-width selected rows rotate within the selected span.",
+    "id": "phrase-ref-06"
+  },
+  {
+    "page": "table",
+    "control": "EDIT + direction on Retrig",
+    "description": "Retrig cycles through Phrase, Chain and Free.",
+    "id": "table-ref-01"
+  },
+  {
+    "page": "table",
+    "control": "Paste FX copied from Phrase",
+    "description": "The copied ARP command and value appear in Table FX1.",
+    "id": "table-ref-02"
+  },
+  {
+    "page": "instrument-pool",
+    "control": "EDIT + UP / DOWN",
+    "description": "The selected instrument moves down in the pool.",
+    "id": "instrument-pool-ref-01"
+  },
+  {
+    "page": "ay-wavetable",
+    "control": "Double-tap OPT",
+    "description": "The same wave is drawn as linear modulation steps around the centre line.",
+    "id": "ay-wavetable-ref-01"
+  },
+  {
+    "page": "ay-wavetable",
+    "control": "SELECT + OPT / SELECT + EDIT",
+    "description": "The new wavetable slot contains the copied shape.",
+    "id": "ay-wavetable-ref-02"
+  },
+  {
+    "page": "sample-editor",
+    "control": "EDIT on Slice Mode",
+    "description": "Equal slice boundaries appear on the waveform.",
+    "id": "sample-editor-ref-01"
+  },
+  {
+    "page": "sample-editor",
+    "control": "EDIT + direction on Slice Count",
+    "description": "The sample is divided again using the selected count.",
+    "id": "sample-editor-ref-02"
+  },
+  {
+    "page": "sample-editor",
+    "control": "EDIT + direction on Slice",
+    "description": "The highlighted slice region follows the slice browser.",
+    "id": "sample-editor-ref-03"
+  },
+  {
+    "page": "reverb",
+    "control": "EDIT + direction on Algorithm",
+    "description": "The algorithm changes and the page shows its corresponding controls.",
+    "id": "reverb-ref-01"
+  },
+  {
+    "page": "instrument",
+    "control": "EDIT + direction on Bogie Model",
+    "description": "Bogie changes model and exposes its active drum macros.",
+    "id": "instrument-ref-01"
+  },
+  {
+    "page": "instrument",
+    "control": "EDIT + direction on MME Model",
+    "description": "MME changes the interaction between its two oscillators.",
+    "id": "instrument-ref-02"
+  },
+  {
+    "page": "instrument",
+    "control": "EDIT + direction on Sintered Model",
+    "description": "The digital drum model changes with its model-specific controls.",
+    "id": "instrument-ref-03"
+  },
+  {
+    "page": "instrument",
+    "control": "EDIT + direction in FM editor",
+    "description": "The native FM algorithm changes in the operator editor.",
+    "id": "instrument-ref-04"
+  },
+  {
+    "page": "instrument",
+    "control": "Direction in SID editor",
+    "description": "The cursor moves through the native SID voice settings.",
+    "id": "instrument-ref-05"
+  },
+  {
+    "page": "instrument",
+    "control": "EDIT + direction in SoundFont Edit",
+    "description": "An explicit tuning override replaces the Bank value.",
+    "id": "instrument-ref-06"
+  },
+  {
+    "page": "settings",
+    "control": "EDIT + direction on Song waveform",
+    "description": "The display preference changes; capture defaults remain waveform-off.",
+    "id": "settings-ref-01"
+  },
+  {
+    "page": "midi",
+    "control": "EDIT + direction in Channel mapping",
+    "description": "The channel mapping changes from Off to an instrument slot.",
+    "id": "midi-ref-01"
+  },
+  {
+    "page": "insert-fx",
+    "control": "EDIT + direction on Beads Pitch",
+    "description": "Pitch moves above its neutral value of 80; the hint shows the transposition.",
+    "id": "insert-fx-ref-01"
+  }
+]

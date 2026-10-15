@@ -26,3 +26,6 @@ rg_log.txt
 chipnomad_log.txt
 
 .vercel
+
+# Copied from docs/user-guide for static deployment.
+/web/dist/user-guide/

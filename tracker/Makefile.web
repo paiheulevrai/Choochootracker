@@ -42,3 +42,4 @@ web-deploy: web
 	@cp $(WEB_BUILD)/choochootracker.* ../web/dist/
 	@cp $(WEB_BUILD)/index.html ../web/dist/
 	@cp $(WEB_BUILD)/privacy.html ../web/dist/
+	@sh ../docs/user-guide/publish.sh
