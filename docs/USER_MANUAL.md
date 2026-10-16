@@ -1328,8 +1328,9 @@ the current screen.
 | Saturation | Drive, Tone, Level, Mix |
 | Bitcrusher | Bit depth, Rate reduction, Tone, Mix |
 | Destruction | Mode, Amount, Tone, Mix |
+| FORMANT | Mode, Vowel, First formant, Second formant, Resonance, Mix |
 
-Continuous controls use 00–FF, including valid zero and maximum FF. Bipolar
+Continuous controls use 00–FF, except FORMANT VOW (00–7F). Bipolar
 controls have an exact neutral at 80. Distortion modes are 00 Density, 01 Drive,
 02 Spiral, 03 Mojo, 04 Dyno. Compressor ratios 00–07 are 1.5, 2, 3, 4, 6, 8, 16,
 20:1; detector sources 00–02 are stereo input, left, right. Detector filter 80 is
@@ -1405,6 +1406,29 @@ unused slots; the sixteen available positions are not a guaranteed CPU budget.
 The Insert page keeps the selected field's tip visible after button release;
 temporary notices can still take its place. The module chooser shows each
 module's effect type and source project alongside its name.
+
+### FORMANT
+
+Select **FORMANT** in TF1 or TF2 for a stereo vowel effect inspired by JM Vowel
+Filter. Parameter 1 is **MODE**: `00` VOW, `01` CUSTOM. In VOW mode, parameter 2
+sweeps continuously through A `00`, E `20`, I `40`, O `60`, U `7F`. The label
+shows neighboring vowels; the hint shows progress between them. Frequencies
+interpolate logarithmically. A sustained sawtooth or aChChid sound is a useful
+starting signal.
+
+CUSTOM exposes independent **F1** (parameter 3, 200–1200 Hz) and **F2** (parameter
+4, 500–2800 Hz), both logarithmic `00`–`FF`. **RES** (parameter 5) spans Q 2–16;
+`55` is Q 4. **MIX** (parameter 6) runs from dry `00` to wet `FF` in either mode.
+VOW hides F1/F2; CUSTOM hides VOW. Switching modes keeps all values and MOD
+assignments. Inactive destinations have no audible effect and resume when
+reactivated. VOW, F1, F2, RES and MIX are available under MOD → INSERT FX; MODE
+can be edited or automated through phrase FX but is not a MOD destination.
+TF1 uses F11–F16; TF2 uses F21–F26. Locks on inactive controls are retained.
+
+The effect uses two +18 dB peaking EQ stages, -18 dB wet compensation and a soft overload
+limit. It colors the source rather than synthesizing speech. Mode/frequency/Q
+changes and MIX are smoothed; very fast movement is intentionally softened.
+The five vowel calibrations and output level remain subject to listening tests.
 
 ### Native OPLL and VRC7 instruments (development)
 

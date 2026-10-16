@@ -481,11 +481,11 @@ static int motionDestinationFX(ChipNomadState* state, int trackIdx, const Instru
   if (insert >= 0 && insert < 16) {
     int slot = insert / 8, p = insert % 8;
     const auto& c = state->audioProject.trackInserts[trackIdx][slot];
-    const auto& d = insertDescriptor(c.module);
-    if (p >= d.count) return 0;
+    int mode = track->inserts.valid[slot] & 1 ? track->inserts.values[slot][0] : c.values[0];
+    if (!insertParameterModulatable(c.module, p, mode)) return 0;
     *fx = (FX)(fxF11 + insert);
     *base = track->inserts.valid[slot] & (1 << p) ? track->inserts.values[slot][p] : c.values[p];
-    *range = d.parameters[p].mapping == InsertMapping::discrete ? (int)d.parameters[p].maximum : 255;
+    *range = insertParameterMaximum(c.module, p);
     *value = InstrumentMotionValue::raw;
     return 1;
   }
@@ -1349,9 +1349,10 @@ static void updateInsertValues(ChipNomadState* state) {
       const auto& d = insertDescriptor(c.module);
       for (int p = 0; p < d.count; ++p) {
         int value = track.inserts.valid[slot] & (1 << p) ? track.inserts.values[slot][p] : c.values[p];
-        int range = d.parameters[p].mapping == InsertMapping::discrete ? (int)d.parameters[p].maximum : 255;
+        int range = insertParameterMaximum(c.module, p);
         if (d.parameters[p].mapping != InsertMapping::discrete) value = slewEngineFX(&track, (FX)(fxF11 + slot * 8 + p), value);
-        if (track.note.instrument != EMPTY_VALUE_8) {
+        int mode = track.inserts.valid[slot] & 1 ? track.inserts.values[slot][0] : c.values[0];
+        if (insertParameterModulatable(c.module, p, mode) && track.note.instrument != EMPTY_VALUE_8) {
           auto type = state->audioProject.instruments[track.note.instrument].type;
           for (auto& mod : track.note.modulation) {
             if (!mod.modulation || instrumentGenericModDestination(type, mod.modulation->destination) != genericModFirstInsert + slot * 8 + p) continue;

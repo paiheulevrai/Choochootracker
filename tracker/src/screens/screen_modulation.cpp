@@ -159,14 +159,16 @@ static void openDestinationPopup(int modIndex) {
     if (functions.supportsTrigger)
       destinationCategories[categoryCount++] = {"TRIGGER", -1, triggerDestinations, 2};
   }
+  int insertCount = 0;
   for (int i = 0; i < 16; ++i) {
     const auto& c = chipnomadState->project.trackInserts[*pSongTrack][i/8];
     const auto& d = insertDescriptor(c.module);
+    if (c.module == insertFormant && (i%8 == 0 || i%8 >= d.count)) continue;
     snprintf(insertHelpers[i],sizeof(insertHelpers[i]),"F%d%d TF%d %s: %s",i/8+1,i%8+1,i/8+1,d.name,i%8<d.count?d.parameters[i%8].name:"Inactive");
     int destination=firstGeneric+genericModFirstInsert+i;
-    insertDestinations[i]={instrumentModDestinationName(instrument->type,destination),destination,NULL,0,insertHelpers[i]};
+    insertDestinations[insertCount++]={instrumentModDestinationName(instrument->type,destination),destination,NULL,0,insertHelpers[i]};
   }
-  destinationCategories[categoryCount++]={"INSERT FX",-1,insertDestinations,16};
+  destinationCategories[categoryCount++]={"INSERT FX",-1,insertDestinations,insertCount};
   selectionPopupSetup("DESTINATION", destinationCategories, categoryCount,
     instrument->modulation[modIndex].destination, destinationSelected,
     destinationCancelled);

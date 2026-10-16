@@ -39,4 +39,14 @@ Adapter controls depth/time/upward/downward/input/output; native band thresholds
 gains and crossover defaults retained. Rui-727 implementation; not official
 Xfer or Ableton code. Upstream standalone tests run against the copied core.
 
+JM Vowel Filter: https://github.com/jozmac/reapack-jm
+Inspected tree 4f507485554c90dcb6a3670058a8f4812c851518
+Effects/JM_fx_Filter_Vowel.jsfx: MIT, copyright 2023 Józef Maćkowiak.
+Native FORMANT follows its two cascaded stereo peaking EQs and logarithmic
+frequency mapping. Standard RBJ equations are implemented independently;
+REAPER GUI/runtime and Tale source are not copied. Tale/rbj_filter.jsfx-inc
+was audited: copyright 2012–2021 Theo Niessink, WTFPL v2, not reused.
+R1 adds calibrated vowel interpolation, mode-aware MOD, control-rate smoothing,
+fixed +18 dB peaks, wet compensation, dry/wet mixing and overload protection.
+
 All imported DSP uses MIT terms. Full copyright and license notices follow.

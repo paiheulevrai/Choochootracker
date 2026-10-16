@@ -1,3 +1,4 @@
+#include "formant_filter.h"
 #include "insert_fx.h"
 #include "beads_insert.h"
 #include <algorithm>
@@ -123,24 +124,41 @@ static const InsertDescriptor descriptors[] = {
       {"Scatter", "Grain scatter", "%", 0, 1, 0, M::linear},
       {"Feedback", "Feedback", "%", 0, 1, 0, M::linear},
       {"Shp/Frz", "Shape / Freeze", "", 0, 255, 38, M::discrete},
-      {"Mix", "Mix", "%", 0, 1, 128, M::linear}}}};
+      {"Mix", "Mix", "%", 0, 1, 128, M::linear}}},
+    {"FORMANT", 6,
+     {{"MODE", "Mode", "", 0, 1, 0, M::discrete},
+      {"VOW", "Vowel", "", 0, 1, 0, M::linear},
+      {"F1", "First formant", "Hz", 200, 1200, 206, M::exponential},
+      {"F2", "Second formant", "Hz", 500, 2800, 173, M::exponential},
+      {"RES", "Resonance", "Q", 2, 16, 85, M::exponential},
+      {"MIX", "Mix", "%", 0, 1, 255, M::linear}}}};
 static_assert(sizeof(descriptors) / sizeof(descriptors[0]) == insertModuleCount,
               "Stable module catalogue");
 const InsertDescriptor& insertDescriptor(int m) {
   return descriptors[m >= 0 && m < insertModuleCount ? m : 0];
 }
-uint8_t insertClamp(int m, int p, int v) {
+int insertParameterMaximum(int m, int p) {
   const auto& d = insertDescriptor(m);
   if (p < 0 || p >= d.count) return 0;
-  return std::max(
-      0, std::min(v, d.parameters[p].mapping == M::discrete ? (int)d.parameters[p].maximum : 255));
+  if (m == insertFormant && p == 1) return 127;
+  return d.parameters[p].mapping == M::discrete ? (int)d.parameters[p].maximum : 255;
+}
+bool insertParameterActive(int m, int p, int mode) {
+  return p >= 0 && p < insertDescriptor(m).count &&
+    (m != insertFormant || (mode ? p != 1 : p != 2 && p != 3));
+}
+bool insertParameterModulatable(int m, int p, int mode) {
+  return insertParameterActive(m, p, mode) && !(m == insertFormant && p == 0);
+}
+uint8_t insertClamp(int m, int p, int v) {
+  return std::clamp(v, 0, insertParameterMaximum(m, p));
 }
 float insertMap(int m, int p, int v) {
   const auto& d = insertDescriptor(m);
   if (p < 0 || p >= d.count) return 0;
   const auto& a = d.parameters[p];
   v = insertClamp(m, p, v);
-  float x = v / 255.0f;
+  float x = v / float(std::max(1, insertParameterMaximum(m, p)));
   if (a.mapping == M::discrete) return v;
   if (a.mapping == M::exponential) return a.minimum * powf(a.maximum / a.minimum, x);
   if (a.mapping == M::bipolar)
@@ -168,7 +186,18 @@ void insertDescribe(char* text, size_t size, int m, int p, int value) {
     return;
   }
   float v = insertMap(m, p, value);
-  if (m == insertBeads && p == 6) {
+  if (m == insertFormant && p == 0) {
+    snprintf(text, size, "%s", value ? "CUSTOM" : "VOW");
+  } else if (m == insertFormant && p == 1) {
+    const int anchors[] = {0, 32, 64, 96, 127};
+    const char* names[] = {"A", "E", "I", "O", "U"};
+    value = insertClamp(m, p, value);
+    int i = 0;
+    while (i < 4 && value >= anchors[i + 1]) ++i;
+    if (value == anchors[i]) snprintf(text, size, "%s", names[i]);
+    else snprintf(text, size, "%s>%s %d%%", names[i], names[i+1],
+                  (value-anchors[i])*100/(anchors[i+1]-anchors[i]));
+  } else if (m == insertBeads && p == 6) {
     int packed = (int)v;
     snprintf(text, size, "%03d%% %s", (packed & 127) * 100 / 127,
              packed & 128 ? "Frozen" : "Recording");
@@ -284,6 +313,7 @@ struct InsertChain::Impl {
     float wet = 0;
     bool switching = false;
     BeadsPool::Handle beads;
+    FormantFilter formant;
     WorkCompressor work;
     insert_dsp::Distortion distortion;
     insert_dsp::StereoDoubler doubler;
@@ -321,6 +351,9 @@ struct InsertChain::Impl {
     s.pending = m;
     s.dirty = true;
     switch (m) {
+      case insertFormant:
+        s.formant.reset(rate);
+        break;
       case insertBeads:
         if (s.beads) s.beads->reset();
         break;
@@ -454,6 +487,9 @@ struct InsertChain::Impl {
     float p[8];
     for (int i = 0; i < 8; ++i) p[i] = insertMap(s.module, i, v[i]);
     switch (s.module) {
+      case insertFormant:
+        s.formant.set(v);
+        break;
       case insertCompressor:
         s.work.set(p);
         break;
@@ -543,6 +579,9 @@ struct InsertChain::Impl {
         p[i] = insertMap(s.module, i, s.switching ? s.previous[i] : values[i]);
       float* channels[] = {l, r};
       switch (s.module) {
+        case insertFormant:
+          s.formant.process(l, r, n);
+          break;
         case insertBeads:
           if (s.beads) s.beads->process(l, r, n, p);
           break;

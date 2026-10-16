@@ -21,6 +21,7 @@ enum InsertModule : uint8_t {
   insertParametricEQ,
   insertTranceGate,
   insertBeads,
+  insertFormant,
   insertModuleCount
 };
 enum class InsertMapping : uint8_t { linear, exponential, bipolar, discrete };
@@ -46,6 +47,9 @@ struct InsertAutomation {
   uint8_t values[2][8], valid[2];
 };
 const InsertDescriptor& insertDescriptor(int module);
+int insertParameterMaximum(int module, int parameter);
+bool insertParameterActive(int module, int parameter, int mode);
+bool insertParameterModulatable(int module, int parameter, int mode);
 uint8_t insertClamp(int module, int parameter, int value);
 float insertMap(int module, int parameter, int value);
 void insertSelect(InsertConfig*, int module);
