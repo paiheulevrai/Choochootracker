@@ -149,8 +149,7 @@ ChooChooTracker is a fork of [ChipNomad](https://github.com/Megus/chipnomad-trac
 Thanks to [luginf](https://github.com/luginf) for project-loading, VT2 import,
 desktop MIDI, and AppImage fixes; to [aiaaaa](https://github.com/aiaaaa) for
 Stick live mode and track-display improvements; to [am0k161](https://github.com/am0k161)
-for the sample editor and sampler improvements; and to Ian (hifi) for the
-instrument-navigation improvements.
+for the sample editor and sampler improvements.
 
 The time-stretching processor is based on [Signalsmith Stretch](https://github.com/Signalsmith-Audio/stretch)
 by Signalsmith Audio. Several insert effects are adapted from
