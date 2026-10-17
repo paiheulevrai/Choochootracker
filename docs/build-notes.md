@@ -159,7 +159,7 @@ $empy = $env:EMSDK_PYTHON -replace '\\','/'
 $empp = "$env:EMSDK/upstream/emscripten/em++.py"
 Set-Location tracker
 & 'C:\msys64\usr\bin\make.exe' -j8 -f Makefile.web web-deploy `
-  'COMMON_CFLAGS=-std=c++17 -Wall -g -Os -DTEST' `
+  'COMMON_CFLAGS=-std=c++17 -Wall -Os -DTEST' `
   "EMXX=$empy $empp"
 ```
 

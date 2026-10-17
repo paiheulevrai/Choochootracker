@@ -2,6 +2,7 @@
 #include "chipnomad_lib.h"
 #include "corelib_gfx.h"
 #include "screens.h"
+#include "monk_patch.h"
 #include "mocks/app_ui_mock.h"
 #include <set>
 #include <string>
@@ -76,7 +77,7 @@ TEST_CASE("Lane FX popup keeps every existing engine and insert command visible"
       }
     }
   }
-  CHECK(engines == 26);
+  CHECK(engines == 27);
 }
 
 TEST_CASE("Lane FX group spacing stays compact when switching help types") {
@@ -171,5 +172,28 @@ TEST_CASE("Lane FX uses the available width while keeping modulation slots toget
     checkPopup(fxM2A, 0, offset);
     CHECK(mockCursorY == modRow + 1);
     CHECK(mockCursorX == 1);
+  }
+}
+
+extern int currentGroup;
+FXGroup* getVisibleGroup(int visibleIdx, InstrumentType instType);
+TEST_CASE("MONK exposes all sixteen controls together without a duplicate envelope group") {
+  PopupSession session;
+  getInstrumentFunctions(InstrumentType::Monk).init(&chipnomadState->project.instruments[0]);
+  for (int offset : {0, 2}) for (int table : {0, 1}) {
+    gfxSetContentRowOffset(offset);
+    for (const auto& control : monkControls) {
+      checkPopup(control.fx, table, offset);
+      auto* group = getVisibleGroup(currentGroup, InstrumentType::Monk);
+      REQUIRE(group != nullptr);
+      CHECK(group->instType == InstrumentType::Monk);
+      CHECK(group->count == 16);
+      CHECK(group->columns == 8);
+    }
+    checkPopup(fxTDC, table, offset);
+    FXCell selected{}, last{};
+    fxEditInput(keyEdit | keyLeft, 1, &selected, &last);
+    fxEditInput(0, 1, &selected, &last);
+    CHECK(selected.command == fxTPN); // No envelope entries before Trigger FX.
   }
 }

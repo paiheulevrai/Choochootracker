@@ -1,5 +1,6 @@
 #include "project.h"
 #include "sid_patch.h"
+#include "monk_patch.h"
 #include <cstdio>
 #include <algorithm>
 #include <cstring>
@@ -38,6 +39,19 @@ bool instrumentNativeFXInfo(const Instrument* i,int fx,NativeFXInfo* out,int op)
     }
     *out = {255, value, false, 0, label}; return true;
   }
+  if (i->type == InstrumentType::Monk) {
+    const auto& p = i->chip.monk;
+    for (int parameter = 0; parameter < monkParameterCount; ++parameter) {
+      const auto& control = monkControls[parameter];
+      if (control.fx == fx) {
+        *out = {control.maximum, std::clamp(monkValue(p, parameter), control.minimum, control.maximum),
+                false, control.minimum, control.name};
+        return true;
+      }
+    }
+    return false;
+  }
+
   if(fx>=fxOAR&&fx<=fxLEN)return instrumentDirectFMInfo(i,fx,out,op);
   if(fx==fxFBK) {
     if(!instrumentFMOperatorCount(i))return false;

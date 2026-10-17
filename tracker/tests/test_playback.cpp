@@ -96,6 +96,25 @@ struct PlaybackFixture {
   }
 };
 
+TEST_CASE_FIXTURE(PlaybackFixture, "slowLFO preserves free and structural phase across notes") {
+  setInstrument(0, 0, 0, 15, 0);
+  Modulation& mod = state->project.instruments[0].modulation[2];
+  mod.type = ModulationType::SlowLFO;
+  mod.p3 = SLOW_LFO_MAX_STEP;
+  PhraseRow row;
+  memset(&row, EMPTY_VALUE_8, sizeof(row));
+  row.note = 48;
+  row.instrument = 0;
+  for (auto trigger : {LFOTrigger::free, LFOTrigger::phrase, LFOTrigger::chain, LFOTrigger::retrig}) {
+    mod.p2 = static_cast<uint8_t>(trigger);
+    readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+    PlaybackModState& playing = state->playbackState.tracks[0].note.modulation[2];
+    playing.counter = 100000;
+    readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+    CHECK(playing.counter == (trigger == LFOTrigger::retrig ? 0 : 100000));
+  }
+}
+
 TEST_CASE("track enable commands apply on the audio tick") {
   PlaybackFixture fixture;
   uint8_t enabled[PROJECT_MAX_TRACKS];

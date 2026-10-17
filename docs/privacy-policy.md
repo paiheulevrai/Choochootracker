@@ -10,4 +10,4 @@ Projects, samples, settings, and exports are stored only on the user's device. T
 
 On Android, ChooChooTracker uses the system file picker only when the user chooses to import or export a file. The app does not access files outside that action.
 
-For privacy questions, contact pierre@project1404.com.
+For privacy questions, open an issue in the project repository.

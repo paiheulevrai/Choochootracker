@@ -14,7 +14,7 @@ struct PlaybackModState {
   int16_t p5Offset;
   const uint8_t (*ayWavetables)[32];
   uint8_t step; // Internal mod step, e.g. AHD/ADSR step. 0xff - modulation is stopped
-  uint16_t counter; // Internal tick counter
+  uint32_t counter; // Runtime-only tick counter; not part of song/preset serialization
   int16_t data1;  // ADSR: From
   int16_t data2;  // ADSR: To
   int16_t outValue; // Read calculated value from this field (16-bit signed range)

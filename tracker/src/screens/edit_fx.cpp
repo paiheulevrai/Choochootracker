@@ -56,6 +56,18 @@ static bool nativeInfo(uint8_t instrumentIdx,int fx,NativeFXInfo& info) {
 }
 
 static const char* nativeControlDescription(int fx) {
+  if (getCurrentInstrumentType() == InstrumentType::Monk) {
+    switch (fx) {
+      case fxMWV: return "A 00  E 40  I 80  O BF  U FF";
+      case fxMIN: return "Low voice <------> High voice";
+      case fxMAM: return "Amount of breath in the voice";
+      case fxMFL: return "Smooth pitch and vowel changes";
+      case fxMFB: return "Depth of the voice's pitch movement";
+      case fxMSH: return "Speed of the voice's pitch movement";
+      default: return "";
+    }
+  }
+
   switch(fx) {
     case fxFPT:return "00=-24st 18=0 30=+24st";
     case fxFVL:return "Instrument volume: 00 silent, FF full";
@@ -145,7 +157,8 @@ static bool isFXAvailable(FXId fx, uint8_t instrumentIdx, int isTable) {
   InstrumentType instrumentType = getInstrumentType(instrumentIdx);
   const Instrument* instrument = instrumentIdx != EMPTY_VALUE_8 && instrumentIdx < PROJECT_MAX_INSTRUMENTS
     ? &chipnomadState->project.instruments[instrumentIdx] : NULL;
-  if((fx>=fxFBR&&fx<=fxLEN)||(fx>=fxFPT&&fx<=fxFSU))return instrument && instrumentFXAvailableForInstrument(instrument,fx);
+  if((fx>=fxFBR&&fx<=fxLEN)||(fx>=fxFPT&&fx<=fxFSU)||(fx>=fxMUV&&fx<=fxMLV))return instrument && instrumentFXAvailableForInstrument(instrument,fx);
+  if (instrumentType == InstrumentType::Monk && fx == fxESH) return false;
   if (instrument && instrumentFXAvailableForInstrument(instrument, fx)) return true;
   for (int groupIdx = 0; groupIdx < fxGroupCount; groupIdx++) {
     FXGroup* group = &fxGroups[groupIdx];
@@ -175,6 +188,11 @@ static int visibleFXCount(const FXGroup* group) {
   int count = 0;
   for (int i = 0; i < group->count; ++i) {
     if (!insertFXAvailable(group->fxList[i].fx)) continue;
+    // MONK exposes its envelope in its own complete sixteen-control group.
+    if (instrument && instrument->type == InstrumentType::Monk &&
+        group->instType == InstrumentType::none &&
+        group->fxList[i].fx >= fxEAT && group->fxList[i].fx <= fxESH) continue;
+
     if (currentIsTable && (group->fxList[i].fx == fxSCL || group->fxList[i].fx == fxCRD)) continue;
     if (hideSCL && group->fxList[i].fx == fxSCL) continue;
     if(group->fxList[i].fx>=fxFBR && group->fxList[i].fx<=fxLEN && (!instrument || !instrumentFXAvailableForInstrument(instrument,group->fxList[i].fx)))continue;
@@ -188,6 +206,11 @@ static const FXName* visibleFXAt(const FXGroup* group, int visibleIndex) {
   int hideSCL = !currentIsTable && chipnomadState->project.scaleMode != 0;
   for (int i = 0; i < group->count; ++i) {
     if (!insertFXAvailable(group->fxList[i].fx)) continue;
+    // MONK exposes its envelope in its own complete sixteen-control group.
+    if (instrument && instrument->type == InstrumentType::Monk &&
+        group->instType == InstrumentType::none &&
+        group->fxList[i].fx >= fxEAT && group->fxList[i].fx <= fxESH) continue;
+
     if (currentIsTable && (group->fxList[i].fx == fxSCL || group->fxList[i].fx == fxCRD)) continue;
     if (hideSCL && group->fxList[i].fx == fxSCL) continue;
     if(group->fxList[i].fx>=fxFBR && group->fxList[i].fx<=fxLEN && (!instrument || !instrumentFXAvailableForInstrument(instrument,group->fxList[i].fx)))continue;
@@ -462,6 +485,8 @@ int drawGroupHeader(int visibleGroupIdx, int y, int isCurrent) {
     const int slot = (group->fxList[0].fx - fxF11) / 8;
     const auto& config = chipnomadState->project.trackInserts[*pSongTrack][slot];
     gfxPrintf(1, y, "TF%d: %s", slot + 1, insertDescriptor(config.module).name);
+  } else if (getCurrentInstrumentType() == InstrumentType::Monk && group->instType == InstrumentType::none && group->fxList[0].fx == fxEAT) {
+    gfxPrint(1, y, "Trigger FX");
   } else {
     gfxPrint(1, y, group->name);
   }

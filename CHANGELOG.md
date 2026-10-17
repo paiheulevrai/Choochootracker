@@ -163,8 +163,7 @@
   Plaits-Alt tracks, with an envelope-level guide.
 - Kept Filter, Slope, Cutoff and Resonance grouped in the instrument UI;
   corrected the Project and Settings screen-map indicators.
-- Updated the PortMaster package metadata, cover reference and credits to
-  Pierre-Emmanuel SURGA.
+- Updated the PortMaster package metadata, cover reference and credits.
 
 ## v0.1.0-prealpha.1 (August 9, 2026)
 

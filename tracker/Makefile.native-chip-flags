@@ -1,7 +1,8 @@
 # Native chip hot paths need speed rather than minimum code size on ARM64.
 # Keep IEEE arithmetic: no fast-math or patch/quality simplification.
 NATIVE_CHIP_OPT_FLAGS ?=
-NATIVE_CHIP_HOT_SOURCES = ../chipnomad_lib/beads_insert.cpp ../chipnomad_lib/external/mutable/beads/% \
+NATIVE_CHIP_HOT_SOURCES = ../chipnomad_lib/synth/monk_dsp.cpp ../chipnomad_lib/synth/monk_delay_dsp.cpp ../chipnomad_lib/synth/monk_synth_dsp.cpp ../chipnomad_lib/synth/monk_voice.cpp \
+  ../chipnomad_lib/beads_insert.cpp ../chipnomad_lib/external/mutable/beads/% \
   ../chipnomad_lib/external/ymfm/% \
   ../chipnomad_lib/external/msfa/% ../chipnomad_lib/external/gb_apu/% \
   ../chipnomad_lib/external/emu76489/% \

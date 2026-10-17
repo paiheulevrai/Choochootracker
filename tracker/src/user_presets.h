@@ -26,6 +26,7 @@ public:
   std::vector<Reference> scan(std::string& error);
   const std::vector<Item>& items() const { return items_; }
   std::string label() const;
+  const std::string& rootPath() const { return root_; }
   bool atRoot() const { return stack_.size() <= 1; }
 private:
   struct Location { std::string path, member; bool zip = false, bank = false, legacy = false; };

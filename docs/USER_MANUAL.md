@@ -9,6 +9,7 @@ It follows the classic LSDj workflow and navigation system, with several sound d
 - PCM samples, single-cycle waveforms and wavetable oscillators, with a multimode filter
 - aChChid, a versatile acid synth based on Open303
 - Bogie, a native 12-model drum synthesiser with a multimode filter
+- MonkSynth, a vocal synthesiser with ten-voice unison and stereo delay
 - MME, a two-oscillator multi-modulation synthesiser with a multimode filter
 - Sintered, a native six-model experimental digital drum synthesiser
 
@@ -540,6 +541,29 @@ On the Modulation screen, press **EDIT** on a source to choose a family (Envelop
 
 Motion is an internal macro envelope, not pitch glide: values below `80` use an AD shape, `80` disables it, and values above `80` use a decay-only shape. Moving farther from the centre makes the envelope faster. Its destinations are fixed per model, so Sintered stays predictable in tracker patterns: Knot animates Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. All models reset their state on a note trigger and bound internal feedback for repeatable hits.
 
+### MonkSynth
+
+MonkSynth is a vocal synthesiser. Shape its vowel, voice character, breath,
+glide, vibrato, unison and delay from the Instrument page. EDIT opens every
+control and the patch name.
+
+Choose a bank and preset above the VOICE controls. ALL includes FACTORY and USER;
+EDIT+PLAY auditions the highlighted preset, while EDIT selects it. Save your own
+sounds under `instruments/USER/monk/`. Saved instruments and songs retain their
+MonkSynth settings.
+
+Values use hexadecimal `00..FF`, except Voices (`01..0A`, one to ten). Attack,
+decay and release span 0..5 seconds; detune spans 0..50 cents and voice spread
+0..0.5. Volume, Pitch and the six main voice controls are available as modulation
+and motion-recording destinations.
+
+All sixteen controls appear together under **MonkSynth FX**: `MWV` (vowel), `MIN`
+(voice), `MAM` (breath), `MFL` (glide), `MFB` (vibrato depth), `MSH` (vibrato rate),
+`MUV` (voices), `MDT` (detune), `MVS` (spread), `MDM` (delay mix), `MDR` (delay rate),
+`MLV` (level), and `EAT`/`EDC`/`ESU`/`ERL` (ADSR). These voice meanings apply when
+MONK is the active instrument; the existing MME command meanings remain unchanged.
+The shared Trigger FX group retains TDC/TCL without duplicate envelope entries.
+
 ### MME
 
 **MME** (Multi Modulation Engine) is a two-oscillator synth dedicated to interactions between oscillators. Its models are `Ring`, `Fold`, `Cross`, `VPM`, `Sync`, `Logic` and `Vocode`. Both oscillators are internal and follow tracker notes; `Interval` sets their relationship.
@@ -791,7 +815,8 @@ The available modulation types are:
 - ADSR - classic attack-decay-sustain-release envelope
 - AHD - attack-hold-decay envelope
 - LFO - low-frequency oscillator with several shapes
-- SLFO - LFO with a period multiplier for slow cycles
+- syncLFO (formerly SLFO) - LFO with a ticks-per-unit setting and period multiplier
+- slowLFO - long cycles with an evenly proportional period control, starting just beyond the ordinary LFO range
 - FLFO - audio-rate LFO that can reach the kHz range; FLFO can be heavy on the CPU
 - SLIN - linear joystick control
 - SRAT - rate-based joystick control
@@ -805,6 +830,15 @@ When an ADSR or AHD envelope targets Volume, it becomes the instrument's volume 
 The modulation amount can be positive or negative. Its range depends on the destination. If the destination's full range is `127` or less, as it is for most parameters, the amount defines an absolute range. Wider destinations such as pitch use a scaled amount.
 
 All duration parameters, including attack, hold, decay and period, are measured in ticks.
+
+**syncLFO** is the former SLFO: set its ticks and multiplier for tempo-synced
+movement. Existing SLFO settings and songs keep the same timing.
+
+Use **slowLFO** for sweeps longer than the ordinary LFO can make. Its Period
+control runs from 256 to 131,072 ticks. All tick-based LFOs follow song tempo
+and share the same shapes, wavetable selection and trigger modes. Choose Free
+for a sweep that continues across notes; Retrig, Phrase and Chain restart it at
+their respective boundaries.
 
 LFO shapes:
 
@@ -824,8 +858,8 @@ LFO trigger types:
 
 - Free - restarts the LFO only when the instrument changes
 - Retrig - restarts the LFO on every note
-- Phrase - restarts LFO and SLFO when playback enters a new phrase
-- Chain - restarts LFO and SLFO when playback enters a new chain
+- Phrase - restarts LFO, syncLFO and slowLFO when playback enters a new phrase
+- Chain - restarts LFO, syncLFO and slowLFO when playback enters a new chain
 - Hold - stops after 1 cycle and holds the last value
 - Once - stops after 1 cycle and returns to zero
 
@@ -1020,7 +1054,8 @@ The value is interpreted as a signed `8-bit` relative change (`01` adds `1`, `FF
 | ADSR | Attack | Decay | Sustain | Release | Unused |
 | AHD | Attack | Hold | Decay | Unused | Unused |
 | LFO | Shape | Trigger mode | Period | Unused | AY wavetable index |
-| SLFO | Shape | Trigger mode | Ticks | Multiplier | AY wavetable index |
+| syncLFO | Shape | Trigger mode | Ticks | Multiplier | AY wavetable index |
+| slowLFO | Shape | Trigger mode | Period step (00–FF) | — | AY wavetable index |
 | FLFO | Shape | Trigger mode | Frequency (`1 Hz` to `20 kHz`) | Unused | AY wavetable index |
 
 ### Braids FX
@@ -1316,7 +1351,7 @@ Desktop and PortMaster. Settings > **MIDI** opens this submenu: **MIDI In** / **
 
 ## 15. Credits and licensing
 
-ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP, Warps-derived MME DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. The aChChid engine uses Open303 by Robin Schmidt, copyright 2009, under the MIT License. Bogie and Sintered are original native implementations. MIDI I/O uses RtMidi by Gary P. Scavone, under its MIT-style license. See the packaged license files for exact attribution.
+ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP, Warps-derived MME DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. The aChChid engine uses Open303 by Robin Schmidt, copyright 2009, under the MIT License. MonkSynth uses JonET’s native DSP under the MIT License; see `LICENSE.monksynth.txt`. Bogie and Sintered are original native implementations. MIDI I/O uses RtMidi by Gary P. Scavone, under its MIT-style license. See the packaged license files for exact attribution.
 
 ## Track insert effects
 
@@ -1346,8 +1381,9 @@ the current screen.
 | Saturation | Drive, Tone, Level, Mix |
 | Bitcrusher | Bit depth, Rate reduction, Tone, Mix |
 | Destruction | Mode, Amount, Tone, Mix |
+| FORMANT | Mode, Vowel, First formant, Second formant, Resonance, Mix |
 
-Continuous controls use 00–FF, including valid zero and maximum FF. Bipolar
+Continuous controls use 00–FF, except FORMANT VOW (00–7F). Bipolar
 controls have an exact neutral at 80. Distortion modes are 00 Density, 01 Drive,
 02 Spiral, 03 Mojo, 04 Dyno. Compressor ratios 00–07 are 1.5, 2, 3, 4, 6, 8, 16,
 20:1; detector sources 00–02 are stereo input, left, right. Detector filter 80 is
@@ -1423,6 +1459,17 @@ unused slots; the sixteen available positions are not a guaranteed CPU budget.
 The Insert page keeps the selected field's tip visible after button release;
 temporary notices can still take its place. The module chooser shows each
 module's effect type and source project alongside its name.
+
+### FORMANT
+
+Select **FORMANT** in TF1 or TF2 to shape a sound into vowel-like tones. It works
+best on a sustained, harmonically rich source such as a saw wave.
+
+Set **MODE** to `00` VOW and use **VOW** to sweep from A (`00`) through E, I and
+O to U (`7F`). Set MODE to `01` CUSTOM to tune **F1** and **F2** yourself instead.
+**RES** narrows or broadens the vowel character; **MIX** blends the effect with the
+original signal. Use MOD → INSERT FX to move the active controls. MODE is not a
+MOD destination.
 
 ### Native OPLL and VRC7 instruments (development)
 

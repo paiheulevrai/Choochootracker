@@ -413,6 +413,14 @@ void initFX(PlaybackState* state, int trackIdx, const FXCell* fx, PlaybackTableS
     }
     return;
   }
+  if (fx->command >= fxMUV && fx->command <= fxMLV) {
+    if (track->note.instrument == EMPTY_VALUE_8 ||
+        state->p->instruments[track->note.instrument].type != InstrumentType::Monk) return;
+    auto& control = track->note.fx[fx->command];
+    control.isOn = 1;
+    control.fxValue = fx->command == fxMUV ? clampInt(fx->value, 1, 10) : fx->value;
+    return;
+  }
   if (fx->command >= fxFPT && fx->command <= fxFSU) {
     if (track->note.instrument == EMPTY_VALUE_8 ||
         state->p->instruments[track->note.instrument].type != InstrumentType::SoundFont) return;

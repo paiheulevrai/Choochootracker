@@ -107,6 +107,7 @@ extern const AppScreen screenSampleSettings;
 // when a new sample is loaded so the editor hosts one thing at a time.
 void sampleEditorDiscardRecording(int instrumentIndex);
 extern const AppScreen screenFMEdit;
+extern const AppScreen screenMonkEdit;
 extern const AppScreen screenSIDEdit;
 extern const AppScreen screenSoundFontEdit;
 extern const AppScreen screenInstrumentPool;

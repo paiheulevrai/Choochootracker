@@ -16,6 +16,7 @@ class PlaitsAltVoice;
 class AChChidVoice;
 class DrumSynthVoice;
 class MMEVoice;
+class MonkSynthVoice;
 class SinteredVoice;
 class OPLLVoice;
 class SIDVoice;
@@ -108,6 +109,8 @@ struct ChipNomadState {
   AChChidVoice* achchidVoices[PROJECT_MAX_TRACKS][CHORD_MAX_VOICES];
   DrumSynthVoice* drumSynthVoices[PROJECT_MAX_TRACKS][CHORD_MAX_VOICES];
   MMEVoice* mmeVoices[PROJECT_MAX_TRACKS][CHORD_MAX_VOICES];
+  MonkSynthVoice* monkPreview;
+  MonkSynthVoice* monkVoices[PROJECT_MAX_TRACKS][CHORD_MAX_VOICES];
   OPLVoice* oplVoices[PROJECT_MAX_TRACKS][CHORD_MAX_VOICES];
   OPLVoice* oplPreview;
   FourOpVoice* fourOpPreview;
@@ -205,6 +208,7 @@ int chipnomadQueueSimpleChipPreview(ChipNomadState* state,int track,InstrumentTy
 int chipnomadQueueFourOpPreview(ChipNomadState* state,int track,InstrumentType type,const InstrumentFourOp* patch);
 int chipnomadQueueOPLPreview(ChipNomadState* state, int track, InstrumentType type, const InstrumentOPL* patch);
 int chipnomadQueueDX7Preview(ChipNomadState* state,int track,const InstrumentDX7* patch);
+int chipnomadQueueMonkPreview(ChipNomadState* state, int track, const InstrumentMonk* patch);
 int chipnomadQueueSIDPreview(ChipNomadState* state,int track,const InstrumentSID* patch);
 int chipnomadQueueOPLLPreview(ChipNomadState* state, int track, const InstrumentOPLL* patch);
 int chipnomadQueuePlaybackStopPreview(ChipNomadState* state, int trackIdx);

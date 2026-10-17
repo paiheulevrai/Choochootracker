@@ -39,6 +39,8 @@ extern ScreenData screenInstrumentPlaits;
 extern ScreenData screenInstrumentAChChid;
 extern ScreenData screenInstrumentDrumSynth;
 extern ScreenData screenInstrumentMME;
+extern ScreenData screenInstrumentMonk;
+bool instrumentMonkTouchCell(int col, int row, int* targetCol, int* targetRow);
 extern ScreenData screenInstrumentSintered;
 extern ScreenData screenInstrumentMidi;
 extern ScreenData screenInstrumentOPLL;

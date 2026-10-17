@@ -6,4 +6,4 @@ void openUserPresetBrowser();
 void cycleUserPreset(int direction);
 void rememberUserPreset(const UserPresets::Reference& preset);
 enum class InstrumentType : uint8_t;
-bool setupUserPresetLibrary(UserPresets& library, InstrumentType type);
+bool setupUserPresetLibrary(UserPresets& library, InstrumentType type, bool factory=false);

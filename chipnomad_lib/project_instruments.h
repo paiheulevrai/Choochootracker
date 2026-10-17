@@ -39,6 +39,7 @@ enum class InstrumentType : uint8_t {
   ArcadeFM = 26,
   SID = 27,
   SoundFont = 28,
+  Monk = 29,
   totalCount,
 };
 
@@ -46,11 +47,12 @@ enum class ModulationType : uint8_t {
   ADSR = 0,
   AHD = 1,
   LFO = 2,
-  SLFO = 3,
+  SLFO = 3, // syncLFO: retain the saved type ID and timing.
   FLFO = 4,
   StickLinear = 5,
   StickVelocity = 6, // Legacy project value, no longer exposed.
   StickRate = 7,
+  SlowLFO = 8,
   totalCount,
 };
 
@@ -93,10 +95,57 @@ struct Modulation {
   int8_t amount;
   uint8_t p1; // ADSR: A, AHD: A, LFO: Shape
   uint8_t p2; // ADSR: D, AHD: H, LFO: Trig
-  uint8_t p3; // ADSR: S, AHD: D, LFO: Period
+  uint8_t p3; // ADSR: S, AHD: D, LFO: Period, SlowLFO: period step
   uint8_t p4; // ADSR: R, AHD: -, LFO: -, SLFO: multiplier
   uint8_t p5; // LFO/SLFO/FLFO Wavetable: AY wavetable index
 };
+
+// Equal ratios across the full byte: round(256 * 2^(9 * step / 255)).
+// Nine octaves: 00=256, 55=2048, AA=16384, FF=131072 ticks.
+// Precomputed to keep exponentiation out of the playback path.
+inline constexpr uint32_t SLOW_LFO_PERIODS[256] = {
+  256, 262, 269, 275, 282, 289, 296, 304,
+  311, 319, 327, 335, 343, 352, 361, 369,
+  379, 388, 398, 407, 418, 428, 439, 449,
+  461, 472, 484, 496, 508, 520, 533, 547,
+  560, 574, 588, 603, 618, 633, 649, 665,
+  681, 698, 715, 733, 751, 770, 789, 808,
+  828, 849, 870, 891, 914, 936, 959, 983,
+  1007, 1032, 1058, 1084, 1111, 1139, 1167, 1196,
+  1225, 1256, 1287, 1319, 1351, 1385, 1419, 1454,
+  1490, 1527, 1565, 1604, 1643, 1684, 1726, 1768,
+  1812, 1857, 1903, 1950, 1999, 2048, 2099, 2151,
+  2204, 2259, 2314, 2372, 2431, 2491, 2552, 2616,
+  2680, 2747, 2815, 2885, 2956, 3029, 3104, 3181,
+  3260, 3341, 3423, 3508, 3595, 3684, 3775, 3869,
+  3965, 4063, 4163, 4266, 4372, 4480, 4591, 4705,
+  4822, 4941, 5063, 5189, 5317, 5449, 5584, 5722,
+  5864, 6009, 6158, 6310, 6467, 6627, 6791, 6959,
+  7132, 7308, 7489, 7675, 7865, 8059, 8259, 8464,
+  8673, 8888, 9108, 9334, 9565, 9802, 10044, 10293,
+  10548, 10809, 11077, 11351, 11633, 11921, 12216, 12518,
+  12828, 13146, 13472, 13805, 14147, 14498, 14857, 15225,
+  15602, 15988, 16384, 16790, 17206, 17632, 18068, 18516,
+  18974, 19444, 19926, 20419, 20925, 21443, 21974, 22519,
+  23076, 23648, 24233, 24834, 25449, 26079, 26725, 27386,
+  28065, 28760, 29472, 30202, 30950, 31716, 32502, 33307,
+  34132, 34977, 35843, 36731, 37641, 38573, 39528, 40507,
+  41510, 42538, 43592, 44671, 45778, 46911, 48073, 49264,
+  50484, 51734, 53015, 54328, 55674, 57052, 58465, 59913,
+  61397, 62918, 64476, 66073, 67709, 69386, 71104, 72865,
+  74670, 76519, 78414, 80356, 82346, 84385, 86475, 88617,
+  90812, 93061, 95365, 97727, 100147, 102628, 105169, 107774,
+  110443, 113178, 115981, 118853, 121797, 124813, 127904, 131072,
+};
+constexpr uint8_t SLOW_LFO_MAX_STEP = 255;
+inline uint32_t modulationSlowLFOPeriod(uint8_t step) {
+  return SLOW_LFO_PERIODS[step];
+}
+
+inline bool modulationIsTickLFO(ModulationType type) {
+  return type == ModulationType::LFO || type == ModulationType::SLFO ||
+         type == ModulationType::SlowLFO;
+}
 
 // AY Instruments
 
@@ -224,6 +273,13 @@ struct InstrumentDrumSynth : InstrumentVoicePostSettings {
 // cross-modulation algorithm.  The six controls deliberately have a stable
 // position in the UI even though their musical interpretation varies by model.
 enum class MMEModel : uint8_t { ring, fold, cross, vpm, sync, logic, vocode, totalCount };
+struct InstrumentMonk {
+  uint8_t attack, decay, sustain, release;
+  uint8_t vowel, character, breath, glide, vibrato, rate;
+  uint8_t unison, detune, voiceSpread, delayMix, delayRate, level;
+  uint8_t factory;
+};
+
 struct InstrumentMME : InstrumentVoicePostSettings {
   MMEModel model;
   uint8_t waves;
@@ -459,6 +515,7 @@ union InstrumentChipData {
   InstrumentAChChid achchid;
   InstrumentDrumSynth drumSynth;
   InstrumentMME mme;
+  InstrumentMonk monk;
   InstrumentSintered sintered;
   InstrumentMidi midi;
 };
@@ -486,10 +543,10 @@ struct InstrumentFunctions {
 // This is metadata, not an audio abstraction: renderers keep their typed
 // paths while screens, validation and motion routing share this one catalogue.
 enum class InstrumentCategory : uint8_t { none, chip, sample, synth, drums, midi, fm };
-enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme, sintered, midi, opll, opl, simpleChip, dx7, soundfont };
+enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme, sintered, midi, opll, opl, simpleChip, dx7, soundfont, monk };
 enum class InstrumentMotionValue : uint8_t { raw, speed, cutoff };
 
-static constexpr uint8_t instrumentNoFX = 0xff;
+static constexpr FXId instrumentNoFX = FX_ID_EMPTY;
 
 // Reserved destinations shared by all instruments for MIDI CC mappings.
 // 0 is the explicit "no destination" option; keep the other values below
@@ -535,7 +592,7 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type);
 const InstrumentDefinition* getInstrumentDefinition(InstrumentType type);
 const InstrumentModDestination* instrumentModDestination(InstrumentType type, int destination);
 int instrumentMotionDestination(const Instrument* instrument, int destination,
-                                uint8_t* fx, int* base, int* range,
+                                FXId* fx, int* base, int* range,
                                 InstrumentMotionValue* value);
 int instrumentCCDestinationAvailable(const Instrument* instrument, int destination);
 int instrumentCCDestinationValue(const Instrument* instrument, int destination, uint8_t cc);

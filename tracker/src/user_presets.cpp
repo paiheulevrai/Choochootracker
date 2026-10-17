@@ -56,6 +56,7 @@ bool metadata(const std::vector<uint8_t>& data, InstrumentType& type, std::strin
 
 const char* userPresetFolder(InstrumentType t) {
   switch (t) {
+    case InstrumentType::Monk: return "monk";
     case InstrumentType::DX7: return "dx7";
     case InstrumentType::OPLL: return "opll";
     case InstrumentType::VRC7: return "vrc7";

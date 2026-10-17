@@ -6,6 +6,8 @@
 #include "chipnomad_lib.h"
 #include "project_utils.h"
 #include "screen_instrument.h"
+#include "user_presets.h"
+#include "user_preset_browser.h"
 #include "waveform_display.h"
 #include "copy_paste.h"
 #include "file_browser.h"
@@ -52,6 +54,7 @@ static SelectionItem instrumentTypeChip[] = {
   {NULL, (int)InstrumentType::GBNoise, NULL, 0},
 };
 static SelectionItem instrumentTypeSynth[] = {
+  {NULL, (int)InstrumentType::Monk, NULL, 0},
   {NULL, (int)InstrumentType::AChChid, NULL, 0},
   {NULL, (int)InstrumentType::Braids, NULL, 0},
   {NULL, (int)InstrumentType::Plaits, NULL, 0},
@@ -95,7 +98,7 @@ static const InstrumentType instrumentTypesQuickCycle[] = {
   InstrumentType::SCWF, InstrumentType::BYOWTBL, InstrumentType::Sample, InstrumentType::SoundFont,
   InstrumentType::AChChid, InstrumentType::Braids,
   InstrumentType::Plaits, InstrumentType::PlaitsAlt,
-  InstrumentType::MME,
+  InstrumentType::MME, InstrumentType::Monk,
   InstrumentType::SegaPSG, InstrumentType::GBPulse, InstrumentType::GBNoise,
   InstrumentType::GenesisFM, InstrumentType::ArcadeFM, InstrumentType::DX7, InstrumentType::Midi, InstrumentType::OPLL, InstrumentType::VRC7, InstrumentType::OPL2, InstrumentType::OPL3,
   InstrumentType::SID,
@@ -203,10 +206,15 @@ static void onInstrumentSaved(const char* folderPath) {
   getInstrumentFilename(filename, sizeof(filename));
   snprintf(fullPath, sizeof(fullPath), "%s%s%s.cni", folderPath, PATH_SEPARATOR_STR, filename);
 
+  auto& instrument = chipnomadState->project.instruments[cInstrument];
+  const bool monk = instrument.type == InstrumentType::Monk;
+  const uint8_t previousBank = monk ? instrument.chip.monk.factory : 0;
+  if (monk) instrument.chip.monk.factory = 0;
   if (instrumentSave(&chipnomadState->project, fullPath, cInstrument) == 0) {
+    if (monk) projectModified = 1;
     strncpy(appSettings.instrumentPath, folderPath, PATH_LENGTH);
     appSettings.instrumentPath[PATH_LENGTH - 1] = 0;
-  }
+  } else if (monk) instrument.chip.monk.factory = previousBank;
   screenSetup(&screenInstrument, cInstrument);
 }
 
@@ -316,7 +324,7 @@ static ScreenData* instrumentScreen(void) {
     &screenInstrumentSCWF, &screenInstrumentBYOWTBL, &screenInstrumentPlaits, &screenInstrumentAChChid,
     &screenInstrumentDrumSynth, &screenInstrumentMME,
     &screenInstrumentSintered,
-    &screenInstrumentMidi, &screenInstrumentOPLL, &screenInstrumentOPL, &screenInstrumentSimpleChip, &screenInstrumentOPL, &screenInstrumentSoundFont,
+    &screenInstrumentMidi, &screenInstrumentOPLL, &screenInstrumentOPL, &screenInstrumentSimpleChip, &screenInstrumentOPL, &screenInstrumentSoundFont, &screenInstrumentMonk,
   };
   InstrumentScreenKind kind = getInstrumentDefinition(chipnomadState->project.instruments[cInstrument].type)->screen;
   ScreenData* data = screens[(int)kind];
@@ -698,7 +706,14 @@ int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
     } else {
       char filename[32];
       getInstrumentFilename(filename, sizeof(filename));
-      fileBrowserSetupFolderMode("SAVE INSTRUMENT", appSettings.instrumentPath, filename, ".cni", onInstrumentSaved, onInstrumentCancelled);
+      UserPresets destination;
+      const char* folder = appSettings.instrumentPath;
+      if (chipnomadState->project.instruments[cInstrument].type == InstrumentType::Monk &&
+          setupUserPresetLibrary(destination, InstrumentType::Monk, false)) {
+        fileCreateDirectoryRecursive(destination.rootPath().c_str());
+        folder = destination.rootPath().c_str();
+      }
+      fileBrowserSetupFolderMode("SAVE INSTRUMENT", folder, filename, ".cni", onInstrumentSaved, onInstrumentCancelled);
       screenSetup(&screenFileBrowser, 0);
     }
   } else if (row == 1) {
@@ -843,7 +858,7 @@ int instrumentKeyJazzTextField(KeyJazzTextField* field) {
   field->popupOpen = isCharEdit;
   field->marksProjectModified = 1;
   field->str = NULL;
-  if (screen->cursorRow == 1) { field->str = chipnomadState->project.instruments[cInstrument].name; field->maxLen = PROJECT_INSTRUMENT_NAME_LENGTH; }
+  if (screen->cursorRow == 1 && chipnomadState->project.instruments[cInstrument].type != InstrumentType::Monk) { field->str = chipnomadState->project.instruments[cInstrument].name; field->maxLen = PROJECT_INSTRUMENT_NAME_LENGTH; }
   return 1;
 }
 

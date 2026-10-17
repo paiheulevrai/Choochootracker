@@ -21,7 +21,7 @@ static InsertConfig& config(int row) {
 }
 static int valid(int col, int row) {
   return row >= 0 && row < 10 && col >= 0 && col < 2 &&
-         (row % 5 == 0 || parameter(col, row) < insertDescriptor(config(row).module).count);
+         (row % 5 == 0 || insertParameterActive(config(row).module, parameter(col, row), config(row).values[0]));
 }
 static void drawCpuLoad(int cpuLoad) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
@@ -63,12 +63,22 @@ static void field(int col, int row, CellState) {
       gfxPrintf(17, y(row), "Bypass    %s", c.bypass ? "ON " : "OFF");
   } else if (valid(col, row)) {
     int p = parameter(col, row);
-    gfxPrintf(x, y(row), "%d %-8s", p + 1, insertDescriptor(c.module).parameters[p].label);
+    char label[16];
+    snprintf(label, sizeof(label), "%s", insertDescriptor(c.module).parameters[p].label);
+    if (c.module == insertFormant && p == 0)
+      snprintf(label, sizeof(label), "%s", c.values[0] ? "CUSTOM" : "MODE VOW");
+    if (c.module == insertFormant && p == 1) {
+      char decoded[32];
+      insertDescribe(decoded, sizeof(decoded), c.module, p, c.values[p]);
+      snprintf(label, sizeof(label), "VOW %.3s", decoded);
+    }
+    gfxPrintf(x, y(row), "%d %-8s", p + 1, label);
     gfxSetFgColor(appSettings.colorScheme.textValue);
     gfxPrintf(x + 12, y(row), "%02X", c.values[p]);
   }
 }
 static int edit(int col, int row, CellEditAction action) {
+  if (!valid(col, row)) return 0;
   auto& c = config(row);
   int handled = 0;
   if (row % 5 == 0) {
@@ -88,7 +98,7 @@ static int edit(int col, int row, CellEditAction action) {
     const bool packedShapeFreeze = c.module == insertBeads && p == 6;
     handled = edit8noLast(action, &v,
                           a.mapping == InsertMapping::discrete && !packedShapeFreeze ? 1 : 16, 0,
-                          a.mapping == InsertMapping::discrete ? (int)a.maximum : 255);
+                          insertParameterMaximum(c.module, p));
     if (handled) insertEdit(&c, p, v);
   }
   if (handled) {
@@ -167,6 +177,7 @@ static const SelectionItem insertCategories[] = {
   {"Tape", -1, tape, (int)(sizeof(tape) / sizeof(tape[0])), nullptr},
   {"EQ", insertParametricEQ, nullptr, 0, nullptr},
   {"Beads", insertBeads, nullptr, 0, nullptr},
+  {"FORMANT", insertFormant, nullptr, 0, nullptr},
 };
 
 static int cycleInsertModule(int module, int direction) {

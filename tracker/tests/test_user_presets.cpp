@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "user_presets.h"
+#include "monk_patch.h"
 #include "packaged_presets.h"
 #include <filesystem>
 #include <fstream>
@@ -289,4 +290,59 @@ TEST_CASE("SID USER columns keep model folders in one collection and restore the
   CHECK(currentScreen==&screenInstrument);
   CHECK(!memcmp(&selected,&state->project.instruments[0],sizeof(selected)));
   chipnomadDestroy(state);chipnomadState=prior;
+}
+
+TEST_CASE("MONK defaults to ALL and preserves the bank while selecting and cycling both sources") {
+  Fixture f;
+  const auto original = fs::current_path();
+  fs::create_directories(f.root / "instruments/FACTORY/monk");
+  fs::create_directories(f.root / "instruments/USER/monk");
+  struct Restore { fs::path path; ~Restore() { fs::current_path(path); } } restore{original};
+  fs::current_path(f.root);
+  auto* prior = chipnomadState;
+  auto* state = chipnomadCreate(); chipnomadState = state;
+  screensInitAll(); cInstrument = 0;
+  auto& instrument = state->project.instruments[0];
+  getInstrumentFunctions(InstrumentType::Monk).init(&instrument);
+  CHECK(instrument.chip.monk.factory == monkBankAll);
+  for (int bank : {monkBankFactory, monkBankUser}) {
+    instrument.chip.monk.factory = bank;
+    instrument.chip.monk.vowel = bank == monkBankFactory ? 32 : 224;
+    std::strcpy(instrument.name, bank == monkBankFactory ? "Factory tone" : "User tone");
+    REQUIRE(instrumentSave(&state->project, bank == monkBankFactory ?
+      "instruments/FACTORY/monk/tone.cni" : "instruments/USER/monk/tone.cni", 0) == 0);
+  }
+  getInstrumentFunctions(InstrumentType::Monk).init(&instrument);
+  auto press = [](int key) { screenSelectionPopup.onInput(1,key,0); screenSelectionPopup.onInput(0,key,0); };
+  openUserPresetBrowser(); screenSelectionPopup.fullRedraw();
+  std::string menu; for (auto& row : mockGfxCells) menu.append(row,40);
+  CHECK(menu.find("ALL") != std::string::npos);
+  CHECK(menu.find("FACTORY") != std::string::npos);
+  CHECK(menu.find("USER") != std::string::npos);
+  press(keyRight); press(keyEdit);
+  REQUIRE(currentScreen == &screenInstrument);
+  CHECK(instrument.chip.monk.factory == monkBankAll);
+  const int first = instrument.chip.monk.vowel;
+  CHECK((first == 32 || first == 224));
+  cycleUserPreset(1);
+  CHECK(instrument.chip.monk.factory == monkBankAll);
+  CHECK(instrument.chip.monk.vowel == 256 - first);
+  const auto selected = instrument;
+  openUserPresetBrowser(); press(keyRight); press(keyEdit);
+  CHECK(std::memcmp(&instrument, &selected, sizeof(instrument)) == 0);
+  cycleUserPreset(1);
+  CHECK(instrument.chip.monk.vowel == first);
+  cycleUserPreset(-1);
+  CHECK(instrument.chip.monk.vowel == 256 - first);
+  REQUIRE(instrumentSave(&state->project, "all.cni", 0) == 0);
+  instrument.chip.monk.factory = monkBankUser;
+  REQUIRE(instrumentLoad(&state->project, "all.cni", 0) == 0);
+  CHECK(instrument.chip.monk.factory == monkBankAll);
+  for (int bank : {monkBankFactory, monkBankUser}) {
+    instrument.chip.monk.factory = bank;
+    cycleUserPreset(1);
+    CHECK(instrument.chip.monk.factory == bank);
+    CHECK(instrument.chip.monk.vowel == (bank == monkBankFactory ? 32 : 224));
+  }
+  chipnomadDestroy(state); chipnomadState = prior;
 }

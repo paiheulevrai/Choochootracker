@@ -7,7 +7,8 @@ LIBS = $(COMMON_LIBS) platforms/sdl2
 OUTPUT_EXT = .html
 WEB_BUILD = build/web
 EMXX ?= em++
-WEB_CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) -DWEB_BUILD -DGAMEPAD_SUPPORT -fexceptions
+# Release bundles must not carry local source paths in debug information.
+WEB_CFLAGS = $(filter-out -g,$(COMMON_CFLAGS)) $(INCLUDES) -DWEB_BUILD -DGAMEPAD_SUPPORT -fexceptions
 WEB_DATA_DIRS = $(filter-out projects,$(COMMON_DATA_DIRS))
 WEB_PRELOAD = $(foreach dir,$(WEB_DATA_DIRS),--preload-file packaging/common/$(dir)@/$(dir)) \
 	--preload-file packaging/common/projects/native-chip-audition.cct@/projects/native-chip-audition.cct \

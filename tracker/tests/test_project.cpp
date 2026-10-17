@@ -455,7 +455,7 @@ TEST_CASE("instrument catalogue covers every family and its routable motion FX")
   }
 
   Instrument instrument;
-  uint8_t fx; int base, range; InstrumentMotionValue value;
+  FXId fx; int base, range; InstrumentMotionValue value;
   getInstrumentFunctions(InstrumentType::Sample).init(&instrument);
   CHECK(instrumentMotionDestination(&instrument, 3, &fx, &base, &range, &value));
   CHECK(fx == fxSST); CHECK(base == 0); CHECK(range == 255);
@@ -518,16 +518,17 @@ TEST_CASE("instrument catalogue covers every family and its routable motion FX")
   CHECK(instrumentModDestinationAvailable(&instrument, 9));
 }
 
-TEST_CASE("v4 projects preserve LFO wavetable settings") {
+TEST_CASE("projects preserve syncLFO and slowLFO settings") {
   Project saved, loaded;
   projectInitAY(&saved);
   projectInitAY(&loaded);
   getInstrumentFunctions(InstrumentType::AY2).init(&saved.instruments[0]);
   Modulation& mod = saved.instruments[0].modulation[2];
-  mod.type = ModulationType::SLFO;
+  SUBCASE("legacy syncLFO") { mod.type = ModulationType::SLFO; }
+  SUBCASE("slowLFO") { mod.type = ModulationType::SlowLFO; }
   mod.p1 = static_cast<uint8_t>(LFOShape::wavetable);
   mod.p2 = static_cast<uint8_t>(LFOTrigger::chain);
-  mod.p3 = 12;
+  mod.p3 = mod.type == ModulationType::SlowLFO ? SLOW_LFO_MAX_STEP : 12;
   mod.p4 = 8;
   mod.p5 = 42;
   const char* path = "build/tests/lfo_wavetable_v4.cct";
@@ -536,6 +537,9 @@ TEST_CASE("v4 projects preserve LFO wavetable settings") {
   REQUIRE(projectLoad(&loaded, path) == 0);
   CHECK(projectFileVersion == 7);
   const Modulation& reloaded = loaded.instruments[0].modulation[2];
+  CHECK(reloaded.type == mod.type);
+  CHECK(reloaded.p3 == mod.p3);
+  CHECK(reloaded.p4 == mod.p4);
   CHECK(reloaded.p1 == static_cast<uint8_t>(LFOShape::wavetable));
   CHECK(reloaded.p2 == static_cast<uint8_t>(LFOTrigger::chain));
   CHECK(reloaded.p5 == 42);

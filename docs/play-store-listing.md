@@ -2,8 +2,8 @@
 
 ## Required account values
 
-- Developer legal name: Pierre-Emmanuel Surga
-- Support email: pierre@project1404.com
+- Developer legal name: [configure in Play Console]
+- Support email: [configure in Play Console]
 - Privacy policy URL: `https://github.com/paiheulevrai/Choochootracker/blob/main/docs/privacy-policy.md`
 - Package: `com.paiheulevrai.choochootracker`
 

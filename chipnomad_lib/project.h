@@ -232,6 +232,9 @@ enum FX : FXId {
   fxFPT, fxFVL, fxFPN, fxFCF, fxFRS, fxFAT, fxFDC, fxFRL,
   fxFHD, fxFSU,
 
+  // MONK native controls, appended without changing existing song IDs.
+  fxMUV, fxMDT, fxMVS, fxMDM, fxMDR, fxMLV,
+
   // Total count - must be last
   fxTotalCount
 };

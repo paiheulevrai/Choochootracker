@@ -68,7 +68,7 @@ CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/external/mutable/beads/*.cc)
                         $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/physical_modelling/*.cc) \
                         $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/speech/*.cc)
 
-TRACKER_SRC_SOURCES = src/soundbank_library.cpp src/screens/instrument_soundfont.cpp src/screens/user_preset_browser.cpp src/user_presets.cpp src/fm_catalog.cpp src/app.cpp src/support_report.cpp src/version.cpp \
+TRACKER_SRC_SOURCES = src/screens/instrument_monk.cpp src/soundbank_library.cpp src/screens/instrument_soundfont.cpp src/screens/user_preset_browser.cpp src/user_presets.cpp src/fm_catalog.cpp src/app.cpp src/support_report.cpp src/version.cpp \
                       src/screens/edit_character.cpp \
                       src/screens/instrument_fm_controls.cpp src/screens/instrument_opl.cpp src/screens/screen_fm_edit.cpp src/screens/screen_sid_edit.cpp src/screens/instrument_simple_chip.cpp \
                       src/screens/screen_insert_fx.cpp \
