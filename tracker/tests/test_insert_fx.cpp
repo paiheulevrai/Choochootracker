@@ -1016,11 +1016,10 @@ TEST_CASE("insert tips return after real key release and categorized chooser sel
   auto& insert = chipnomadState->project.trackInserts[0][0];
   insertSelect(&insert, insertOff);
   const int popupOrder[] = {
-      insertOff, insertCompressor, insertOTT,
-      insertDistortion, insertSaturation, insertBitcrusher, insertDestruction,
-      insertChorus, insertPhaser, insertFlanger,
-      insertTranceGate,
-      insertDoubler, insertRotary, insertTape, insertParametricEQ, insertBeads, insertFormant,
+      insertOff, insertOTT, insertCompressor, insertParametricEQ,
+      insertDistortion, insertSaturation, insertBitcrusher, insertDestruction, insertTape,
+      insertChorus, insertPhaser, insertFlanger, insertTranceGate,
+      insertRotary, insertDoubler, insertBeads, insertFormant,
   };
   for (int i = 1; i < (int)(sizeof(popupOrder) / sizeof(popupOrder[0])); ++i) {
     screenInsertFX.onInput(1, keyEdit | keyRight, 0);
@@ -1036,7 +1035,7 @@ TEST_CASE("insert tips return after real key release and categorized chooser sel
   REQUIRE(currentScreen == &screenSelectionPopup);
   CHECK(selectionPopupIsFullWidth());
   screenSelectionPopup.fullRedraw();
-  CHECK(std::string(mockGfxCells[4], 40).find("Drive") != std::string::npos);
+  CHECK(std::string(mockGfxCells[4], 40).find("Character") != std::string::npos);
   CHECK(std::string(mockGfxCells[2], 40).find("Distortion") != std::string::npos);
   // Legacy category choosers keep their two-panel layout.
   SelectionItem items[] = {{"Existing", 0, nullptr, 0, nullptr}};
