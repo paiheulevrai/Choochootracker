@@ -144,40 +144,39 @@ static void selected(int module) {
 }
 static void cancelled() { screenSetup(&screenInsertFX, -1); }
 
-static const SelectionItem dynamics[] = {
-  {"Compressor", insertCompressor, nullptr, 0, nullptr},
+static const SelectionItem mix[] = {
   {"OTT", insertOTT, nullptr, 0, nullptr},
+  {"Compressor", insertCompressor, nullptr, 0, nullptr},
+  {"EQ", insertParametricEQ, nullptr, 0, nullptr},
 };
-static const SelectionItem drive[] = {
+static const SelectionItem character[] = {
   {"Distortion", insertDistortion, nullptr, 0, nullptr},
   {"Saturation", insertSaturation, nullptr, 0, nullptr},
   {"Bitcrusher", insertBitcrusher, nullptr, 0, nullptr},
   {"Destruction", insertDestruction, nullptr, 0, nullptr},
+  {"TAPESCAM", insertTape, nullptr, 0, nullptr},
 };
-static const SelectionItem stereo[] = {
-  {"Doubler", insertDoubler, nullptr, 0, nullptr},
-  {"Rotary", insertRotary, nullptr, 0, nullptr},
-};
-
 static const SelectionItem modulation[] = {
   {"Chorus", insertChorus, nullptr, 0, nullptr},
   {"Phaser", insertPhaser, nullptr, 0, nullptr},
   {"Flanger", insertFlanger, nullptr, 0, nullptr},
   {"Trance Gate", insertTranceGate, nullptr, 0, nullptr},
 };
-static const SelectionItem tape[] = {
-  {"TAPESCAM", insertTape, nullptr, 0, nullptr},
+static const SelectionItem spatial[] = {
+  {"Rotary", insertRotary, nullptr, 0, nullptr},
+  {"Doubler", insertDoubler, nullptr, 0, nullptr},
+};
+static const SelectionItem texture[] = {
+  {"Beads", insertBeads, nullptr, 0, nullptr},
+  {"Vowel Filter", insertFormant, nullptr, 0, nullptr},
 };
 static const SelectionItem insertCategories[] = {
   {"OFF", insertOff, nullptr, 0, nullptr},
-  {"Dynamics", -1, dynamics, (int)(sizeof(dynamics) / sizeof(dynamics[0])), nullptr},
-  {"Drive", -1, drive, (int)(sizeof(drive) / sizeof(drive[0])), nullptr},
+  {"Mix", -1, mix, (int)(sizeof(mix) / sizeof(mix[0])), nullptr},
+  {"Character", -1, character, (int)(sizeof(character) / sizeof(character[0])), nullptr},
   {"Modulation", -1, modulation, (int)(sizeof(modulation) / sizeof(modulation[0])), nullptr},
-  {"Stereo", -1, stereo, (int)(sizeof(stereo) / sizeof(stereo[0])), nullptr},
-  {"Tape", -1, tape, (int)(sizeof(tape) / sizeof(tape[0])), nullptr},
-  {"EQ", insertParametricEQ, nullptr, 0, nullptr},
-  {"Beads", insertBeads, nullptr, 0, nullptr},
-  {"FORMANT", insertFormant, nullptr, 0, nullptr},
+  {"Spatial", -1, spatial, (int)(sizeof(spatial) / sizeof(spatial[0])), nullptr},
+  {"Texture", -1, texture, (int)(sizeof(texture) / sizeof(texture[0])), nullptr},
 };
 
 static int cycleInsertModule(int module, int direction) {
