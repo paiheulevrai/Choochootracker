@@ -9,6 +9,9 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <io.h>
+#elif !defined(WEB_BUILD)
+#include <unistd.h>
 #endif
 #include "project.h"
 #include "opll_presets.h"
@@ -1713,6 +1716,17 @@ static int projectSaveInternal(FILE* file, Project* project) {
 static int closeProjectOutput(FILE* file, int result) {
   if (!file) return 1;
   if (result == 0 && fflush(file) != 0) result = 1;
+#ifndef WEB_BUILD
+  // Ask the system to put the data on the storage device before the caller
+  // renames the file into place. Otherwise a handheld switched off (or an SD
+  // card removed) soon after an autosave can keep the new name with only
+  // part of the data. Best effort: a failure here does not fail the save.
+#ifdef _WIN32
+  if (result == 0) _commit(_fileno(file));
+#else
+  if (result == 0) fsync(fileno(file));
+#endif
+#endif
   if (ferror(file)) result = 1;
   if (fclose(file) != 0) result = 1;
   return result;
