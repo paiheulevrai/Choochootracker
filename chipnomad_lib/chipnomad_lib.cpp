@@ -1643,7 +1643,11 @@ static void processTrackInserts(ChipNomadState* state, float* output, int frames
 }
 
 static void processMasterMix(ChipNomadState* state, float* output, int frames) {
-  bool hasReverb = false, hasDelay = false;
+  // An effect runs while any track sends to it, and keeps running on silence
+  // until its tail has died away, so per-note sends (RSN/DSN) ring out like a
+  // mixer send instead of stopping at the next note.
+  bool hasReverb = state->masterEffects->reverbTailActive();
+  bool hasDelay = state->masterEffects->delayTailActive();
   for (int i = 0; i < state->audioProject.tracksCount; ++i) {
     hasReverb |= effectiveTrackSend(state, i, true) > 0.0f || state->audioProject.delayReverbSend > 0;
     hasDelay |= effectiveTrackSend(state, i, false) > 0.0f;

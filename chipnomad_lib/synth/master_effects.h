@@ -17,6 +17,10 @@ class MasterEffects {
   void init(float sampleRate);
   void reset();
   bool tailActive() const;
+  // Whether each effect is still producing an audible tail. Its bus must
+  // keep being processed (with silence) until the tail has died away.
+  bool reverbTailActive() const;
+  bool delayTailActive() const;
   void process(float* reverbBus, float* delayBus, float* output,
                size_t frames, const Project* project);
 

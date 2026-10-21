@@ -49,6 +49,14 @@ bool MasterEffects::tailActive() const {
   return reverbTailFrames_ || delayTailFrames_;
 }
 
+bool MasterEffects::reverbTailActive() const {
+  return reverbTailFrames_ != 0;
+}
+
+bool MasterEffects::delayTailActive() const {
+  return delayTailFrames_ != 0;
+}
+
 float MasterEffects::lowpassCoefficient(float cutoff) const {
   if (cutoff < 20.0f) cutoff = 20.0f;
   if (cutoff > sampleRate_ * 0.45f) cutoff = sampleRate_ * 0.45f;

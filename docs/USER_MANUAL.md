@@ -1011,6 +1011,8 @@ Each FX has a 3-letter command and a hexadecimal value. The in-app help panel gi
 | `RSN` | `00-FF` | Sets this track's reverb send until the next note trigger. |
 | `DSN` | `00-FF` | Sets this track's delay send until the next note trigger. |
 
+Like a mixer send, `RSN` and `DSN` only change how much new sound goes into the effect. Sound that is already in the reverb or delay keeps ringing out after the next note, even when nothing else sends to the effect.
+
 ### ADSR / Trigger FX
 
 | FX | Value | Detailed behaviour |
