@@ -57,6 +57,8 @@ preserved. Input polling and app timers keep their usual cadence.
 | `title` | Title screen assets |
 | `waveforms` | `.wav` single-cycle waveforms for the 2xSCWF engine |
 
+The current project is autosaved every minute and on exit as `autosave.cct` next to the app. If the autosave cannot be loaded at startup, the title screen says so and the demo project opens instead. The unreadable file is kept as `autosave.cct.unreadable` (then `-2`, `-3`, ...) so later autosaves never overwrite it, and the work in it can still be recovered.
+
 ## 2. Controls
 
 ChooChooTracker works best with a gamepad that has a D-pad, 2 analogue sticks and 7 buttons.

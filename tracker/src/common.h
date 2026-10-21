@@ -185,6 +185,9 @@ extern int sampleLazyPlaybackActive;
 // title screen can warn instead of silently offering to "continue" into the
 // demo project it fell back to.
 extern int autosaveLoadFailed;
+// After a failed autosave load: 1 = the unreadable file was kept beside the
+// autosave, -1 = it could not be moved, so autosaving is paused this session.
+extern int autosaveKept;
 
 // Settings functions
 void initDefaultAppSettings(void);

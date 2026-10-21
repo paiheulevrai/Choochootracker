@@ -503,6 +503,32 @@ int appTapSequenceOpen(int button) {
   return tapButton == button && tapTimerCount > 0;
 }
 
+#ifndef WEB_BUILD
+// Moves an autosave that failed to load to autosave.cct.unreadable (or
+// .unreadable-2, -3, ...) so later autosaves cannot overwrite it.
+static int keepUnreadableAutosave(void) {
+  char autosave[PATH_LENGTH + 1];
+  snprintf(autosave, sizeof(autosave), "%s", getAutosavePath());
+  char keepPath[PATH_LENGTH + 32];
+  for (int n = 1; n < 100; ++n) {
+    if (n == 1) snprintf(keepPath, sizeof(keepPath), "%s.unreadable", autosave);
+    else snprintf(keepPath, sizeof(keepPath), "%s.unreadable-%d", autosave, n);
+    FILE* existing = fopen(keepPath, "rb");
+    if (existing) {
+      fclose(existing);
+      continue;
+    }
+    return rename(autosave, keepPath) == 0;
+  }
+  return 0;
+}
+#endif
+
+static void autosaveProject(void) {
+  if (autosaveKept < 0) return; // The unreadable autosave is still in place
+  projectSave(&chipnomadState->project, getAutosavePath());
+}
+
 /**
 * @brief Initialize the application: setup audio system, load auto-saved project, show the first screen
 */
@@ -568,6 +594,11 @@ void appSetup(void) {
   // Only a genuine parse failure is worth warning about - no autosave yet
   // (first launch) is normal and falls through to the demo silently.
   autosaveLoadFailed = autosaveExists && !projectLoaded;
+#ifndef WEB_BUILD
+  // Never autosave over a file that failed to load: set it aside first so
+  // the work in it can still be recovered.
+  if (autosaveLoadFailed) autosaveKept = keepUnreadableAutosave() ? 1 : -1;
+#endif
 #ifdef WEB_BUILD
   const char* defaultProject = "/projects/grieg-mountain-king-fm.cct";
 #else
@@ -1103,7 +1134,7 @@ void appOnEvent(MainLoopEventData eventData) {
     // Autosave
     if (++autosaveCounter >= AUTOSAVE_INTERVAL_FRAMES) {
       autosaveCounter = 0;
-      projectSave(&chipnomadState->project, getAutosavePath());
+      autosaveProject();
     }
 
     // Multi-tap timer handling
@@ -1137,7 +1168,7 @@ void appOnEvent(MainLoopEventData eventData) {
     break;
   case MainLoopEvent::exit:
     // Auto-save the current project and settings on exit
-    projectSave(&chipnomadState->project, getAutosavePath());
+    autosaveProject();
     settingsSave();
     break;
   case MainLoopEvent::sleep:
@@ -1147,7 +1178,7 @@ void appOnEvent(MainLoopEventData eventData) {
       // Stop playback to avoid state issues
       chipnomadQueuePlaybackStop(chipnomadState);
       // Auto-save project
-      projectSave(&chipnomadState->project, getAutosavePath());
+      autosaveProject();
     }
     // Save settings
     settingsSave();

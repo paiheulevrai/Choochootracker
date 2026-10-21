@@ -197,6 +197,7 @@ ChipNomadState* chipnomadState;
 int projectModified = 0;
 int sampleLazyPlaybackActive = 0;
 int autosaveLoadFailed = 0;
+int autosaveKept = 0;
 
 int settingsSave(void) {
 #ifdef WEB_BUILD

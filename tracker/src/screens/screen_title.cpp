@@ -178,9 +178,10 @@ static void drawMenu(void) {
 // let a later, shorter-lived message push off screen.
 static void drawTitleMessage(void) {
   if (autosaveLoadFailed) {
-    const char* lines[] = {"AUTOSAVE FAILED TO LOAD", "DEMO PROJECT OPENED INSTEAD"};
+    const char* lines[] = {"AUTOSAVE FAILED TO LOAD", "DEMO PROJECT OPENED INSTEAD",
+      autosaveKept > 0 ? "KEPT AS AUTOSAVE.CCT.UNREADABLE" : "AUTOSAVE PAUSED TO PROTECT IT"};
     gfxSetFgColor(appSettings.colorScheme.warning);
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < (autosaveKept ? 3 : 2); i++) {
       const int textX = (32 - (int)strlen(lines[i])) / 2;
       gfxTitlePrint(textX, 10 + i, lines[i]);
     }
