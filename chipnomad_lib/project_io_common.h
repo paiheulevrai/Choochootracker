@@ -19,6 +19,17 @@ void resetPeekConsume(void);
 int saveBinaryData(FILE* file, const uint8_t* data, uint16_t dataLen);
 int loadBinaryData(FILE* file, uint8_t** outData, uint16_t* outLen, uint16_t maxLen);
 
+// Safe saving, used for projects and samples: write to "<path>.tmp", close
+// it with fileCloseSynced() (which also waits until the data is on the
+// storage device), then fileReplace() the original with it, so a failed or
+// interrupted save never leaves a half-written file under the real name.
+// Both return 0 on success. The browser filesystem has no such rename, so
+// web builds write directly.
+int fileCloseSynced(FILE* file, int result);
+#ifndef WEB_BUILD
+int fileReplace(const char* tempPath, const char* path);
+#endif
+
 // Internal I/O functions (used between project_io.c and project_instruments_io.c)
 int instrumentSaveData(FILE* file, int idx, Instrument* instrument);
 int instrumentLoadData(FILE* file, Instrument* instrument, Project* p);

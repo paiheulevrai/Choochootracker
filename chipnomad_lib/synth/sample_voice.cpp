@@ -1,6 +1,7 @@
 #include "sample_voice.h"
 
 #include "../project_instruments.h"
+#include "../project_io_common.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -709,7 +710,17 @@ int sampleSaveWav16WithCues(const InstrumentSample* sample, const char* path,
     snprintf(error, errorSize, "Path too long");
     return 1;
   }
-  FILE* file = fopen(path, "wb");
+  // Written beside the original and renamed into place once it is on the
+  // storage device, so a failed or interrupted save keeps the old WAV (see
+  // fileCloseSynced).
+#ifdef WEB_BUILD
+  const char* writePath = path;
+#else
+  char tempPath[PROJECT_SAMPLE_PATH_LENGTH + 5];
+  snprintf(tempPath, sizeof(tempPath), "%s.tmp", path);
+  const char* writePath = tempPath;
+#endif
+  FILE* file = fopen(writePath, "wb");
   if (!file) {
     snprintf(error, errorSize, "Cannot create WAV");
     return 1;
@@ -755,9 +766,12 @@ int sampleSaveWav16WithCues(const InstrumentSample* sample, const char* path,
     ok = false;
   }
 
-  if (fclose(file) != 0) ok = false;
+  if (fileCloseSynced(file, ok ? 0 : 1) != 0) ok = false;
+#ifndef WEB_BUILD
+  if (ok && fileReplace(tempPath, path) != 0) ok = false;
+#endif
   if (!ok) {
-    remove(path);
+    remove(writePath);
     snprintf(error, errorSize, "Cannot write WAV");
     return 1;
   }
