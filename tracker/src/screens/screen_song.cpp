@@ -6,6 +6,7 @@
 #include "chipnomad_lib.h"
 #include "project_utils.h"
 #include "audio_manager.h"
+#include "app.h"
 
 #include "copy_paste.h"
 #include <string.h>
@@ -25,6 +26,15 @@ typedef enum {
 
 static MuteSoloState muteSoloState = MUTE_SOLO_EMPTY;
 static int liveMode = 0;
+// A double tap on OPT waits before switching Live Mode, so a triple tap
+// (highlight) never flashes the other screen title. The wait follows the
+// player's own tapping speed: half again the gap between the first two taps.
+static constexpr int LIVE_TOGGLE_MIN_WAIT_FRAMES = 6;
+static int liveTogglePending = 0;
+static int liveToggledEarly = 0;   // Switched while a third tap could still come
+static uint32_t songFrame = 0;     // Counts Song screen frames
+static uint32_t firstOptTapFrame = 0;
+static uint32_t liveToggleFrame = 0;
 
 static int getColumnCount(int row);
 static void drawStatic(void);
@@ -130,12 +140,25 @@ static void init(void) {
   screen.selectAnchorRow = 0;
   screen.selectAnchorCol = 0;
   liveMode = 0;
+  liveTogglePending = 0;
+  liveToggledEarly = 0;
   pSongRow = &screen.cursorRow;
   pSongTrack = &screen.cursorCol;
 }
 
 static void setup(int input) {
   screen.selectMode = 0;
+  liveTogglePending = 0;
+  liveToggledEarly = 0;
+}
+
+static void applyPendingLiveToggle(void) {
+  if (!liveTogglePending) return;
+  liveTogglePending = 0;
+  liveToggledEarly = appTapSequenceOpen(keyOpt);
+  liveMode ^= 1;
+  drawStatic();
+  screenMessage(MESSAGE_TIME, liveMode ? "Live: PLAY queue, double urgent" : "Song mode");
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -205,6 +228,10 @@ static void fullRedraw(void) {
 }
 
 static void draw(void) {
+  ++songFrame;
+  if (liveTogglePending && ((int32_t)(songFrame - liveToggleFrame) >= 0 || !appTapSequenceOpen(keyOpt)))
+    applyPendingLiveToggle();
+
   for (int c = 0; c < chipnomadState->project.tracksCount; c++) {
     gfxClearRect(2 + c * 3, 3, 1, screenVisibleRows());
     const PlaybackTrackState* track = &chipnomadGetPlaybackStatus(chipnomadState)->tracks[c];
@@ -404,10 +431,27 @@ static int onEdit(int col, int row, CellEditAction action) {
 static int onInput(int isKeyDown, int keys, int tapCount) {
   int handled = 0;
 
+  if (isKeyDown) {
+    int thirdOptTap = keys == keyOpt && tapCount == 3;
+    if (thirdOptTap && liveTogglePending) {
+      liveTogglePending = 0; // The triple tap highlights instead
+    } else if (thirdOptTap && liveToggledEarly) {
+      liveMode ^= 1; // A slower third tap undoes the early switch
+      drawStatic();
+    } else if (liveTogglePending) {
+      applyPendingLiveToggle(); // Any other press switches Live Mode first
+    }
+    liveToggledEarly = 0;
+  }
+
+  if (isKeyDown && keys == keyOpt && tapCount == 1) firstOptTapFrame = songFrame;
   if (isKeyDown && keys == keyOpt && tapCount == 2) {
-    liveMode ^= 1;
-    drawStatic();
-    screenMessage(MESSAGE_TIME, liveMode ? "Live: PLAY queue, double urgent" : "Song mode");
+    screenClearOptPressed();
+    int gap = (int)(songFrame - firstOptTapFrame);
+    int wait = gap + gap / 2;
+    if (wait < LIVE_TOGGLE_MIN_WAIT_FRAMES) wait = LIVE_TOGGLE_MIN_WAIT_FRAMES;
+    liveToggleFrame = songFrame + wait;
+    liveTogglePending = 1;
     return 1;
   }
   if (isKeyDown && liveMode && keys == keyPlay) return livePlay(tapCount);
@@ -419,14 +463,18 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
         if (isKeyDown && keys == keyOpt) {
           if (tapCount == 3) {
             // Toggle highlight on triple-tap Opt
-            chipnomadState->project.songHighlight[screen.cursorRow][screen.cursorCol] ^= 1;
+            uint8_t* highlight = &chipnomadState->project.songHighlight[screen.cursorRow][screen.cursorCol];
+            *highlight ^= 1;
             projectModified = 1;
             drawField(screen.cursorCol, screen.cursorRow, CellState::focus);
             drawCursor(screen.cursorCol, screen.cursorRow);
+            screenMessage(MESSAGE_TIME, *highlight ? "Highlight on" : "Highlight off");
           } else {
             muteSoloState = MUTE_SOLO_OPT_PRESSED;
           }
-            handled = 1;
+          // A plain Opt tap copies a selection on release. Let common input
+          // arm that copy while still watching for a mute/solo chord.
+          handled = tapCount == 3 || screen.selectMode == 0;
         }
         break;
 
@@ -517,6 +565,9 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   if (keys == 0) {
     muteSoloState = MUTE_SOLO_EMPTY;
   }
+
+  // A Song-specific chord must not also copy and dismiss the selection.
+  if (handled && (keys != keyOpt || tapCount == 3)) screenClearOptPressed();
 
   // Only call common input handling if we didn't handle Song-specific input
   if (!handled) {

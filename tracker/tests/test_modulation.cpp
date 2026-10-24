@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "../../chipnomad_lib/playback_modulation.h"
 #include "../../chipnomad_lib/playback.h"
+#include <initializer_list>
 #include <string.h>
 #include <stdio.h>
 
@@ -1523,6 +1524,97 @@ TEST_CASE("structural LFO triggers restart only LFO and SLFO state") {
   CHECK(state.counter == 0);
   CHECK(state.step == 0);
   CHECK(state.outValue == 0);
+}
+
+TEST_CASE("slowLFO spans nine octaves evenly across the full byte") {
+  CHECK(modulationSlowLFOPeriod(0) == 256);
+  CHECK(modulationSlowLFOPeriod(0x55) == 2048);
+  CHECK(modulationSlowLFOPeriod(0xaa) == 16384);
+  CHECK(modulationSlowLFOPeriod(SLOW_LFO_MAX_STEP) == 131072);
+  CHECK(modulationSlowLFOPeriod(255) == 131072);
+  CHECK(SLOW_LFO_MAX_STEP == 255);
+  for (int step = 1; step <= 255; ++step) {
+    const uint32_t previous = modulationSlowLFOPeriod(step - 1);
+    const uint32_t current = modulationSlowLFOPeriod(step);
+    CHECK(current > previous); // All 256 settings are distinct.
+    const double ratio = double(current) / previous;
+    CHECK(ratio > 1.021); // ~2.48% per click, allowing whole-tick rounding.
+    CHECK(ratio < 1.029);
+  }
+  CHECK(modulationIsAdditive(ModulationType::SlowLFO));
+
+  Modulation mod = {.type = ModulationType::SlowLFO, .amount = 127,
+                   .p1 = static_cast<uint8_t>(LFOShape::tri), .p3 = SLOW_LFO_MAX_STEP};
+  PlaybackModState state;
+  playbackModInit(&state, &mod);
+  state.counter = 65535;
+  playbackModNext(&state);
+  CHECK(state.counter == 65536);
+  playbackModNext(&state);
+  CHECK(state.counter == 65537);
+  playbackModNoteOff(&state);
+  CHECK(state.counter == 65537);
+  state.p3Offset = -255;
+  playbackModNext(&state);
+  CHECK(state.counter == 2); // Reduced period wraps the old position safely.
+  state.p3Offset = 255;
+  state.counter = 131071;
+  playbackModNext(&state);
+  CHECK(state.counter == 0);
+}
+
+TEST_CASE("slowLFO long periods retain waveform positions and trigger behavior") {
+  uint8_t wavetables[256][32] = {};
+  wavetables[7][16] = 15;
+  wavetables[7][31] = 15;
+  Modulation mod = {.type = ModulationType::SlowLFO, .amount = 127,
+                   .p1 = static_cast<uint8_t>(LFOShape::wavetable),
+                   .p3 = SLOW_LFO_MAX_STEP, .p5 = 7};
+  PlaybackModState state;
+  playbackModInit(&state, &mod);
+  playbackModSetAYWavetables(&state, wavetables);
+  playbackModNext(&state);
+  CHECK(state.outValue == -32385);
+  state.counter = 65536;
+  playbackModNext(&state);
+  CHECK(state.outValue == 32385);
+  state.counter = 131071;
+  playbackModNext(&state);
+  CHECK(state.outValue == 32385);
+  CHECK(state.counter == 0);
+  playbackModNext(&state);
+  CHECK(state.outValue == -32385);
+
+  for (auto trigger : {LFOTrigger::hold, LFOTrigger::once}) {
+    mod.p2 = static_cast<uint8_t>(trigger);
+    playbackModNext(&state); // Trigger change restarts and preserves the table.
+    CHECK(state.counter == 1);
+    CHECK(state.ayWavetables == wavetables);
+    state.counter = 131071;
+    playbackModNext(&state);
+    CHECK(state.step == 0xff);
+    CHECK(state.outValue == (trigger == LFOTrigger::hold ? 32385 : 0));
+    playbackModNext(&state);
+    CHECK(state.counter == 131072);
+    playbackModRestart(&state);
+    CHECK(state.step == 0);
+    CHECK(state.counter == 0);
+  }
+}
+
+TEST_CASE("syncLFO retains its legacy multiplied period") {
+  CHECK(static_cast<uint8_t>(ModulationType::SLFO) == 3);
+  Modulation mod = {.type = ModulationType::SLFO, .amount = 127,
+                   .p1 = static_cast<uint8_t>(LFOShape::tri), .p3 = 255, .p4 = 64};
+  PlaybackModState state;
+  playbackModInit(&state, &mod);
+  state.counter = 4079;
+  playbackModNext(&state);
+  playbackModNext(&state);
+  CHECK(state.outValue == 32385);
+  state.counter = 16319;
+  playbackModNext(&state);
+  CHECK(state.counter == 0);
 }
 
 // Tests are run automatically by doctest

@@ -137,14 +137,36 @@ int midiIoOutputPortName(int index, char* buffer, int bufferSize) {
   }
 }
 
+// RtMidi's getMessage() reports each message's delta time relative to the
+// PREVIOUS dequeued message (driver timestamp on ALSA/CoreMIDI, MM timer on
+// WinMM), not an absolute time - and we poll in bursts, so consecutive
+// getMessage() calls can be far apart in wall time while the messages they
+// return arrived microseconds apart. To recover true arrival times we chain
+// the deltas: arrival(n) = arrival(n-1) + delta(n), anchored to the wall
+// clock on the first message after open. This matters for MIDI clock tempo
+// measurement, where clock bytes arrive 24x per beat and poll bursts would
+// otherwise make every interval look like one poll period.
+static uint64_t g_lastArrivalMicros = 0;
+static int g_haveLastArrival = 0;
+
 int midiIoOpenInput(int portIndex) {
   midiIoCloseInput();
   try {
     g_midiIn = new RtMidiIn();
     g_midiIn->openPort((unsigned int)portIndex, "ChooChooTracker In");
-    // We poll for note/CC/program-change messages only; sysex and realtime
-    // clock/active-sensing bytes would just be extra queue entries to skip.
-    g_midiIn->ignoreTypes(true, true, true);
+    // MIDI clock sync needs the realtime bytes (0xF8 clock, 0xFA/0xFB/0xFC
+    // transport) to reach our poll loop, so nothing is filtered at the
+    // driver level. Sysex/active-sensing that still get queued are dropped
+    // by midiIoPollInput's size/status filter below.
+    // All three flags must be clear because RtMidi's ALSA handler falls
+    // through from its TICK case into the SENSING and SYSEX cases: a 0xF8
+    // is dropped if ANY of the three ignore flags is set, not just the
+    // clock one.
+    g_midiIn->ignoreTypes(false, false, false);
+    // Timestamps restart with the port: the first message has no reliable
+    // delta to chain from.
+    g_haveLastArrival = 0;
+    g_lastArrivalMicros = 0;
     return 0;
   } catch (...) {
     delete g_midiIn;
@@ -162,22 +184,41 @@ void midiIoCloseInput(void) {
 
 int midiIoIsInputOpen(void) { return g_midiIn != NULL; }
 
-int midiIoPollInput(uint8_t* outStatus, uint8_t* outData1, uint8_t* outData2) {
+int midiIoPollInput(uint8_t* outStatus, uint8_t* outData1, uint8_t* outData2,                    uint64_t* outTimestampMicros) {
   if (!g_midiIn) return 0;
   std::vector<unsigned char> message;
-  // Skip anything that isn't a plain 2 or 3-byte channel message (sysex,
-  // clock, etc.) rather than misreading its bytes as note/CC data.
   try {
     for (;;) {
-      g_midiIn->getMessage(&message);
+      // getMessage() returns the message's delta time in seconds (time
+      // since the previous dequeued message); there is no separate
+      // timestamp getter in this RtMidi version.
+      double delta = g_midiIn->getMessage(&message);
       if (message.empty()) return 0;
-      if (message.size() == 2 || message.size() == 3) break;
+      uint8_t status = message[0];
+      // Accept: realtime clock/transport bytes (always 1 byte), or plain
+      // 2/3-byte channel voice messages. Everything else (sysex, 0xF1/0xF2/
+      // 0xF3 system common, 0xFE active sensing, 0xFF reset) is dropped
+      // rather than misread as note/CC data.
+      int isRealtime = message.size() == 1 &&
+        (status == 0xF8 || status == 0xFA || status == 0xFB || status == 0xFC);
+      int isChannel = (message.size() == 2 || message.size() == 3) && status < 0xF0;
+      if (!isRealtime && !isChannel) continue;
+
+      uint64_t now = midiIoNowMicros();
+      uint64_t arrival = (delta > 0.0 && g_haveLastArrival)
+        ? g_lastArrivalMicros + (uint64_t)(delta * 1000000.0)
+        : now;
+      if (arrival > now) arrival = now; // clock skew guard
+      g_lastArrivalMicros = arrival;
+      g_haveLastArrival = 1;
+
+      *outStatus = status;
+      *outData1 = message.size() > 1 ? message[1] : 0;
+      *outData2 = message.size() > 2 ? message[2] : 0;
+      *outTimestampMicros = arrival;
+      return 1;
     }
   } catch (...) { return 0; }
-  *outStatus = message[0];
-  *outData1 = message[1];
-  *outData2 = message.size() == 3 ? message[2] : 0;
-  return 1;
 }
 
 int midiIoOpenOutput(int portIndex) {
@@ -234,7 +275,7 @@ int midiIoOutputPortName(int, char*, int) { return -1; }
 int midiIoOpenInput(int) { return -1; }
 void midiIoCloseInput(void) {}
 int midiIoIsInputOpen(void) { return 0; }
-int midiIoPollInput(uint8_t*, uint8_t*, uint8_t*) { return 0; }
+int midiIoPollInput(uint8_t*, uint8_t*, uint8_t*, uint64_t*) { return 0; }
 int midiIoOpenOutput(int) { return -1; }
 void midiIoCloseOutput(void) {}
 int midiIoIsOutputOpen(void) { return 0; }

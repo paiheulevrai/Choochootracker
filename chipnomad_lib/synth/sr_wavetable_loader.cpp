@@ -7,8 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static uint16_t serumFrameSize(const char* path) {
-  FILE* file = fopen(path, "rb");
+static uint16_t serumFrameSize(FILE* file) {
   if (!file) return 0;
   char id[4];
   uint32_t size;
@@ -27,16 +26,15 @@ static uint16_t serumFrameSize(const char* path) {
     }
     fseek(file, size + (size & 1), SEEK_CUR);
   }
-  fclose(file);
   return result;
 }
 
-int srWavetableLoadWav(const char* path, InstrumentSample* table,
+int srWavetableLoadWavFile(FILE* file, const char* path, InstrumentSample* table,
                      uint16_t* frameSize, uint16_t* frameCount,
                      char* error, size_t errorSize) {
-  if (sampleLoadWav16(path, table, error, errorSize)) return 1;
+  if (sampleLoadWav16File(file, path, table, error, errorSize)) return 1;
   if (table->channels != 1) { snprintf(error, errorSize, "Wavetable needs mono WAV"); return 1; }
-  uint16_t size = serumFrameSize(path);
+  uint16_t size = serumFrameSize(file);
   if (!size && table->frameCount == 64 * 256) size = 256;
   if (!size && table->frameCount % 2048 == 0) size = 2048;
   if (!size || table->frameCount % size != 0) {
@@ -48,4 +46,14 @@ int srWavetableLoadWav(const char* path, InstrumentSample* table,
   *frameSize = size;
   *frameCount = (uint16_t)count;
   return 0;
+}
+
+int srWavetableLoadWav(const char* path, InstrumentSample* table,
+                     uint16_t* frameSize, uint16_t* frameCount,
+                     char* error, size_t errorSize) {
+  FILE* file = fopen(path, "rb");
+  if (!file) { snprintf(error, errorSize, "Cannot open WAV"); return 1; }
+  int result = srWavetableLoadWavFile(file, path, table, frameSize, frameCount, error, errorSize);
+  fclose(file);
+  return result;
 }

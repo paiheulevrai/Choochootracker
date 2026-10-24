@@ -1,10 +1,11 @@
 #include <stdio.h>
+#include <initializer_list>
 #include <string.h>
 #include "project.h"
 #include "project_instruments.h"
 #include "utils.h"
 
-FXName fxNames[256];
+FXName fxNames[fxTotalCount];
 static FXName instrumentGroupNames[(int)InstrumentType::totalCount][fxTotalCount];
 
 // FX Names organized by groups (in the order as they appear in FX select screen)
@@ -16,11 +17,11 @@ FXName fxNamesSequencer[] = {
   {fxRET, "RET"}, {fxDEL, "DEL"}, {fxOFF, "OFF"}, {fxKIL, "KIL"}, {fxTIC, "TIC"},
   {fxTBL, "TBL"}, {fxTBX, "TBX"}, {fxTHO, "THO"}, {fxTXH, "TXH"}, {fxGRV, "GRV"},
   {fxGGR, "GGR"}, {fxHOP, "HOP"}, {fxSNG, "SNG"}, {fxPRO, "PRO"},
-  {fxMOD, "MOD"}, {fxSPD, "SPD"}, {fxSLE, "SLE"}
+  {fxMOD, "MOD"}, {fxRNN, "RNN"}, {fxSPD, "SPD"}, {fxSLE, "SLE"}, {fxPAN, "PAN"}
 };
 int fxSequencerCount = sizeof(fxNamesSequencer) / sizeof(FXName);
 
-FXName fxNamesTrack[] = {{fxRSN, "RSN"}, {fxDSN, "DSN"}, {fxSCL, "SCL"}, {fxCRD, "CRD"}};
+FXName fxNamesTrack[] = {{fxRSN, "RSN"}, {fxDSN, "DSN"}, {fxSCL, "SCL"}, {fxCRD, "CRD"}, {fxTPN, "TPN"}};
 int fxTrackCount = sizeof(fxNamesTrack) / sizeof(FXName);
 
 FXName fxNamesEnvelope[] = {
@@ -60,40 +61,56 @@ FXName fxNamesInsert[] = {
 // FX Groups array. FX counts are filled in fillFXNames()
 FXGroup fxGroups[] = {
   {"Sequencer FX", fxNamesSequencer, 0, 8, InstrumentType::none},
-  {"Track FX", fxNamesTrack, 0, 4, InstrumentType::none},
+  {"Track FX", fxNamesTrack, 0, 8, InstrumentType::none},
   {"AY Classic FX", NULL, 0, 8, InstrumentType::AY1},
   {"AY Plus FX", NULL, 0, 8, InstrumentType::AY2},
   {"AYSample FX", NULL, 0, 8, InstrumentType::AYSample},
-  {"Braids FX", NULL, 0, 5, InstrumentType::Braids},
-  {"Sample FX", NULL, 0, 6, InstrumentType::Sample},
-  {"2xSCWF FX", NULL, 0, 4, InstrumentType::SCWF},
-  {"BYOWTBL FX", NULL, 0, 6, InstrumentType::BYOWTBL},
-  {"Plaits FX", NULL, 0, 7, InstrumentType::Plaits},
-  {"Plaits-Alt FX", NULL, 0, 7, InstrumentType::PlaitsAlt},
-  {"aChChid FX", NULL, 0, 9, InstrumentType::AChChid},
+  {"Braids FX", NULL, 0, 8, InstrumentType::Braids},
+  {"Sample FX", NULL, 0, 8, InstrumentType::Sample},
+  {"2xSCWF FX", NULL, 0, 8, InstrumentType::SCWF},
+  {"BYOWTBL FX", NULL, 0, 8, InstrumentType::BYOWTBL},
+  {"Plaits FX", NULL, 0, 8, InstrumentType::Plaits},
+  {"Plaits-Alt FX", NULL, 0, 8, InstrumentType::PlaitsAlt},
+  {"aChChid FX", NULL, 0, 8, InstrumentType::AChChid},
   {"Bogie FX", NULL, 0, 8, InstrumentType::DrumSynth},
-  {"ADSR / Trigger FX", fxNamesEnvelope, 0, 7, InstrumentType::none},
-  {"Modulation FX", fxNamesModulation, 0, 5, InstrumentType::none},
   {"MME FX", NULL, 0, 8, InstrumentType::MME},
+  {"OPLL FX", NULL, 0, 8, InstrumentType::OPLL},
+  {"VRC7 FX", NULL, 0, 8, InstrumentType::VRC7},
+  {"OPL2 FX", NULL, 0, 8, InstrumentType::OPL2},
+  {"OPL3 FX", NULL, 0, 8, InstrumentType::OPL3},
+  {"Genesis FX", NULL, 0, 8, InstrumentType::GenesisFM},
+  {"Arcade FX", NULL, 0, 8, InstrumentType::ArcadeFM},
+  {"DX7 FX", NULL, 0, 8, InstrumentType::DX7},
+  {"Sega PSG FX", NULL, 0, 8, InstrumentType::SegaPSG},
+  {"GB Pulse FX", NULL, 0, 8, InstrumentType::GBPulse},
+  {"GB Noise FX", NULL, 0, 8, InstrumentType::GBNoise},
+  {"SID FX", NULL, 0, 8, InstrumentType::SID},
   {"Sintered FX", NULL, 0, 8, InstrumentType::Sintered},
-  {"MIDI FX", NULL, 0, 4, InstrumentType::Midi},
-  {"Insert FX", fxNamesInsert, 16, 8, InstrumentType::none},
+  {"ADSR / Trigger FX", fxNamesEnvelope, 0, 8, InstrumentType::none},
+  {"Modulation FX", fxNamesModulation, 0, 5, InstrumentType::none},
+  {"MIDI FX", NULL, 0, 8, InstrumentType::Midi},
+  {"TF1", fxNamesInsert, 8, 8, InstrumentType::none},
+  {"TF2", fxNamesInsert + 8, 8, 8, InstrumentType::none},
+  {"MonkSynth FX", NULL, 0, 8, InstrumentType::Monk},
+  {"SoundFont FX", NULL, 0, 8, InstrumentType::SoundFont},
 };
 int fxGroupCount = sizeof(fxGroups) / sizeof(FXGroup);
 
 // Fill FX names
 void fillFXNames() {
   // Initialize all FX names to "---"
-  for (int c = 0; c < 256; c++) {
+  for (int c = 0; c < fxTotalCount; c++) {
     strcpy(fxNames[c].name, "---");
-    fxNames[c].fx = (enum FX)c;
+    fxNames[c].fx = (FXId)c;
   }
-
+  // Retain legacy spellings for saved songs, without offering duplicate controls.
+  strcpy(fxNames[fxFVL].name, "FVL");
+  strcpy(fxNames[fxFPN].name, "FPN");
   // Fill counts in fxGroups array
   fxGroups[0].count = fxSequencerCount;
   fxGroups[1].count = fxTrackCount;
-  fxGroups[13].count = fxEnvelopeCount;
-  fxGroups[14].count = fxModulationCount;
+  fxGroups[26].count = fxEnvelopeCount;
+  fxGroups[27].count = fxModulationCount;
   // Instrument groups are materialized from the declarative catalogue.  The
   // editor still receives its established FXName view, without duplicating
   // family availability or labels here.
@@ -111,7 +128,7 @@ void fillFXNames() {
   {
     const InstrumentDefinition* definition = getInstrumentDefinition(InstrumentType::MME);
     FXName* names = instrumentGroupNames[(int)InstrumentType::MME];
-    fxGroups[15].fxList = names; fxGroups[15].count = definition->fxCount;
+    fxGroups[13].fxList = names; fxGroups[13].count = definition->fxCount;
     for (int i = 0; i < definition->fxCount; ++i) {
       names[i].fx = (FX)definition->fxList[i].fx;
       strcpy(names[i].name, definition->fxList[i].name);
@@ -120,10 +137,10 @@ void fillFXNames() {
   {
     const InstrumentDefinition* definition = getInstrumentDefinition(InstrumentType::Sintered);
     FXName* names = instrumentGroupNames[(int)InstrumentType::Sintered];
-    fxGroups[16].fxList = names; fxGroups[16].count = definition->fxCount;
+    fxGroups[25].fxList = names; fxGroups[25].count = definition->fxCount;
     for (int i = 0; i < definition->fxCount; ++i) { names[i].fx = (FX)definition->fxList[i].fx; strcpy(names[i].name, definition->fxList[i].name); }
   }
-  for (int group = 17; group < 18; ++group) {
+  for (int group = 28; group < 29; ++group) {
     InstrumentType type = fxGroups[group].instType;
     const InstrumentDefinition* definition = getInstrumentDefinition(type);
     FXName* names = instrumentGroupNames[(int)type];
@@ -131,10 +148,39 @@ void fillFXNames() {
     for (int i = 0; i < definition->fxCount; ++i) { names[i].fx = (FX)definition->fxList[i].fx; strcpy(names[i].name, definition->fxList[i].name); }
   }
 
-  // Fill FX names from all groups
+  for (auto type : {InstrumentType::Monk, InstrumentType::SoundFont}) {
+    const auto* definition = getInstrumentDefinition(type);
+    auto* names = instrumentGroupNames[(int)type];
+    auto& group = fxGroups[fxGroupCount - (type == InstrumentType::Monk ? 2 : 1)];
+    group.fxList = names; group.count = definition->fxCount;
+    for (int i = 0; i < definition->fxCount; ++i) {
+      names[i].fx = (FX)definition->fxList[i].fx;
+      strcpy(names[i].name, definition->fxList[i].name);
+    }
+  }
+
+  for(int group=14;group<25;++group) {
+    auto type=fxGroups[group].instType;auto* names=instrumentGroupNames[int(type)];int count=0;
+    for(int g=genericModFMBrightness;g<genericModFirstDirectFM;++g)if(const auto* d=instrumentNativeModDestination(type,g)) {
+      if(g==genericModFMBrightness||(g>=genericModFMTime&&g<=genericModFMLFODepth))continue;
+      names[count].fx=FX(d->fx);
+      const char* labels[]={"FBR","FFB","CMD","CNR","CND","CNS","CSP","CSS","CSD","CEI","CEP","CED","FO1","FO2","FO3","FO4","FO5","FO6","SCP","SCT","SRN","SWV","SFI","SMR","SRG","SSY","FET","FTD","FDT","FHR","FLR","FLD","SAT","SDE","SSU","SRL","SPR"};
+      strcpy(names[count++].name,labels[g-genericModFMBrightness]);
+      if(g==genericModFMFeedback){names[count-1].fx=fxFBK;strcpy(names[count-1].name,"FBK");}
+      if(g>=genericModFMOperator1&&g<=genericModFMOperator6) {
+        names[count-1].fx=FX(fxOL1+g-genericModFMOperator1);
+        snprintf(names[count-1].name,sizeof(names[count-1].name),"OL%d",g-genericModFMOperator1+1);
+      }
+    }
+    for(int fx=fxOAR;fx<=fxLEN;++fx)if(instrumentFXAvailable(type,fx)) {
+      names[count].fx=FX(fx);strcpy(names[count++].name,directFMName(fx));
+    }
+    fxGroups[group].fxList=names;fxGroups[group].count=count;
+  }
+
   for (int g = 0; g < fxGroupCount; g++) {
     for (int i = 0; i < fxGroups[g].count; i++) {
-      enum FX fx = fxGroups[g].fxList[i].fx;
+      FXId fx = fxGroups[g].fxList[i].fx;
       strcpy(fxNames[fx].name, fxGroups[g].fxList[i].name);
       fxNames[fx].fx = fx;
     }
@@ -153,12 +199,14 @@ void projectInit(Project* p) {
   p->signedTrackSpeed = 1;
   p->perceptualEffects = 1;
   p->scaleApply = 1;
+  p->scaleMode = 0;
   p->scaleTracksMask = 0xff;
   p->scaleRoot = 0;
   p->scalePreset = scaleChromatic;
   p->scaleCustomMask = 0x0fff;
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
     p->trackVolume[i] = 100;
+    p->trackPan[i] = 128;
     p->trackTilt[i] = 0x80;
   }
   p->tiltPivotHz = 1000;
@@ -166,11 +214,22 @@ void projectInit(Project* p) {
   p->reverbTime = 180;
   p->reverbDamping = 160;
   p->reverbFilterCutoffHz = 16000;
+  p->reverbHighpassCutoffHz = 150;
+  p->reverbAlgorithm = 0;
+  p->beadsReverbTime = 180;
+  p->beadsReverbTone = 153;
+  p->beadsReverbHighpassCutoffHz = 150;
   p->delayReturn = 100;
   p->delayReverbSend = 0;
   p->delayTicks = 9;
   p->delayFeedback = 50;
   p->delayFilterCutoffHz = 12000;
+  p->delayAlgorithm = 0;
+  p->tapeDivision = 2;
+  p->tapeHeads = 6;
+  p->tapeTone = 160;
+  p->tapeFlutter = 25;
+  p->tapeSpring = 25;
 
   // Clean song structure
   for (int c = 0; c < PROJECT_MAX_LENGTH; c++) {
@@ -206,6 +265,10 @@ void projectInit(Project* p) {
     instrumentClear(&p->instruments[c]);
   }
 
+  for (int c = 0; c < PROJECT_MAX_MIDI_CC_MAPPINGS; c++) {
+    p->midiCCMappings[c].enabled = 1;
+  }
+
   // Clean tables
   for (int c = 0; c < PROJECT_MAX_TABLES; c++) {
     tableClear(&p->tables[c]);
@@ -235,10 +298,10 @@ int8_t phraseIsEmpty(Project* project, int phrase) {
   for (int c = 0; c < 16; c++) {
     if (project->phrases[phrase].rows[c].note != EMPTY_VALUE_8) return 0;
     if (project->phrases[phrase].rows[c].instrument != EMPTY_VALUE_8) return 0;
-    if (project->phrases[phrase].rows[c].volume != EMPTY_VALUE_8) return 0;
+    if (project->phrases[phrase].rows[c].volume != EMPTY_VALUE_16) return 0;
     for (int d = 0; d < 3; d++) {
-      if (project->phrases[phrase].rows[c].fx[d][0] != EMPTY_VALUE_8) return 0;
-      if (project->phrases[phrase].rows[c].fx[d][1] != 0) return 0;
+      if (project->phrases[phrase].rows[c].fx[d].command != FX_ID_EMPTY) return 0;
+      if (project->phrases[phrase].rows[c].fx[d].value != 0) return 0;
     }
   }
 
@@ -258,8 +321,8 @@ int8_t tableIsEmpty(Project* project, int table) {
     if (project->tables[table].rows[c].pitchOffset != 0) return 0;
     if (project->tables[table].rows[c].volume != EMPTY_VALUE_8) return 0;
     for (int d = 0; d < 4; d++) {
-      if (project->tables[table].rows[c].fx[d][0] != EMPTY_VALUE_8) return 0;
-      if (project->tables[table].rows[c].fx[d][1] != 0) return 0;
+      if (project->tables[table].rows[c].fx[d].command != FX_ID_EMPTY) return 0;
+      if (project->tables[table].rows[c].fx[d].value != 0) return 0;
     }
   }
 
@@ -312,10 +375,9 @@ void phraseClear(Phrase* phrase) {
   for (int d = 0; d < 16; d++) {
     phrase->rows[d].note = EMPTY_VALUE_8;
     phrase->rows[d].instrument = EMPTY_VALUE_8;
-    phrase->rows[d].volume = EMPTY_VALUE_8;
+    phrase->rows[d].volume = EMPTY_VALUE_16;
     for (int e = 0; e < 3; e++) {
-      phrase->rows[d].fx[e][0] = EMPTY_VALUE_8;
-      phrase->rows[d].fx[e][1] = 0;
+      phrase->rows[d].fx[e] = {FX_ID_EMPTY, 0};
     }
   }
 }
@@ -342,8 +404,7 @@ void tableClear(Table* table) {
     table->rows[d].pitchOffset = 0;
     table->rows[d].volume = EMPTY_VALUE_8;
     for (int e = 0; e < 4; e++) {
-      table->rows[d].fx[e][0] = EMPTY_VALUE_8;
-      table->rows[d].fx[e][1] = 0;
+      table->rows[d].fx[e] = {FX_ID_EMPTY, 0};
     }
   }
 }

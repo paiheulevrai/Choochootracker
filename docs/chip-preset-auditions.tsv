@@ -1,0 +1,53 @@
+bank	preset	source_cni	wav	start_seconds	duration_seconds	peak	rms	dc	human_listened
+The Fat Man 2-op	Acoustic Grand	fatman-2op-0-00000-000.cni	bank-1.wav	0	4	0.0191652	0.0087397	-6.59515e-05	false
+The Fat Man 2-op	Pizzicato Strings	fatman-2op-0-00000-045.cni	bank-1.wav	4	4	0.0206006	0.00462541	-1.68621e-07	false
+The Fat Man 2-op	Polysynth Pad	fatman-2op-0-00000-090.cni	bank-1.wav	8	4	0.0310765	0.0115642	-0.000421329	false
+The Fat Man 2-op	Percussion 042	fatman-2op-1-00000-042.cni	bank-1.wav	12	4	0.0305653	0.000884305	0.000171969	false
+The Fat Man 4-op	Acoustic Grand	fatman-4op-0-00000-000.cni	bank-2.wav	0	4	0.084972	0.032789	4.66782e-05	false
+The Fat Man 4-op	Pizzicato Strings	fatman-4op-0-00000-045.cni	bank-2.wav	4	4	0.0623989	0.0112068	-2.3532e-06	false
+The Fat Man 4-op	Polysynth Pad	fatman-4op-0-00000-090.cni	bank-2.wav	8	4	0.121123	0.0352828	-0.0056474	false
+The Fat Man 4-op	Percussion 042	fatman-4op-1-00000-042.cni	bank-2.wav	12	4	0.12723	0.00340839	0.000692443	false
+DMXOPL3	Acoustic Grand Piano	dmxopl3-0-00000-000.cni	bank-3.wav	0	4	0.0532602	0.0140346	3.2282e-05	false
+DMXOPL3	Lead 4 (chiffer)	dmxopl3-0-00000-083.cni	bank-3.wav	4	4	0.110063	0.0314535	0.0190434	false
+DMXOPL3	Percussion 041	dmxopl3-1-00000-041.cni	bank-3.wav	8	4	0.0960499	0.00887558	0.000147859	false
+DMXOPL3	Open High Conga (New)	dmxopl3-1-00016-063.cni	bank-3.wav	12	4	0.12934	0.0113267	0.000483696	false
+OpenDX7 Originals	Elec Piano 1	dx7-6158177464e010fd8f4893aa.cni	bank-101.wav	0	4	0.224105	0.0542216	8.94183e-05	false
+OpenDX7 Originals	Soft Brass	dx7-a65fd4c315b7f086b82bbd49.cni	bank-101.wav	4	4	0.136097	0.0323171	-0.000108283	false
+OpenDX7 Originals	Soft Mallet	dx7-3c56555577c34354eec887f9.cni	bank-101.wav	8	4	0.121469	0.0450896	-3.36427e-06	false
+OpenDX7 Originals	Shimmer Pad	dx7-d06d69dea469a0eae3b86f33.cni	bank-101.wav	12	4	0.106157	0.0376754	-2.45201e-06	false
+YSE Originals	YSE SINE 0	dx7-2e62571db3bee2ffd2669862.cni	bank-102.wav	0	4	0.0940619	0.0228278	1.06651e-05	false
+YSE Originals	YSE FM2OP	dx7-b2df13005fb1e76ccbe09dcc.cni	bank-102.wav	4	4	0.0117331	0.00284564	-4.41681e-06	false
+YSE Originals	YSE BELL 0	dx7-58cd81bc1735968d22da4c44.cni	bank-102.wav	8	4	0.0274451	0.00437613	-1.94094e-05	false
+YSE Originals	YSE BRASS	dx7-d85e05f7dff128610e3ac84d.cni	bank-102.wav	12	4	0.0159512	0.00211368	-3.1696e-05	false
+ChooChoo DX7 Originals	Felt Hammer	dx7-354cc74709ecccd6ce235813.cni	bank-103.wav	0	4	0.0723403	0.00561699	6.29303e-06	false
+ChooChoo DX7 Originals	Hollow Fifth	dx7-a37107690d3ecf66cf58c465.cni	bank-103.wav	4	4	0.0570127	0.0159684	0.000105164	false
+ChooChoo DX7 Originals	Night Current	dx7-955494a141de8d5496f66bf0.cni	bank-103.wav	8	4	0.027641	0.0107598	2.3421e-06	false
+ChooChoo DX7 Originals	Low Horns	dx7-ad847b114b727b7eb2961d15.cni	bank-103.wav	12	4	0.0711076	0.00806308	-0.00013514	false
+ChooChoo Genesis	Twin Reed	four-op-25-a973239a215eb6e73023aeca.cni	bank-200.wav	0	4	0.0360272	0.00806342	-3.25963e-10	false
+ChooChoo Genesis	Round Sub	four-op-25-b20e1075b4f460fb1c731fb0.cni	bank-200.wav	4	4	0.0479298	0.0119325	-1.90105e-10	false
+ChooChoo Genesis	Cloud Pair	four-op-25-593895637c90004fd749a5f8.cni	bank-200.wav	8	4	0.0256588	0.0110196	-2.20108e-06	false
+ChooChoo Genesis	Small Pipes	four-op-25-e67f6ada41b52b08246d6b5d.cni	bank-200.wav	12	4	0.0278126	0.013758	2.10394e-10	false
+ChooChoo Arcade	Twin Reed	four-op-26-8f494c1aef5ed5b12ce16532.cni	bank-201.wav	0	4	0.0538977	0.01136	1.34832e-10	false
+ChooChoo Arcade	Round Sub	four-op-26-0fd5944d2eba5674d515e2e7.cni	bank-201.wav	4	4	0.0715303	0.0168807	1.05946e-10	false
+ChooChoo Arcade	Cloud Pair	four-op-26-af779b098ce72cb781453247.cni	bank-201.wav	8	4	0.0379037	0.0158694	-1.42754e-08	false
+ChooChoo Arcade	Small Pipes	four-op-26-41e76fd664baa6d19fc6206f.cni	bank-201.wav	12	4	0.0412271	0.0203268	-2.99096e-10	false
+OPLL / MSX	Violin	builtin-17-01.cni	bank-317.wav	0	4	0.0270112	0.00302044	0.000660795	false
+OPLL / MSX	Flute	builtin-17-04.cni	bank-317.wav	4	4	0.0277972	0.0102739	-0.00124215	false
+OPLL / MSX	Trumpet	builtin-17-07.cni	bank-317.wav	8	4	0.0278292	0.0154388	0.00718773	false
+OPLL / MSX	Synthesizer	builtin-17-10.cni	bank-317.wav	12	4	0.0279853	0.0114351	0.00597645	false
+VRC7	Buzzy Bell	builtin-18-01.cni	bank-318.wav	0	4	0.043342	0.014218	-3.87117e-05	false
+VRC7	Flute	builtin-18-04.cni	bank-318.wav	4	4	0.027785	0.010811	-0.00326833	false
+VRC7	Trumpet	builtin-18-07.cni	bank-318.wav	8	4	0.0278292	0.0154388	0.00718773	false
+VRC7	Vibes	builtin-18-10.cni	bank-318.wav	12	4	0.0315565	0.0120516	-4.43897e-05	false
+Sega PSG	Bright Pluck	builtin-21-00.cni	bank-321.wav	0	4	0.213985	0.0270298	0.000972839	false
+Sega PSG	Soft Pad	builtin-21-03.cni	bank-321.wav	4	4	0.142601	0.0747763	0.000165142	false
+Sega PSG	Long Pluck	builtin-21-06.cni	bank-321.wav	8	4	0.232362	0.0490927	0.00109871	false
+Sega PSG	Noise Snare	builtin-21-09.cni	bank-321.wav	12	4	0.207879	0.0174265	0.000593074	false
+GB Pulse	Hollow Lead	builtin-22-00.cni	bank-322.wav	0	4	0.0228348	0.0108809	-9.77243e-05	false
+GB Pulse	Thin Pluck	builtin-22-02.cni	bank-322.wav	4	4	0.0191872	0.00254735	-9.42013e-05	false
+GB Pulse	Pulse Organ	builtin-22-04.cni	bank-322.wav	8	4	0.0130081	0.0100304	2.58978e-06	false
+GB Pulse	Down Sweep	builtin-22-06.cni	bank-322.wav	12	4	0.01529	0.00386838	-3.99904e-06	false
+GB Noise	Closed Hat	builtin-23-00.cni	bank-323.wav	0	4	0.0100711	0.000383104	3.19687e-06	false
+GB Noise	Snare Burst	builtin-23-02.cni	bank-323.wav	4	4	0.0160568	0.0030959	1.71658e-05	false
+GB Noise	Metal Hat	builtin-23-04.cni	bank-323.wav	8	4	0.00940916	0.000751292	-9.97165e-07	false
+GB Noise	Low Noise	builtin-23-06.cni	bank-323.wav	12	4	0.0221611	0.00457464	6.46693e-05	false

@@ -73,17 +73,24 @@ Synthesis
 - AY Classic, AY Plus, and crunchy AY Sample playback (from Chipnomad)
 - All 47 Braids engines, 24 stock Plaits engines, and 24 additional Plaits-Alt engines
 - Clean mono or stereo PCM8/PCM16 sample playback (one-shot samples with autoslice mode)
+- Stretch mode, autoslicing, chromatic sample playback
 - Dual single cycle waveform oscillator: with mix & detune
 - Dual wavetable oscillator: bring your own Serum wavetables !
 - Achchid: acid engine (open303 based) that can take Braids as VCO
 - Bogie: In-house drum synth with 12 VA/FM models (including cowbells).
 - MME: Multi Modulation Engine. An aggressive voice inspired by the Loquelic Iteritas, but with Mutable Warps algos
 - Sintered: experimental synthetic percussions. MME for drums. Very wild.
-- Multimode LP/HP/BP 12/24dB filters for all new synth/sample engines
+
+Sound design
+- Multimode LP/HP/BP 12/24dB filters on each track (except special engines)
 - Several filter flavours inspired by analog synths
 - Per-track volume, mute, solo, tiltEQ, Reverb send, and Delay send
-- Mutable Instruments Clouds meme lush reverb
-- Tick-synchronized filtered ping-pong delay
+- Send reverb: Mutable Instruments Clouds meme lush reverb
+- Send delay: Tick-synchronized filtered ping-pong delay
+- Insert effects: 2x effect slots per track (in-house & Airwindows effects)
+- Capable sample editor
+- Resampling support
+- Timesretch: in-house dirty mode or Signalsmith Stretch 
 
 Articulations
 - Three tracker FX columns per row
@@ -120,6 +127,7 @@ Find bugs or anything? Come discuss on Discord: https://discord.gg/Ut9vM6zgKU
 
 ## Documentation
 
+- [Visual field guide](https://choochootracker.vercel.app/user-guide/) · [Offline version and sources](docs/user-guide/README.md)
 - [User manual](docs/USER_MANUAL.md)
 - [User manual PDF](docs/ChooChooTracker-User-Manual.pdf)
 
@@ -129,7 +137,7 @@ Find bugs or anything? Come discuss on Discord: https://discord.gg/Ut9vM6zgKU
 - there can still be some crashes and bugs
 - Visual identity is not final
 - Feature set isn't frozen
-- need to tweak the scaling of various controls (like linear vs expo, that kind of stuff)
+- Engines and stuff may still require tweaking to sound as good as they should
 
 ## Why the train name?
 
@@ -139,7 +147,22 @@ I wanted a mobile groovebox to make techno... but none of the available option t
 
 ChooChooTracker is a fork of [ChipNomad](https://github.com/Megus/chipnomad-tracker). Its Braids, Plaits, Clouds, and stmlib code comes from Mutable Instruments' open-source releases. See the included license files for exact attribution.
 
-Thanks to [luginf](https://github.com/luginf) for project-loading and VT2 import fixes, and to [aiaaaa](https://github.com/aiaaaa) for Stick live mode improvements.
+Thanks to [luginf](https://github.com/luginf) for project-loading, VT2 import fix,
+desktop MIDI, and AppImage fixes; to [aiaaaa](https://github.com/aiaaaa) for
+Stick live mode and track-display improvements; to [am0k161](https://github.com/am0k161)
+for the sample editor and sampler improvements; and to Ian (hifi) for the
+instrument-navigation improvements.
+
+The time-stretching processor is based on [Signalsmith Stretch](https://github.com/Signalsmith-Audio/stretch)
+by Signalsmith Audio. Several insert effects are adapted from
+[Airwindows](https://github.com/airwindows/airwindows); see the included
+license files for the individual attributions.
+
+Official ChooChooTracker releases may include [Ableton Link](https://github.com/Ableton/link) under a separate
+authorisation. The project's MIT license does not grant rights to Ableton Link;
+forks, derivative works and third-party distributors must obtain their own
+authorisation before they build or distribute a product that includes it. See
+[Link's license](https://github.com/Ableton/link/blob/master/LICENSE.md).
 
 The project is released under the [MIT License](LICENSE).
 
@@ -155,3 +178,4 @@ Mad respects to the people I stole ideas from:
 - Whoever invented the menu navigation style of vintage RPGs
 - the Noise Engineering team, who inspired the MME engine
 - All musicians who I saw playing live sets on gameboys and other constrained hardware rigs.
+

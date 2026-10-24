@@ -1,0 +1,87 @@
+name: AppImage
+
+# An AppImage uses the C library of the machine it runs on, so what it needs is
+# fixed by the system it was built on. Build inside a Debian 10 (glibc 2.28)
+# container so the result runs on Debian 10+, Ubuntu 20.04+ (incl. 22.04) and
+# anything newer. Debian 10 is EOL: its packages come from archive.debian.org.
+# The checkout happens on the host and only the build runs in the container,
+# because the container's old userland can't run the JavaScript actions.
+on:
+  workflow_dispatch:
+  push:
+    branches: [linux-appimage]
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      # Pinned by SHA-256. appimagetool 1.9.1 builds the image around the
+      # static Type 2 runtime below, so the result no longer needs libfuse2
+      # on the host (APPIMAGE_EXTRACT_AND_RUN=1 covers FUSE-less systems).
+      - name: Download pinned appimagetool and static Type 2 runtime
+        env:
+          APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+          RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "$APPIMAGETOOL_SHA256  $RUNNER_TEMP/appimagetool" | sha256sum --check
+          chmod +x "$RUNNER_TEMP/appimagetool"
+          curl --fail --location --output "$RUNNER_TEMP/runtime-x86_64" \
+            https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+          echo "$RUNTIME_SHA256  $RUNNER_TEMP/runtime-x86_64" | sha256sum --check
+
+      # Debian 10 ships SDL 2.0.9, too old for the code (SDL_RenderFlush needs
+      # 2.0.10): build SDL from source in the container and bundle that one.
+      - name: Download pinned SDL2 source
+        env:
+          SDL2_SHA256: 8b8d4aef2038533da814965220f88f77d60dfa0f32685f80ead65e501337da7f
+        run: |
+          curl --fail --location --output "$RUNNER_TEMP/SDL2.tar.gz" \
+            https://github.com/libsdl-org/SDL/releases/download/release-2.30.11/SDL2-2.30.11.tar.gz
+          echo "$SDL2_SHA256  $RUNNER_TEMP/SDL2.tar.gz" | sha256sum --check
+
+      - name: Build AppImage in a Debian 10 container
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -v "$RUNNER_TEMP/appimagetool:/opt/appimagetool:ro" \
+            -v "$RUNNER_TEMP/runtime-x86_64:/opt/runtime-x86_64:ro" \
+            -v "$RUNNER_TEMP/SDL2.tar.gz:/opt/SDL2.tar.gz:ro" \
+            -w /workspace \
+            debian:10 bash -euxc '
+              sed -i "s|deb.debian.org|archive.debian.org|; s|security.debian.org|archive.debian.org|; /buster-updates/d" /etc/apt/sources.list
+              echo "Acquire::Check-Valid-Until false;" > /etc/apt/apt.conf.d/99archive
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                g++ make file libasound2-dev \
+                libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev \
+                libxxf86vm-dev libgl1-mesa-dev libpulse-dev libudev-dev libdbus-1-dev
+              mkdir /tmp/sdl && tar -xzf /opt/SDL2.tar.gz -C /tmp/sdl --strip-components=1
+              (cd /tmp/sdl && ./configure --prefix=/usr --libdir=/lib/x86_64-linux-gnu \
+                --disable-video-wayland --disable-video-kmsdrm && make -j2 && make install)
+              printf "#!/bin/sh\nexec /opt/appimagetool --appimage-extract-and-run \"\$@\"\n" \
+                > /usr/local/bin/appimagetool
+              chmod +x /usr/local/bin/appimagetool
+              make -C tracker -j2 -f Makefile.linux appimage APPIMAGE_LIBS=/lib/x86_64-linux-gnu/libSDL2-2.0.so.0 APPIMAGE_RUNTIME=/opt/runtime-x86_64
+              echo "highest glibc symbol version needed:"
+              objdump -T tracker/build/linux/choochootracker | grep -o "GLIBC_[0-9.]*" | sort -uV | tail -1
+            '
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: choochootracker-appimage
+          path: releases/*.AppImage
+          if-no-files-found: error

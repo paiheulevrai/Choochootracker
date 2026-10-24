@@ -1,0 +1,76 @@
+{
+  "waveform": "saw",
+  "attack": 3,
+  "decay": 7,
+  "sustain": 15,
+  "release": 12,
+  "pulse_width": 664,
+  "pw_table": null,
+  "filter_cutoff": 143,
+  "filter_resonance": 12,
+  "filter_mode": "lp",
+  "filter_voice1": true,
+  "ring_mod": false,
+  "sync": false,
+  "frequency": 440.0,
+  "gate_frames": 18,
+  "release_frames": 155,
+  "wavetable": null,
+  "volume": 15,
+  "chip_model": "6581",
+  "source_instrument": "Salamander Grand Piano (CC-BY 3.0)",
+  "wt_attack_frames": 1,
+  "wt_attack_waveform": "saw+triangle",
+  "wt_sustain_waveform": "saw",
+  "wt_use_test_bit": true,
+  "pw_start": 664,
+  "pw_delta": 15,
+  "pw_min": 724,
+  "pw_max": 3324,
+  "pw_mode": "sweep",
+  "wavetable_steps": null,
+  "filter_cutoff_start": 143,
+  "filter_cutoff_end": 239,
+  "filter_sweep_frames": 39,
+  "reference_notes": [
+    {
+      "note": "C3",
+      "freq_hz": 130.81
+    },
+    {
+      "note": "Eb3",
+      "freq_hz": 155.56
+    },
+    {
+      "note": "Gb3",
+      "freq_hz": 185.0
+    },
+    {
+      "note": "A3",
+      "freq_hz": 220.0
+    },
+    {
+      "note": "C4",
+      "freq_hz": 261.63
+    },
+    {
+      "note": "Eb4",
+      "freq_hz": 311.13
+    },
+    {
+      "note": "Gb4",
+      "freq_hz": 369.99
+    },
+    {
+      "note": "A4",
+      "freq_hz": 440.0
+    },
+    {
+      "note": "C5",
+      "freq_hz": 523.25
+    }
+  ],
+  "fitness_score": 0.4658,
+  "version": 14,
+  "notes": "Restored from v7 baseline (commit 7dbf445) - better tonal quality than re-optimized versions"
+}

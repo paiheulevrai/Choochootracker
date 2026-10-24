@@ -38,6 +38,19 @@ TEST_CASE("MME macros and feedback alter the voice without instability") {
   }
 }
 
+TEST_CASE("MME Waves morphs smoothly through waveform-pair boundaries") {
+  InstrumentMME low = mmeInstrument(MMEModel::fold), high = low;
+  low.waves = 51; high.waves = 52; // The old five-step selector jumped here.
+  MMEVoice a, b; a.init(48000.0f); b.init(48000.0f);
+  a.configure(&low, 6000, 1, 20000, 0); b.configure(&high, 6000, 1, 20000, 0);
+  a.noteOn(); b.noteOn();
+  std::vector<float> left(128), right(128);
+  a.render(left.data(), left.size()); b.render(right.data(), right.size());
+  double difference = 0.0;
+  for (size_t i = 0; i < left.size(); ++i) difference += std::fabs(left[i] - right[i]);
+  CHECK(difference < 2.0);
+}
+
 TEST_CASE("MME Sync performs an audible master reset") {
   InstrumentMME freeRunning = mmeInstrument(MMEModel::sync), synced = freeRunning;
   freeRunning.amount = 0; synced.amount = 255; freeRunning.interval = synced.interval = 190;

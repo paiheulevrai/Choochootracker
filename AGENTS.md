@@ -3,6 +3,13 @@
 ## Builds
 
 - Windows: run from `tracker` with MSYS2 UCRT64: `make -j4 windows`.
+- From PowerShell, invoke MSYS2 Bash and escape the workspace spaces; set
+  `HOME` and `TMPDIR` inside the workspace because the sandbox may block
+  MSYS2's default locations:
+
+  ```powershell
+  & 'C:\msys64\usr\bin\bash.exe' -lc 'export PATH=/ucrt64/bin:/usr/bin; cd tracker; mkdir -p build/msys-home build/msys-tmp; export HOME="$(pwd)/build/msys-home"; export TMPDIR="$(pwd)/build/msys-tmp"; make -j4 windows'
+  ```
 - Windows releases must ship as a complete package: include the executable,
   required DLLs, and all runtime assets/dependencies, like the PortMaster
   package.
@@ -21,10 +28,12 @@
   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
   . .\.tmp\emsdk\emsdk_env.ps1
   $env:PATH += ';C:\msys64\usr\bin;C:\msys64\ucrt64\bin'
+  $empy = $env:EMSDK_PYTHON -replace '\\','/'
+  $empp = "$env:EMSDK/upstream/emscripten/em++.py"
   Set-Location tracker
   & 'C:\msys64\usr\bin\make.exe' -j8 -f Makefile.web web-deploy `
-    'COMMON_CFLAGS=-std=c++17 -Wall -g -Os -DTEST' `
-    "EMXX=$env:EMSDK_PYTHON $env:EMSDK\upstream\emscripten\em++.py"
+    'COMMON_CFLAGS=-std=c++17 -Wall -Os -DTEST' `
+    "EMXX=$empy $empp"
   ```
 
 - If web reports `clang++.exe: permission denied`, repair the execution

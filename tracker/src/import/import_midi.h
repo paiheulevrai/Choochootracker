@@ -14,6 +14,9 @@ extern "C" {
 // program numbers have no chiptune equivalent, so the user is expected to
 // pick real instruments afterward. Only the first tempo found in the file is
 // used (single global tickRate/groove, no per-section tempo changes).
+// The destination must be initialized with projectInit/projectInitAY first,
+// even for an empty project. Success releases its previous instrument data;
+// failure leaves the destination unchanged and owned by the caller.
 int projectLoadMidi(Project* project, const char* path);
 
 #ifdef __cplusplus

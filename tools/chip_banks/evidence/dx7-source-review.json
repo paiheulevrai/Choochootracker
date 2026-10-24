@@ -1,0 +1,46 @@
+{
+  "evidence_date": "2026-10-03",
+  "large_library_target": 1000,
+  "large_library_target_met": false,
+  "sources": [
+    {
+      "source": "Benson DX7 collection",
+      "url": "https://homepages.abdn.ac.uk/d.j.benson/pages/html/dx7.html",
+      "archive_sha256": "8eae9d5dc10601e3b7e293d280f6bd14ef2d8810091ead3e740a430fc451ec52",
+      "review": "not approved for bundling",
+      "reason": "Page describes public-domain collection but explicitly includes factory ROM banks. 228 SYX files, no accompanying author/license documentation in this archive; no bank-specific author grants verified. Raw files retained only in ignored audit directory.",
+      "files": 228
+    },
+    {
+      "source": "Bobby Blues / Synthoxicated Pafreak",
+      "url": "https://bobbyblues.recup.ch/yamaha_dx7/dx7_patches.html",
+      "archive_sha256": "70e4f553287f3ddc3b471f26570bf0eb8bef52501bfaa3b4ce0aab0ed0834d7b",
+      "review": "direct-author submission candidate; excluded for format",
+      "reason": "Submission section asks for personal creations offered as public domain and names this author. Actual 5239-byte banks and 730-byte single files include DX7II/performance extensions. Not silently reduced to base voices."
+    },
+    {
+      "source": "Bobby Blues All The Web / magazine compilations",
+      "url": "https://bobbyblues.recup.ch/yamaha_dx7/dx7_patches.html",
+      "review": "not approved for bundling",
+      "reason": "Compilation free-download rationale is not an author redistribution grant; separate submission terms do not clear magazine/factory material."
+    },
+    {
+      "source": "Dexed BlackWinny cartridge compilation",
+      "url": "https://asb2m10.github.io/dexed/",
+      "review": "not approved for bundling",
+      "reason": "Compilation link and credits do not establish bank-specific redistribution grants."
+    },
+    {
+      "source": "visualizersdotnl Yamaha-DX7-patch-library",
+      "url": "https://github.com/visualizersdotnl/Yamaha-DX7-patch-library",
+      "review": "not approved for bundling",
+      "reason": "CC0 mirror contains aggregated third-party/factory collections; compiler cannot establish all underlying author grants."
+    },
+    {
+      "source": "YSE CC0 seed",
+      "url": "https://github.com/yvanvds/yse-soundengine/blob/911ea2d4fcfe749d81a7b1e679c66e3cd07aefeb/CONTENT-LICENSES.md",
+      "review": "approved selected original data only",
+      "reason": "Explicit asset-level CC0 dedication; 32 slots contain four parameter sets, so four are bundled. Separate tolerated-unclear factory data excluded."
+    }
+  ]
+}

@@ -2,6 +2,7 @@ build
 tracker/measurements/
 results/
 .tmp/
+.worktrees/
 inspirations/
 releases/
 .vscode

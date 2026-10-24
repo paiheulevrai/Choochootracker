@@ -33,12 +33,27 @@ int chordBuild(uint8_t root, uint8_t slot, uint8_t inversion, uint8_t pitchCount
   int values[CHORD_MAX_VOICES];
   for (int i = 0; i < chord.count; ++i) values[i] = root + chord.intervals[i];
 
-  int steps = std::min((int)inversion, (int)chordMaxInversion(slot));
+  // Four closed positions are available even for triads and power chords:
+  // after their ordinary inversions, the cycle continues one octave higher.
+  int steps = inversion & 3;
   for (int step = 0; step < steps; ++step) {
     std::sort(values, values + chord.count);
     values[0] += 12;
   }
   std::sort(values, values + chord.count);
+
+  // The high bits add the classic drop voicings: drop-2, drop-3, or both.
+  // Dyads use progressively deeper bass drops so every CRD X value is useful.
+  if (chord.count >= 2) {
+    int voicing = inversion >> 2;
+    if (voicing & 1) values[chord.count - 2] -= 12;
+    if (voicing & 2) {
+      if (chord.count >= 3) values[chord.count - 3] -= 12;
+      else values[0] -= 24;
+    }
+    std::sort(values, values + chord.count);
+  }
+
   for (int i = 0; i < chord.count; ++i) {
     values[i] = std::max(0, std::min((int)pitchCount - 1, values[i]));
     pitches[i] = (uint8_t)values[i];

@@ -7,12 +7,16 @@ include Makefile.common
 LIBS = $(COMMON_LIBS) platforms/sdl2 ../chipnomad_lib/external/rtmidi
 OUTPUT_EXT =
 
-XTRA_CFLAGS = -DDESKTOP_BUILD -DGAMEPAD_SUPPORT -D__LINUX_ALSA__ -D__LINUX_ALSASEQ__
-XTRA_LIBS = -lSDL2 -lm -lasound
+XTRA_CFLAGS = -DDESKTOP_BUILD -DGAMEPAD_SUPPORT -D__LINUX_ALSA__ -D__LINUX_ALSASEQ__ \
+	-DLINK_PLATFORM_LINUX=1 -DASIO_STANDALONE=1 -DASIO_NO_TYPEID=1 -DASIO_VERSION_NAMESPACE=link_asio_1_38_2 -Wno-multichar
+XTRA_LIBS = -lSDL2 -lm -lasound -lpthread -lstdc++fs -latomic
 CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(XTRA_CFLAGS)
 OUTPUT = -o $(BUILD)/choochootracker$(OUTPUT_EXT)
 
 APPNAME = ChooChooTracker
+PACKAGE_ARCH ?= $(shell uname -m)
+PACKAGE_SUFFIX ?= Linux-$(PACKAGE_ARCH)
+PACKAGE_README ?= packaging/linux/README.txt
 
 # Simple Linux build
 .PHONY: linux
@@ -38,7 +42,7 @@ linux-deploy:
 	@mkdir -p $(BUILD)/$(APPNAME)-Linux
 	@cp $(BUILD)/choochootracker $(BUILD)/$(APPNAME)-Linux/
 	@cp -r packaging/common/* $(BUILD)/$(APPNAME)-Linux/
-	@cp packaging/linux/README.txt $(BUILD)/$(APPNAME)-Linux/
+	@cp $(PACKAGE_README) $(BUILD)/$(APPNAME)-Linux/README.txt
 	@cp ../docs/USER_MANUAL.md $(BUILD)/$(APPNAME)-Linux/
 	@mkdir -p $(BUILD)/$(APPNAME)-Linux/licenses
 	@cp ../LICENSE packaging/portmaster/license/* $(BUILD)/$(APPNAME)-Linux/licenses/
@@ -56,8 +60,9 @@ linux-package: linux
 	@echo "Creating Linux package..."
 	@mkdir -p $(BUILD)/$(APPNAME)-Linux
 	@cp $(BUILD)/choochootracker $(BUILD)/$(APPNAME)-Linux/
+	@strip --strip-unneeded $(BUILD)/$(APPNAME)-Linux/choochootracker
 	@cp -r packaging/common/* $(BUILD)/$(APPNAME)-Linux/
-	@cp packaging/linux/README.txt $(BUILD)/$(APPNAME)-Linux/
+	@cp $(PACKAGE_README) $(BUILD)/$(APPNAME)-Linux/README.txt
 	@cp ../docs/USER_MANUAL.md $(BUILD)/$(APPNAME)-Linux/
 	@mkdir -p $(BUILD)/$(APPNAME)-Linux/licenses
 	@cp ../LICENSE packaging/portmaster/license/* $(BUILD)/$(APPNAME)-Linux/licenses/
@@ -65,8 +70,8 @@ linux-package: linux
 	@echo 'cd "$$(dirname "$$0")"' >> $(BUILD)/$(APPNAME)-Linux/chipnomad.sh
 	@echo 'exec ./choochootracker "$$@"' >> $(BUILD)/$(APPNAME)-Linux/chipnomad.sh
 	@chmod +x $(BUILD)/$(APPNAME)-Linux/chipnomad.sh
-	@cd $(BUILD) && tar -czf $(APPNAME)-$$(date +%Y-%m-%d)-$(VERSION)-Linux-$(shell uname -m).tar.gz $(APPNAME)-Linux
-	@echo "Linux package created: $(BUILD)/$(APPNAME)-$$(date +%Y-%m-%d)-$(VERSION)-Linux-$(shell uname -m).tar.gz"
+	@cd $(BUILD) && tar -czf $(APPNAME)-$$(date +%Y-%m-%d)-$(VERSION)-$(PACKAGE_SUFFIX).tar.gz $(APPNAME)-Linux
+	@echo "Linux package created: $(BUILD)/$(APPNAME)-$$(date +%Y-%m-%d)-$(VERSION)-$(PACKAGE_SUFFIX).tar.gz"
 
 # AppImage (Linux x86_64). Bundles only the libraries that aren't
 # guaranteed present on the host (SDL2 and its libsamplerate dependency -
@@ -82,19 +87,26 @@ appimage: linux
 	@mkdir -p $(BUILD)/$(APPNAME).AppDir/usr/bin
 	@mkdir -p $(BUILD)/$(APPNAME).AppDir/usr/lib
 	@cp $(BUILD)/choochootracker $(BUILD)/$(APPNAME).AppDir/usr/bin/
+	@strip --strip-unneeded $(BUILD)/$(APPNAME).AppDir/usr/bin/choochootracker
 	@for lib in $(APPIMAGE_LIBS); do \
 		if [ ! -f "$$lib" ]; then echo "Error: $$lib not found - install libsdl2-2.0-0" && exit 1; fi; \
 		target="$$(basename "$$(readlink -f "$$lib")")"; \
 		cp -L "$$(readlink -f "$$lib")" $(BUILD)/$(APPNAME).AppDir/usr/lib/ || exit 1; \
 		ln -sf "$$target" "$(BUILD)/$(APPNAME).AppDir/usr/lib/$$(basename "$$lib")"; \
 	done
+	@find $(BUILD)/$(APPNAME).AppDir/usr/lib -type f -exec strip --strip-unneeded {} +
 	@mkdir -p $(BUILD)/$(APPNAME).AppDir/usr/share/choochootracker/common
 	@cp -r packaging/common/* $(BUILD)/$(APPNAME).AppDir/usr/share/choochootracker/common/
 	@cp packaging/linux-appimage/AppRun $(BUILD)/$(APPNAME).AppDir/
+	@sed -i 's/\r$$//' $(BUILD)/$(APPNAME).AppDir/AppRun
+	@if grep -q "$$(printf '\r')" $(BUILD)/$(APPNAME).AppDir/AppRun || ! grep -q 'readlink' $(BUILD)/$(APPNAME).AppDir/AppRun || ! grep -q '^for item in ' $(BUILD)/$(APPNAME).AppDir/AppRun || ! grep -Fq 'cd "$${DATA_DIR}"' $(BUILD)/$(APPNAME).AppDir/AppRun; then \
+		echo "Error: generated AppRun is not a valid LF-normalized launcher."; \
+		exit 1; \
+	fi
 	@chmod +x $(BUILD)/$(APPNAME).AppDir/AppRun
 	@cp packaging/linux-appimage/choochootracker.desktop $(BUILD)/$(APPNAME).AppDir/
 	@sed -i 's/\r$$//' $(BUILD)/$(APPNAME).AppDir/choochootracker.desktop
-	@cp ../docs/play-store-assets/ChooChooTracker-play-icon-512.png $(BUILD)/$(APPNAME).AppDir/choochootracker.png
+	@cp packaging/linux-appimage/choochootracker.png $(BUILD)/$(APPNAME).AppDir/
 	@mkdir -p ../releases
 	@command -v appimagetool >/dev/null 2>&1 || { \
 		echo "Error: appimagetool not found on PATH."; \
@@ -104,7 +116,7 @@ appimage: linux
 		echo "See docs/build-notes.md for details."; \
 		exit 1; \
 	}
-	ARCH=x86_64 appimagetool $(BUILD)/$(APPNAME).AppDir ../releases/$(APPNAME)-$$(date +%Y-%m-%d)-$(VERSION)-x86_64.AppImage
+	ARCH=x86_64 appimagetool $(if $(APPIMAGE_RUNTIME),--runtime-file $(APPIMAGE_RUNTIME)) $(BUILD)/$(APPNAME).AppDir ../releases/$(APPNAME)-$$(date +%Y-%m-%d)-$(VERSION)-x86_64.AppImage
 	@echo "AppImage created in ../releases/"
 
 .PHONY: clean

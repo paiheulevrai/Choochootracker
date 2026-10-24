@@ -5,6 +5,7 @@
 
 const char* byteToHex(uint8_t byte);
 const char* byteToHexOrEmpty(uint8_t byte);
+const char* volumeToHexOrEmpty(uint16_t volume);
 
 int min(int a, int b);
 int max(int a, int b);

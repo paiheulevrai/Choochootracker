@@ -4,7 +4,6 @@
 #include "common.h"
 #include "corelib_gfx.h"
 #include "screens/screens.h"
-#include "screens/screen_instrument.h"
 #include <algorithm>
 #include <cmath>
 
@@ -21,24 +20,11 @@ static Bitmap* sized(Bitmap*& bitmap, int columns, int rows) {
   return bitmap;
 }
 
-static int instrumentTrack() {
-  const PlaybackStatus* playing = chipnomadGetPlaybackStatus(chipnomadState);
-  int selected = -1;
-  for (int t = 0; t < chipnomadState->project.tracksCount; ++t)
-    if (playing->trackEnabled[t] && playing->tracks[t].note.instrument == cInstrument &&
-        (selected < 0 || t == *pSongTrack)) selected = t;
-  return selected;
-}
-
 void scopeDisplayDraw(void) {
   if (!chipnomadState || currentScreen == &screenTitle) return;
   ScreenOverlayCoordinates overlay;
   if (screenScopeRows(currentScreen) && sized(scope, 40, 2)) {
     const float* samples = monitorDisplayMixSamples();
-    if (currentScreen == &screenInstrument || currentScreen == &screenModulation) {
-      int track = instrumentTrack();
-      samples = track < 0 ? nullptr : monitorDisplayTrackSamples(track);
-    }
     int w = scope->widthPixels, h = scope->heightPixels;
     float range = 0.25f;
     if (samples) for (int i = 0; i < AUDIO_MONITOR_SAMPLES; ++i) range = std::max(range, fabsf(samples[i]));

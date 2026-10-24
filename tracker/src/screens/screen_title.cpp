@@ -1,13 +1,22 @@
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
+#include <new>
+#include <chrono>
+#include "title_night_sky.h"
 #include "common.h"
 #include "screens.h"
 #include "screen_project.h"
 #include "corelib_gfx.h"
 #include "corelib_file.h"
+#include "corelib_mainloop.h"
 
 static GfxImage *sky, *scene, *foreground, *viaduct, *train, *logo;
-static int frame;
+static GfxImage *mountains, *meteor;
+static uint64_t frame;
+static bool nightMode;
+static TitleNightSky* nightSky;
+static std::chrono::steady_clock::time_point skyStartedAt;
 static int selected;
 static int continueAvailable;
 
@@ -22,19 +31,23 @@ enum {
 };
 
 static void unload(void) {
+  delete nightSky; nightSky = NULL;
   gfxImageFree(sky); sky = NULL;
   gfxImageFree(scene); scene = NULL;
   gfxImageFree(foreground); foreground = NULL;
   gfxImageFree(viaduct); viaduct = NULL;
   gfxImageFree(train); train = NULL;
   gfxImageFree(logo); logo = NULL;
+  gfxImageFree(mountains); mountains = NULL;
+  gfxImageFree(meteor); meteor = NULL;
 }
 
 static GfxImage* load(const char* name) {
   char path[PATH_LENGTH + 64];
 #ifdef ANDROID_BUILD
+  extern int androidGetPrivateWorkspacePath(char*, int);
   char workspace[PATH_LENGTH];
-  if (fileGetDefaultDirectory(workspace, sizeof(workspace)) == 0) {
+  if (androidGetPrivateWorkspacePath(workspace, sizeof(workspace)) == 0) {
     snprintf(path, sizeof(path), "%s/title/%s", workspace, name);
     return gfxImageLoadBMP(path);
   }
@@ -45,6 +58,25 @@ static GfxImage* load(const char* name) {
 
 static void init(void) {
   unload();
+  nightMode = appSettings.bootScreenNight != 0;
+  if (nightMode) {
+    nightSky = new (std::nothrow) TitleNightSky();
+    sky = gfxImageCreateARGB(TitleNightSky::width, TitleNightSky::height);
+    mountains = load("night_mountains.bmp");
+    scene = load("night_scene.bmp");
+    foreground = load("night_foreground.bmp");
+    viaduct = load("night_viaduct.bmp");
+    train = load("night_train.bmp");
+    logo = load("night_logo.bmp");
+    meteor = load("night_meteor.bmp");
+    if (nightSky && sky && mountains && scene && foreground && viaduct && train && logo && meteor) {
+      nightSky->render(0);
+      if (gfxImageUpdateARGB(sky, nightSky->pixels)) return;
+    }
+    // Older/incomplete packages must still offer a usable title screen.
+    unload();
+    nightMode = false;
+  }
   sky = load("snes_sky.bmp");
   scene = load("snes_scene.bmp");
   foreground = load("snes_foreground.bmp");
@@ -66,7 +98,9 @@ static int canContinue(void) {
 }
 
 static void setup(int input) {
+  if (!sky || nightMode != (appSettings.bootScreenNight != 0)) init();
   frame = 0;
+  skyStartedAt = std::chrono::steady_clock::now();
   continueAvailable = canContinue();
   selected = continueAvailable ? 0 : 1;
 }
@@ -86,12 +120,49 @@ static void drawWrapped(const GfxImage* image, int offset, int y) {
   }
 }
 
+static int scrollOffset(const GfxImage* image, int framesPerPixel) {
+  const int width = gfxImageWidth(image);
+  return width ? (int)((frame / framesPerPixel) % width) : 0;
+}
+
+static void drawNightSky(void) {
+  // Keep the sky's timing consistent on both 30 Hz and 60 Hz platforms.
+  const uint64_t skyFrame = std::chrono::duration_cast<std::chrono::milliseconds>(
+    std::chrono::steady_clock::now() - skyStartedAt).count() * 60 / 1000;
+  const int slices = std::max(1, mainLoopGetTargetFps() / 10);
+  const int rows = (TitleNightSky::height + slices - 1) / slices;
+  if (nightSky->render(skyFrame, rows)) gfxImageUpdateARGB(sky, nightSky->pixels);
+  gfxImageDrawCrop(sky, 0, 0, 256, 224, 0, 0);
+  const int cycleFrame = (int)(skyFrame % 14400);
+  struct ShootingStar { int start, x, y, dx, dy; };
+  static const ShootingStar stars[] = {
+    {420,32,20,76,32}, {1980,220,16,-82,38}, {3840,46,38,94,30},
+    {6120,198,24,-80,33}, {8160,24,48,100,26}, {10980,228,10,-88,44},
+    {13260,72,14,104,39}
+  };
+  // A mirrored second pass adds seven events without changing their quiet trails.
+  for (int pass = 0; pass < 2; ++pass) for (auto star : stars) {
+    if (pass) { star.start = (star.start + 1080) % 14400; star.x = 256 - star.x; star.dx = -star.dx; }
+    const int age = cycleFrame - star.start;
+    if (age < 0 || age >= 54) continue;
+    const double fade = fmin(1.0, fmin((age + 1) / 7.0, (54 - age) / 16.0));
+    for (int tail = 22; tail >= 0; --tail) {
+      const double progress = (age - tail * .55) / 54.0;
+      if (progress < 0) continue;
+      const int color = (int)floor((1 - tail / 24.0) * 7 * fade + .5);
+      gfxImageDrawCrop(meteor, color, 0, 1, 1,
+        (int)floor(star.x + star.dx * progress + .5),
+        (int)floor(star.y + star.dy * progress + .5));
+    }
+  }
+}
+
 static void drawMenu(void) {
   const char* items[] = {"CONTINUE", "OPEN", "NEW"};
   for (int i = 0; i < 3; i++) {
     const int textX = (32 - (int)strlen(items[i])) / 2;
     gfxSetFgColor(i == 0 && !continueAvailable ? 0x777777 :
-      i == selected ? 0xffd665 : 0xf2e6c7);
+      i == selected ? (nightMode ? 0xd8d4ad : 0xffd665) : (nightMode ? 0xb6c4d8 : 0xf2e6c7));
     gfxTitlePrint(textX - 2, 6 + i, i == selected && ((frame / 20) & 1) == 0 ? ">" : " ");
     gfxTitlePrint(textX, 6 + i, items[i]);
   }
@@ -107,9 +178,10 @@ static void drawMenu(void) {
 // let a later, shorter-lived message push off screen.
 static void drawTitleMessage(void) {
   if (autosaveLoadFailed) {
-    const char* lines[] = {"AUTOSAVE FAILED TO LOAD", "DEMO PROJECT OPENED INSTEAD"};
+    const char* lines[] = {"AUTOSAVE FAILED TO LOAD", "DEMO PROJECT OPENED INSTEAD",
+      autosaveKept > 0 ? "KEPT AS AUTOSAVE.CCT.UNREADABLE" : "AUTOSAVE PAUSED TO PROTECT IT"};
     gfxSetFgColor(appSettings.colorScheme.warning);
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < (autosaveKept ? 3 : 2); i++) {
       const int textX = (32 - (int)strlen(lines[i])) / 2;
       gfxTitlePrint(textX, 10 + i, lines[i]);
     }
@@ -125,17 +197,20 @@ static void drawTitleMessage(void) {
 
 static void draw(void) {
   gfxTitleBegin();
-  drawWrapped(sky, frame / SKY_SCROLL_FRAMES, 0);
+  if (nightMode) {
+    drawNightSky();
+    drawWrapped(mountains, scrollOffset(mountains, SKY_SCROLL_FRAMES), 0);
+  } else drawWrapped(sky, scrollOffset(sky, SKY_SCROLL_FRAMES), 0);
   // The scenery around the viaduct remains a separate, intermediate plane.
-  drawWrapped(scene, frame / SCENE_SCROLL_FRAMES, 112);
+  drawWrapped(scene, scrollOffset(scene, SCENE_SCROLL_FRAMES), 112);
   int vibration = frame % 173 < 6 ? (frame & 1 ? -1 : 1) : 0;
   if (train) {
     const int trainWidth = gfxImageWidth(train);
-    const int trainX = (8 + frame / TRAIN_SCROLL_FRAMES + trainWidth) % (256 + trainWidth) - trainWidth;
+    const int trainX = (int)((8 + frame / TRAIN_SCROLL_FRAMES + trainWidth) % (256 + trainWidth)) - trainWidth;
     gfxImageDrawCrop(train, 0, 0, trainWidth, gfxImageHeight(train), trainX, 133 + vibration);
   }
-  drawWrapped(viaduct, frame / VIADUCT_SCROLL_FRAMES, 152);
-  drawWrapped(foreground, frame / FOREGROUND_SCROLL_FRAMES, 136);
+  drawWrapped(viaduct, scrollOffset(viaduct, VIADUCT_SCROLL_FRAMES), 152);
+  drawWrapped(foreground, scrollOffset(foreground, FOREGROUND_SCROLL_FRAMES), 136);
   if (logo) gfxImageDrawCrop(logo, 0, 0, gfxImageWidth(logo), gfxImageHeight(logo), 52, 24);
   drawMenu();
   drawTitleMessage();
@@ -151,7 +226,8 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   // Start is a second confirm key on the title screen only.
   if (keys != keyEdit && keys != keyPlay) return 1;
   gfxTitleEnd();
-  if (selected == 0 && continueAvailable) { unload(); screenSetup(&screenSong, 0); }
+  unload();
+  if (selected == 0 && continueAvailable) { screenSetup(&screenSong, 0); }
   else if (selected == 1) {
 #ifdef WEB_BUILD
     projectOpenFromScreenAtPath(&screenTitle, "/projects");
@@ -159,7 +235,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     projectOpenFromScreen(&screenTitle);
 #endif
   }
-  else { unload(); projectCreateNewFromScreen(&screenSong); }
+  else { projectCreateNewFromScreen(&screenSong); }
   return 1;
 }
 

@@ -3,8 +3,10 @@
 
 #include "screens.h"
 
-// Common rows on the project screen
-#define SCR_PROJECT_ROWS (6)
+// Common rows on the project screen:
+// 0 Load/Save/New/Export/Manage, 1 File, 2 Title, 3 Author, 4 Linear pitch,
+// 5 Clock source, 6 Tempo (BPM). Pitch table and Scale follow.
+#define SCR_PROJECT_ROWS (7)
 
 int projectLoadFromPath(const char* path);
 void projectOpenFromScreen(const AppScreen* returnScreen);
@@ -17,6 +19,6 @@ void projectCommonDrawCursor(int col, int row);
 void projectCommonDrawField(int col, int row, CellState state);
 int projectCommonOnEdit(int col, int row, CellEditAction action);
 
-extern ScreenData screenProjectAY;
+extern ScreenData screenProjectExtra;
 
 #endif

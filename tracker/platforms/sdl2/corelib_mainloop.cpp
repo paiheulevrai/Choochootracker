@@ -6,30 +6,119 @@
 #include "corelib_keymap.h"
 #include "corelib_input.h"
 #include "../../src/corelib/corelib_assets.h"
+#include "../../src/common.h"
+#ifdef ANDROID_BUILD
+#include "../android/extra_buttons_android.h"
+extern void androidPerformTouchHaptic(void);
+#endif
 
+#ifdef MIYOOPORTS_BUILD
+// MMIYOO is a software framebuffer backend. The tracker state and audio run
+// independently, while 30 UI frames per second keeps the tiny display
+// responsive without spending most of the console CPU on redraws.
+#define FPS 30
+#else
 #define FPS 60
+#endif
+
+static int requestedFps = FPS;
+static int frameTimeUs;
+
+void mainLoopSetTargetFps(int fps) {
+#if defined(PORTMASTER_BUILD) || defined(MIYOOPORTS_BUILD)
+  requestedFps = fps < 1 ? 1 : (fps > 60 ? 60 : fps);
+#else
+  (void)fps;
+#endif
+}
+int mainLoopGetTargetFps(void) { return requestedFps; }
+int mainLoopGetFrameTimeUs(void) { return frameTimeUs; }
 
 #ifdef GAMEPAD_SUPPORT
 // Gamepad support
 static SDL_GameController* gameController = NULL;
 static int gamepadTriggerDown[2] = {};
 
-static void initGamepad(void) {
-#ifdef TOUCH_INPUT
-  extern int vpadEnabled;
-  vpadEnabled = 1;
+// Fallback for pads SDL has no controller mapping for (cheap generic USB
+// SNES-style pads): use the raw joystick, mapped onto controller buttons so
+// the key mapping screen can still remap them.
+static SDL_Joystick* fallbackJoystick = NULL;
+static int fallbackAxisDir[4] = {};
+static int fallbackHatDir[4] = {};
+static int fallbackSentDir[4] = {};
+static const int fallbackDpadCodes[4] = {
+  SDL_CONTROLLER_BUTTON_DPAD_UP, SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+  SDL_CONTROLLER_BUTTON_DPAD_LEFT, SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
+};
+static const int fallbackButtonCodes[] = {
+  SDL_CONTROLLER_BUTTON_A, SDL_CONTROLLER_BUTTON_B,
+  SDL_CONTROLLER_BUTTON_X, SDL_CONTROLLER_BUTTON_Y,
+  SDL_CONTROLLER_BUTTON_LEFTSHOULDER, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+  SDL_CONTROLLER_BUTTON_BACK, SDL_CONTROLLER_BUTTON_START,
+};
+
+#ifdef ANDROID_BUILD
+// Pads in "extra buttons" mode report KEYCODE_BUTTON_1..16: each one is its
+// own gamepad input, mappable in Settings > Controls > Key mapping.
+static int extraButtonCode(int keyCode) {
+  int index = keyCode - ANDROID_KEYCODE_BUTTON_1;
+  return index >= 0 && index < gamepadExtraButtonCount ? gamepadExtraButton + index : -1;
+}
 #endif
+
+static void closeFallbackJoystick(void) {
+  if (!fallbackJoystick) return;
+  SDL_JoystickClose(fallbackJoystick);
+  fallbackJoystick = NULL;
+  for (int i = 0; i < 4; ++i) fallbackAxisDir[i] = fallbackHatDir[i] = 0;
+}
+
+static void openFallbackJoystick(void) {
+  if (fallbackJoystick || gameController) return;
+  for (int i = 0; i < SDL_NumJoysticks(); i++) {
+    if (SDL_IsGameController(i)) continue;
+    SDL_Joystick* candidate = SDL_JoystickOpen(i);
+    if (candidate) {
+#ifdef ANDROID_BUILD
+      // Android exposes motion sensors as raw joysticks. They have axes but
+      // no physical controls, so accepting one here turns gravity into D-pad.
+      if (!SDL_JoystickNumButtons(candidate) && !SDL_JoystickNumHats(candidate)) {
+        SDL_Log("CCT ignoring sensor-only joystick '%s'", SDL_JoystickName(candidate));
+        SDL_JoystickClose(candidate);
+        continue;
+      }
+#endif
+      fallbackJoystick = candidate;
+      // The virtual pad stays visible: the raw mapping is a guess, and the
+      // touch controls are needed to open the key mapping screen.
+      SDL_Log("CCT fallback joystick '%s': %d buttons, %d hats, %d axes",
+              SDL_JoystickName(fallbackJoystick), SDL_JoystickNumButtons(fallbackJoystick),
+              SDL_JoystickNumHats(fallbackJoystick), SDL_JoystickNumAxes(fallbackJoystick));
+      break;
+    }
+  }
+}
+
+static void fallbackSendDpad(void (*onEvent)(MainLoopEventData)) {
+  MainLoopEventData eventData;
+  for (int dir = 0; dir < 4; ++dir) {
+    int down = fallbackAxisDir[dir] || fallbackHatDir[dir];
+    if (down == fallbackSentDir[dir]) continue;
+    fallbackSentDir[dir] = down;
+    eventData.type = down ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
+    eventData.data.input = (InputCode){InputDeviceType::gamepad, fallbackDpadCodes[dir]};
+    onEvent(eventData);
+  }
+}
+
+static void initGamepad(void) {
   for (int i = 0; i < SDL_NumJoysticks(); i++) {
     if (SDL_IsGameController(i)) {
       gameController = SDL_GameControllerOpen(i);
-      if (gameController) {
-#ifdef TOUCH_INPUT
-        vpadEnabled = 0;
-#endif
-        break;
-      }
+      if (gameController) break;
     }
   }
+  openFallbackJoystick();
 }
 #endif
 
@@ -105,9 +194,9 @@ static int SDLCALL preserveRawTouchCoordinates(void*, SDL_Event* event) {
 #endif
 
 void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData)) {
-  uint32_t delay = 1000 / FPS;
   uint32_t start;
   uint32_t busytime = 0;
+  uint32_t interactionUntil = 0;
   SDL_Event event;
   int menu = 0;
   MainLoopEventData eventData;
@@ -217,9 +306,21 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 #endif
 
   while (1) {
+#if defined(TOUCH_INPUT) && defined(GAMEPAD_SUPPORT)
+    {
+      // The virtual pad hides only if the user asked for it (Settings >
+      // Controls) and a gamepad is connected.
+      int wanted = !(appSettings.hideTouchPadWithGamepad && (gameController || fallbackJoystick));
+      if (wanted != vpadEnabled) {
+        if (!wanted) releaseFingers();
+        vpadEnabled = wanted;
+      }
+    }
+#endif
     start = SDL_GetTicks();
 
     while (SDL_PollEvent(&event)) {
+      interactionUntil = SDL_GetTicks() + 250;
       // The Menu+X quit combo mirrors a physical button chord on handhelds
       // without an easy way back to a Quit menu item (PortMaster/consoles).
       // On desktop, Menu/X happen to be bound to Ctrl/S, which makes Ctrl+S
@@ -240,6 +341,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           SDL_GameControllerClose(gameController);
           gameController = NULL;
         }
+        closeFallbackJoystick();
 #endif
         return;
       }
@@ -250,6 +352,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           SDL_GameControllerClose(gameController);
           gameController = NULL;
         }
+        closeFallbackJoystick();
 #endif
       }
       else if (event.type == SDL_APP_WILLENTERBACKGROUND) {
@@ -261,6 +364,11 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
         onEvent(eventData);
       }
       else if (event.type == SDL_APP_DIDENTERFOREGROUND) {
+        // Android may recreate its EGL surface while we are backgrounded,
+        // without emitting SDL_RENDER_*_RESET.  Rebuild our cached frame
+        // before the redraw so resuming after a rotated background app cannot
+        // keep presenting a texture from the old surface.
+        gfxHandleRenderReset();
         eventData.type = MainLoopEvent::wake;
         eventData.data.value = 0;
         onEvent(eventData);
@@ -312,6 +420,14 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
         }
       }
 #endif
+      else if (event.type == SDL_AUDIODEVICEREMOVED) {
+        // An audio device was unplugged or its stream died (SDL posts this
+        // for opened devices from both the hotplug path and the audio
+        // thread's IO-error path). Handled on the UI thread by the app.
+        eventData.type = MainLoopEvent::audioDeviceRemoved;
+        eventData.data.value = event.adevice.iscapture ? 1 : 0;
+        onEvent(eventData);
+      }
       else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
         // SDL/OS keyboard repeat competes with the app's deterministic repeat timer.
         if (event.type == SDL_KEYDOWN && event.key.repeat) continue;
@@ -319,6 +435,9 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
         if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_RETURN &&
             (event.key.keysym.mod & KMOD_ALT)) {
           gfxToggleFullscreen();
+          eventData.type = MainLoopEvent::fullRedraw;
+          eventData.data.value = 0;
+          onEvent(eventData);
           continue;
         }
 #endif
@@ -341,24 +460,67 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           for (int i = 0; i < SDL_NumJoysticks(); i++) {
             if (SDL_IsGameController(i)) {
               gameController = SDL_GameControllerOpen(i);
-              if (gameController) {
-#ifdef TOUCH_INPUT
-                releaseFingers();
-                vpadEnabled = 0;
-#endif
-                break;
-              }
+              if (gameController) break;
             }
           }
         }
+      }
+      else if (event.type == SDL_JOYDEVICEADDED) {
+        // Controllers get SDL_CONTROLLERDEVICEADDED instead; this catches the rest.
+        if (!gameController && !fallbackJoystick) {
+          openFallbackJoystick();
+        }
+      }
+      else if (event.type == SDL_JOYDEVICEREMOVED) {
+        if (fallbackJoystick && event.jdevice.which == SDL_JoystickInstanceID(fallbackJoystick)) {
+          closeFallbackJoystick();
+          fallbackSendDpad(onEvent);
+        }
+      }
+#ifdef ANDROID_BUILD
+      else if (event.type == SDL_USEREVENT && event.user.code == EXTRA_BUTTON_EVENT_CODE) {
+        int code = extraButtonCode((int)(intptr_t)event.user.data1);
+        if (code >= 0) {
+          eventData.type = event.user.data2 ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
+          eventData.data.input = (InputCode){InputDeviceType::gamepad, code};
+          onEvent(eventData);
+        }
+      }
+#else
+      else if (fallbackJoystick && (event.type == SDL_JOYBUTTONDOWN || event.type == SDL_JOYBUTTONUP) &&
+               event.jbutton.which == SDL_JoystickInstanceID(fallbackJoystick)) {
+        SDL_Log("CCT joy button %d %s", event.jbutton.button, event.type == SDL_JOYBUTTONDOWN ? "down" : "up");
+        if (event.jbutton.button < sizeof(fallbackButtonCodes) / sizeof(fallbackButtonCodes[0])) {
+          eventData.type = event.type == SDL_JOYBUTTONDOWN ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
+          eventData.data.input = (InputCode){InputDeviceType::gamepad, fallbackButtonCodes[event.jbutton.button]};
+          onEvent(eventData);
+        }
+      }
+#endif
+      else if (fallbackJoystick && event.type == SDL_JOYHATMOTION &&
+               event.jhat.which == SDL_JoystickInstanceID(fallbackJoystick)) {
+        SDL_Log("CCT joy hat %d value %d", event.jhat.hat, event.jhat.value);
+        fallbackHatDir[0] = (event.jhat.value & SDL_HAT_UP) != 0;
+        fallbackHatDir[1] = (event.jhat.value & SDL_HAT_DOWN) != 0;
+        fallbackHatDir[2] = (event.jhat.value & SDL_HAT_LEFT) != 0;
+        fallbackHatDir[3] = (event.jhat.value & SDL_HAT_RIGHT) != 0;
+        fallbackSendDpad(onEvent);
+      }
+      else if (fallbackJoystick && event.type == SDL_JOYAXISMOTION &&
+               event.jaxis.which == SDL_JoystickInstanceID(fallbackJoystick) && event.jaxis.axis < 2) {
+        SDL_Log("CCT joy axis %d value %d", event.jaxis.axis, event.jaxis.value);
+        int neg = event.jaxis.value < -16384, pos = event.jaxis.value > 16384;
+        if (event.jaxis.axis == 0) { fallbackAxisDir[2] = neg; fallbackAxisDir[3] = pos; }
+        else { fallbackAxisDir[0] = neg; fallbackAxisDir[1] = pos; }
+        fallbackSendDpad(onEvent);
       }
       else if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
         if (gameController && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gameController))) {
           SDL_GameControllerClose(gameController);
           gameController = NULL;
-#ifdef TOUCH_INPUT
-          vpadEnabled = 1;
-#endif
+          // A raw pad may have remained connected while the mapped controller
+          // was active, so no new device-added event will arrive for it.
+          openFallbackJoystick();
         }
       }
 #endif
@@ -387,6 +549,9 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           numActiveFingers++;
           if (buttonTouches[buttonIndex]++ == 0) {
             gfxSetButtonPressed(buttonIndex, 1);
+#ifdef ANDROID_BUILD
+            if (appSettings.touchHaptics) androidPerformTouchHaptic();
+#endif
             eventData.type = MainLoopEvent::keyDown;
             eventData.data.input = (InputCode){InputDeviceType::logical, buttons[buttonIndex].key};
             onEvent(eventData);
@@ -494,6 +659,11 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           mouseTouchButton = buttonIndex;
           if (buttonTouches[buttonIndex]++ == 0) {
             gfxSetButtonPressed(buttonIndex, 1);
+#ifdef ANDROID_BUILD
+            // SDL's Android backend can report screen touches as mouse clicks
+            // instead of finger events. Keep their feedback identical.
+            if (appSettings.touchHaptics) androidPerformTouchHaptic();
+#endif
             eventData.type = MainLoopEvent::keyDown;
             eventData.data.input = (InputCode){InputDeviceType::logical, buttons[buttonIndex].key};
             onEvent(eventData);
@@ -571,6 +741,13 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     gfxUpdateScreen();
 
     busytime = SDL_GetTicks() - start;
+    frameTimeUs = (int)(busytime * 1000);
+#if defined(PORTMASTER_BUILD) || defined(MIYOOPORTS_BUILD)
+    int targetFps = SDL_GetTicks() < interactionUntil ? 60 : requestedFps;
+#else
+    int targetFps = FPS;
+#endif
+    uint32_t delay = 1000 / (uint32_t)targetFps;
     if (delay > busytime) {
       SDL_Delay(delay - busytime);
     }

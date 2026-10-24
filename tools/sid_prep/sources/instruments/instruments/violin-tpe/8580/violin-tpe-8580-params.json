@@ -1,0 +1,75 @@
+{
+  "waveform": "saw",
+  "attack": 10,
+  "decay": 9,
+  "sustain": 8,
+  "release": 2,
+  "pulse_width": 1707,
+  "pw_table": null,
+  "filter_cutoff": 44,
+  "filter_resonance": 8,
+  "filter_mode": "off",
+  "filter_voice1": false,
+  "ring_mod": false,
+  "sync": false,
+  "frequency": 440.0,
+  "gate_frames": 67,
+  "release_frames": 10,
+  "wavetable": null,
+  "volume": 15,
+  "chip_model": "8580",
+  "source_instrument": null,
+  "wt_attack_frames": 2,
+  "wt_attack_waveform": "pulse+saw",
+  "wt_sustain_waveform": "saw",
+  "wt_use_test_bit": false,
+  "pw_start": 1707,
+  "pw_delta": -50,
+  "pw_min": 0,
+  "pw_max": 2665,
+  "pw_mode": "sweep",
+  "wavetable_steps": null,
+  "filter_cutoff_start": 44,
+  "filter_cutoff_end": 44,
+  "filter_sweep_frames": 50,
+  "reference_notes": [
+    {
+      "note": "G3",
+      "freq_hz": 196.0
+    },
+    {
+      "note": "Bb3",
+      "freq_hz": 233.08
+    },
+    {
+      "note": "Db4",
+      "freq_hz": 277.18
+    },
+    {
+      "note": "E4",
+      "freq_hz": 329.63
+    },
+    {
+      "note": "G4",
+      "freq_hz": 392.0
+    },
+    {
+      "note": "Bb4",
+      "freq_hz": 466.16
+    },
+    {
+      "note": "Db5",
+      "freq_hz": 554.37
+    },
+    {
+      "note": "E5",
+      "freq_hz": 659.26
+    },
+    {
+      "note": "G5",
+      "freq_hz": 783.99
+    }
+  ],
+  "fitness_score": 0.0,
+  "version": 1
+}

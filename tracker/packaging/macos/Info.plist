@@ -26,6 +26,8 @@
 	<true/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.music</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ChooChooTracker records audio input to capture samples for the sampler instrument.</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

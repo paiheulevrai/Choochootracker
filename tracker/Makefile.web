@@ -7,9 +7,11 @@ LIBS = $(COMMON_LIBS) platforms/sdl2
 OUTPUT_EXT = .html
 WEB_BUILD = build/web
 EMXX ?= em++
-WEB_CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) -DWEB_BUILD -DGAMEPAD_SUPPORT
+# Release bundles must not carry local source paths in debug information.
+WEB_CFLAGS = $(filter-out -g,$(COMMON_CFLAGS)) $(INCLUDES) -DWEB_BUILD -DGAMEPAD_SUPPORT -fexceptions
 WEB_DATA_DIRS = $(filter-out projects,$(COMMON_DATA_DIRS))
 WEB_PRELOAD = $(foreach dir,$(WEB_DATA_DIRS),--preload-file packaging/common/$(dir)@/$(dir)) \
+	--preload-file packaging/common/projects/native-chip-audition.cct@/projects/native-chip-audition.cct \
 	--preload-file packaging/common/projects/DNB.cct@/projects/DNB.cct \
 	--preload-file packaging/common/projects/dub-reich.cct@/projects/dub-reich.cct \
 	--preload-file packaging/common/projects/grieg-mountain-king-fm.cct@/projects/grieg-mountain-king-fm.cct \
@@ -25,6 +27,7 @@ WEB_LDFLAGS = -sUSE_SDL=2 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=256MB \
 
 SOURCES := $(filter-out platforms/sdl2/corelib_mainloop.cpp,$(SOURCES)) \
 	platforms/web/corelib_mainloop.cpp
+SOURCES += platforms/web/midi_backend_web.cpp
 
 .PHONY: web web-deploy
 
@@ -40,3 +43,4 @@ web-deploy: web
 	@cp $(WEB_BUILD)/choochootracker.* ../web/dist/
 	@cp $(WEB_BUILD)/index.html ../web/dist/
 	@cp $(WEB_BUILD)/privacy.html ../web/dist/
+	@sh ../docs/user-guide/publish.sh

@@ -152,7 +152,7 @@ class MutableVoiceBase {
   bool active_, gate_, triggerPending_, retriggerPending_;
   uint8_t envelopeMode_;
   uint32_t quietSamples_;
-  VoicePostProcessor<PlaitsEnvelope> post_;
+  VoicePostProcessor<> post_;
 };
 
 #endif

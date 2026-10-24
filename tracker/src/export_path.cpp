@@ -250,7 +250,8 @@ void exportRefreshSamplePaths(struct Project* project, const char* baseDir,
       snprintf(relBase, sizeof(relBase), "%s", baseDir + cwdLen + 1);
     }
   }
-  if (baseDir[0] == '/' || baseDir[0] == '\\') {
+  if (baseDir[0] == '/' || baseDir[0] == '\\' ||
+      (baseDir[0] && baseDir[1] == ':')) {
     snprintf(absBase, sizeof(absBase), "%s", baseDir);
   }
 

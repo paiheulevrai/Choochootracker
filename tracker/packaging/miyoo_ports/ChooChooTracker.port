@@ -1,0 +1,9 @@
+#!/bin/sh
+GameName="ChooChooTracker"
+GameDir="ChooChooTracker"
+GameExecutable="launch.sh"
+GameDataFile="choochootracker"
+KillAudioserver=0
+PerformanceMode=0
+Arguments=""
+/mnt/SDCARD/Emu/PORTS/launch_standalone.sh "$GameName" "$GameDir" "$GameExecutable" "$Arguments" "$GameDataFile" "$KillAudioserver" "$PerformanceMode"

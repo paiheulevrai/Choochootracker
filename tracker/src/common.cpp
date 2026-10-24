@@ -2,8 +2,12 @@
 #include "corelib/corelib_file.h"
 #include "corelib/corelib_gfx.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef WEB_BUILD
+#include <emscripten.h>
+#endif
 #include <chipnomad_lib.h>
 
 static char settingsPath[PATH_LENGTH + 32];
@@ -11,24 +15,48 @@ static char autosavePath[PATH_LENGTH + 32];
 static char lineBuffer[1024];
 static const int kAudioSampleRate = 48000;
 
+static int defaultAudioBufferSize(void) {
+#ifdef WEB_BUILD
+  return 1024;
+#elif defined(PORTMASTER_BUILD)
+  return 512;
+#elif defined(ANDROID_BUILD) || defined(DESKTOP_BUILD)
+  return 256;
+#else
+  return 512;
+#endif
+}
+
+static int normalizeAudioBufferSize(int size) {
+  static const int sizes[] = {32, 64, 128, 256, 512, 1024};
+  int closest = sizes[0];
+  long long closestDistance = llabs((long long)closest - size);
+  for (int candidate : sizes) {
+    const long long distance = llabs((long long)candidate - size);
+    if (distance < closestDistance) {
+      closest = candidate;
+      closestDistance = distance;
+    }
+  }
+  return closest;
+}
+
 AppSettings appSettings;
 
 void initDefaultAppSettings(void) {
   appSettings.screenWidth = 0; // 0 to auto-detect resolution
   appSettings.screenHeight = 0;
   appSettings.audioSampleRate = kAudioSampleRate;
-#ifdef WEB_BUILD
-  appSettings.audioBufferSize = 1024;
-#elif defined(ANDROID_BUILD) || defined(DESKTOP_BUILD)
-  // Keep playback status and waveform monitors responsive at 30 Hz.
-  appSettings.audioBufferSize = 1600;
-#else
-  appSettings.audioBufferSize = 4906;
-#endif
+  appSettings.audioBufferSize = defaultAudioBufferSize();
   appSettings.aySampleDithering = 1; // Default: ON
   appSettings.doubleTapFrames = 20;
   appSettings.keyRepeatDelay = 16;
+#ifdef PORTMASTER_BUILD
+  // One navigation step per 60 Hz UI frame feels natural on a physical D-pad.
+  appSettings.keyRepeatSpeed = 1;
+#else
   appSettings.keyRepeatSpeed = 2;
+#endif
   appSettings.mixVolume = 1.0f;
   appSettings.quality = (int)ChipNomadQuality::medium;
   appSettings.braidsBits = 6;
@@ -40,7 +68,11 @@ void initDefaultAppSettings(void) {
   appSettings.pitchConflictWarning = 0;
   appSettings.quickHelpReleaseSeen = 0;
   appSettings.ayWavetableLfoView = 0;
+#ifdef PORTMASTER_BUILD
+  appSettings.waveformRefreshHz = 60;
+#else
   appSettings.waveformRefreshHz = 30;
+#endif
   appSettings.stickLiveMode = StickLiveMode::hold;
   for (auto& visual : appSettings.trackVisuals)
     visual.mode = TrackVisualMode::detailed;
@@ -48,8 +80,25 @@ void initDefaultAppSettings(void) {
   appSettings.midiOutputDevice = -1;
   appSettings.midiInputDeviceName[0] = '\0';
   appSettings.midiOutputDeviceName[0] = '\0';
+  appSettings.clockSource = ClockSource::internal;
   for (int i = 0; i < MIDI_CHANNEL_COUNT; i++) appSettings.midiChannelInstrument[i] = -1;
   appSettings.persistentWaveform = 0;
+#ifdef ANDROID_BUILD
+  appSettings.hideTouchPadWithGamepad = 0; // phones have no built-in pad: keep touch controls
+  appSettings.touchHaptics = 1;
+#else
+  appSettings.hideTouchPadWithGamepad = 1; // handhelds: their built-in pad replaces it
+  appSettings.touchHaptics = 0;
+#endif
+  appSettings.bootScreenNight = 0;
+
+  // Audio input recording defaults: nothing enumerated, nothing armed,
+  // monitoring off, no recording folder override.
+  appSettings.audioInputDeviceCount = 0;
+  memset(appSettings.audioInputDeviceNames, 0, sizeof(appSettings.audioInputDeviceNames));
+  for (int i = 0; i < AUDIO_INPUT_MAX_ARMED; i++) appSettings.audioInputArmed[i] = -1;
+  appSettings.audioInputMonitor = 0;
+  appSettings.recordingPath[0] = '\0';
 
   // Zero out key mapping (platform-specific defaults applied later)
   memset(&appSettings.keyMapping, 0, sizeof(KeyMapping));
@@ -146,7 +195,9 @@ int* pSongTrack;
 int* pChainRow;
 ChipNomadState* chipnomadState;
 int projectModified = 0;
+int sampleLazyPlaybackActive = 0;
 int autosaveLoadFailed = 0;
+int autosaveKept = 0;
 
 int settingsSave(void) {
 #ifdef WEB_BUILD
@@ -183,6 +234,9 @@ int settingsSave(void) {
     appSettings.stickLiveMode == StickLiveMode::toggle ? "TOGGLE" : "HOLD";
   fprintf(file, "stickLiveMode: %s\n", stickLiveMode);
   fprintf(file, "persistentWaveform: %d\n", appSettings.persistentWaveform);
+  fprintf(file, "hideTouchPadWithGamepad: %d\n", appSettings.hideTouchPadWithGamepad);
+  fprintf(file, "touchHaptics: %d\n", appSettings.touchHaptics);
+  fprintf(file, "bootScreenNight: %d\n", appSettings.bootScreenNight);
   for (int track = 0; track < PROJECT_MAX_TRACKS; ++track)
     fprintf(file, "trackVisuals%d: %d\n", track + 1, (int)appSettings.trackVisuals[track].mode);
 
@@ -192,6 +246,25 @@ int settingsSave(void) {
   }
   fprintf(file, "midiInputDeviceName: %s\n", appSettings.midiInputDeviceName);
   fprintf(file, "midiOutputDeviceName: %s\n", appSettings.midiOutputDeviceName);
+  // Write the canonical `clockSource:` line for v3+; also write the
+  // legacy `midiClockMode:` alias (0/1 only, never 2) so older binaries
+  // that read the old field still load the Internal/Midi-Clock choice.
+  fprintf(file, "clockSource: %d\n", (int)appSettings.clockSource);
+  fprintf(file, "midiClockMode: %d\n",
+    appSettings.clockSource == ClockSource::midiClock ? 1 : 0);
+
+  // Audio input recording: persist the device-name list and the armed slots
+  // BY NAME (indices into the live enumeration aren't stable across
+  // reboots/replugging - same policy as MIDI devices).
+  fprintf(file, "audioInputDeviceCount: %d\n", appSettings.audioInputDeviceCount);
+  for (int i = 0; i < appSettings.audioInputDeviceCount && i < AUDIO_INPUT_MAX_DEVICES; i++)
+    fprintf(file, "audioInputDeviceName.%d: %s\n", i, appSettings.audioInputDeviceNames[i]);
+  for (int i = 0; i < AUDIO_INPUT_MAX_ARMED; i++) {
+    if (appSettings.audioInputArmed[i] >= 0 && appSettings.audioInputArmed[i] < appSettings.audioInputDeviceCount)
+      fprintf(file, "audioInputArmed.%d: %s\n", i, appSettings.audioInputDeviceNames[appSettings.audioInputArmed[i]]);
+  }
+  fprintf(file, "audioInputMonitor: %d\n", appSettings.audioInputMonitor);
+  fprintf(file, "recordingPath: %s\n", appSettings.recordingPath);
 
   // Save key mapping codes
   fprintf(file, "keyUp: %d,%d,%d\n", appSettings.keyMapping.keyUp[0].code, appSettings.keyMapping.keyUp[1].code, appSettings.keyMapping.keyUp[2].code);
@@ -245,6 +318,10 @@ int settingsSave(void) {
   fprintf(file, "srWavetablePath: %s\n", appSettings.srWavetablePath);
 
   fclose(file);
+#ifdef WEB_BUILD
+  // Emscripten's in-memory settings file becomes durable only after IDBFS sync.
+  EM_ASM({ if (window.choochooSettingsSaved) window.choochooSettingsSaved(); });
+#endif
   return 0;
 }
 
@@ -272,10 +349,22 @@ int settingsLoad(void) {
       len--;
     }
 
-    if (strncmp(line, "persistentWaveform: ", 20) == 0) {
+    if (strncmp(line, "bootScreenNight: ", 17) == 0) {
+      int enabled;
+      if (sscanf(line + 17, "%d", &enabled) == 1 && (enabled == 0 || enabled == 1))
+        appSettings.bootScreenNight = (uint8_t)enabled;
+    } else if (strncmp(line, "persistentWaveform: ", 20) == 0) {
       int enabled;
       if (sscanf(line + 20, "%d", &enabled) == 1 && (enabled == 0 || enabled == 1))
         appSettings.persistentWaveform = (uint8_t)enabled;
+    } else if (strncmp(line, "hideTouchPadWithGamepad: ", 25) == 0) {
+      int enabled;
+      if (sscanf(line + 25, "%d", &enabled) == 1 && (enabled == 0 || enabled == 1))
+        appSettings.hideTouchPadWithGamepad = (uint8_t)enabled;
+    } else if (strncmp(line, "touchHaptics: ", 14) == 0) {
+      int enabled;
+      if (sscanf(line + 14, "%d", &enabled) == 1 && (enabled == 0 || enabled == 1))
+        appSettings.touchHaptics = (uint8_t)enabled;
     } else if (strncmp(line, "trackVisuals", 11) == 0) {
       int track, mode;
       if (sscanf(line, "trackVisuals%d: %d", &track, &mode) == 2 &&
@@ -334,6 +423,63 @@ int settingsLoad(void) {
     } else if (strncmp(line, "midiOutputDeviceName: ", 22) == 0) {
       strncpy(appSettings.midiOutputDeviceName, line + 22, MIDI_DEVICE_NAME_LENGTH);
       appSettings.midiOutputDeviceName[MIDI_DEVICE_NAME_LENGTH] = 0;
+    } else if (strncmp(line, "clockSource: ", 13) == 0) {
+      // Canonical v3+ setting. Read before the legacy `midiClockMode:`
+      // alias below; if both lines exist (new binaries write both), the
+      // canonical one wins because it appears first in the file.
+      int source = 0;
+      if (sscanf(line + 13, "%d", &source) == 1 &&
+          (source == 0 || source == 1 || source == 2))
+        appSettings.clockSource = (ClockSource)source;
+    } else if (strncmp(line, "midiClockMode: ", 15) == 0) {
+      // Legacy alias from v2 settings.txt: 0 -> internal, 1 -> midiClock.
+      // Only applied when the canonical `clockSource:` line was absent,
+      // so a file written by a new binary keeps its Link selection.
+      int mode = 0;
+      if (sscanf(line + 15, "%d", &mode) == 1 && (mode == 0 || mode == 1))
+        appSettings.clockSource = mode == 1 ? ClockSource::midiClock : ClockSource::internal;
+    } else if (strncmp(line, "audioInputDeviceCount: ", 23) == 0) {
+      int count;
+      if (sscanf(line + 23, "%d", &count) == 1)
+        appSettings.audioInputDeviceCount = count < 0 ? 0 :
+          (count > AUDIO_INPUT_MAX_DEVICES ? AUDIO_INPUT_MAX_DEVICES : count);
+    } else if (strncmp(line, "audioInputDeviceName.", 21) == 0) {
+      int index;
+      if (sscanf(line + 21, "%d:", &index) == 1 && index >= 0 && index < AUDIO_INPUT_MAX_DEVICES) {
+        const char* name = strchr(line + 21, ':');
+        if (name && name[1] == ' ') {
+          name += 2;
+          strncpy(appSettings.audioInputDeviceNames[index], name, AUDIO_DEVICE_NAME_LENGTH);
+          appSettings.audioInputDeviceNames[index][AUDIO_DEVICE_NAME_LENGTH] = 0;
+        }
+      }
+    } else if (strncmp(line, "audioInputArmed.", 16) == 0) {
+      int slot;
+      if (sscanf(line + 16, "%d:", &slot) == 1 && slot >= 0 && slot < AUDIO_INPUT_MAX_ARMED) {
+        const char* name = strchr(line + 16, ':');
+        if (name && name[1] == ' ') {
+          name += 2;
+          // Resolve the persisted name to an index in the saved device list;
+          // append if it isn't there yet (e.g. list was truncated on save).
+          int index = -1;
+          for (int i = 0; i < appSettings.audioInputDeviceCount && i < AUDIO_INPUT_MAX_DEVICES; i++) {
+            if (strcmp(appSettings.audioInputDeviceNames[i], name) == 0) { index = i; break; }
+          }
+          if (index < 0 && appSettings.audioInputDeviceCount < AUDIO_INPUT_MAX_DEVICES) {
+            index = appSettings.audioInputDeviceCount++;
+            strncpy(appSettings.audioInputDeviceNames[index], name, AUDIO_DEVICE_NAME_LENGTH);
+            appSettings.audioInputDeviceNames[index][AUDIO_DEVICE_NAME_LENGTH] = 0;
+          }
+          appSettings.audioInputArmed[slot] = (int8_t)index;
+        }
+      }
+    } else if (strncmp(line, "audioInputMonitor: ", 19) == 0) {
+      int enabled;
+      if (sscanf(line + 19, "%d", &enabled) == 1 && (enabled == 0 || enabled == 1))
+        appSettings.audioInputMonitor = enabled;
+    } else if (strncmp(line, "recordingPath: ", 15) == 0) {
+      strncpy(appSettings.recordingPath, line + 15, PATH_LENGTH);
+      appSettings.recordingPath[PATH_LENGTH] = 0;
     } else if (strncmp(line, "keyUp: ", 7) == 0) {
       sscanf(line + 7, "%d,%d,%d", &appSettings.keyMapping.keyUp[0].code, &appSettings.keyMapping.keyUp[1].code, &appSettings.keyMapping.keyUp[2].code);
     } else if (strncmp(line, "keyDown: ", 9) == 0) {
@@ -448,14 +594,15 @@ int settingsLoad(void) {
   }
 
   fclose(file);
-  appSettings.audioSampleRate = kAudioSampleRate;
-#ifdef WEB_BUILD
-  // Browser audio and UI share a thread. Large saved buffers batch playback
-  // updates and stall animations; 4906 is rounded up to 8192 by SDL/Web Audio.
-  appSettings.audioBufferSize = 1024;
-#elif defined(ANDROID_BUILD) || defined(DESKTOP_BUILD)
-  // Migrate the old 10 Hz default.
-  if (appSettings.audioBufferSize == 4906) appSettings.audioBufferSize = 1600;
+  if (appSettings.audioSampleRate != 32000 && appSettings.audioSampleRate != 48000)
+    appSettings.audioSampleRate = kAudioSampleRate;
+  // 4,906 was the legacy platform default; other values are rounded to the
+  // nearest choice exposed by the audio settings screen.
+  appSettings.audioBufferSize = appSettings.audioBufferSize == 4906
+    ? defaultAudioBufferSize() : normalizeAudioBufferSize(appSettings.audioBufferSize);
+#ifdef PORTMASTER_BUILD
+  if (appSettings.keyRepeatSpeed == 2) appSettings.keyRepeatSpeed = 1;
+  if (appSettings.waveformRefreshHz == 30) appSettings.waveformRefreshHz = 60;
 #endif
   if (appSettings.braidsBits < 0 || appSettings.braidsBits > 6) appSettings.braidsBits = 6;
   if (appSettings.braidsDrift < 0 || appSettings.braidsDrift > 4) appSettings.braidsDrift = 0;
@@ -465,6 +612,12 @@ int settingsLoad(void) {
     if (appSettings.midiChannelInstrument[i] < -1 || appSettings.midiChannelInstrument[i] >= PROJECT_MAX_INSTRUMENTS)
       appSettings.midiChannelInstrument[i] = -1;
   }
+  if (appSettings.audioInputDeviceCount < 0) appSettings.audioInputDeviceCount = 0;
+  if (appSettings.audioInputDeviceCount > AUDIO_INPUT_MAX_DEVICES) appSettings.audioInputDeviceCount = AUDIO_INPUT_MAX_DEVICES;
+  for (int i = 0; i < AUDIO_INPUT_MAX_ARMED; i++) {
+    if (appSettings.audioInputArmed[i] >= appSettings.audioInputDeviceCount) appSettings.audioInputArmed[i] = -1;
+  }
+  if (appSettings.audioInputMonitor != 0 && appSettings.audioInputMonitor != 1) appSettings.audioInputMonitor = 0;
   return 0;
 }
 

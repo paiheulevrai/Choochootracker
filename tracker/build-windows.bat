@@ -14,7 +14,7 @@ set "CHOOCHOOTRACKER_TMP=%CD%\..\.tmp"
 set "HOME=%CHOOCHOOTRACKER_TMP%"
 set "CHERE_INVOKING=1"
 
-"%MSYS2_ROOT%\usr\bin\bash.exe" -lc "export PATH=/ucrt64/bin:/usr/bin; export HOME=$CHOOCHOOTRACKER_TMP; export TMP=$CHOOCHOOTRACKER_TMP; export TEMP=$CHOOCHOOTRACKER_TMP; make -j4 windows"
+"%MSYS2_ROOT%\usr\bin\bash.exe" -lc "export PATH=/ucrt64/bin:/usr/bin; export HOME=$CHOOCHOOTRACKER_TMP; export TMP=$CHOOCHOOTRACKER_TMP; export TEMP=$CHOOCHOOTRACKER_TMP; export TMPDIR=$CHOOCHOOTRACKER_TMP; make -j4 windows"
 if %ERRORLEVEL% NEQ 0 (
     echo Error: Build failed.
     exit /b 1

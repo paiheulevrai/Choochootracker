@@ -1,0 +1,273 @@
+{
+  "date": "2026-10-05",
+  "purpose": "Separate SID prototype; no tracker runtime integration",
+  "core": {
+    "repo": "https://github.com/floooh/chips",
+    "commit": "9e88298ce56319953ac7a43213a1120359f7a3a6",
+    "license": "Zlib",
+    "path": "vendor/m6581.h",
+    "sha256": "a793225ee69b91e0ea8c91b221d06ee024e45e6c8179176980abfa95d5a54cdf"
+  },
+  "files": [
+    {
+      "path": "sources/sidkit/LICENSE",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/LICENSE",
+      "sha256": "19edf89bd822d10494feacb36b55642175ce1d37d2e7b93fdfda4f9b911dc945"
+    },
+    {
+      "path": "sources/sidkit/README.md",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/README.md",
+      "sha256": "850ca67a18dd54bc62393decc99f51e6440504aa3e80ec2a9cc95708384ea3a6"
+    },
+    {
+      "path": "sources/sidkit/patches/fire.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/fire.json",
+      "sha256": "b4ec1cc9fd852b1b1f45a6a326afcbeb7735fb381d6323cac399cbb391b16c26"
+    },
+    {
+      "path": "sources/sidkit/patches/heavy_repeater_filtered.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/heavy_repeater_filtered.json",
+      "sha256": "69f2047466817b977e5a5d227b6d0b7b1baa30ee5166a0f2039fdcec740ea0a1"
+    },
+    {
+      "path": "sources/sidkit/patches/ion_cannon.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/ion_cannon.json",
+      "sha256": "5cba092348805efca712333042acd4296684c7473e485cd0088fa9132a53cb21"
+    },
+    {
+      "path": "sources/sidkit/patches/ion_cannon_filtered.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/ion_cannon_filtered.json",
+      "sha256": "2cd069d13a3b6513bf0bc8c5749bde999f464dbfd5bc39d0a59eac18b87c5f74"
+    },
+    {
+      "path": "sources/sidkit/patches/powerup.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/powerup.json",
+      "sha256": "7a41cd8fa97e018aa15fb01d75ece8494a38706b7c5dbf23bfed9e794dd49bf6"
+    },
+    {
+      "path": "sources/sidkit/patches/powerup_shield.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/powerup_shield.json",
+      "sha256": "1979362f046d325de3290970fac592f00a829eacf0270ff08d193473bc726585"
+    },
+    {
+      "path": "sources/sidkit/patches/powerup_shield_boost.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/powerup_shield_boost.json",
+      "sha256": "aa7a5bfc91d3635d9a11ad39e43ee5b62378a535eccaefb2f9fa63c55ed401ec"
+    },
+    {
+      "path": "sources/sidkit/patches/powerup_speed.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/powerup_speed.json",
+      "sha256": "fca6c1bfbd6bccff26b4bdea78f274b6d804f2c61d87b034288c38dc04daddbc"
+    },
+    {
+      "path": "sources/sidkit/patches/powerup_speed_boost.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/powerup_speed_boost.json",
+      "sha256": "3ebd4a2dbf6b8accaffb701fc0bb664e70c6bf1d9b0a7cc51e6faa1878f1f74c"
+    },
+    {
+      "path": "sources/sidkit/patches/powerup_spread.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/powerup_spread.json",
+      "sha256": "4324deeb21fb4c1accebaee02c2de1d38c4f859d9bdd18912f853a7a60c55946"
+    },
+    {
+      "path": "sources/sidkit/patches/powerup_spread_boost.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/powerup_spread_boost.json",
+      "sha256": "b4acf317f9470b72ca09936dc636734730301a51ddbc456ce2b1b7715c222571"
+    },
+    {
+      "path": "sources/sidkit/patches/shield_on_v3.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/shield_on_v3.json",
+      "sha256": "30a28b90574b65dc1d4d05c1d9cc9d00572acb52d19049d2fdd31942fc648240"
+    },
+    {
+      "path": "sources/sidkit/patches/tie_cannon_filtered.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/tie_cannon_filtered.json",
+      "sha256": "9485056b4cbd4a8819f19163485ef30b9f939aca12356601d707819e5cdef49c"
+    },
+    {
+      "path": "sources/sidkit/patches/turbolaser_filtered.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/turbolaser_filtered.json",
+      "sha256": "b9d4ae0305af06399af0f8e72bcba905548f68f7ad0ecafab211ba80a221fa70"
+    },
+    {
+      "path": "sources/sidkit/patches/xwing_blaster_filtered.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/xwing_blaster_filtered.json",
+      "sha256": "7e97ed19ccc607b3d5735c24b9ee6a92d530dc37a6adbdff5610c99e2cf8d86b"
+    },
+    {
+      "path": "sources/sidkit/patches/xwing_blaster_octdown.json",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/patches/xwing_blaster_octdown.json",
+      "sha256": "b8d804b95fe5cc1931fab1e178e917db363de0da6f0830f21158a377bd66ebe4"
+    },
+    {
+      "path": "sources/sidkit/sid_sfx/presets.py",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/sid_sfx/presets.py",
+      "sha256": "7930f9897b317656d5dbaff8a865e6236400f1a217d37bdfbd118d0c88891aff"
+    },
+    {
+      "path": "sources/sidkit/sid_sfx/schema.py",
+      "url": "https://raw.githubusercontent.com/devinvenable/c64SIDkit/fc541093c5cc3ae3664a36a274c3c3f938de2d07/sid_sfx/schema.py",
+      "sha256": "28be2949246f510b27b1f28e22e2568b43f50c668310b1f7e0fd14d7bb9dcd87"
+    },
+    {
+      "path": "sources/instruments/LICENSE",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/LICENSE",
+      "sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411"
+    },
+    {
+      "path": "sources/instruments/README.md",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/README.md",
+      "sha256": "2f26839891fa6a193612fd4a0bf449ee57f103074692289ab8d8bc7f1c9459a6"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar-tpe/6581/acoustic-guitar-tpe-6581-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/acoustic-guitar-tpe/6581/acoustic-guitar-tpe-6581-params.json",
+      "sha256": "eb7811ec879a59532523261263273b2fd5f540453420c5c2eadda53ad8b7ee82"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar-tpe/6581/acoustic-guitar-tpe-6581.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/acoustic-guitar-tpe/6581/acoustic-guitar-tpe-6581.ins",
+      "sha256": "beb8e917a5686b54aec52a412512c64c5d9f9de938fdbd588dca0b0de1647882"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar-tpe/8580/acoustic-guitar-tpe-8580-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/acoustic-guitar-tpe/8580/acoustic-guitar-tpe-8580-params.json",
+      "sha256": "cea8fa90dbfc450c50fa7c9455877a72b9f5f4ced8df9a4d609e5ba9b8ea776a"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar-tpe/8580/acoustic-guitar-tpe-8580.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/acoustic-guitar-tpe/8580/acoustic-guitar-tpe-8580.ins",
+      "sha256": "d015c834960d667732178e56827c1e76aef282215db03689419adfcaad276640"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar-tpe/README.md",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/acoustic-guitar-tpe/README.md",
+      "sha256": "7d8872f64bb8acd506fe66cfa17b85021e7fd226bc0c975d63f7e1773f5372c8"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar/6581/acoustic-guitar-6581-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/acoustic-guitar/6581/acoustic-guitar-6581-params.json",
+      "sha256": "4189466bd22803d2f7a2b99c83eab10539f1e533bc8bde6e9f3ff70500651770"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar/6581/acoustic-guitar-6581.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/acoustic-guitar/6581/acoustic-guitar-6581.ins",
+      "sha256": "bf9f5b3009a4051385f5409b9c12d09eaeead905550d54ad2e28d5be2558df3d"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar/8580/acoustic-guitar-8580-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/acoustic-guitar/8580/acoustic-guitar-8580-params.json",
+      "sha256": "335df5ddf0d83ac67eab7e330c86d3dd23ee10af31b3805123feef7995afc398"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar/8580/acoustic-guitar-8580.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/acoustic-guitar/8580/acoustic-guitar-8580.ins",
+      "sha256": "076565f7389257728d82c263f244d821c68b3acdaac4845ffd792e760eb1ebfc"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar/README.md",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/acoustic-guitar/README.md",
+      "sha256": "ca9a9af2c4cff2b30c16e5e57a788b494b07c5f3bff78cd3bdba0b67efb387a8"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano-tpe/6581/grand-piano-tpe-6581-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/grand-piano-tpe/6581/grand-piano-tpe-6581-params.json",
+      "sha256": "303ebe56ae275bdd97a6788fc42c4220b54a3788ff787b7f4c669fb792306c60"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano-tpe/6581/grand-piano-tpe-6581.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/grand-piano-tpe/6581/grand-piano-tpe-6581.ins",
+      "sha256": "ba755353bedf26f1d7de6d93b34e41a72fd36235a2d251eb808fea28be6b27e1"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano-tpe/8580/grand-piano-tpe-8580-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/grand-piano-tpe/8580/grand-piano-tpe-8580-params.json",
+      "sha256": "d541d0fbe61e663db2fc719f17d1df9c42c8d2bb375009d2d5c06d85f28f4720"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano-tpe/8580/grand-piano-tpe-8580.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/grand-piano-tpe/8580/grand-piano-tpe-8580.ins",
+      "sha256": "ca14bb112d9a4db99d711ce991480fbe6879729b63865c345609f91c17eb43f5"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano-tpe/README.md",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/grand-piano-tpe/README.md",
+      "sha256": "547d38b90cb27480da40c0d496789df4853983faa2352cb792bb9e6f32311a40"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano/6581/grand-piano-6581-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/grand-piano/6581/grand-piano-6581-params.json",
+      "sha256": "58bed38c6eb4e57f5d87b5d2e0bc4f8098d44c14d01fea5b13942cb10e3dca99"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano/6581/grand-piano-6581.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/grand-piano/6581/grand-piano-6581.ins",
+      "sha256": "8ebb2086c539c6fa78c4a94bd85f0bdda27cd954acbe3927d74ad30e6a799a7b"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano/8580/grand-piano-8580-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/grand-piano/8580/grand-piano-8580-params.json",
+      "sha256": "1548f9ed53602eeef92f86570aca6d367ff08e19020f2555b34b3740c38956c8"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano/8580/grand-piano-8580.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/grand-piano/8580/grand-piano-8580.ins",
+      "sha256": "349e6027122cc69e5cf283459ea1b17896c944752394713de1360afd83db6560"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano/README.md",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/grand-piano/README.md",
+      "sha256": "67c7dd25833e816e90e8ef008fbd3bc3f37746deb589547cda7e3eb282153a4b"
+    },
+    {
+      "path": "sources/instruments/instruments/violin-tpe/6581/violin-tpe-6581-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/violin-tpe/6581/violin-tpe-6581-params.json",
+      "sha256": "d908bc2e7a59e79787be88e1269906f294ef558e8469731bb7d7c4e53a1a24a7"
+    },
+    {
+      "path": "sources/instruments/instruments/violin-tpe/6581/violin-tpe-6581.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/violin-tpe/6581/violin-tpe-6581.ins",
+      "sha256": "79fe036387e58da02431abb7ccd4be9169b0e5361393817b0bf193acfa3103a8"
+    },
+    {
+      "path": "sources/instruments/instruments/violin-tpe/8580/violin-tpe-8580-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/violin-tpe/8580/violin-tpe-8580-params.json",
+      "sha256": "000b95e1531c86790b33bb843121db0fced5d50e7fef16ffafd1e5c470cbeccb"
+    },
+    {
+      "path": "sources/instruments/instruments/violin-tpe/8580/violin-tpe-8580.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/violin-tpe/8580/violin-tpe-8580.ins",
+      "sha256": "65216f61dbc7ad10643900f6b57ff88796f14e7b3e7d46f7ea1ee2a5d2751885"
+    },
+    {
+      "path": "sources/instruments/instruments/violin-tpe/README.md",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/violin-tpe/README.md",
+      "sha256": "8fe5207cfb2782a5cbc0b8f97257f07a084a55ab6b5f07c86934402cf592ee09"
+    },
+    {
+      "path": "sources/instruments/instruments/violin/6581/violin-6581-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/violin/6581/violin-6581-params.json",
+      "sha256": "eaadd286868304dabc1f8ec5d15157fce5d624db8ca67709034f9403f16976e6"
+    },
+    {
+      "path": "sources/instruments/instruments/violin/6581/violin-6581.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/violin/6581/violin-6581.ins",
+      "sha256": "e3737c560bb5264aeb5f52d9a4140381809adc2bd39dec56c8f4f1deda4de854"
+    },
+    {
+      "path": "sources/instruments/instruments/violin/8580/violin-8580-params.json",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/violin/8580/violin-8580-params.json",
+      "sha256": "95558e341cdbc32ecb5f37d1704883e35f0d1e43a09b4cd9585e744a3b2c534c"
+    },
+    {
+      "path": "sources/instruments/instruments/violin/8580/violin-8580.ins",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/violin/8580/violin-8580.ins",
+      "sha256": "a662b18b75ece78d451c2b483b332902ba8115aa6172fe3a6f664d9672391d19"
+    },
+    {
+      "path": "sources/instruments/instruments/violin/README.md",
+      "url": "https://raw.githubusercontent.com/JC-000/c64-sid-instruments/2af3d5cb422bb523ed0ea624539391a0c44646fe/instruments/violin/README.md",
+      "sha256": "95eb5f0c20c98f8a46c25718521cc1132a94d8fbb6bce8a0d1725d86cb6f0076"
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 #ifndef __CHIPNOMAD_LIB__PROJECT_CONSTANTS_H__
 #define __CHIPNOMAD_LIB__PROJECT_CONSTANTS_H__
 
+#include <stdint.h>
+
 #define PROJECT_MAX_TRACKS (8)
 #define PROJECT_MAX_LENGTH (256)
 #define PROJECT_MAX_CHAINS (255)
@@ -9,6 +11,7 @@
 #define PROJECT_MAX_INSTRUMENTS (128)
 #define PROJECT_MAX_TABLES (255)
 #define PROJECT_MAX_CHIPS (PROJECT_MAX_TRACKS)
+#define PROJECT_MAX_MIDI_CC_MAPPINGS (32)
 #define PROJECT_MAX_PITCHES (254)
 #define PROJECT_MAX_SAMPLE_SIZE (16384)
 #define PROJECT_INSTRUMENT_NAME_LENGTH (15)
@@ -18,5 +21,10 @@
 #define NOTE_OFF (254)
 #define EMPTY_VALUE_8 (255)
 #define EMPTY_VALUE_16 (32767)
+#define PHRASE_VOLUME_MAX (127)
+
+// Lane command IDs are independent from 8-bit effect values.
+using FXId = uint16_t;
+constexpr FXId FX_ID_EMPTY = 0xffff;
 
 #endif // __CHIPNOMAD_LIB__PROJECT_CONSTANTS_H__

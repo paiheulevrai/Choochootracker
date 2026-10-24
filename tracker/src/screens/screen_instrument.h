@@ -16,19 +16,44 @@ void instrumentCommonDrawVoicePostStatic(int drawEnvelope);
 int instrumentCommonDrawVoicePostCursor(int col, int row);
 int instrumentCommonDrawVoicePostField(int col, int row, CellState state, const InstrumentVoicePostSettings* post);
 int instrumentCommonOnEditVoicePost(int col, int row, CellEditAction action, InstrumentVoicePostSettings* post);
+void instrumentFMAmpDrawStatic();
+void instrumentFMRefreshStaticWaveform();
+void instrumentFMAmpDrawCursor(int col, int row);
+void instrumentFMAmpDrawField(int col, int row, CellState state);
+int instrumentFMAmpEdit(int col, int row, CellEditAction action);
+void instrumentFMToneDrawCursor(int col);
+void instrumentSIDDrawHints();
+void instrumentFMSetContext(int instrument, InstrumentType type);
+void instrumentFMToneDrawField(int col, CellState state);
+int instrumentFMToneEdit(int col, CellEditAction action);
 
 extern ScreenData screenInstrumentAY;
 extern ScreenData screenInstrumentAY2;
 extern ScreenData screenInstrumentAYSample;
 extern ScreenData screenInstrumentBraids;
 extern ScreenData screenInstrumentSample;
+extern ScreenData screenInstrumentSoundFont;
 extern ScreenData screenInstrumentSCWF;
 extern ScreenData screenInstrumentBYOWTBL;
 extern ScreenData screenInstrumentPlaits;
 extern ScreenData screenInstrumentAChChid;
 extern ScreenData screenInstrumentDrumSynth;
 extern ScreenData screenInstrumentMME;
+extern ScreenData screenInstrumentMonk;
+bool instrumentMonkTouchCell(int col, int row, int* targetCol, int* targetRow);
 extern ScreenData screenInstrumentSintered;
 extern ScreenData screenInstrumentMidi;
+extern ScreenData screenInstrumentOPLL;
+extern ScreenData screenInstrumentOPL;
+bool fmEditSupported(InstrumentType type);
+extern ScreenData screenInstrumentSimpleChip;
 
 #endif
+
+void instrumentFMImportSysEx(const char* path);
+
+const char* instrumentPresetCollectionName();
+void instrumentPresetOpenCollections();
+void instrumentPresetCycleCollection(int direction);
+void instrumentPresetOpenSounds();
+void instrumentPresetCycle(int direction);

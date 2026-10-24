@@ -3,43 +3,47 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050c1f">
   <title>ChooChooTracker — Web</title>
   <style>
-    :root { color-scheme: dark; }
+    :root { color-scheme: dark; --background: #050c1f; --empty: #10284a;
+      --muted: #52799b; --text: #c9bfa5; --value: #ffd665; --title: #e6b84f;
+      --play: #64d6ff; --cursor: #65d8ff; --selection: #245072; --warning: #ff6655; }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; display: grid; place-items: center;
-      background: #050c1f; color: #c9bfa5; font: 16px system-ui, sans-serif; }
+      background: var(--background); color: var(--text); font: 16px system-ui, sans-serif; }
     main { width: min(100%, 980px); padding: 1rem; text-align: center; }
-    h1 { color: #e6b84f; font-size: 1.15rem; letter-spacing: .12em; }
-    p { color: #52799b; }
+    h1 { color: var(--title); font-size: 1.15rem; letter-spacing: .12em; }
+    p { color: var(--muted); }
     #canvas { display: block; width: min(100%, 640px); height: auto; aspect-ratio: 4 / 3;
-      margin: 0 auto; border: 1px solid #245072; background: #050c1f;
+      margin: 0 auto; border: 1px solid var(--title); background: var(--background);
       image-rendering: pixelated; }
-    #status { color: #ffd665; min-height: 1.5em; }
-    button { color: #050c1f; background: #ffd665; border: 0; padding: .55rem 1rem;
+    #audio-status { color: var(--value); }
+    #status { color: var(--value); min-height: 1.5em; }
+    button { color: var(--background); background: var(--value); border: 0; padding: .55rem 1rem;
       font-weight: 700; cursor: pointer; }
     button:disabled { cursor: wait; opacity: .55; }
     #file-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem;
       width: min(100%, 640px); margin: 0 auto .75rem; }
     #file-controls button { padding: .42rem .7rem; font-size: .8rem; }
     #touch-controls { display: none; width: min(100%, 640px); margin: .75rem auto 0;
-      padding: .8rem 1rem .65rem; border: 1px solid #3b4350; border-radius: 1.2rem;
-      background: linear-gradient(#10284a, #050c1f); box-shadow: inset 0 1px #52799b;
+      padding: .8rem 1rem .65rem; border: 1px solid var(--selection); border-radius: 1.2rem;
+      background: linear-gradient(var(--empty), var(--background)); box-shadow: inset 0 1px var(--muted);
       grid-template-columns: 1fr 1fr 1fr; grid-template-areas: "dpad . face" "system system system";
       gap: .65rem; touch-action: none; }
-    #touch-controls button { border: 1px solid #050c1f; color: #ffd665; font: 700 .72rem system-ui;
-      touch-action: none; user-select: none; -webkit-user-select: none; box-shadow: inset 0 1px #52799b, 0 2px 2px #050c1f; }
+    #touch-controls button { border: 1px solid var(--background); color: var(--value); font: 700 .72rem system-ui;
+      touch-action: none; user-select: none; -webkit-user-select: none; box-shadow: inset 0 1px var(--muted), 0 2px 2px var(--background); }
     .dpad { grid-area: dpad; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); aspect-ratio: 1; max-width: 8rem; }
-    .dpad button { background: #245072; border-radius: .25rem; font-size: 1rem; }
+    .dpad button { background: var(--selection); border-radius: .25rem; font-size: 1rem; }
     .dpad .up { grid-column: 2; } .dpad .left { grid-row: 2; grid-column: 1; }
     .dpad .right { grid-row: 2; grid-column: 3; } .dpad .down { grid-row: 3; grid-column: 2; }
     .face { grid-area: face; display: flex; align-items: center; justify-content: center; gap: .55rem; }
-    .face button { width: 3.6rem; height: 3.6rem; border-radius: 50%; background: #ff6655; }
-    .face button:first-child { background: #65d8ff; }
+    .face button { width: 3.6rem; height: 3.6rem; border-radius: 50%; background: var(--warning); }
+    .face button:first-child { background: var(--cursor); }
     .system { grid-area: system; display: flex; justify-content: center; gap: .75rem; }
-    .system button { min-width: 5.8rem; min-height: 2rem; border-radius: 1rem; background: #10284a; }
+    .system button { min-width: 5.8rem; min-height: 2rem; border-radius: 1rem; background: var(--empty); }
     .links { margin: .8rem 0 0; }
-    .links a { color: #ffd665; margin: 0 .5rem; }
+    .links a { color: var(--value); margin: 0 .5rem; }
     @media (pointer: coarse), (max-width: 700px) {
       main { width: min(100%, 640px); padding: .5rem; }
       #canvas { width: 100%; }
@@ -52,11 +56,20 @@
     <h1>CHOOCHOO TRACKER / WEB</h1>
     <button id="start">Start tracker</button>
     <div id="status"></div>
-    <div id="file-controls" aria-label="Project and sample files">
+    <div id="audio-status" role="status"></div>
+    <div id="file-controls" aria-label="Project, sample and recovery controls">
       <button id="import-project" disabled>Import .cct</button>
       <button id="import-samples" disabled>Import WAVs</button>
       <button id="import-folder" disabled>Import sample folder</button>
+      <button id="import-banks" disabled>Import sound banks</button>
+      <button id="import-bank-folder" disabled>Import bank folder</button>
+      <button id="import-user-zip" disabled>Import USER ZIP</button>
+      <input id="user-zip-input" type="file" accept=".zip,application/zip" hidden>
       <button id="export-project" disabled>Download .cct</button>
+      <button id="restart-audio" disabled>Restart audio</button>
+      <button id="reload-app" disabled>Reload app</button>
+      <input id="bank-input" type="file" accept=".sf2,.sf3,.sfz,.exs,.zip,.wav,.aif,.aiff,.ogg" multiple hidden>
+      <input id="bank-folder-input" type="file" webkitdirectory multiple hidden>
       <input id="project-input" type="file" accept=".cct" hidden>
       <input id="sample-input" type="file" accept=".wav,audio/wav" multiple hidden>
       <input id="sample-folder-input" type="file" accept=".wav,audio/wav" webkitdirectory multiple hidden>
@@ -84,24 +97,117 @@
     const fileControls = document.querySelectorAll('#file-controls button');
     let trackerStarted = false;
     let storageSyncing = false;
+    let storagePending = false;
+    let storageCallbacks = [];
     const getFs = () => (typeof FS !== 'undefined' ? FS : (window.Module && window.Module.FS));
+
+    // Kept in the wrapper because Web MIDI is a browser API. The C++ backend
+    // only sees the same port list and raw messages as every other platform.
+    // Status values match platforms/web/midi_backend_web.cpp.
+    (() => {
+      let access = null, pending = false, state = 0;
+      let inputs = [], outputs = [], inputPort = null, outputPort = null;
+      const rebuild = () => {
+        if (!access) { inputs = []; outputs = []; return; }
+        inputs = Array.from(access.inputs.values()).filter(port => port.state === 'connected');
+        outputs = Array.from(access.outputs.values()).filter(port => port.state === 'connected');
+        if (inputPort && !inputs.includes(inputPort)) inputPort = null;
+        if (outputPort && !outputs.includes(outputPort)) outputPort = null;
+      };
+      const closeInput = () => {
+        if (inputPort) inputPort.onmidimessage = null;
+        inputPort = null;
+      };
+      const receive = (event) => {
+        const data = event.data;
+        if (!data || data.length < 2 || !window.Module || !window.Module.ccall) return;
+        window.Module.ccall('webMidiMessage', null, ['number', 'number', 'number'],
+          [data[0], data[1], data.length > 2 ? data[2] : 0]);
+      };
+      window.choochooWebMidi = {
+        requestAccess() {
+          if (access || pending) return;
+          if (!navigator.requestMIDIAccess) { state = 2; return; }
+          pending = true;
+          state = 1;
+          navigator.requestMIDIAccess({ sysex: false }).then((granted) => {
+            access = granted;
+            pending = false;
+            state = 0;
+            rebuild();
+            access.onstatechange = rebuild;
+          }, () => { pending = false; state = 3; });
+        },
+        status() { return state; },
+        portCount(isInput) { return (isInput ? inputs : outputs).length; },
+        portName(isInput, index) {
+          const port = (isInput ? inputs : outputs)[index];
+          return port ? (port.name || port.manufacturer || 'Unnamed MIDI port') : null;
+        },
+        openPort(isInput, index) {
+          const port = (isInput ? inputs : outputs)[index];
+          if (!port) return false;
+          if (isInput) {
+            closeInput();
+            inputPort = port;
+            inputPort.onmidimessage = receive;
+            inputPort.open().catch(() => { state = 4; });
+          } else {
+            outputPort = port;
+            outputPort.open().catch(() => { state = 4; });
+          }
+          return true;
+        },
+        closePort(isInput) {
+          if (isInput) closeInput();
+          else outputPort = null;
+        },
+        send(statusByte, data1, data2, dueTime) {
+          if (!outputPort) return;
+          const message = [statusByte, data1];
+          if ((statusByte & 0xe0) !== 0xc0) message.push(data2);
+          try { outputPort.send(message, dueTime); } catch (_) { state = 4; }
+        },
+      };
+    })();
+
+    const themeVariables = ['background', 'empty', 'muted', 'text', 'value',
+      'title', 'play', 'cursor', 'selection', 'warning'];
+    window.choochooApplyTheme = (colors, saveResult) => {
+      colors.forEach((color, index) => document.documentElement.style.setProperty(
+        '--' + themeVariables[index], '#' + (color & 0xffffff).toString(16).padStart(6, '0')));
+      const background = colors[0];
+      document.querySelector('meta[name="theme-color"]').content =
+        document.documentElement.style.getPropertyValue('--background');
+      const brightness = ((background >> 16 & 255) * 299 +
+        (background >> 8 & 255) * 587 + (background & 255) * 114) / 1000;
+      document.documentElement.style.colorScheme = brightness >= 128 ? 'light' : 'dark';
+      if (saveResult) { status.textContent = 'Could not save theme settings.'; return; }
+    };
 
     const userPath = (name) => name.split('/').filter((part) => part && part !== '.' && part !== '..').join('/');
     const ensureUserDirectories = (fs) => {
       fs.mkdirTree('/user/projects');
       fs.mkdirTree('/user/samples');
+      fs.mkdirTree('/user/instruments/USER/soundfont');
       fs.mkdirTree('/user/exports');
     };
     const syncUserStorage = (done) => {
       const fs = getFs();
-      if (!fs || storageSyncing) return;
+      if (!fs) { if (done) done(new Error('Tracker is not ready.')); return; }
+      if (done) storageCallbacks.push(done);
+      if (storageSyncing) { storagePending = true; return; }
+      const callbacks = storageCallbacks;
+      storageCallbacks = [];
       storageSyncing = true;
       fs.syncfs(false, (error) => {
         storageSyncing = false;
         if (error) status.textContent = 'Could not save browser storage.';
-        if (done) done(error);
+        callbacks.forEach((callback) => callback(error));
+        if (storagePending) { storagePending = false; syncUserStorage(); }
       });
     };
+    window.choochooSettingsSaved = () => syncUserStorage();
     window.choochooDownloadFile = (path) => {
       const fs = getFs();
       if (!fs) return;
@@ -170,7 +276,146 @@
     };
     start.addEventListener('click', loadTracker);
     window.addEventListener('load', loadTracker);
-    window.addEventListener('pagehide', () => syncUserStorage());
+    const audioStatus = document.querySelector('#audio-status');
+    const getAudio = () => window.Module && window.Module.SDL2 && window.Module.SDL2.audioContext;
+    let observedAudio, observedNode, observedTime = 0, lastAudioProgress = 0, lastAudioCallback = 0;
+    let audioActivated = false;
+    let audioRecovering = false, audioGeneration = 0, reloading = false;
+    const audioClockStalled = () => {
+      const audio = getAudio(), now = performance.now();
+      if (!audio) return false;
+      if (audio !== observedAudio || audio.currentTime !== observedTime) {
+        observedAudio = audio;
+        observedTime = audio.currentTime;
+        lastAudioProgress = now;
+      }
+      const node = window.Module.SDL2.audio && window.Module.SDL2.audio.scriptProcessorNode;
+      if (node && node !== observedNode) {
+        observedNode = node;
+        lastAudioCallback = now;
+        const callback = node.onaudioprocess;
+        node.onaudioprocess = function(event) {
+          if (observedNode === node) {
+            lastAudioCallback = performance.now();
+            if (audio.state === 'running') audioActivated = true;
+          }
+          callback.call(this, event);
+        };
+      }
+      return audio.state === 'running' && (now - lastAudioProgress > 2000 ||
+        (node && now - lastAudioCallback > 2000));
+    };
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    const audioDeadline = (promise) => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Audio operation timed out')), 1500);
+      Promise.resolve(promise).then(value => { clearTimeout(timer); resolve(value); },
+        error => { clearTimeout(timer); reject(error); });
+    });
+    const resumeBrowserAudio = async (restart = false, cycle = false, userGesture = false) => {
+      if (document.hidden || reloading || !window.Module || !window.Module._webRestartAudio) return;
+      // Initial autoplay suspension is normal. Focus/pageshow must not start a
+      // recovery attempt before output has worked or the user interacts.
+      if (!restart && !audioActivated && !userGesture) return;
+      if (audioRecovering && !restart) return;
+      // A visible page can miss a wake event. A user gesture must also wake SDL.
+      window.Module.ccall('webSetPageHidden', null, ['number'], [0]);
+      let audio = getAudio();
+      const stalled = audioClockStalled();
+      if (!restart && (!audio || (audio.state === 'running' && !stalled && !cycle))) return;
+      const generation = ++audioGeneration;
+      audioRecovering = true;
+      try {
+        if (restart || audio.state === 'closed') {
+          // Run inside the button's user gesture. Reopen the browser output,
+          // keeping the existing tracker, instruments and project in memory.
+          // SDL otherwise calls close() again on an already closed context.
+          if (audio && audio.state === 'closed') window.Module.SDL2.audioContext = undefined;
+          if (window.Module.ccall('webRestartAudio', 'number', [], [])) throw new Error('Audio output failed');
+          audio = getAudio();
+          observedAudio = undefined;
+        } else if (cycle || stalled || audio.state === 'interrupted') {
+          // Safari can report running while its clock is frozen, or leave a
+          // resume promise pending. Bound both operations and reset first.
+          await audioDeadline(audio.suspend());
+          await delay(200);
+        }
+        if (generation !== audioGeneration || document.hidden || audio !== getAudio()) return;
+        audioClockStalled();
+        const before = audio.currentTime;
+        const started = performance.now();
+        await audioDeadline(audio.resume());
+        const node = window.Module.SDL2.audio && window.Module.SDL2.audio.scriptProcessorNode;
+        await delay(Math.max(350, node ? node.bufferSize / audio.sampleRate * 2000 + 100 : 350));
+        if (generation !== audioGeneration || document.hidden || audio !== getAudio()) return;
+        if (audio.state !== 'running' || audio.currentTime <= before || lastAudioCallback <= started)
+          throw new Error('Audio output did not recover');
+        audioActivated = true;
+        audioStatus.textContent = restart ? 'Audio output restarted. Press Play if needed.' : '';
+      } catch (_) {
+        if (generation === audioGeneration && !document.hidden && (audioActivated || restart))
+          audioStatus.textContent = 'Audio is paused or unavailable. Tap Restart audio.';
+      } finally {
+        if (generation === audioGeneration) audioRecovering = false;
+      }
+    };
+    let pageWasHidden = document.hidden;
+    const setPageHidden = (hidden) => {
+      if (!window.Module || !window.Module._webSetPageHidden) return;
+      const wasHidden = pageWasHidden;
+      pageWasHidden = hidden;
+      window.Module.ccall('webSetPageHidden', null, ['number'], [hidden ? 1 : 0]);
+      if (hidden) {
+        ++audioGeneration;
+        audioRecovering = false;
+        syncUserStorage();
+        const audio = getAudio();
+        if (audio && audio.state !== 'closed') audio.suspend().catch(() => {});
+      } else resumeBrowserAudio(false, wasHidden);
+    };
+    document.addEventListener('visibilitychange', () => setPageHidden(document.hidden));
+    window.addEventListener('pagehide', () => setPageHidden(true));
+    window.addEventListener('pageshow', () => { if (!document.hidden) setPageHidden(false); });
+    window.addEventListener('focus', () => { if (!document.hidden) setPageHidden(false); });
+    ['pointerdown', 'touchend', 'keydown'].forEach((event) =>
+      document.addEventListener(event, (input) => {
+        // Touch activation belongs to touchend; pointerdown can precede the
+        // browser's permission and leave a resume promise waiting for it.
+        if (!input.isTrusted || (event === 'pointerdown' && input.pointerType !== 'mouse')) return;
+        resumeBrowserAudio(false, false, true);
+      }, { capture: true, passive: true }));
+    // Observe failures without continuously waking audio or preventing Auto-Lock.
+    setInterval(() => {
+      if (!document.hidden && !audioRecovering && !reloading && audioClockStalled() && audioActivated)
+        audioStatus.textContent = 'Audio stopped responding. Tap a control or Restart audio.';
+    }, 1000);
+    document.querySelector('#restart-audio').addEventListener('click', () => resumeBrowserAudio(true));
+    document.querySelector('#reload-app').addEventListener('click', () => {
+      if (reloading) return;
+      reloading = true;
+      fileControls.forEach(button => { button.disabled = true; });
+      status.textContent = 'Saving before reload…';
+      setPageHidden(true);
+      let finished = false;
+      const fail = () => {
+        if (finished) return;
+        finished = true;
+        reloading = false;
+        fileControls.forEach(button => { button.disabled = false; });
+        setPageHidden(false);
+        status.textContent = 'Could not finish saving. Reload cancelled; download your project before trying again.';
+      };
+      const timer = setTimeout(fail, 10000);
+      try {
+        if (window.Module.ccall('webSaveBrowserState', 'number', [], [])) throw new Error('Save failed');
+        syncUserStorage(error => {
+          if (finished) return;
+          clearTimeout(timer);
+          if (error) { fail(); return; }
+          finished = true;
+          window.location.reload();
+        });
+      } catch (_) { clearTimeout(timer); fail(); }
+    });
 
     document.querySelector('#import-project').addEventListener('click', () => document.querySelector('#project-input').click());
     document.querySelector('#import-samples').addEventListener('click', () => document.querySelector('#sample-input').click());
@@ -188,8 +433,37 @@
       if (event.target.files.length) await importFiles(event.target.files, '/user/samples');
       event.target.value = '';
     };
+    document.querySelector('#import-banks').addEventListener('click', () => document.querySelector('#bank-input').click());
+    document.querySelector('#import-bank-folder').addEventListener('click', () => document.querySelector('#bank-folder-input').click());
+    const importBanks = async (event) => {
+      if (event.target.files.length) await importFiles(event.target.files, '/user/instruments/USER/soundfont');
+      event.target.value = '';
+    };
+    document.querySelector('#bank-input').addEventListener('change', importBanks);
+    document.querySelector('#bank-folder-input').addEventListener('change', importBanks);
     document.querySelector('#sample-input').addEventListener('change', importSamples);
     document.querySelector('#sample-folder-input').addEventListener('change', importSamples);
+    document.querySelector('#import-user-zip').addEventListener('click', () => document.querySelector('#user-zip-input').click());
+    document.querySelector('#user-zip-input').addEventListener('change', async (event) => {
+      const file = event.target.files[0], fs = getFs();
+      if (!file || !fs) return;
+      fileControls.forEach(button => { button.disabled = true; });
+      const path = '/user/.user-library-import.zip';
+      let result = 'Import interrupted. Existing files kept.';
+      try {
+        status.textContent = 'Importing USER collection…';
+        fs.writeFile(path, new Uint8Array(await file.arrayBuffer()));
+        result = await window.Module.ccall('webImportUserZip', 'string', ['string'], [path], {async: true});
+      } catch (error) {
+        result = 'Import interrupted. Existing files kept. ' + (error.message || error);
+      } finally {
+        if (fs.analyzePath(path).exists) fs.unlink(path);
+        const error = await new Promise(resolve => syncUserStorage(resolve));
+        status.textContent = error ? result + ' Browser storage failed; keep your original ZIP.' : result;
+        event.target.value = '';
+        fileControls.forEach(button => { button.disabled = false; });
+      }
+    });
     document.querySelector('#export-project').addEventListener('click', () => {
       const path = '/user/exports/choochootracker.cct';
       if (window.Module.ccall('webSaveProject', 'number', ['string'], [path]) !== 0) {

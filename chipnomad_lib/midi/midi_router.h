@@ -50,6 +50,12 @@ struct MidiBackend {
   void (*flushOutputQueue)(void* userdata);
   unsigned int (*droppedCount)(void* userdata);
   uint64_t (*nowMicros)(void* userdata);
+  // Starts any platform permission flow needed before ports can be listed.
+  // Native backends leave this null; Web MIDI completes it asynchronously.
+  void (*requestAccess)(void* userdata);
+  // Optional human-readable backend state for the device settings screen.
+  // The returned text remains valid until the next call.
+  const char* (*statusMessage)(void* userdata);
   int hasInput;
   int hasOutput;
   int hasClockInput;
@@ -84,6 +90,8 @@ unsigned int midiRouterGetDroppedCount(void);
 // computing several tracker rows' worth of events) read "now" through this
 // once, then add each row's offset to it.
 uint64_t midiRouterNowMicros(void);
+void midiRouterRequestAccess(void);
+const char* midiRouterStatusMessage(void);
 
 // Which incoming MIDI channels drive what. Only auto_ is implemented;
 // tracks8 is reserved so multitimbral 8-track input can be added later
@@ -93,8 +101,12 @@ enum class MidiInputMode {
   tracks8, // Reserved, not implemented: channels 1-8 -> tracker tracks 1-8.
 };
 
-// Reserved for a future PR: MIDI Clock/Start/Continue/Stop, neither
-// generated (master) nor followed (slave) yet.
+// MIDI clock sync. off: realtime bytes are ignored entirely (internal
+// clock). slave: follow an external device's Clock (0xF8) and transport
+// (0xFA Start / 0xFB Continue / 0xFC Stop) - the app layer reads the
+// measured tempo and transport state via the getters below and drives
+// playback from them. master (generating clock for other gear) is still
+// reserved for a future PR.
 enum class MidiClockMode {
   off,
   master,
@@ -141,6 +153,12 @@ struct MidiPreviewIntent {
   int stop; // 1 = stop preview (note/instrument unused), 0 = play note on instrument
 };
 
+struct MidiCCIntent {
+  uint8_t channel;
+  uint8_t cc;
+  uint8_t value;
+};
+
 // Sets the per-channel instrument mapping Auto mode input uses (-1 =
 // channel not assigned, falls back to midiRouterTick's fallbackInstrument).
 // Call once at startup and whenever it changes.
@@ -150,6 +168,26 @@ void midiRouterSetChannelInstrumentMap(MidiRouterState* router, const int8_t cha
 // app shutdown, so a note held across the change can't leave a phantom
 // entry once a (possibly different) device resumes.
 void midiRouterResetHeldNotes(MidiRouterState* router);
+
+// Switches clock following on/off live (app startup, Project screen).
+// Resets tempo measurement and transport state but NOT the change serials,
+// so a caller comparing serials never re-applies a stale event after the
+// switch.
+void midiRouterSetClockMode(MidiRouterState* router, MidiClockMode mode);
+
+// Slave-mode clock state, polled by the app layer after midiRouterTick
+// (same serial pattern as midiRouterGetCCValue: serials let callers apply
+// each change exactly once). Transport: returns 1 once any transport
+// message has been seen in slave mode, with *running the latest state
+// (1 = Start/Continue, 0 = Stop) and *serial its change counter.
+int midiRouterGetClockTransport(const MidiRouterState* router, int* running, uint32_t* serial);
+// Tempo: returns 1 once a tempo has been measured in slave mode, with *bpm
+// the smoothed tempo (24 clocks/beat) and *serial bumped whenever the
+// quantized (whole BPM) value changes.
+int midiRouterGetClockBpm(const MidiRouterState* router, float* bpm, uint32_t* serial);
+// Monotonic MIDI-clock pulse count. Start/Continue reset the musical phase to
+// zero; callers can compare it with their own 24-ticks-per-beat phase.
+uint64_t midiRouterGetClockPulseCount(const MidiRouterState* router);
 
 // Polls the backend and applies the active input mode (only auto_ is
 // implemented: last-note-priority legato, channel-mapped or
@@ -161,5 +199,11 @@ void midiRouterResetHeldNotes(MidiRouterState* router);
 // mode only needs to also decide a track index, not reach into engine
 // internals to do it.
 int midiRouterTick(MidiRouterState* router, int fallbackInstrument, MidiPreviewIntent* outIntents, int maxIntents);
+// Returns whether this exact CC has been received, and optionally its value
+// and the serial of that receipt.  A zero value is meaningful, so callers
+// must not confuse an unseen CC with a CC explicitly sent at zero.
+int midiRouterGetCCValue(const MidiRouterState* router, uint8_t channel, uint8_t cc,
+                         uint8_t* value, uint32_t* serial);
+int midiRouterGetLastCC(const MidiRouterState* router, MidiCCIntent* out, uint32_t* serial);
 
 #endif // __CHIPNOMAD_LIB__MIDI_ROUTER_H__

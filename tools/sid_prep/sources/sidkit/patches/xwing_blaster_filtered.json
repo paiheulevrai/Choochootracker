@@ -1,0 +1,21 @@
+{
+  "name": "xwing_blaster_filtered",
+  "voice": 1,
+  "waveform": "SAWTOOTH",
+  "freq_hi": 38,
+  "freq_lo": 24,
+  "attack": 0,
+  "decay": 6,
+  "sustain": 0,
+  "release": 5,
+  "pw_hi": 0,
+  "duration_frames": 8,
+  "sweep_target_hi": 4,
+  "sweep_target_lo": 195,
+  "sweep_type": "exponential",
+  "filter_mode": "off",
+  "filter_cutoff": 120,
+  "filter_resonance": 15,
+  "filter_cutoff_sweep": 0,
+  "description": "X-wing blaster filtered \u2014 sawtooth sweep, band-pass resonance (573Hz, matches original)"
+}

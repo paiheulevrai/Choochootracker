@@ -1,0 +1,88 @@
+{
+  "waveform": "saw",
+  "attack": 2,
+  "decay": 2,
+  "sustain": 1,
+  "release": 12,
+  "pulse_width": 3946,
+  "pw_table": null,
+  "filter_cutoff": 44,
+  "filter_resonance": 8,
+  "filter_mode": "off",
+  "filter_voice1": false,
+  "ring_mod": false,
+  "sync": false,
+  "frequency": 440.0,
+  "gate_frames": 10,
+  "release_frames": 155,
+  "wavetable": null,
+  "volume": 15,
+  "chip_model": "6581",
+  "source_instrument": null,
+  "wt_attack_frames": 5,
+  "wt_attack_waveform": "pulse+saw",
+  "wt_sustain_waveform": "saw",
+  "wt_use_test_bit": false,
+  "pw_start": 3946,
+  "pw_delta": 3,
+  "pw_min": 3027,
+  "pw_max": 4095,
+  "pw_mode": "sweep",
+  "wavetable_steps": [
+    [
+      "pulse+saw",
+      2
+    ],
+    [
+      "saw",
+      0
+    ]
+  ],
+  "filter_cutoff_start": 44,
+  "filter_cutoff_end": 44,
+  "filter_sweep_frames": 50,
+  "reference_notes": [
+    {
+      "note": "E2",
+      "freq_hz": 82.41
+    },
+    {
+      "note": "G2",
+      "freq_hz": 98.0
+    },
+    {
+      "note": "Bb2",
+      "freq_hz": 116.54
+    },
+    {
+      "note": "Db3",
+      "freq_hz": 138.59
+    },
+    {
+      "note": "E3",
+      "freq_hz": 164.81
+    },
+    {
+      "note": "G3",
+      "freq_hz": 196.0
+    },
+    {
+      "note": "Bb3",
+      "freq_hz": 233.08
+    },
+    {
+      "note": "Db4",
+      "freq_hz": 277.18
+    },
+    {
+      "note": "E4",
+      "freq_hz": 329.63
+    },
+    {
+      "note": "G4",
+      "freq_hz": 392.0
+    }
+  ],
+  "fitness_score": 0.0,
+  "version": 1
+}

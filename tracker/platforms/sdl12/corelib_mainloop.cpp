@@ -8,6 +8,11 @@
 
 #define FPS 60
 
+static int frameTimeUs;
+void mainLoopSetTargetFps(int) {}
+int mainLoopGetTargetFps(void) { return FPS; }
+int mainLoopGetFrameTimeUs(void) { return frameTimeUs; }
+
 void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData)) {
   uint32_t delay = 1000 / FPS;
   uint32_t start;
@@ -51,6 +56,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     gfxUpdateScreen();
 
     busytime = SDL_GetTicks() - start;
+    frameTimeUs = (int)(busytime * 1000);
     if (delay > busytime) {
       SDL_Delay(delay - busytime);
     }

@@ -1,0 +1,5 @@
+instances=1 state_bytes=240 emulated_seconds=2.133270 cpu_percent=22.786 p95_us=5084.917 worst_us=5502.875 energy=476.383269736 peak=0.194691
+instances=2 state_bytes=480 emulated_seconds=2.133270 cpu_percent=45.470 p95_us=9919.875 worst_us=9999.209 energy=952.766539473 peak=0.194691
+instances=4 state_bytes=960 emulated_seconds=2.133270 cpu_percent=90.955 p95_us=19653.083 worst_us=20180.709 energy=1905.533078947 peak=0.194691
+instances=8 state_bytes=1920 emulated_seconds=2.133270 cpu_percent=181.721 p95_us=39088.875 worst_us=39369.166 energy=3811.066157896 peak=0.194691
+

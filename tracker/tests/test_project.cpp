@@ -4,14 +4,39 @@
 #include "project_io_common.h"
 #include "project_utils.h"
 #include "import/import_vt2.h"
+#include "synth/multimode_filter.h"
 
 #include <cstring>
 #include <cstdlib>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <cstdio>
+#include <memory>
 
 TEST_SUITE("project") {
+
+TEST_CASE("MIDI CC maps continuous engine destinations to native values") {
+  Project p;
+  projectInit(&p);
+  Instrument* plaits = &p.instruments[0];
+  plaits->type = InstrumentType::Plaits;
+  CHECK(instrumentCCDestinationAvailable(plaits, 1));
+  CHECK(instrumentSetCCDestination(plaits, 1, 0));
+  CHECK(plaits->volume == 0);
+  CHECK(instrumentSetCCDestination(plaits, 1, 127));
+  CHECK(plaits->volume == 255);
+  CHECK(instrumentCCDestinationAvailable(plaits, 4));
+  CHECK(instrumentSetCCDestination(plaits, 4, 0));
+  CHECK(plaits->chip.plaits.timbre == 0);
+  CHECK(instrumentSetCCDestination(plaits, 4, 127));
+  CHECK(plaits->chip.plaits.timbre == 32767);
+  CHECK(instrumentSetCCDestination(plaits, 7, 0));
+  CHECK(plaits->chip.plaits.filterCutoffHz == FILTER_CUTOFF_MIN_HZ);
+  CHECK(instrumentSetCCDestination(plaits, 7, 127));
+  CHECK(plaits->chip.plaits.filterCutoffHz == FILTER_CUTOFF_MAX_HZ);
+  projectFree(&p);
+}
 
 // Test fixture
 struct ProjectFixture {
@@ -42,6 +67,102 @@ TEST_CASE_FIXTURE(ProjectFixture, "projectInit default track tilt") {
   for (int i = 0; i < PROJECT_MAX_TRACKS; ++i) CHECK(p.trackTilt[i] == 0x80);
 }
 
+TEST_CASE_FIXTURE(ProjectFixture, "projectInit defaults to Clouds with usable Beads settings") {
+  CHECK(p.reverbAlgorithm == 0);
+  CHECK(p.beadsReverbTime == 180);
+  CHECK(p.beadsReverbTone == 153);
+  CHECK(p.beadsReverbHighpassCutoffHz == 150);
+}
+
+TEST_CASE_FIXTURE(ProjectFixture, "projectInit has a usable Tape Echo preset") {
+  CHECK(p.delayAlgorithm == 0);
+  CHECK(p.tapeDivision == 2);
+  CHECK(p.tapeHeads == 6);
+  CHECK(p.tapeTone == 160);
+  CHECK(p.tapeFlutter == 25);
+  CHECK(p.tapeSpring == 25);
+}
+
+TEST_CASE("Beads reverb settings survive save and load") {
+  Project saved, loaded;
+  projectInit(&saved); projectInit(&loaded);
+  // Match the valid project setup used by the other save/load fixtures.
+  saved.chipsCount = 1;
+  saved.tracksCount = 1;
+  saved.chipType = ChipType::AY;
+  std::strcpy(saved.pitchTable.name, "Beads test");
+  saved.reverbAlgorithm = 1;
+  saved.beadsReverbTime = 77;
+  saved.beadsReverbTone = 201;
+  saved.beadsReverbHighpassCutoffHz = 900;
+  const char* path = "build/tests/beads_reverb_io.cct";
+  REQUIRE(projectSave(&saved, path) == 0);
+  INFO(projectFileError);
+  REQUIRE(projectLoad(&loaded, path) == 0);
+  CHECK(loaded.reverbAlgorithm == 1);
+  CHECK(loaded.beadsReverbTime == 77);
+  CHECK(loaded.beadsReverbTone == 201);
+  CHECK(loaded.beadsReverbHighpassCutoffHz == 900);
+}
+
+TEST_CASE("table volumes retain their level when loading old projects") {
+  Project saved, loaded;
+  projectInit(&saved); projectInit(&loaded);
+  saved.chipsCount = 1;
+  saved.tracksCount = 1;
+  saved.chipType = ChipType::AY;
+  std::strcpy(saved.pitchTable.name, "Table volume test");
+  const char* path = "build/tests/table_volume_io.cct";
+
+  saved.tables[0].rows[0].volume = 64;
+  REQUIRE(projectSave(&saved, path) == 0);
+  REQUIRE(projectLoad(&loaded, path) == 0);
+  CHECK(loaded.tables[0].rows[0].volume == 64);
+
+  saved.tables[0].rows[0].volume = 15;
+  REQUIRE(projectSave(&saved, path) == 0);
+  std::ifstream input(path, std::ios::binary);
+  std::string data((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+  input.close();
+  const size_t header = data.find("# ChooChooTracker Module 11.0");
+  REQUIRE(header != std::string::npos);
+  data.replace(header, std::strlen("# ChooChooTracker Module 11.0"), "# ChooChooTracker Module 7.0");
+  std::ofstream output(path, std::ios::binary | std::ios::trunc);
+  output.write(data.data(), data.size());
+  output.close();
+  REQUIRE(projectLoad(&loaded, path) == 0);
+  CHECK(loaded.tables[0].rows[0].volume == PHRASE_VOLUME_MAX);
+}
+
+TEST_CASE("Tape Echo settings survive save and load") {
+  Project saved, loaded;
+  projectInit(&saved); projectInit(&loaded);
+  saved.chipsCount = loaded.chipsCount = 1;
+  saved.tracksCount = loaded.tracksCount = 1;
+  saved.chipType = loaded.chipType = ChipType::AY;
+  std::strcpy(saved.pitchTable.name, "Tape Echo test");
+  saved.delayAlgorithm = 1;
+  saved.tapeDivision = 5;
+  saved.tapeHeads = 4;
+  saved.tapeTone = 77;
+  saved.tapeFlutter = 61;
+  saved.tapeSpring = 43;
+  const char* path = "build/tests/tape_echo_io.cct";
+  REQUIRE(projectSave(&saved, path) == 0);
+  REQUIRE(projectLoad(&loaded, path) == 0);
+  CHECK(loaded.delayAlgorithm == 1);
+  CHECK(loaded.tapeDivision == 5);
+  CHECK(loaded.tapeHeads == 4);
+  CHECK(loaded.tapeTone == 77);
+  CHECK(loaded.tapeFlutter == 61);
+  CHECK(loaded.tapeSpring == 43);
+}
+
+TEST_CASE_FIXTURE(ProjectFixture, "projectInit enables MIDI CC mapping rows") {
+  for (int i = 0; i < PROJECT_MAX_MIDI_CC_MAPPINGS; ++i)
+    CHECK(p.midiCCMappings[i].enabled == 1);
+}
+
 TEST_CASE("track tilt project settings survive save and load") {
   Project saved, loaded;
   projectInit(&saved);
@@ -65,6 +186,25 @@ TEST_CASE("track tilt project settings survive save and load") {
   CHECK(loaded.tiltPivotHz == 2500);
 }
 
+TEST_CASE("MIDI CC mappings survive save and load") {
+  Project saved, loaded;
+  projectInit(&saved); projectInit(&loaded);
+  saved.chipsCount = loaded.chipsCount = 1;
+  saved.tracksCount = loaded.tracksCount = 1;
+  saved.chipType = loaded.chipType = ChipType::AY;
+  std::strcpy(saved.title, "MIDI CC");
+  std::strcpy(saved.pitchTable.name, "MIDI CC");
+  saved.midiCCMappings[0] = {1, 2, 74, 3, 4};
+  const char* path = "build/tests/midi_cc_io.cct";
+  REQUIRE(projectSave(&saved, path) == 0);
+  REQUIRE(projectLoad(&loaded, path) == 0);
+  CHECK(loaded.midiCCMappings[0].enabled == 1);
+  CHECK(loaded.midiCCMappings[0].channel == 2);
+  CHECK(loaded.midiCCMappings[0].cc == 74);
+  CHECK(loaded.midiCCMappings[0].instrument == 3);
+  CHECK(loaded.midiCCMappings[0].destination == 4);
+}
+
 TEST_CASE("scale project settings survive save and load") {
   Project saved, loaded;
   projectInit(&saved);
@@ -79,6 +219,7 @@ TEST_CASE("scale project settings survive save and load") {
   std::strcpy(saved.pitchTable.noteNames[0], "C-4");
   saved.pitchTable.values[0] = 1000;
   saved.scaleApply = 0;
+  saved.scaleMode = 1;
   saved.scaleTracksMask = 0xa5;
   saved.scaleRoot = 9;
   saved.scalePreset = scaleCustom;
@@ -87,10 +228,51 @@ TEST_CASE("scale project settings survive save and load") {
   REQUIRE(projectSave(&saved, path) == 0);
   REQUIRE(projectLoad(&loaded, path) == 0);
   CHECK(loaded.scaleApply == 0);
+  CHECK(loaded.scaleMode == 1);
   CHECK(loaded.scaleTracksMask == 0xa5);
   CHECK(loaded.scaleRoot == 9);
   CHECK(loaded.scalePreset == scaleCustom);
   CHECK(loaded.scaleCustomMask == 0x0491);
+}
+
+TEST_CASE("legacy scale line without mode field loads as Quantizer") {
+  Project saved, loaded;
+  projectInit(&saved);
+  projectInit(&loaded);
+  saved.chipsCount = 1;
+  saved.tracksCount = 1;
+  saved.chipType = ChipType::AY;
+  saved.tickRate = 50;
+  saved.pitchTable.length = 1;
+  saved.pitchTable.octaveSize = 12;
+  std::strcpy(saved.pitchTable.name, "Test");
+  std::strcpy(saved.pitchTable.noteNames[0], "C-4");
+  saved.pitchTable.values[0] = 1000;
+  const char* path = "build/tests/scale_io_legacy.cct";
+  REQUIRE(projectSave(&saved, path) == 0);
+  // Rewrite the current 6-field Scale line into the pre-Note-Lock layout:
+  // apply,root,preset,customMask,tracksMask (no mode field).
+  {
+    std::ifstream in(path);
+    REQUIRE(in.is_open());
+    std::string text, lineBuf;
+    while (std::getline(in, lineBuf)) {
+      if (lineBuf.rfind("- Scale: ", 0) == 0) lineBuf = "- Scale: 1,5,3,2741,165";
+      text += lineBuf;
+      text += '\n';
+    }
+    in.close();
+    std::ofstream out(path);
+    REQUIRE(out.is_open());
+    out << text;
+  }
+  REQUIRE(projectLoad(&loaded, path) == 0);
+  CHECK(loaded.scaleApply == 1);
+  CHECK(loaded.scaleMode == 0);
+  CHECK(loaded.scaleRoot == 5);
+  CHECK(loaded.scalePreset == scaleDorian);
+  CHECK(loaded.scaleCustomMask == 0x0ab5);
+  CHECK(loaded.scaleTracksMask == 0xa5);
 }
 
 TEST_CASE("a project with fewer than 8 tracks survives save and load") {
@@ -108,7 +290,7 @@ TEST_CASE("a project with fewer than 8 tracks survives save and load") {
   saved.chains[0].rows[0].phrase = 0;
   saved.phrases[0].rows[0].note = 40;
   saved.phrases[0].rows[0].instrument = 0;
-  saved.phrases[0].rows[0].volume = 15;
+  saved.phrases[0].rows[0].volume = PHRASE_VOLUME_MAX;
 
   const char* path = "build/tests/reduced_tracks_io.cct";
   REQUIRE(projectSave(&saved, path) == 0);
@@ -161,12 +343,68 @@ TEST_CASE("sample slice survives save and load; missing field is Off") {
   CHECK(missing.instruments[0].chip.sample.slice == 0);
 }
 
+TEST_CASE("projects embed loaded samples in a ZIP container") {
+  Project saved, loaded;
+  projectInitAY(&saved);
+  projectInitAY(&loaded);
+  getInstrumentFunctions(InstrumentType::Sample).init(&saved.instruments[0]);
+  InstrumentSample& sample = saved.instruments[0].chip.sample;
+  std::strcpy(sample.path, "samples/original.wav");
+  sample.sampleRate = 8000;
+  sample.frameCount = 4;
+  sample.channels = 1;
+  sample.data = static_cast<int16_t*>(std::malloc(4 * sizeof(int16_t)));
+  REQUIRE(sample.data != nullptr);
+  sample.data[0] = -1000; sample.data[1] = 2000; sample.data[2] = -3000; sample.data[3] = 4000;
+
+  const char* path = "build/tests/sample_archive.cct";
+  REQUIRE(projectSave(&saved, path) == 0);
+  FILE* archive = std::fopen(path, "rb");
+  REQUIRE(archive != nullptr);
+  CHECK(std::fgetc(archive) == 'P');
+  CHECK(std::fgetc(archive) == 'K');
+  std::fclose(archive);
+
+  REQUIRE(projectLoad(&loaded, path) == 0);
+  const InstrumentSample& result = loaded.instruments[0].chip.sample;
+  REQUIRE(result.data != nullptr);
+  CHECK(result.frameCount == 4);
+  CHECK(result.sampleRate == 8000);
+  CHECK(result.data[0] == -1000);
+  CHECK(result.data[3] == 4000);
+  CHECK(std::strcmp(result.path, "samples/original.wav") == 0);
+}
+
+TEST_CASE("archives preserve BYOWTBL frame layout") {
+  Project saved, loaded;
+  projectInitAY(&saved);
+  projectInitAY(&loaded);
+  getInstrumentFunctions(InstrumentType::BYOWTBL).init(&saved.instruments[0]);
+  InstrumentBYOWTBL& table = saved.instruments[0].chip.byowtbl;
+  std::strcpy(table.oscillator[0].path, "samples/wavetable.wav");
+  table.oscillator[0].sampleRate = 8000;
+  table.oscillator[0].frameCount = 8;
+  table.oscillator[0].channels = 1;
+  table.oscillator[0].data = static_cast<int16_t*>(std::malloc(8 * sizeof(int16_t)));
+  REQUIRE(table.oscillator[0].data != nullptr);
+  table.frameSize[0] = 4;
+  table.tableFrames[0] = 2;
+
+  const char* path = "build/tests/byowtbl_archive.cct";
+  REQUIRE(projectSave(&saved, path) == 0);
+  REQUIRE(projectLoad(&loaded, path) == 0);
+
+  const InstrumentBYOWTBL& result = loaded.instruments[0].chip.byowtbl;
+  CHECK(result.frameSize[0] == 4);
+  CHECK(result.tableFrames[0] == 2);
+}
+
 TEST_CASE("new projects initialize the validated period pitch table") {
   Project project;
   projectInitAY(&project);
-  CHECK(project.linearPitch == 0);
-  CHECK(project.pitchTable.values[0] > project.pitchTable.values[12]);
-  CHECK(project.pitchTable.values[12] > project.pitchTable.values[24]);
+  CHECK(project.linearPitch == 1);
+  CHECK(project.pitchTable.values[0] < project.pitchTable.values[12]);
+  CHECK(project.pitchTable.values[12] < project.pitchTable.values[24]);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "projectInit other grooves empty") {
@@ -205,24 +443,24 @@ TEST_CASE_FIXTURE(ProjectFixture, "projectInit tables empty") {
 }
 
 TEST_CASE("modulation destination limits match every engine's routing") {
-  CHECK(instrumentModDestinationMax(InstrumentType::AY1) == 22);
-  CHECK(instrumentModDestinationMax(InstrumentType::AY2) == 28);
-  CHECK(instrumentModDestinationMax(InstrumentType::AYSample) == 24);
-  CHECK(instrumentModDestinationMax(InstrumentType::Braids) == 31);
-  CHECK(instrumentModDestinationMax(InstrumentType::Sample) == 33);
-  CHECK(instrumentModDestinationMax(InstrumentType::SCWF) == 31);
-  CHECK(instrumentModDestinationMax(InstrumentType::BYOWTBL) == 33);
-  CHECK(instrumentModDestinationMax(InstrumentType::Plaits) == 33);
-  CHECK(instrumentModDestinationMax(InstrumentType::PlaitsAlt) == 33);
-  CHECK(instrumentModDestinationMax(InstrumentType::AChChid) == 27);
-  CHECK(instrumentModDestinationMax(InstrumentType::DrumSynth) == 28);
+  CHECK(instrumentModDestinationMax(InstrumentType::AY1) == 49);
+  CHECK(instrumentModDestinationMax(InstrumentType::AY2) == 55);
+  CHECK(instrumentModDestinationMax(InstrumentType::AYSample) == 51);
+  CHECK(instrumentModDestinationMax(InstrumentType::Braids) == 51);
+  CHECK(instrumentModDestinationMax(InstrumentType::Sample) == 53);
+  CHECK(instrumentModDestinationMax(InstrumentType::SCWF) == 51);
+  CHECK(instrumentModDestinationMax(InstrumentType::BYOWTBL) == 53);
+  CHECK(instrumentModDestinationMax(InstrumentType::Plaits) == 53);
+  CHECK(instrumentModDestinationMax(InstrumentType::PlaitsAlt) == 53);
+  CHECK(instrumentModDestinationMax(InstrumentType::AChChid) == 54);
+  CHECK(instrumentModDestinationMax(InstrumentType::DrumSynth) == 55);
 }
 
 TEST_CASE("voice-post modulation destinations keep their labels") {
   static const char* labels[] = {"ADSR A", "ADSR D", "ADSR S", "ADSR R", "ADSR Shape", "Trig D", "Trig C",
                                  "M1 P5", "M2 P5", "M3 P5", "M4 P5"};
   int firstGeneric = getInstrumentFunctions(InstrumentType::Plaits).modDestinationsCount + 1;
-  for (int i = 0; i < genericModTotalCount - genericModEnvelopeAttack; ++i)
+  for (int i = 0; i < genericModFirstInsert - genericModEnvelopeAttack; ++i)
     CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::Plaits,
       firstGeneric + genericModEnvelopeAttack + i), labels[i]) == 0);
 }
@@ -238,7 +476,8 @@ TEST_CASE("instrument catalogue covers every family and its routable motion FX")
     for (int destination = 0; destination < definition->destinationCount; ++destination) {
       const InstrumentModDestination* metadata = instrumentModDestination(type, destination);
       REQUIRE(metadata != nullptr);
-      CHECK(std::strcmp(metadata->name, instrumentModDestinationName(type, destination)) == 0);
+      const char* expectedName = destination == midiCCDestinationNone ? "-" : instrumentModDestinationName(type, destination);
+      CHECK(std::strcmp(metadata->name, expectedName) == 0);
       if (metadata->fx != instrumentNoFX) CHECK(instrumentFXAvailable(type, metadata->fx));
     }
     for (int fx = 0; fx < definition->fxCount; ++fx)
@@ -246,7 +485,7 @@ TEST_CASE("instrument catalogue covers every family and its routable motion FX")
   }
 
   Instrument instrument;
-  uint8_t fx; int base, range; InstrumentMotionValue value;
+  FXId fx; int base, range; InstrumentMotionValue value;
   getInstrumentFunctions(InstrumentType::Sample).init(&instrument);
   CHECK(instrumentMotionDestination(&instrument, 3, &fx, &base, &range, &value));
   CHECK(fx == fxSST); CHECK(base == 0); CHECK(range == 255);
@@ -262,7 +501,7 @@ TEST_CASE("instrument catalogue covers every family and its routable motion FX")
   CHECK(fx == fxBIA);
 
   static const char* aChChidDestinations[] = {
-    "Off", "Volume", "Pitch", "Cutoff", "Reso", "EnvMod", "Decay", "Accent", "Timbre", "Color"
+    "-", "Volume", "Pitch", "Cutoff", "Reso", "EnvMod", "Decay", "Accent", "Timbre", "Color"
   };
   const InstrumentDefinition* aChChid = getInstrumentDefinition(InstrumentType::AChChid);
   REQUIRE(aChChid->destinationCount == 10);
@@ -276,7 +515,7 @@ TEST_CASE("instrument catalogue covers every family and its routable motion FX")
   CHECK(fx == fxACL); CHECK(range == 16384);
 
   static const char* drumSynthDestinations[] = {
-    "Off", "Volume", "Pitch", "Decay", "Tone", "Sweep", "Noise", "FM", "Drive", "Cutoff", "Reso"
+    "-", "Volume", "Pitch", "Decay", "Tone", "Sweep", "Noise", "FM", "Drive", "Cutoff", "Reso"
   };
   const InstrumentDefinition* drumSynth = getInstrumentDefinition(InstrumentType::DrumSynth);
   CHECK(std::strcmp(drumSynth->uiName, "Bogie") == 0);
@@ -309,24 +548,28 @@ TEST_CASE("instrument catalogue covers every family and its routable motion FX")
   CHECK(instrumentModDestinationAvailable(&instrument, 9));
 }
 
-TEST_CASE("v4 projects preserve LFO wavetable settings") {
+TEST_CASE("projects preserve syncLFO and slowLFO settings") {
   Project saved, loaded;
   projectInitAY(&saved);
   projectInitAY(&loaded);
   getInstrumentFunctions(InstrumentType::AY2).init(&saved.instruments[0]);
   Modulation& mod = saved.instruments[0].modulation[2];
-  mod.type = ModulationType::SLFO;
+  SUBCASE("legacy syncLFO") { mod.type = ModulationType::SLFO; }
+  SUBCASE("slowLFO") { mod.type = ModulationType::SlowLFO; }
   mod.p1 = static_cast<uint8_t>(LFOShape::wavetable);
   mod.p2 = static_cast<uint8_t>(LFOTrigger::chain);
-  mod.p3 = 12;
+  mod.p3 = mod.type == ModulationType::SlowLFO ? SLOW_LFO_MAX_STEP : 12;
   mod.p4 = 8;
   mod.p5 = 42;
   const char* path = "build/tests/lfo_wavetable_v4.cct";
   REQUIRE(projectSave(&saved, path) == 0);
   INFO(projectFileError);
   REQUIRE(projectLoad(&loaded, path) == 0);
-  CHECK(projectFileVersion == 5);
+  CHECK(projectFileVersion == 11);
   const Modulation& reloaded = loaded.instruments[0].modulation[2];
+  CHECK(reloaded.type == mod.type);
+  CHECK(reloaded.p3 == mod.p3);
+  CHECK(reloaded.p4 == mod.p4);
   CHECK(reloaded.p1 == static_cast<uint8_t>(LFOShape::wavetable));
   CHECK(reloaded.p2 == static_cast<uint8_t>(LFOTrigger::chain));
   CHECK(reloaded.p5 == 42);
@@ -346,14 +589,20 @@ TEST_CASE("v3 projects default the LFO wavetable index to zero") {
 TEST_CASE("phrase FX groups put the active engine after Track FX") {
   CHECK(std::strcmp(fxGroups[0].name, "Sequencer FX") == 0);
   CHECK(std::strcmp(fxGroups[1].name, "Track FX") == 0);
-  CHECK(fxGroups[1].columns == 4);
+  CHECK(fxGroups[1].columns == 8);
   CHECK(fxGroups[1].fxList[3].fx == fxCRD);
-  CHECK(getInstrumentDefinition(InstrumentType::Sample)->fxList[2].fx == fxSTA);
+  // Merged sample FX order keeps SPL/SLI first (our fork's saved-project
+  // numeric values); SST is the sample-start control, STA a legacy alias.
+  CHECK(getInstrumentDefinition(InstrumentType::Sample)->fxList[3].fx == fxSST);
+  CHECK(getInstrumentDefinition(InstrumentType::Sample)->fxList[4].fx == fxSTA);
   CHECK(fxGroups[2].instType == InstrumentType::AY1);
   CHECK(fxGroups[11].instType == InstrumentType::AChChid);
   CHECK(fxGroups[12].instType == InstrumentType::DrumSynth);
-  CHECK(std::strcmp(fxGroups[13].name, "ADSR / Trigger FX") == 0);
-  CHECK(std::strcmp(fxGroups[14].name, "Modulation FX") == 0);
+  CHECK(fxGroups[13].instType == InstrumentType::MME);
+  CHECK(fxGroups[14].instType == InstrumentType::OPLL);
+  CHECK(fxGroups[24].instType == InstrumentType::SID);
+  CHECK(std::strcmp(fxGroups[26].name, "ADSR / Trigger FX") == 0);
+  CHECK(std::strcmp(fxGroups[27].name, "Modulation FX") == 0);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "failed VT2 import leaves its destination unchanged") {
@@ -604,7 +853,15 @@ TEST_CASE("fillFXNames ay") {
 
 TEST_CASE("fillFXNames unknown") {
   fillFXNames();
-  CHECK(std::strcmp(fxNames[200].name, "---") == 0);
+  CHECK(std::strcmp(fxNames[fxFBK + 1].name, "---") == 0);
+}
+
+TEST_CASE("project load keeps its working project off the caller stack") {
+  auto loaded = std::make_unique<Project>();
+  projectInit(loaded.get());
+  REQUIRE(projectLoad(loaded.get(), "packaging/common/projects/gm-midi-demo.cct") == 0);
+  CHECK(loaded->tracksCount == PROJECT_MAX_TRACKS);
+  projectFree(loaded.get());
 }
 
 } // TEST_SUITE("project")

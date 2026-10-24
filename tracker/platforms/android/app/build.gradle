@@ -66,8 +66,22 @@ android {
         applicationId "com.paiheulevrai.choochootracker"
         minSdk 26
         targetSdk 36
-        versionCode 14
-        versionName "1.0.14-alpha"
+        versionCode 20
+        versionName "1.0.20-alpha"
+    }
+
+    // Two storage variants of the same app:
+    //  - store:  private app workspace, no storage permission (Play Store).
+    //  - direct: workspace in /sdcard/ChooChooTracker, user-accessible, needs
+    //            MANAGE_EXTERNAL_STORAGE (F-Droid and direct APK).
+    flavorDimensions 'storage'
+    productFlavors {
+        store {
+            dimension 'storage'
+        }
+        direct {
+            dimension 'storage'
+        }
     }
 
     // Copy bundled tracker content to assets.

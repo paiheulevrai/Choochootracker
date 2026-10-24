@@ -73,7 +73,9 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         requestFocus();
         setOnKeyListener(this);
         setOnTouchListener(this);
-        enableSensor(Sensor.TYPE_ACCELEROMETER, true);
+        // ChooChooTracker does not use tilt input. Leaving this disabled keeps
+        // SDL from registering gravity as a raw joystick axis.
+        enableSensor(Sensor.TYPE_ACCELEROMETER, false);
     }
 
     public Surface getNativeSurface() {

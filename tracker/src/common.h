@@ -19,6 +19,9 @@ extern "C" {
 #define THEME_NAME_LENGTH (16)
 #define MIDI_CHANNEL_COUNT (16)
 #define MIDI_DEVICE_NAME_LENGTH (127)
+#define AUDIO_DEVICE_NAME_LENGTH (127)
+#define AUDIO_INPUT_MAX_DEVICES (16)
+#define AUDIO_INPUT_MAX_ARMED (8)
 
 struct ColorScheme {
   int background;
@@ -52,6 +55,45 @@ enum class StickLiveMode { hold, toggle, free };
 enum class TrackVisualMode : uint8_t { detailed, audio };
 struct TrackVisualSettings { TrackVisualMode mode = TrackVisualMode::detailed; };
 
+// Clock source for engine tempo. Generalized from the old 0/1
+// midiClockMode int to a 3-state enum: internal (project.tickRate),
+// midiClock (follow incoming MIDI Clock 0xF8 + transport), or link
+// (Ableton Link session). On file load, an old `midiClockMode:`
+// line in settings.txt is read as a backwards-compat alias: 0 ->
+// internal, 1 -> midiClock. New settings write `clockSource: 0|1|2`.
+enum class ClockSource : int {
+  internal = 0,
+  midiClock = 1,
+  link = 2,
+};
+
+// Audio input recording source. -1 = none; 0..7 = bounce the captured
+// signal into that track's chain input; 100..115 = external MIDI instrument
+// (index = value - 100), mirroring the MIDI channel-instrument convention.
+enum class AudioInputSource : int {
+  none = -1,
+  track0 = 0,
+  track1,
+  track2,
+  track3,
+  track4,
+  track5,
+  track6,
+  track7,
+  externalBase = 100
+};
+
+inline bool audioInputIsTrackSource(int source) {
+  return source >= 0 && source < PROJECT_MAX_TRACKS;
+}
+inline bool audioInputIsExternalSource(int source) {
+  return source >= (int)AudioInputSource::externalBase &&
+         source < (int)AudioInputSource::externalBase + MIDI_CHANNEL_COUNT;
+}
+inline int audioInputExternalIndex(int source) {
+  return source - (int)AudioInputSource::externalBase;
+}
+
 struct AppSettings {
   int screenWidth;
   int screenHeight;
@@ -81,6 +123,11 @@ struct AppSettings {
   int midiOutputDevice;
   char midiInputDeviceName[MIDI_DEVICE_NAME_LENGTH + 1];
   char midiOutputDeviceName[MIDI_DEVICE_NAME_LENGTH + 1];
+  // Saved to settings.txt as `clockSource: 0|1|2` (internal / midiClock
+  // / link). Applied to the router in appSetup() and changed live from
+  // the Project screen. Old `midiClockMode:` lines in settings.txt are
+  // read as a backwards-compat alias (0 -> internal, 1 -> midiClock).
+  ClockSource clockSource;
   // Saved to settings.txt: which instrument a MIDI-in note on a given
   // channel (0-15) plays during preview, e.g. channel 0 -> instrument 5.
   // -1 = channel not assigned (falls back to the currently selected
@@ -89,6 +136,9 @@ struct AppSettings {
   StickLiveMode stickLiveMode;
   TrackVisualSettings trackVisuals[PROJECT_MAX_TRACKS];
   uint8_t persistentWaveform;
+  uint8_t hideTouchPadWithGamepad; // touch builds: hide the virtual pad while a gamepad is connected
+  uint8_t touchHaptics; // Android touch controls: request the system haptic feedback
+  uint8_t bootScreenNight; // 0 = original art; 1 = mellow night title
   KeyMapping keyMapping;
   ColorScheme colorScheme;
   char themeName[THEME_NAME_LENGTH + 1];
@@ -105,6 +155,15 @@ struct AppSettings {
   char ayWavetablePath[PATH_LENGTH + 1];
   char scwfPath[PATH_LENGTH + 1];
   char srWavetablePath[PATH_LENGTH + 1];
+  // Audio input recording (see docs/audio-input-recording-implementation-plan.md).
+  // Device names are persisted; indices are runtime-only (enumeration order
+  // isn't stable across reboots), resolved at launch like MIDI devices.
+  char audioInputDeviceNames[AUDIO_INPUT_MAX_DEVICES][AUDIO_DEVICE_NAME_LENGTH + 1];
+  int audioInputDeviceCount;
+  // Armed capture devices as indices into audioInputDeviceNames, -1 = empty.
+  int8_t audioInputArmed[AUDIO_INPUT_MAX_ARMED];
+  int audioInputMonitor; // 1 = route capture to output at -6 dB
+  char recordingPath[PATH_LENGTH + 1]; // Last recording output folder
 };
 
 extern AppSettings appSettings;
@@ -116,10 +175,19 @@ extern ChipNomadState* chipnomadState;
 
 extern int projectModified; // Flag to track if the project has unsaved changes
 
+// Set while the sample settings screen is playing a full sample back in
+// LAZY mode (tap PLAY toggles it). Guards the app-level auto-stop so the
+// preview survives the PLAY key release, and arms EDIT to drop slices at
+// the playback marker.
+extern int sampleLazyPlaybackActive;
+
 // Set at startup when an autosave file exists but failed to load, so the
 // title screen can warn instead of silently offering to "continue" into the
 // demo project it fell back to.
 extern int autosaveLoadFailed;
+// After a failed autosave load: 1 = the unreadable file was kept beside the
+// autosave, -1 = it could not be moved, so autosaving is paused this session.
+extern int autosaveKept;
 
 // Settings functions
 void initDefaultAppSettings(void);

@@ -10,7 +10,7 @@
 #include <string.h>
 
 // Two adjacent columns, each with two eight-field blocks. Content rows
-// 1..8 and 9..16 fit between the two-row scope and the message footer.
+// 2..9 and 11..18 leave a gap between blocks and keep the message footer free.
 // Column 0 edits Mod1/Mod2; column 1 edits Mod3/Mod4.
 
 #define COL_LEFT_X    0
@@ -21,13 +21,19 @@
 #define ROW_TOTAL 16
 #define ROWS_PER_MOD 8
 
-static SelectionItem destinationCategories[6];
-static SelectionItem sourceCategories[3];
+static SelectionItem destinationCategories[8];
+static SelectionItem sourceCategories[4];
+static SelectionItem insertDestinations[16];
+static char insertHelpers[16][64];
 static const SelectionItem envelopeSources[] = {{"ADSR", (int)ModulationType::ADSR, NULL, 0}, {"AHD", (int)ModulationType::AHD, NULL, 0}};
-static const SelectionItem lfoSources[] = {{"LFO", (int)ModulationType::LFO, NULL, 0}, {"SYNC LFO", (int)ModulationType::SLFO, NULL, 0}, {"FAST LFO", (int)ModulationType::FLFO, NULL, 0}};
+static const SelectionItem lfoSources[] = {{"LFO", (int)ModulationType::LFO, NULL, 0}, {"syncLFO", (int)ModulationType::SLFO, NULL, 0}, {"slowLFO", (int)ModulationType::SlowLFO, NULL, 0}, {"FAST LFO", (int)ModulationType::FLFO, NULL, 0}};
 static const SelectionItem stickSources[] = {{"LINEAR", (int)ModulationType::StickLinear, NULL, 0}, {"RATE", (int)ModulationType::StickRate, NULL, 0}};
-static SelectionItem engineDestinations[32];
-static SelectionItem sendDestinations[2];
+enum { sequencePitchSelection = -10, sequenceVolumeSelection, sequenceGateSelection };
+static const SelectionItem sequenceSources[] = {
+  {"PITCH", sequencePitchSelection, NULL, 0}, {"VOL", sequenceVolumeSelection, NULL, 0}, {"TRANCE GATE", sequenceGateSelection, NULL, 0}
+};
+static SelectionItem engineDestinations[96];
+static SelectionItem sendDestinations[3];
 static SelectionItem parameterDestinations[16];
 static SelectionItem wavetableDestinations[4];
 static SelectionItem envelopeDestinations[5];
@@ -43,7 +49,7 @@ static void cycleDestination(Instrument* instrument, Modulation* mod, int direct
   int previous = mod->destination;
   do {
     cycle8(&mod->destination, direction, 0, instrumentModDestinationMax(instrument->type), 1);
-  } while (!instrumentModDestinationAvailable(instrument, mod->destination) && mod->destination != previous);
+  } while (!modulationSequenceDestinationAllowed(instrument, mod, mod->destination) && mod->destination != previous);
 }
 
 static void setModulationType(Modulation* mod, ModulationType type, int modIndex) {
@@ -53,14 +59,21 @@ static void setModulationType(Modulation* mod, ModulationType type, int modIndex
   mod->p1 = modulationIsLiveStick(type) ? modIndex : 0;
   mod->p2 = type == ModulationType::StickRate ? 24 : 0;
   mod->p3 = type == ModulationType::ADSR ? 255 :
-            (type == ModulationType::FLFO ? 0 : (type == ModulationType::SLFO ? 24 : 6));
+            ((type == ModulationType::FLFO || type == ModulationType::SlowLFO) ? 0 : (type == ModulationType::SLFO ? 24 : 6));
   mod->p4 = type == ModulationType::SLFO ? 4 : 0;
   mod->p5 = 0;
 }
 
 static void sourceSelected(int value) {
-  setModulationType(&chipnomadState->project.instruments[cInstrument].modulation[editedModIndex],
-                    static_cast<ModulationType>(value), editedModIndex);
+  Modulation* mod = &chipnomadState->project.instruments[cInstrument].modulation[editedModIndex];
+  if (value >= sequencePitchSelection && value <= sequenceGateSelection) {
+    setModulationType(mod, ModulationType::Sequence, editedModIndex);
+    mod->p1 = static_cast<uint8_t>(value - sequencePitchSelection);
+    mod->p2 = static_cast<uint8_t>(SequenceMode::normal);
+    if (mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate)) sequenceGateDefaults(mod);
+  } else {
+    setModulationType(mod, static_cast<ModulationType>(value), editedModIndex);
+  }
   projectModified = 1;
   screenSetup(&screenModulation, cInstrument);
 }
@@ -70,9 +83,10 @@ static void sourceCancelled() { screenSetup(&screenModulation, cInstrument); }
 static void openSourcePopup(int modIndex) {
   editedModIndex = modIndex;
   sourceCategories[0] = {"ENVELOPES", -1, envelopeSources, 2};
-  sourceCategories[1] = {"LFO", -1, lfoSources, 3};
+  sourceCategories[1] = {"LFO", -1, lfoSources, 4};
   sourceCategories[2] = {"STICKS", -1, stickSources, 2};
-  selectionPopupSetup("SOURCE", sourceCategories, 3,
+  sourceCategories[3] = {"SEQUENCE", -1, sequenceSources, 3};
+  selectionPopupSetup("SOURCE", sourceCategories, 4,
     (int)chipnomadState->project.instruments[cInstrument].modulation[modIndex].type,
     sourceSelected, sourceCancelled);
   screenSetup(&screenSelectionPopup, 0);
@@ -90,17 +104,21 @@ static const char* modulationParameterName(ModulationType type, int parameter) {
   static const char* adsr[] = {"Attack", "Decay", "Sustain", "Release"};
   static const char* ahd[] = {"Attack", "Hold", "Decay", ""};
   static const char* lfo[] = {"Shape", "Trigger", "Rate", "", "Wavetable"};
+  static const char* slowLfo[] = {"Shape", "Trigger", "Period step", "", "Wavetable"};
   static const char* slfo[] = {"Shape", "Trigger", "Ticks", "Multiplier", "Wavetable"};
   static const char* flfo[] = {"Shape", "Trigger", "Frequency", "", "Wavetable"};
   static const char* stick[] = {"Axis", "", "", "", ""};
   static const char* stickRate[] = {"Axis", "Ticks", "", "", ""};
+  static const char* sequence[] = {"Source", "Mode", "", "", ""};
   const char* const* names = lfo;
   if (type == ModulationType::ADSR) names = adsr;
   else if (type == ModulationType::AHD) names = ahd;
   else if (type == ModulationType::SLFO) names = slfo;
+  else if (type == ModulationType::SlowLFO) names = slowLfo;
   else if (type == ModulationType::FLFO) names = flfo;
   else if (type == ModulationType::StickLinear) names = stick;
   else if (type == ModulationType::StickRate) names = stickRate;
+  else if (type == ModulationType::Sequence) names = sequence;
   return names[parameter];
 }
 
@@ -115,11 +133,17 @@ static void openDestinationPopup(int modIndex) {
   editedModIndex = modIndex;
   int engineDestinationCount = 0;
   for (int i = 0; i <= functions.modDestinationsCount; ++i)
-    if (instrumentModDestinationAvailable(instrument, i))
+    if (modulationSequenceDestinationAllowed(instrument, &instrument->modulation[modIndex], i))
       engineDestinations[engineDestinationCount++] = {instrumentModDestinationNameForInstrument(instrument, i), i, NULL, 0};
   int firstGeneric = functions.modDestinationsCount + 1;
+  for(int g=genericModFMBrightness;g<genericModTotalCount;++g)
+    if(const auto* d=instrumentNativeModDestination(instrument->type,g))
+      if(modulationSequenceDestinationAllowed(instrument,&instrument->modulation[modIndex],firstGeneric+g))engineDestinations[engineDestinationCount++]={d->name,firstGeneric+g,NULL,0};
+  if (instrument->type != InstrumentType::Midi)
+    engineDestinations[engineDestinationCount++] = {"PAN", firstGeneric + genericModInstrumentPan, NULL, 0};
   sendDestinations[0] = {"REVERB SEND", firstGeneric + genericModReverbSend, NULL, 0};
   sendDestinations[1] = {"DELAY SEND", firstGeneric + genericModDelaySend, NULL, 0};
+  sendDestinations[2] = {"TRACK PAN", firstGeneric + genericModTrackPan, NULL, 0};
   for (int i = 0; i < 16; ++i) {
     int destination = firstGeneric + genericModFirstParameter + i;
     int mod = i / 4;
@@ -143,7 +167,7 @@ static void openDestinationPopup(int modIndex) {
 
   int categoryCount = 0;
   destinationCategories[categoryCount++] = {"ENGINE", -1, engineDestinations, engineDestinationCount};
-  destinationCategories[categoryCount++] = {"FX SENDS", -1, sendDestinations, 2};
+  destinationCategories[categoryCount++] = {"MIXER TRACK", -1, sendDestinations, 3};
   destinationCategories[categoryCount++] = {"MODULATORS", -1, parameterDestinations, 16};
   destinationCategories[categoryCount++] = {"LFO TABLES", -1, wavetableDestinations, 4};
   if (functions.supportsVoicePost) {
@@ -151,6 +175,16 @@ static void openDestinationPopup(int modIndex) {
     if (functions.supportsTrigger)
       destinationCategories[categoryCount++] = {"TRIGGER", -1, triggerDestinations, 2};
   }
+  int insertCount = 0;
+  for (int i = 0; i < 16; ++i) {
+    const auto& c = chipnomadState->project.trackInserts[*pSongTrack][i/8];
+    const auto& d = insertDescriptor(c.module);
+    if (!insertParameterModulatable(c.module, i % 8, c.values[0])) continue;
+    snprintf(insertHelpers[i],sizeof(insertHelpers[i]),"F%d%d TF%d %s: %s",i/8+1,i%8+1,i/8+1,d.name,i%8<d.count?d.parameters[i%8].name:"Inactive");
+    int destination=firstGeneric+genericModFirstInsert+i;
+    insertDestinations[insertCount++]={instrumentModDestinationName(instrument->type,destination),destination,NULL,0,insertHelpers[i]};
+  }
+  destinationCategories[categoryCount++]={"INSERT FX",-1,insertDestinations,insertCount};
   selectionPopupSetup("DESTINATION", destinationCategories, categoryCount,
     instrument->modulation[modIndex].destination, destinationSelected,
     destinationCancelled);
@@ -215,10 +249,12 @@ static const char* modTypeName(ModulationType type) {
     case ModulationType::ADSR: return "ADSR";
     case ModulationType::AHD:  return "AHD";
     case ModulationType::LFO:  return "LFO";
-    case ModulationType::SLFO: return "SLFO";
+    case ModulationType::SLFO: return "syncLFO";
+    case ModulationType::SlowLFO: return "slowLFO";
     case ModulationType::FLFO: return "FLFO";
     case ModulationType::StickLinear: return "STKLIN";
     case ModulationType::StickRate: return "STKRAT";
+    case ModulationType::Sequence: return "SEQ";
     default:      return "?   ";
   }
 }
@@ -253,8 +289,8 @@ static const char* lfoTrigName(LFOTrigger trig) {
 }
 
 // Get the parameter label for a given modulator type and parameter index (0-3)
-static const char* paramLabel(ModulationType type, int paramIdx) {
-  switch (type) {
+static const char* paramLabel(const Modulation* mod, int paramIdx) {
+  switch (mod->type) {
     case ModulationType::ADSR:
       if (paramIdx == 0) return "Atk";
       if (paramIdx == 1) return "Dec";
@@ -267,6 +303,7 @@ static const char* paramLabel(ModulationType type, int paramIdx) {
       if (paramIdx == 2) return "Dec";
       break;
     case ModulationType::LFO:
+    case ModulationType::SlowLFO:
       if (paramIdx == 0) return "Shape";
       if (paramIdx == 1) return "Trig";
       if (paramIdx == 2) return "Period";
@@ -292,6 +329,17 @@ static const char* paramLabel(ModulationType type, int paramIdx) {
       if (paramIdx == 0) return "Axis";
       if (paramIdx == 1) return "Ticks";
       break;
+    case ModulationType::Sequence:
+      if (mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate)) {
+        static const char* labels[] = {"Motif", "Rate", "Length", "Trigger", "Accents"};
+        return paramIdx < 5 ? labels[paramIdx] : NULL;
+      }
+      if (paramIdx == 0) return "Source";
+      if (paramIdx == 1) return "Mode";
+      if (paramIdx == 2) return "Pattern";
+      if (paramIdx == 3) return "Rate";
+      if (paramIdx == 4) return "Gate";
+      break;
     default:
       break;
   }
@@ -303,11 +351,14 @@ static int paramCount(const Modulation* mod) {
   switch (mod->type) {
     case ModulationType::ADSR: return 4;
     case ModulationType::AHD:  return 3;
+    case ModulationType::SlowLFO:
     case ModulationType::LFO:  return mod->p1 == static_cast<uint8_t>(LFOShape::wavetable) ? 4 : 3;
     case ModulationType::SLFO: return mod->p1 == static_cast<uint8_t>(LFOShape::wavetable) ? 5 : 4;
     case ModulationType::FLFO: return mod->p1 == static_cast<uint8_t>(LFOShape::wavetable) ? 4 : 3;
     case ModulationType::StickLinear: return 1;
     case ModulationType::StickRate: return 2;
+    case ModulationType::Sequence:
+      return mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) ? 5 : 2;
     default:      return 0;
   }
 }
@@ -351,15 +402,41 @@ static void drawStatic(void) {
   }
 }
 
+static void hint(const Modulation* mod, int modRow) {
+  if (mod->type != ModulationType::Sequence ||
+      mod->p1 != static_cast<uint8_t>(SequenceSource::tranceGate)) return;
+  static const char* rateNames[] = {"1/2", "1/2T", "1/2.", "1/4", "1/4T", "1/4.",
+                                    "1/8", "1/8T", "1/8.", "1/16", "1/16T", "1/16.",
+                                    "1/32", "1/32T", "1/32."};
+  uint8_t rate = sequenceGateRate(mod);
+  switch (modRow) {
+    case 0: screenMessage(0, "Sequence source: Trance Gate"); break;
+    case 1: screenMessage(0, "Gate output modulates this destination"); break;
+    case 2: screenMessage(0, "Gate modulation depth %hhd", mod->amount); break;
+    case 3: {
+      char motif[32];
+      insertDescribe(motif, sizeof(motif), insertTranceGate, 0, sequenceGatePattern(mod));
+      screenMessage(0, "Motif: %s", motif);
+      break;
+    }
+    case 4: screenMessage(0, "Rate %s", rateNames[rate > 14 ? 14 : rate]); break;
+    case 5: screenMessage(0, "Length %u steps", sequenceGateLength(mod)); break;
+    case 6: screenMessage(0, "Trigger resets: free, retrig, phrase, chain"); break;
+    case 7: screenMessage(0, "Accents %u across open steps", sequenceGateAccents(mod)); break;
+  }
+}
+
 static void drawCursor(int col, int row) {
   int y = rowToY(row);
   int valX = col == 0 ? COL_LEFT_VAL : COL_RIGHT_VAL;
   int modRow = getModRow(row);
   int modIdx = getModIndex(col, row);
   Modulation* mod = &chipnomadState->project.instruments[cInstrument].modulation[modIdx];
+  hint(mod, modRow);
 
   switch (modRow) {
-    case 0: gfxCursor(valX, y, strlen(modTypeName(mod->type))); break;
+    case 0: gfxCursor(valX, y, strlen(mod->type == ModulationType::Sequence &&
+                                      mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) ? "TGATE" : modTypeName(mod->type))); break;
     case 1: {
       Instrument* inst = &chipnomadState->project.instruments[cInstrument];
       gfxCursor(valX, y, strlen(instrumentModDestinationName(inst->type, mod->destination)));
@@ -367,7 +444,7 @@ static void drawCursor(int col, int row) {
     }
     case 2: gfxCursor(valX, y, 2); break; // Amt
     default:
-      if ((mod->type == ModulationType::LFO && (modRow - 3) <= 1) ||
+      if (((modulationIsTickLFO(mod->type) || mod->type == ModulationType::FLFO) && (modRow - 3) <= 1) ||
           (mod->type == ModulationType::FLFO && modRow == 5) ||
           ((mod->type == ModulationType::StickLinear || mod->type == ModulationType::StickRate) &&
            modRow == 3)) {
@@ -395,7 +472,9 @@ static void drawField(int col, int row, CellState state) {
 
   switch (modRow) {
     case 0: // Type (on header row)
-      gfxPrint(valX, y, modTypeName(mod->type));
+      gfxClearRect(valX, y, 8, 1);
+      gfxPrint(valX, y, mod->type == ModulationType::Sequence &&
+                         mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) ? "TGATE" : modTypeName(mod->type));
       break;
     case 1: // Destination
       gfxClearRect(valX, y, 8, 1);
@@ -415,7 +494,7 @@ static void drawField(int col, int row, CellState state) {
       // Draw the label
       gfxSetFgColor(appSettings.colorScheme.textDefault);
       gfxClearRect(labelX, y, 6, 1);
-      const char* label = paramLabel(mod->type, paramIdx);
+      const char* label = paramLabel(mod, paramIdx);
       if (label) gfxPrint(labelX, y, label);
 
       // Draw the value
@@ -425,7 +504,7 @@ static void drawField(int col, int row, CellState state) {
       if (mod->type == ModulationType::AHD || mod->type == ModulationType::ADSR) {
         uint8_t* params = &mod->p1;
         gfxPrint(valX, y, byteToHex(params[paramIdx]));
-      } else if (mod->type == ModulationType::LFO || mod->type == ModulationType::SLFO || mod->type == ModulationType::FLFO) {
+      } else if (modulationIsTickLFO(mod->type) || mod->type == ModulationType::FLFO) {
         if (paramIdx == 0) {
           gfxPrint(valX, y, lfoShapeName(static_cast<LFOShape>(mod->p1)));
         } else if (paramIdx == 1) {
@@ -441,6 +520,21 @@ static void drawField(int col, int row, CellState state) {
       } else if (mod->type == ModulationType::StickLinear || mod->type == ModulationType::StickRate) {
         if (paramIdx == 0) gfxPrint(valX, y, stickAxisName(mod->p1));
         else if (paramIdx == 1 && mod->type == ModulationType::StickRate) gfxPrintf(valX, y, "%3u", mod->p2);
+      } else if (mod->type == ModulationType::Sequence) {
+        if (mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate)) {
+          if (paramIdx == 0) gfxPrintf(valX, y, "%02X", sequenceGatePattern(mod));
+          else if (paramIdx == 1) gfxPrintf(valX, y, "%u", sequenceGateRate(mod));
+          else if (paramIdx == 2) gfxPrintf(valX, y, "%u", sequenceGateLength(mod));
+          else if (paramIdx == 3) {
+            static const char* names[] = {"Free", "Retrig", "Phrase", "Chain"};
+            gfxPrint(valX, y, names[static_cast<uint8_t>(sequenceGateTrigger(mod))]);
+          } else if (paramIdx == 4) gfxPrintf(valX, y, "%u", sequenceGateAccents(mod));
+        } else if (paramIdx == 0) {
+          static const char* names[] = {"Pitch", "Vol", "Trance Gate"};
+          gfxPrint(valX, y, names[mod->p1 < static_cast<uint8_t>(SequenceSource::totalCount) ? mod->p1 : 0]);
+        } else {
+          gfxPrint(valX, y, mod->p2 == static_cast<uint8_t>(SequenceMode::bypass) ? "Bypass" : "Normal");
+        }
       }
       break;
     }
@@ -512,7 +606,7 @@ static int onEdit(int col, int row, enum CellEditAction action) {
             screenMessage(0, "%s %hhu ticks", fullName, params[paramIdx]);
           }
         }
-      } else if (mod->type == ModulationType::LFO || mod->type == ModulationType::SLFO || mod->type == ModulationType::FLFO) {
+      } else if (modulationIsTickLFO(mod->type) || mod->type == ModulationType::FLFO) {
         if (paramIdx == 0) {
           handled = edit8noLast(action, &mod->p1, 1, 0, static_cast<uint8_t>(LFOShape::totalCount) - 1);
           if (handled) screenFullRedraw(&screenData);
@@ -524,6 +618,12 @@ static int onEdit(int col, int row, enum CellEditAction action) {
           if (handled) {
             if (mod->type == ModulationType::FLFO)
               screenMessage(0, "Frequency %.0f Hz", powf(8000.0f, mod->p3 / 255.0f));
+            else if (mod->type == ModulationType::SlowLFO) {
+              uint32_t ticks = modulationSlowLFOPeriod(mod->p3);
+              float tickRate = chipnomadState->project.tickRate;
+              unsigned seconds = (unsigned)roundf(ticks / (tickRate > 0 ? tickRate : 50.0f));
+              screenMessage(0, "%u:%02u cycle, %u ticks", seconds / 60, seconds % 60, (unsigned)ticks);
+            }
             else
               screenMessage(0, "Period %hhu ticks", mod->p3);
           }
@@ -541,6 +641,19 @@ static int onEdit(int col, int row, enum CellEditAction action) {
         } else if (paramIdx == 1 && mod->type == ModulationType::StickRate) {
           handled = edit8noLast(action, &mod->p2, 16, 1, 255);
           if (handled) screenMessage(0, "Rate sweep %u ticks", mod->p2);
+        }
+      } else if (mod->type == ModulationType::Sequence) {
+        if (mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate)) {
+          uint8_t value;
+          if (paramIdx == 0) { value = sequenceGatePattern(mod); handled = edit8noLast(action, &value, 1, 0, 63); if (handled) sequenceGateSetPattern(mod, value); }
+          else if (paramIdx == 1) { value = sequenceGateRate(mod); handled = edit8noLast(action, &value, 1, 0, 14); if (handled) sequenceGateSetRate(mod, value); }
+          else if (paramIdx == 2) { value = sequenceGateLength(mod); handled = edit8noLast(action, &value, 1, 1, 16); if (handled) sequenceGateSetLength(mod, value); }
+          else if (paramIdx == 3) { value = static_cast<uint8_t>(sequenceGateTrigger(mod)); handled = edit8noLast(action, &value, 1, 0, static_cast<uint8_t>(SequenceGateTrigger::totalCount) - 1); if (handled) sequenceGateSetTrigger(mod, static_cast<SequenceGateTrigger>(value)); }
+          else if (paramIdx == 4) { value = sequenceGateAccents(mod); handled = edit8noLast(action, &value, 1, 0, 16); if (handled) sequenceGateSetAccents(mod, value); }
+        } else if (paramIdx == 0) {
+          handled = edit8noLast(action, &mod->p1, 1, 0, static_cast<uint8_t>(SequenceSource::totalCount) - 1);
+        } else if (paramIdx == 1) {
+          handled = edit8noLast(action, &mod->p2, 1, 0, static_cast<uint8_t>(SequenceMode::totalCount) - 1);
         }
       }
       break;
@@ -578,6 +691,10 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
   }
 
+  if (keys == (keyUp | keyShift)) {
+    screenInsertFXOpenTrack();
+    return 1;
+  }
   if (keys == (keyDown | keyShift)) {
     // To Instrument screen
     screenSetup(&screenInstrument, cInstrument);

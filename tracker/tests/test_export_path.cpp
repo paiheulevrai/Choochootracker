@@ -6,8 +6,14 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <filesystem>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifdef _WIN32
+#include <direct.h>
+#define chdir _chdir
+#define getcwd _getcwd
+#endif
 
 TEST_SUITE("export_path") {
 
@@ -22,24 +28,22 @@ struct ExportPathFixture {
     appSettings.projectFilename[0] = 0;
     appSettings.exportPath[0] = 0;
     appSettings.exportLastFolder[0] = 0;
-    snprintf(workDir, sizeof(workDir), "/tmp/choochoo_export_test_%d", (int)getpid());
-    // Start from a clean slate
-    char cmd[600];
-    snprintf(cmd, sizeof(cmd), "rm -rf %s", workDir);
-    system(cmd);
-    // The default export base dir is derived from the process working
-    // directory, so run the test from inside the work dir
     char* savedCwdResult = getcwd(savedCwd, sizeof(savedCwd));
     REQUIRE(savedCwdResult != NULL);
-    REQUIRE(mkdir(workDir, 0755) == 0);
+    snprintf(workDir, sizeof(workDir), "%s/choochoo_export_test", savedCwd);
+    // Start from a clean slate
+    std::filesystem::remove_all(workDir);
+    // The default export base dir is derived from the process working
+    // directory, so run the test from inside the work dir
+    REQUIRE(std::filesystem::create_directory(workDir));
     REQUIRE(chdir(workDir) == 0);
+    char* normalizedCwd = getcwd(workDir, sizeof(workDir));
+    REQUIRE(normalizedCwd != NULL);
   }
 
   ~ExportPathFixture() {
     chdir(savedCwd);
-    char cmd[600];
-    snprintf(cmd, sizeof(cmd), "rm -rf %s", workDir);
-    system(cmd);
+    std::filesystem::remove_all(workDir);
     appSettings = saved;
   }
 
@@ -64,15 +68,15 @@ TEST_CASE_FIXTURE(ExportPathFixture, "Default base dir is <cwd>/samples/Exports"
   char base[EXPORT_PATH_MAX];
   exportGetBaseDir(base, sizeof(base));
   char expected[EXPORT_PATH_MAX];
-  snprintf(expected, sizeof(expected), "%s/samples/Exports", workDir);
+  snprintf(expected, sizeof(expected), "%s%ssamples%sExports", workDir, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR);
   CHECK(strcmp(base, expected) == 0);
 }
 
 TEST_CASE_FIXTURE(ExportPathFixture, "Custom export path overrides the base dir") {
-  setCustomPath("/tmp/my_custom_exports");
+  setCustomPath("my_custom_exports");
   char base[EXPORT_PATH_MAX];
   exportGetBaseDir(base, sizeof(base));
-  CHECK(strcmp(base, "/tmp/my_custom_exports") == 0);
+  CHECK(strcmp(base, "my_custom_exports") == 0);
 }
 
 TEST_CASE_FIXTURE(ExportPathFixture, "Unnamed project uses current-project folder") {
@@ -80,7 +84,7 @@ TEST_CASE_FIXTURE(ExportPathFixture, "Unnamed project uses current-project folde
   char dir[EXPORT_PATH_MAX];
   exportGetProjectDir(dir, sizeof(dir));
   char expected[EXPORT_PATH_MAX];
-    snprintf(expected, sizeof(expected), "%s/samples/Exports/current-project", workDir);
+    snprintf(expected, sizeof(expected), "%s%ssamples%sExports%scurrent-project", workDir, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR);
   CHECK(strcmp(dir, expected) == 0);
 }
 
@@ -89,7 +93,7 @@ TEST_CASE_FIXTURE(ExportPathFixture, "Named project uses the project name as fol
   char dir[EXPORT_PATH_MAX];
   exportGetProjectDir(dir, sizeof(dir));
   char expected[EXPORT_PATH_MAX];
-    snprintf(expected, sizeof(expected), "%s/samples/Exports/mysong", workDir);
+    snprintf(expected, sizeof(expected), "%s%ssamples%sExports%smysong", workDir, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR);
   CHECK(strcmp(dir, expected) == 0);
 }
 
@@ -130,7 +134,7 @@ TEST_CASE_FIXTURE(ExportPathFixture, "exportBuildFilePath builds name.extension 
   char path[EXPORT_PATH_MAX];
   CHECK(exportBuildFilePath(path, sizeof(path), "bounce", "wav") == 0);
   char expected[EXPORT_PATH_MAX];
-  snprintf(expected, sizeof(expected), "%s/samples/Exports/song/bounce.wav", workDir);
+  snprintf(expected, sizeof(expected), "%s%ssamples%sExports%ssong%sbounce.wav", workDir, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR);
   CHECK(strcmp(path, expected) == 0);
 }
 
@@ -231,7 +235,7 @@ TEST_CASE_FIXTURE(ExportPathFixture, "exportRefreshSamplePaths rewrites matching
 
   // A sample under the old folder (CWD-relative, as sampleStorePath stores it)
   char relPath[256];
-  snprintf(relPath, sizeof(relPath), "samples/Exports/old/take.wav");
+  snprintf(relPath, sizeof(relPath), "samples%sExports%sold%stake.wav", PATH_SEPARATOR_STR, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR);
   project.instruments[0].type = InstrumentType::Sample;
   snprintf(project.instruments[0].chip.sample.path, PROJECT_SAMPLE_PATH_LENGTH + 1, "%s", relPath);
 
@@ -247,7 +251,7 @@ TEST_CASE_FIXTURE(ExportPathFixture, "exportRefreshSamplePaths rewrites matching
   exportRefreshSamplePaths(&project, base, "old", "new");
 
   char expected[256];
-  snprintf(expected, sizeof(expected), "samples/Exports/new/take.wav");
+  snprintf(expected, sizeof(expected), "samples%sExports%snew%stake.wav", PATH_SEPARATOR_STR, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR);
   CHECK(strcmp(project.instruments[0].chip.sample.path, expected) == 0);
   CHECK(strcmp(project.instruments[1].chip.scwf.oscillator[0].path, expected) == 0);
   CHECK(strcmp(project.instruments[1].chip.scwf.oscillator[1].path, expected) == 0);
@@ -263,14 +267,14 @@ TEST_CASE_FIXTURE(ExportPathFixture, "exportRefreshSamplePaths handles absolute 
   projectInit(&project);
 
   char absPath[512];
-  snprintf(absPath, sizeof(absPath), "%s/old/take.wav", base);
+  snprintf(absPath, sizeof(absPath), "%s%sold%stake.wav", base, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR);
   project.instruments[0].type = InstrumentType::Sample;
   snprintf(project.instruments[0].chip.sample.path, PROJECT_SAMPLE_PATH_LENGTH + 1, "%s", absPath);
 
   exportRefreshSamplePaths(&project, base, "old", "new");
 
   char expected[512];
-  snprintf(expected, sizeof(expected), "%s/new/take.wav", base);
+  snprintf(expected, sizeof(expected), "%s%snew%stake.wav", base, PATH_SEPARATOR_STR, PATH_SEPARATOR_STR);
   CHECK(strcmp(project.instruments[0].chip.sample.path, expected) == 0);
 }
 
@@ -409,7 +413,7 @@ TEST_CASE_FIXTURE(ExportPathFixture, "fileRename moves a directory") {
 TEST_CASE_FIXTURE(ExportPathFixture, "fileRename fails on missing source") {
   char dst[600];
   snprintf(dst, sizeof(dst), "%s/nothing_dst", workDir);
-  CHECK(fileRename("/tmp/choochoo_export_test_missing_dir_xyz", dst) == -1);
+  CHECK(fileRename("choochoo_export_test_missing_dir_xyz", dst) == -1);
 }
 
 TEST_CASE_FIXTURE(ExportPathFixture, "fileCreateDirectoryRecursive handles existing and deep paths") {

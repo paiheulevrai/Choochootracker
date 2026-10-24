@@ -20,6 +20,7 @@ static int captureCol = 0;
 static CaptureState captureState = STATE_NAVIGATION;
 static InputCode pendingCapture = {InputDeviceType::none, 0};
 static InputCode captureTrigger = {InputDeviceType::none, 0};
+static InputCode captureIgnore = {InputDeviceType::none, 0};
 static void fullRedraw(void);
 static void applyPendingCapture(void);
 
@@ -75,10 +76,23 @@ static int portMasterGamepadToKeyboard(InputCode input, InputCode* output) {
 }
 #endif
 
+static int samePhysicalButton(InputCode first, InputCode second) {
+  if (first.deviceType == second.deviceType && first.code == second.code) return 1;
+#ifdef PORTMASTER_BUILD
+  InputCode translated;
+  if (portMasterGamepadToKeyboard(first, &translated) &&
+      translated.deviceType == second.deviceType && translated.code == second.code) return 1;
+  if (portMasterGamepadToKeyboard(second, &translated) &&
+      translated.deviceType == first.deviceType && translated.code == first.code) return 1;
+#endif
+  return 0;
+}
+
 static void onRawInput(InputCode input, int isDown) {
   if (!isDown) {
-    if (captureState == STATE_CAPTURE_DONE &&
-        input.deviceType == captureTrigger.deviceType && input.code == captureTrigger.code) {
+    if (captureState == STATE_CAPTURING && samePhysicalButton(input, captureIgnore)) {
+      captureIgnore = (InputCode){InputDeviceType::none, 0};
+    } else if (captureState == STATE_CAPTURE_DONE && samePhysicalButton(input, captureTrigger)) {
       applyPendingCapture();
       captureState = STATE_NAVIGATION;
       inputRawCallback = NULL;
@@ -87,6 +101,7 @@ static void onRawInput(InputCode input, int isDown) {
     return;
   }
   if (captureState != STATE_CAPTURING) return;
+  if (samePhysicalButton(input, captureIgnore)) return;
 
 #ifdef PORTMASTER_BUILD
   InputCode translatedInput;
@@ -182,6 +197,9 @@ static int onEdit(int col, int row, CellEditAction action) {
       captureRow = row;
       captureCol = col;
       captureState = STATE_CAPTURING;
+      // The button that opened capture can arrive again through PortMaster's
+      // other input path.  Wait for it to be released before accepting a key.
+      captureIgnore = appCurrentInput();
       inputRawCallback = onRawInput;
       fullRedraw();
       return 1;
@@ -199,7 +217,7 @@ static int onEdit(int col, int row, CellEditAction action) {
     // its old logical state into Settings: on gptokeyb/PortMaster the release
     // may arrive after this mapping has changed.
     appResetInputState();
-    screenSetup(&screenSettings, 0);
+    screenSetup(&screenControlsSettings, 0);
     return 1;
   }
 
@@ -237,6 +255,7 @@ static void setup(int input) {
   captureState = STATE_NAVIGATION;
   inputRawCallback = NULL;
   captureTrigger = (InputCode){InputDeviceType::none, 0};
+  captureIgnore = (InputCode){InputDeviceType::none, 0};
 }
 
 static void fullRedraw(void) {

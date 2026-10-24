@@ -710,7 +710,9 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                     // FIXME: Why aren't we enabling sensor input at start?
 
                     mSDLThread = new Thread(new SDLMain(), "SDLThread");
-                    mSurface.enableSensor(Sensor.TYPE_ACCELEROMETER, true);
+                    // ChooChooTracker has no tilt controls; avoid exposing
+                    // gravity through SDL's raw joystick fallback.
+                    mSurface.enableSensor(Sensor.TYPE_ACCELEROMETER, false);
                     mSDLThread.start();
 
                     // No nativeResume(), don't signal Android_ResumeSem

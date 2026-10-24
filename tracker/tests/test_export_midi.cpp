@@ -11,7 +11,7 @@
 TEST_SUITE("export_midi") {
 
 static void setNote(Project* p, int track, int songRow, int chainRow, int phraseRowIdx,
-                     uint8_t note, uint8_t instrument, uint8_t volume) {
+                     uint8_t note, uint8_t instrument, uint16_t volume) {
   int chainIdx = songRow; // one dedicated chain per song row is plenty for tests
   p->song[songRow][track] = chainIdx;
   p->chains[chainIdx].rows[chainRow].phrase = chainIdx; // one dedicated phrase, same index
@@ -27,8 +27,8 @@ TEST_CASE("exports a note and its note-off, quantized to the row grid") {
   projectInitAY(&p);
   p.tracksCount = 1;
 
-  // C-0 is pitch table index 0 -> MIDI note 12. Full volume (15) -> velocity 127.
-  setNote(&p, 0, 0, 0, 0, 0, 0, 15);
+  // C-0 is pitch table index 0 -> MIDI note 12. Full volume (7F) -> velocity 127.
+  setNote(&p, 0, 0, 0, 0, 0, 0, PHRASE_VOLUME_MAX);
   p.phrases[0].rows[2].note = NOTE_OFF;
 
   const char* path = "test_export_midi_note.mid";
@@ -55,7 +55,7 @@ TEST_CASE("a chain transpose shifts the exported MIDI note") {
   projectInitAY(&p);
   p.tracksCount = 1;
 
-  setNote(&p, 0, 0, 0, 0, 0, 0, 15);
+  setNote(&p, 0, 0, 0, 0, 0, 0, PHRASE_VOLUME_MAX);
   p.chains[0].rows[0].transpose = 5; // +5 semitones
 
   const char* path = "test_export_midi_transpose.mid";
@@ -85,8 +85,8 @@ TEST_CASE("a chain ending early advances to the next song row immediately, not a
   // Song row 0's chain only fills chain row 0 (rows 1-15 stay "---"): real
   // playback ends the chain there and jumps straight to song row 1, rather
   // than padding out the remaining 15 chain rows as silence.
-  setNote(&p, 0, 0, 0, 0, 0, 0, 15);
-  setNote(&p, 0, 1, 0, 0, 1, 0, 15); // second song row, distinct note
+  setNote(&p, 0, 0, 0, 0, 0, 0, PHRASE_VOLUME_MAX);
+  setNote(&p, 0, 1, 0, 0, 1, 0, PHRASE_VOLUME_MAX); // second song row, distinct note
 
   const char* path = "test_export_midi_early_chain_end.mid";
   REQUIRE(projectExportMidi(&p, path) == 0);

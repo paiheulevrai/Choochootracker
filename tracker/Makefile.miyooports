@@ -1,44 +1,64 @@
-# MiyooPorts makefile
-
-# MiyooPorts platform identifier
+# OnionOS / Miyoo Mini and Mini Plus (ARMv7 hard-float).
+# The device toolchain and the MMIYOO SDL2 SDK are downloaded by the CI
+# workflow; using a host ARM compiler produces an incompatible GLIBC binary.
 PLATFORM = miyooports
-
 include Makefile.common
 
-# MiyooPorts-specific settings
-LIBS = $(COMMON_LIBS) platforms/sdl12
-OUTPUT_EXT =
-DOCKER32 = docker run --privileged --platform=linux/armhf --rm --user $$(id -u):$$(id -g) -v`pwd`/..:/src -w/src/tracker
+LIBS = $(COMMON_LIBS) platforms/sdl2
+MIYOO_TOOLCHAIN ?=
+MIYOO_SDL2_ROOT ?=
+MIYOO_SYSROOT ?= $(MIYOO_TOOLCHAIN)/arm-linux-gnueabihf/libc
+CXX = $(MIYOO_TOOLCHAIN)/bin/arm-linux-gnueabihf-g++
+STRIP = $(MIYOO_TOOLCHAIN)/bin/arm-linux-gnueabihf-strip
 
-# MiyooPorts build settings
-XTRA_CFLAGS = -DMIYOOPORTS_BUILD -I${SYSROOT}/usr/include -L${SYSROOT}/usr/lib
-XTRA_LIBS = -lSDL -lm
-CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(XTRA_CFLAGS)
+ifeq ($(strip $(MIYOO_TOOLCHAIN)),)
+$(error MIYOO_TOOLCHAIN must point to the Miyoo device toolchain)
+endif
+ifeq ($(strip $(MIYOO_SDL2_ROOT)),)
+$(error MIYOO_SDL2_ROOT must point to the MMIYOO SDL2 SDK)
+endif
 
-.PHONY: .MiyooPorts
-.MiyooPorts:
+CFLAGS = $(filter-out -flto,$(COMMON_CFLAGS)) $(INCLUDES) \
+  --sysroot=$(MIYOO_SYSROOT) -I$(MIYOO_SDL2_ROOT)/include \
+  -DMIYOOPORTS_BUILD -DGAMEPAD_SUPPORT -mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard
+XTRA_LIBS = -L$(MIYOO_SDL2_ROOT)/lib -lSDL2 -Wl,--allow-shlib-undefined \
+  -lstdc++fs -static-libstdc++ -static-libgcc -ldl -lpthread -lm
+
+object_for = $(BUILD)/obj/$(subst ../,up/,$(basename $(1))).o
+OBJECTS := $(foreach source,$(SOURCES),$(call object_for,$(source)))
+DEPS := $(OBJECTS:.o=.d)
+TARGET = $(BUILD)/choochootracker
+
+define compile_source
+$(call object_for,$(1)): $(1) Makefile.miyooports Makefile.common
+	@mkdir -p $$(dir $$@)
+	@$(CXX) $(CFLAGS) -MMD -MP -c $$< -o $$@
+endef
+
+$(foreach source,$(SOURCES),$(eval $(call compile_source,$(source))))
+-include $(DEPS)
+
+.PHONY: MiyooPorts MiyooPorts-deploy
+MiyooPorts: $(TARGET)
+
+$(TARGET): $(OBJECTS)
 	mkdir -p $(BUILD)
-	$(CROSS_COMPILE)$(CC) $(CFLAGS) $(XTRA_LIBS) -o $(BUILD)/chipnomad.armhf
-	chmod +x $(BUILD)/chipnomad.armhf
+	$(CXX) $(CFLAGS) $(OBJECTS) $(XTRA_LIBS) -o $@
+	$(STRIP) $@
 
-.PHONY: MiyooPorts
-MiyooPorts:
-	@./check-docker.sh || exit 1
-	$(DOCKER32) monkeyx/retro_builder:arm32 make -f Makefile.miyooports .MiyooPorts CC=g++ CPU=armhf
+PACKAGE_ROOT = $(BUILD)/package
+PORT_DIR = $(PACKAGE_ROOT)/Roms/PORTS/Games/ChooChooTracker
+RELEASE = $(abspath ../releases)/ChooChooTracker-$$(date +%Y-%m-%d)-$(VERSION)-MiyooPorts.zip
 
-.PHONY: MiyooPorts-deploy
 MiyooPorts-deploy: MiyooPorts
-	@echo "Creating MiyooPorts deployment package..."
-	@mkdir -p ../../releases
-	@rm -rf /tmp/chipnomad-miyooports-package
-	@mkdir -p /tmp/chipnomad-miyooports-package/Roms/PORTS/Games/ChipNomad
-	@mkdir -p /tmp/chipnomad-miyooports-package/Roms/PORTS/Imgs
-	@mkdir -p /tmp/chipnomad-miyooports-package/Roms/PORTS/Shortcuts/ChipNomad
-	@cp $(BUILD)/chipnomad.armhf /tmp/chipnomad-miyooports-package/Roms/PORTS/Games/ChipNomad/
-	@cp -r packaging/common/* /tmp/chipnomad-miyooports-package/Roms/PORTS/Games/ChipNomad/
-	@cp packaging/chipnomad-icon.png /tmp/chipnomad-miyooports-package/Roms/PORTS/Imgs/ChipNomad.png
-	@cp -r packaging/miyoo_ports/* /tmp/chipnomad-miyooports-package/Roms/PORTS/Shortcuts/ChipNomad
-	@cd /tmp/chipnomad-miyooports-package && zip -r ChipNomad-$$(date +%Y-%m-%d)-$(VERSION)-MiyooPorts.zip .
-	@mv /tmp/chipnomad-miyooports-package/ChipNomad-*-MiyooPorts.zip ../../releases/
-	@rm -rf /tmp/chipnomad-miyooports-package
-	@echo "MiyooPorts package created in ../../releases/"
+	rm -rf $(PACKAGE_ROOT)
+	mkdir -p $(PORT_DIR)/libs $(PACKAGE_ROOT)/Roms/PORTS/Shortcuts $(PACKAGE_ROOT)/Roms/PORTS/Imgs ../releases
+	cp $(TARGET) $(PORT_DIR)/choochootracker
+	cp $(MIYOO_SDL2_ROOT)/lib/libSDL2-2.0.so.0 $(MIYOO_SDL2_ROOT)/lib/libneonarmmiyoo.so $(PORT_DIR)/libs/
+	cp -r packaging/common/. $(PORT_DIR)/
+	cp packaging/miyoo_ports/launch.sh $(PORT_DIR)/
+	cp packaging/miyoo_ports/ChooChooTracker.port $(PACKAGE_ROOT)/Roms/PORTS/Shortcuts/
+	cp packaging/chipnomad-icon.png $(PACKAGE_ROOT)/Roms/PORTS/Imgs/ChooChooTracker.png
+	chmod +x $(TARGET) $(PORT_DIR)/choochootracker $(PORT_DIR)/launch.sh $(PACKAGE_ROOT)/Roms/PORTS/Shortcuts/ChooChooTracker.port
+	cd $(PACKAGE_ROOT) && zip -qr $(RELEASE) Roms
+	@echo "MiyooPorts package created: $(RELEASE)"

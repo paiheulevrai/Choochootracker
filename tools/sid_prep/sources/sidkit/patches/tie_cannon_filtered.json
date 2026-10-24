@@ -1,0 +1,21 @@
+{
+  "name": "tie_cannon_filtered",
+  "voice": 1,
+  "waveform": "PULSE",
+  "freq_hi": 31,
+  "freq_lo": 191,
+  "attack": 0,
+  "decay": 5,
+  "sustain": 0,
+  "release": 4,
+  "pw_hi": 12,
+  "duration_frames": 8,
+  "sweep_target_hi": 4,
+  "sweep_target_lo": 0,
+  "sweep_type": "exponential",
+  "filter_mode": "off",
+  "filter_cutoff": 130,
+  "filter_resonance": 15,
+  "filter_cutoff_sweep": 0,
+  "description": "TIE cannon \u2014 pulse sweep, wider PW, band-pass resonance (477Hz, matches original)"
+}

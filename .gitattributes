@@ -1,2 +1,6 @@
 # PortMaster launchers are executed by Bash on the target device.
 *.sh text eol=lf
+tracker/packaging/linux-appimage/AppRun text eol=lf
+
+# Keep the original fixture license bytes and line endings.
+tracker/tests/fixtures/soundbanks/FluidR3Mono-LICENSE.txt -text -diff

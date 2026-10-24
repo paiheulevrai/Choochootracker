@@ -834,7 +834,8 @@ void outputRegistersAY(ChipNomadState* chipNomadState, int trackIdx, int chipIdx
         // Envelope off - calculate volume
         // ===============================
 
-        volume = clampInt(track->note.volume + track->note.volumeOffset, 0, 15);
+        // Phrase volume is 0-127; AY output remains the native 0-15 scale.
+        volume = (clampInt(track->note.volume + track->note.volumeOffset, 0, PHRASE_VOLUME_MAX) * 15 + 63) / PHRASE_VOLUME_MAX;
         volume *= track->note.chip.ay.volume; // Instrument volume
 
         // Instrument table volume
@@ -842,7 +843,7 @@ void outputRegistersAY(ChipNomadState* chipNomadState, int trackIdx, int chipIdx
         if (tableIdx != EMPTY_VALUE_8 && p->tables[tableIdx].rows[track->note.instrumentTable.rows[0]].volume != EMPTY_VALUE_8) {
           volume *= p->tables[tableIdx].rows[track->note.instrumentTable.rows[0]].volume;
         } else {
-          volume *= 15;
+          volume *= PHRASE_VOLUME_MAX;
         }
 
         // Aux table volume
@@ -850,11 +851,11 @@ void outputRegistersAY(ChipNomadState* chipNomadState, int trackIdx, int chipIdx
         if (tableIdx != EMPTY_VALUE_8 && p->tables[tableIdx].rows[track->note.auxTable.rows[0]].volume != EMPTY_VALUE_8) {
           volume *= p->tables[tableIdx].rows[track->note.auxTable.rows[0]].volume;
         } else {
-          volume *= 15;
+          volume *= PHRASE_VOLUME_MAX;
         }
 
         // Normalize volume
-        volume = volume / (15 * 15 * 15);
+        volume = volume / (15 * PHRASE_VOLUME_MAX * PHRASE_VOLUME_MAX);
 
         // Sanity limits (even though it should never happen)
         volume = clampInt(volume, 0, 15);

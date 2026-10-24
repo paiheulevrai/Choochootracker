@@ -338,10 +338,55 @@ public class SDLAudioManager {
     public static int[] getAudioInputDevices() {
         if (Build.VERSION.SDK_INT >= 24 /* Android 7.0 (N) */) {
             AudioManager audioManager = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
-            return Arrays.stream(audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)).mapToInt(AudioDeviceInfo::getId).toArray();
+            // Only expose inputs the tracker can actually record from: the
+            // always-present built-in microphone and USB audio interfaces.
+            // Everything else (telephony, FM, loopback echoes of outputs...)
+            // just adds noise to the device menu.
+            return Arrays.stream(audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS))
+                    .filter(deviceInfo -> deviceInfo.isSource()
+                            && (deviceInfo.getType() == AudioDeviceInfo.TYPE_BUILTIN_MIC
+                                || deviceInfo.getType() == AudioDeviceInfo.TYPE_USB_DEVICE
+                                || deviceInfo.getType() == AudioDeviceInfo.TYPE_USB_HEADSET
+                                || deviceInfo.getType() == AudioDeviceInfo.TYPE_USB_ACCESSORY))
+                    .mapToInt(AudioDeviceInfo::getId).toArray();
         } else {
             return NO_DEVICES;
         }
+    }
+
+    /**
+     * This method is called by SDL using JNI.
+     *
+     * SDL enumerates Android capture devices by their numeric id (that id is
+     * what audioOpen() consumes), so the tracker asks for a human-readable
+     * name separately. Returns the product name reported by the framework,
+     * with a type-based fallback when a device has none.
+     */
+    public static String audioInputDeviceName(int deviceId) {
+        if (Build.VERSION.SDK_INT >= 24 /* Android 7.0 (N) */ && mContext != null) {
+            AudioManager audioManager = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+            AudioDeviceInfo info = Arrays.stream(audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS))
+                    .filter(deviceInfo -> deviceInfo.getId() == deviceId)
+                    .findFirst()
+                    .orElse(null);
+            if (info != null) {
+                String name = info.getProductName() != null ? info.getProductName().toString() : "";
+                if (!name.isEmpty()) {
+                    return name;
+                }
+                switch (info.getType()) {
+                    case AudioDeviceInfo.TYPE_BUILTIN_MIC:
+                        return "Built-in microphone";
+                    case AudioDeviceInfo.TYPE_USB_DEVICE:
+                    case AudioDeviceInfo.TYPE_USB_HEADSET:
+                    case AudioDeviceInfo.TYPE_USB_ACCESSORY:
+                        return "USB input";
+                    default:
+                        break;
+                }
+            }
+        }
+        return "Input " + deviceId;
     }
 
     /**

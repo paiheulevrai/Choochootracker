@@ -37,6 +37,8 @@ int main(int argc, char** argv) {
 
   if (hasExtension(input, ".cct") && (hasExtension(output, ".mid") || hasExtension(output, ".midi"))) {
     Project* project = (Project*)malloc(sizeof(Project));
+    if (!project) return 1;
+    projectInit(project);
     if (projectLoad(project, input) != 0) {
       fprintf(stderr, "Error loading '%s': %s\n", input, projectFileError);
       free(project);
@@ -57,6 +59,8 @@ int main(int argc, char** argv) {
 
   if ((hasExtension(input, ".mid") || hasExtension(input, ".midi")) && hasExtension(output, ".cct")) {
     Project* project = (Project*)malloc(sizeof(Project));
+    if (!project) return 1;
+    projectInit(project);
     if (projectLoadMidi(project, input) != 0) {
       fprintf(stderr, "Error loading '%s': %s\n", input, projectFileError);
       free(project);

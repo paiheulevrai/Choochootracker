@@ -30,12 +30,18 @@ int midiIoOutputPortName(int index, char* buffer, int bufferSize);
 int midiIoOpenInput(int portIndex);
 void midiIoCloseInput(void);
 int midiIoIsInputOpen(void);
-// Pops one pending channel message (note on/off, CC, program change...).
-// Sysex and system realtime bytes are ignored/dropped. Returns 1 and fills
-// outStatus/outData1/outData2 (outData2 is 0 for 2-byte messages) if a
-// message was waiting, 0 if the queue is empty. Call in a loop (e.g. once
-// per frame) to drain everything queued since the last poll.
-int midiIoPollInput(uint8_t* outStatus, uint8_t* outData1, uint8_t* outData2);
+// Pops one pending message: channel voice messages (note on/off, CC,
+// program change...) or the realtime bytes needed for MIDI clock sync
+// (0xF8 clock, 0xFA/0xFB/0xFC transport - always 1 byte). Sysex, system
+// common (0xF1/0xF2/0xF3), active sensing (0xFE) and reset (0xFF) are
+// dropped. Returns 1 and fills outStatus/outData1/outData2 (outData2 is 0
+// for 2-byte and realtime messages) plus outTimestampMicros (arrival time
+// on the midiIoNowMicros() clock, reconstructed from driver deltas so
+// clock-byte spacing stays accurate across poll bursts) if a message was
+// waiting, 0 if the queue is empty. Call in a loop (e.g. once per frame)
+// to drain everything queued since the last poll.
+int midiIoPollInput(uint8_t* outStatus, uint8_t* outData1, uint8_t* outData2,
+                    uint64_t* outTimestampMicros);
 
 // --- Output ---
 int midiIoOpenOutput(int portIndex);

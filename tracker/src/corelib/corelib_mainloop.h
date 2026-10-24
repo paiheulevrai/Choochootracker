@@ -15,6 +15,9 @@ enum class MainLoopEvent {
   touchTap,
   touchAdjust,
   touchNavigate,
+  // SDL_AUDIODEVICEREMOVED reached the platform loop. data.value is the
+  // event's iscapture flag (1 = a capture device was removed/failed).
+  audioDeviceRemoved,
 };
 
 struct MainLoopEventData {
@@ -31,5 +34,9 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 void mainLoopDelay(int ms);
 void mainLoopQuit(void);
 void mainLoopTriggerQuit(void);
+// UI-only pacing. Audio remains owned by SDL's callback thread.
+void mainLoopSetTargetFps(int fps);
+int mainLoopGetTargetFps(void);
+int mainLoopGetFrameTimeUs(void);
 
 #endif

@@ -9,7 +9,6 @@ static int modelButtonDown;
 static Bitmap* previewBitmap;
 
 static void drawPreview(const InstrumentMME* mme) {
-  if (appSettings.persistentWaveform) return;
   if (!previewBitmap) previewBitmap = gfxBitmapCreate(32, 3);
   renderMMEPreview(previewBitmap, mme);
   gfxSetFgColor(appSettings.colorScheme.textInfo);

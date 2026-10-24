@@ -315,6 +315,19 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   return screenInput(&screenColorThemeData, isKeyDown, keys, tapCount);
 }
 
+#ifdef DESKTOP_BUILD
+int colorThemeKeyJazzTextField(KeyJazzTextField* field) {
+  ScreenData* screen = &screenColorThemeData;
+  field->screen = screen;
+  field->row = 10;
+  field->popupOpen = isCharEdit;
+  field->marksProjectModified = 0;
+  field->str = NULL;
+  if (screen->cursorRow == 10) { field->str = appSettings.themeName; field->maxLen = THEME_NAME_LENGTH; }
+  return 1;
+}
+#endif
+
 const AppScreen screenColorTheme = {
   .init = NULL,
   .setup = setup,

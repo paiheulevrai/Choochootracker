@@ -14,6 +14,10 @@ ChooChooTracker is a handheld tracker based on ChipNomad. It combines AY/YM synt
 
 The first PortMaster build targets aarch64 devices such as the Anbernic RG353V. Audio runs at 96 kHz.
 
+## Ableton Link
+
+Ableton Link tempo sync requires Wi-Fi: it only works when the device is on a network with other Link participants (e.g. a phone running LinkHut or a computer running Ableton Live). Enable it on the Project screen (Clock source → Ableton Link, then Connect). Beat alignment is best-effort within roughly 10-15 ms on PortMaster; tempo sync itself is exact.
+
 ## Instrument FX
 
 - Braids: `BMD` model, `BTM` timbre, `BCL` color, `BCF` cutoff, `BRS` resonance.

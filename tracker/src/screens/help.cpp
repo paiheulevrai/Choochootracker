@@ -6,6 +6,7 @@
 #include "corelib_gfx.h"
 #include "common.h"
 #include "misc.h"
+#include "synth/sample_voice.h"
 
 // Helper function to get modulation type name
 static const char* getModulationTypeName(ModulationType type) {
@@ -127,6 +128,12 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
       break;
     case fxVSL: // Volume slide
       snprintf(buffer, bufferSize, "Volume slide %+hhd per step", (int8_t)fx[1]);
+      break;
+    case fxPAN:
+      snprintf(buffer, bufferSize, "Instrument pan: %02X", fx[1]);
+      break;
+    case fxTPN:
+      snprintf(buffer, bufferSize, "Track pan: %02X", fx[1]);
       break;
     case fxRET: // Retrigger
       snprintf(buffer, bufferSize, "Retrigger note every %hhd tics", fx[1] & 0xf);
@@ -360,7 +367,27 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     case fxSCF: snprintf(buffer, bufferSize, "Sample cutoff %hhu", fx[1]); break;
     case fxSRS: snprintf(buffer, bufferSize, "Sample resonance %hhu", fx[1]); break;
     case fxSSP: snprintf(buffer, bufferSize, "Sample speed %hhu", fx[1]); break;
-    case fxSLP: snprintf(buffer, bufferSize, "Sample loop mode %hhu", fx[1]); break;
+    case fxLST: snprintf(buffer, bufferSize, "Loop start %+d", (int8_t)fx[1]); break;
+    case fxSLP: {
+      static const char* playbackModes[] = {"forward", "reverse", "loop", "ping-pong",
+        "loop x-fade", "ping-pong x-fade"};
+      snprintf(buffer, bufferSize, "Sample playback: %s",
+        fx[1] <= 5 ? playbackModes[fx[1]] : "?");
+      break;
+    }
+    case fxSLI: {
+      const Instrument* instrument = instrumentIdx != EMPTY_VALUE_8 &&
+        instrumentIdx < PROJECT_MAX_INSTRUMENTS
+        ? &chipnomadState->project.instruments[instrumentIdx] : NULL;
+      if (instrument && instrument->type == InstrumentType::Sample) {
+        uint8_t count = sampleDecodeSliceCount(instrument->chip.sample.slice);
+        if (count) snprintf(buffer, bufferSize, "Play slice %hhu of %hhu", fx[1], count);
+        else snprintf(buffer, bufferSize, "Slicing disabled");
+      } else {
+        snprintf(buffer, bufferSize, "Slice %hhu (sample only)", fx[1]);
+      }
+      break;
+    }
     case fxSDT: snprintf(buffer, bufferSize, "2xSCWF detune %hhu", fx[1]); break;
     case fxSMX: snprintf(buffer, bufferSize, "2xSCWF oscillator mix %hhu", fx[1]); break;
     case fxSCF2: snprintf(buffer, bufferSize, "2xSCWF cutoff %hhu", fx[1]); break;
@@ -371,6 +398,24 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     case fxMOD: snprintf(buffer, bufferSize, "Modulo %hhu:%hhu", fx[1] >> 4, fx[1] & 15); break;
     case fxSPD: snprintf(buffer, bufferSize, "Track clock mode %02hX", fx[1]); break;
     case fxSLE: snprintf(buffer, bufferSize, "Engine FX slew %hhu ticks", fx[1]); break;
+    case fxFBR: snprintf(buffer, bufferSize, "FM brightness %+d", fmBrightnessFromByte(fx[1])); break;
+    case fxFFB:
+      if (!fx[1]) snprintf(buffer, bufferSize, "FM feedback: preset");
+      else snprintf(buffer, bufferSize, "FM feedback %d", (fx[1] > 8 ? 8 : fx[1]) - 1);
+      break;
+    case fxCMD: case fxCNR: case fxCND: case fxCNS: case fxCSP: case fxCSS:
+    case fxCSD: case fxCEI: case fxCEP: case fxCED:
+    case fxFO1: case fxFO2: case fxFO3: case fxFO4: case fxFO5: case fxFO6:
+    case fxOL1: case fxOL2: case fxOL3: case fxOL4: case fxOL5: case fxOL6:
+    case fxFBK:
+    case fxFET: case fxFTD: case fxFDT: case fxFHR: case fxFLR: case fxFLD:
+    case fxSAT: case fxSDE: case fxSSU: case fxSRL: case fxSPR:
+    case fxSCP: case fxSCT: case fxSRN: case fxSWV: case fxSFTY: case fxSMR: case fxSRG: case fxSSY: {
+      const char* description = helpFXDescription((FX)fx[0], instrumentIdx);
+      const char* end = strchr(description, '\n');
+      snprintf(buffer, bufferSize, "%.*s %02X", int(end ? end - description : strlen(description)), description, fx[1]);
+      break;
+    }
     case fxRSN: snprintf(buffer, bufferSize, "Track reverb send %hhu", fx[1]); break;
     case fxDSN: snprintf(buffer, bufferSize, "Track delay send %hhu", fx[1]); break;
     case fxEAT: snprintf(buffer, bufferSize, "Envelope attack %hhu", fx[1]); break;
@@ -405,7 +450,7 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
 
 
 // FX help text storage - initialized at first use
-static const char* fxHelpText[256] = {nullptr};
+static const char* fxHelpText[fxTotalCount] = {nullptr};
 static bool fxHelpTextInitialized = false;
 
 static void initFxHelpText() {
@@ -421,6 +466,8 @@ static void initFxHelpText() {
   fxHelpText[fxPRD] = "Period (relative)\nAdds offset to note period\n(chip specific)";
   fxHelpText[fxVOL] = "Volume (relative)\nAdds volume offset";
   fxHelpText[fxVSL] = "Volume Slide\nChanges volume by specified\namount per step continuously";
+  fxHelpText[fxPAN] = "Instrument Pan\n00 left; 80 centre; FF right\nOverrides the instrument PAN";
+  fxHelpText[fxTPN] = "Track Pan\n00 left; 80 centre; FF right\nOverrides the mixer PAN";
   fxHelpText[fxRET] = "Retrigger\nRetriggers note every N tics";
   fxHelpText[fxDEL] = "Delay\nDelays note start by N tics";
   fxHelpText[fxOFF] = "Note Off\nSends note off after N tics";
@@ -432,7 +479,7 @@ static void initFxHelpText() {
   fxHelpText[fxTXH] = "Aux Table Hop\nJumps to specific\naux table row";
   fxHelpText[fxGRV] = "Track Groove\nSets groove for this track only";
   fxHelpText[fxGGR] = "Global Groove\nSets groove for all tracks";
-  fxHelpText[fxSCL] = "Scale / Root\nSCL XY: X is scale\nY is root C through B";
+  fxHelpText[fxSCL] = "Scale / Root\nSCL XY: X is scale\nY is root C through B\nQuantizer mode only";
   fxHelpText[fxCRD] = "Chord\nCRD XY: X is inversion\nY selects a fixed chord";
   fxHelpText[fxHOP] = "Hop\nHops to phrase/table row X times";
   fxHelpText[fxSNG] = "Song Hop\nHops in song by N rows";
@@ -503,7 +550,11 @@ static void initFxHelpText() {
   fxHelpText[fxSCF] = "Sample Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
   fxHelpText[fxSRS] = "Sample Resonance FX\nOverrides resonance until\nthe next note trigger";
   fxHelpText[fxSSP] = "Sample Speed FX\n00-FF maps to 0-500 percent\nuntil the next note trigger";
-  fxHelpText[fxSLP] = "Sample Loop FX\n00 off, 01 loop, 02 ping-pong\nuntil the next note trigger";
+  fxHelpText[fxSLP] = "Sample Playback FX\n00 forward, 01 reverse\n02 loop, 03 ping-pong\n04 loop x-fade, 05 ping-pong\nx-fade. 02-05 write the\nloop mode to the instrument\nuntil the next note trigger;\n04/05 crossfade the loop\nwrap over 25 percent of\nthe loop window";
+  fxHelpText[fxSLI] = "Sample Slice FX\nPlays the numbered slice\nregardless of the note;\n01 = first slice. Needs\nslice mode enabled";
+  fxHelpText[fxRNS] = "Random Slice FX\nPlays random slice\nwhen in slicing mode";
+  fxHelpText[fxRNN] = "Random Note FX\nPlays random note\nX: mode, Y: range";
+  fxHelpText[fxLST] = "Sample Loop Start FX\nShifts the loop start\nmarker by the signed\namount per row\nuntil the next note trigger";
   fxHelpText[fxSDT] = "Stereo Osc Detune FX\nSets detune between oscillators\nuntil the next note trigger";
   fxHelpText[fxSMX] = "Stereo Osc Mix FX\nSets oscillator A/B mix\nuntil the next note trigger";
   fxHelpText[fxSCF2] = "Stereo Osc Cutoff FX\n00-FF logarithmic cutoff\nuntil the next note trigger";
@@ -513,7 +564,44 @@ static void initFxHelpText() {
   fxHelpText[fxPRO] = "Probability\n00-64 = 0-100 percent\nConditions on a row use AND";
   fxHelpText[fxMOD] = "Modulo condition\nAB triggers pass A of B\nExample 34 = 3:4";
   fxHelpText[fxSPD] = "Track playback speed\n00=x1, 01=x2, FF=/2\nPersists until next SPD";
-  fxHelpText[fxSLE] = "Engine FX Slew\n00 immediate; higher values\nglide continuous engine FX";
+  fxHelpText[fxSLE] = "Engine FX Smoothing\n00 = immediate change\n01-FF = glide time in tracker ticks\nAffects continuous engine controls";
+  fxHelpText[fxFBR] = "FM Brightness\n80 = preset; 00 darker; FF brighter\nRaises or lowers all modulator levels\nSLE smooths the change";
+  fxHelpText[fxFET] = "FM Envelope Time\n80 = preset; 00 shorter; FF longer\nChanges all operator envelope rates\nExisting hold rates stay held\nSLE smooths the rate changes";
+  fxHelpText[fxFTD] = "FM Tone Decay\n80 = preset; 00 shorter; FF longer\nChanges modulator decay rates only\nControls how the tone evolves\nSLE smooths the rate changes";
+  fxHelpText[fxFDT] = "FM Detune Spread\n80 = unchanged preset\n00 / FF = opposite detune spreads\nAlternates tuning across operators\nSLE moves through native steps";
+  fxHelpText[fxFHR] = "FM Harmonic Ratio\n80 = preset; 00 lower; FF higher\nChanges modulator frequency ratios\nFixed-frequency DX7 ops stay fixed\nSLE moves through native steps";
+  fxHelpText[fxFLR] = "FM LFO Rate\n80 = preset; 00 slower; FF faster\nUses the chip's native speed steps\nNeeds LFO depth to hear a change\nSLE smooths the rate changes";
+  fxHelpText[fxFLD] = "FM LFO Depth\n80 = preset; 00 none; FF maximum\nAdjusts pitch + amplitude modulation\nAmp effect needs enabled operators\nSLE smooths the depth changes";
+  fxHelpText[fxSAT] = "SID Native Attack\n00-0F = 16 attack time settings\n00 fastest; 0F slowest\nChanges the chip envelope live";
+  fxHelpText[fxSDE] = "SID Native Decay\n00-0F = 16 decay time settings\n00 fastest; 0F slowest\nChanges the chip envelope live";
+  fxHelpText[fxSSU] = "SID Native Sustain\n00-0F = 16 sustain level settings\n00 silent; 0F full level\nChanges the chip envelope live";
+  fxHelpText[fxSRL] = "SID Native Release\n00-0F = 16 release time settings\n00 fastest; 0F slowest\nChanges the chip envelope live";
+  fxHelpText[fxSPR] = "SID Partner Ratio\n00-0F = partner frequency 1x-16x\nAffects ring modulation and hard sync\nDiscrete frequency ratios";
+  fxHelpText[fxSCP] = "SID Pulse Width\n00-FF spans the native pulse width\nOnly affects pulse-containing waves\nSLE smooths the width changes";
+  fxHelpText[fxSCT] = "SID Filter Cutoff\n00-FF spans the native cutoff range\nNeeds a filter mode enabled (SFI)\nSLE smooths the cutoff changes";
+  fxHelpText[fxSRN] = "SID Resonance\n4-bit parameter: 16 levels (00-0F)\nEmphasizes the cutoff frequency";
+  fxHelpText[fxSWV] = "SID Waveform\n00 tri; 01 saw; 03 pulse; 07 noise\n02/04/05/06 are combined waves\nEight choices, not a continuous range";
+  fxHelpText[fxSFTY] = "SID Filter Mode\nBits: 01 low; 02 band; 04 high\nAdd bits to combine filter modes\n00 bypasses filtering";
+  fxHelpText[fxSMR] = "SID Macro Speed\n00-FF = 1-200 preset updates/sec\nChanges the speed of preset motion";
+  fxHelpText[fxSRG] = "SID Ring Modulation\n00 off; 01 on\nTriangle uses a silent partner\nSPR sets the partner frequency ratio";
+  fxHelpText[fxSSY] = "SID Hard Sync\n00 off; 01 on\nResets oscillator from silent partner\nSPR sets the partner frequency ratio";
+  fxHelpText[fxFFB] = "FM Feedback\n00 = use the preset feedback\n01-08 = eight native levels (0-7)\n3-bit parameter: eight native levels";
+  fxHelpText[fxFO1] = "FM Operator 1 Level\n80 = preset; 00 lower; FF higher\nModulator: tone / carrier: volume\nSLE smooths the level change\nNative level limits still apply";
+  fxHelpText[fxFO2] = "FM Operator 2 Level\n80 = preset; 00 lower; FF higher\nModulator: tone / carrier: volume\nSLE smooths the level change\nNative level limits still apply";
+  fxHelpText[fxFO3] = "FM Operator 3 Level\n80 = preset; 00 lower; FF higher\nModulator: tone / carrier: volume\nSLE smooths the level change\nNative level limits still apply";
+  fxHelpText[fxFO4] = "FM Operator 4 Level\n80 = preset; 00 lower; FF higher\nModulator: tone / carrier: volume\nSLE smooths the level change\nNative level limits still apply";
+  fxHelpText[fxFO5] = "FM Operator 5 Level\n80 = preset; 00 lower; FF higher\nModulator: tone / carrier: volume\nSLE smooths the level change\nNative level limits still apply";
+  fxHelpText[fxFO6] = "FM Operator 6 Level\n80 = preset; 00 lower; FF higher\nModulator: tone / carrier: volume\nSLE smooths the level change\nNative level limits still apply";
+  fxHelpText[fxCMD] = "Chip Mode\nSega: tone / white / periodic noise\nGB: pulse duty or noise width";
+  fxHelpText[fxCNR] = "Sega Noise Rate\n2-bit rate: four choices (00-03)\n00-02 select fixed noise clocks\n03 follows the played note";
+  fxHelpText[fxCND] = "GB Noise Divisor\n3-bit divisor: 8 settings (00-07)\nChanges live; combine with CNS";
+  fxHelpText[fxCNS] = "GB Noise Shift\n00-0D select clock shift\nHigher values lower noise frequency";
+  fxHelpText[fxCSP] = "GB Sweep Period\n3-bit timer: 8 settings (00-07)\nLatches on the next note trigger";
+  fxHelpText[fxCSS] = "GB Sweep Shift\n3-bit shift: 8 settings (00-07)\n00 disables frequency calculation\nLatches on the next note trigger";
+  fxHelpText[fxCSD] = "GB Sweep Direction\n00 up; 01 down\nLatches on the next note trigger";
+  fxHelpText[fxCEI] = "GB Envelope Initial Level\n4-bit volume: 16 levels (00-0F)\nLatches on the next note trigger";
+  fxHelpText[fxCEP] = "GB Envelope Period\n3-bit period: 00 holds; 01-07 steps\nLatches on the next note trigger";
+  fxHelpText[fxCED] = "GB Envelope Direction\n00 falling; 01 rising\nLatches on the next note trigger";
   fxHelpText[fxRSN] = "Reverb Send FX\nSets this track's reverb send\nuntil the next note trigger";
   fxHelpText[fxDSN] = "Delay Send FX\nSets this track's delay send\nuntil the next note trigger";
   fxHelpText[fxEAT] = "ADSR Attack FX\nOverrides attack until\nthe next note trigger";
@@ -553,6 +641,43 @@ static void initFxHelpText() {
 
 const char* helpFXDescription(enum FX fxIdx, uint8_t instrumentIdx) {
   initFxHelpText(); // Initialize on first use
+  if (fxIdx >= fxF11 && fxIdx <= fxF28 && chipnomadState && pSongTrack &&
+      *pSongTrack >= 0 && *pSongTrack < PROJECT_MAX_TRACKS) {
+    static char text[240];
+    const int address = fxIdx - fxF11, slot = address / 8, parameter = address % 8;
+    const auto& config = chipnomadState->project.trackInserts[*pSongTrack][slot];
+    const auto& descriptor = insertDescriptor(config.module);
+    if (parameter >= descriptor.count) {
+      snprintf(text, sizeof(text),
+               "F%d%d - TF%d %s\nUnused parameter %d\nThis command has no effect\nChoose a control on Insert FX",
+               slot + 1, parameter + 1, slot + 1, descriptor.name, parameter + 1);
+    } else {
+      char low[32], high[32];
+      const int maximum = insertClamp(config.module, parameter, 255);
+      insertDescribe(low, sizeof(low), config.module, parameter, 0);
+      insertDescribe(high, sizeof(high), config.module, parameter, maximum);
+      snprintf(text, sizeof(text),
+               "TF%d %s: %s\nF%d%d - absolute track control\n00: %s\n%02X: %s\nPersists across notes and phrases",
+               slot + 1, descriptor.name, descriptor.parameters[parameter].name,
+               slot + 1, parameter + 1, low, maximum, high);
+    }
+    return text;
+  }
+  if(fxIdx==fxFBK)return "FM Feedback\n00-07: eight native levels\nAbsolute feedback amount\nStarts at the instrument setting";
+  if(fxIdx>=fxOL1&&fxIdx<=fxOL6) {
+    static char text[200];
+    snprintf(text,sizeof(text),"FM Operator %d Level\nAbsolute native output level\nHigher values raise the output\nModulator: tone / carrier: volume\nSLE moves through native steps",fxIdx-fxOL1+1);
+    return text;
+  }
+
+  if (fxIdx == fxCMD && chipnomadState && instrumentIdx < PROJECT_MAX_INSTRUMENTS) {
+    switch (chipnomadState->project.instruments[instrumentIdx].type) {
+      case InstrumentType::SegaPSG: return "Sega Tone / Noise\n00 tone; 01 white; 02 periodic\nNoise clock is set by CNR";
+      case InstrumentType::GBPulse: return "GB Pulse Duty\n00 12.5%; 01 25%; 02 50%; 03 75%\n2-bit duty: four native choices";
+      case InstrumentType::GBNoise: return "GB Noise Width\n00 15-bit; 01 7-bit metallic noise\nChanges width while the note plays";
+      default: break;
+    }
+  }
 
   static const int bufferSize = 120;
   static char buffer[bufferSize]; // Buffer for dynamic description

@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include "version.h"
 #include "corelib_gfx.h"
 #include "corelib_font.h"
@@ -63,6 +64,13 @@ static void createCharSurfaces(void) {
 #ifdef MIYOOPORTS_BUILD
 static SDL_Surface* offscreenSurface = NULL;
 #endif
+struct GfxImage {
+  SDL_Surface* surface;
+  int width;
+  int height;
+};
+
+static SDL_Surface* titleSurface = NULL;
 
 int gfxSetup(int *screenWidth, int *screenHeight) {
   if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
@@ -118,6 +126,10 @@ void gfxCleanup(void) {
     offscreenSurface = NULL;
   }
 #endif
+  if (titleSurface) {
+    SDL_FreeSurface(titleSurface);
+    titleSurface = NULL;
+  }
 }
 
 void gfxSetFgColor(int rgb) {
@@ -443,4 +455,207 @@ void gfxDrawHUD(void) {}
 void gfxSetButtonPressed(int buttonIndex, int pressed) {
   (void)buttonIndex;
   (void)pressed;
+}
+
+const char* gfxGetRendererType(void) {
+  return "SDL 1.2 software";
+}
+
+GfxImage* gfxImageLoadBMP(const char* path) {
+  SDL_Surface* loaded = SDL_LoadBMP(path);
+  if (!loaded) {
+    printf("Failed to load title image %s: %s\n", path, SDL_GetError());
+    return NULL;
+  }
+
+  SDL_Surface* imageSurface = SDL_DisplayFormatAlpha(loaded);
+  SDL_FreeSurface(loaded);
+  if (!imageSurface) {
+    printf("Failed to convert title image %s: %s\n", path, SDL_GetError());
+    return NULL;
+  }
+  if (imageSurface->format->BytesPerPixel != 4) {
+    printf("Unsupported pixel format for title image %s\n", path);
+    SDL_FreeSurface(imageSurface);
+    return NULL;
+  }
+
+  if (SDL_LockSurface(imageSurface) != 0) {
+    printf("Failed to lock title image %s: %s\n", path, SDL_GetError());
+    SDL_FreeSurface(imageSurface);
+    return NULL;
+  }
+  for (int y = 0; y < imageSurface->h; y++) {
+    Uint32* row = (Uint32*)((Uint8*)imageSurface->pixels + y * imageSurface->pitch);
+    for (int x = 0; x < imageSurface->w; x++) {
+      Uint8 r, g, b, a;
+      SDL_GetRGBA(row[x], imageSurface->format, &r, &g, &b, &a);
+      if (r > 100 && b > 100 && r > g * 1.6f && b > g * 1.6f) a = 0;
+      row[x] = SDL_MapRGBA(imageSurface->format, r, g, b, a);
+    }
+  }
+  SDL_UnlockSurface(imageSurface);
+  if (SDL_SetAlpha(imageSurface, SDL_SRCALPHA, 255) != 0) {
+    printf("Failed to enable title image transparency for %s: %s\n", path, SDL_GetError());
+    SDL_FreeSurface(imageSurface);
+    return NULL;
+  }
+
+  GfxImage* image = (GfxImage*)malloc(sizeof(GfxImage));
+  if (!image) {
+    SDL_FreeSurface(imageSurface);
+    return NULL;
+  }
+  image->surface = imageSurface;
+  image->width = imageSurface->w;
+  image->height = imageSurface->h;
+  return image;
+}
+
+GfxImage* gfxImageCreateARGB(int width, int height) {
+  SDL_Surface* surface = SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, 32,
+    0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
+  if (!surface) return NULL;
+  GfxImage* image = (GfxImage*)malloc(sizeof(GfxImage));
+  if (!image) { SDL_FreeSurface(surface); return NULL; }
+  SDL_SetAlpha(surface, 0, 255);
+  image->surface = surface; image->width = width; image->height = height;
+  return image;
+}
+
+int gfxImageUpdateARGB(GfxImage* image, const uint32_t* pixels) {
+  if (!image || !pixels || SDL_LockSurface(image->surface) != 0) return 0;
+  for (int y = 0; y < image->height; ++y)
+    memcpy((uint8_t*)image->surface->pixels + y * image->surface->pitch,
+      pixels + y * image->width, image->width * 4);
+  SDL_UnlockSurface(image->surface);
+  return 1;
+}
+
+void gfxImageFree(GfxImage* image) {
+  if (!image) return;
+  if (image->surface) SDL_FreeSurface(image->surface);
+  free(image);
+}
+
+int gfxImageWidth(const GfxImage* image) {
+  return image ? image->width : 0;
+}
+
+int gfxImageHeight(const GfxImage* image) {
+  return image ? image->height : 0;
+}
+
+void gfxImageDrawCrop(const GfxImage* image, int sourceX, int sourceY,
+  int sourceW, int sourceH, int destinationX, int destinationY) {
+  if (!image || !image->surface || !titleSurface ||
+      sourceX < 0 || sourceY < 0 || sourceW <= 0 || sourceH <= 0 ||
+      sourceX + sourceW > image->width || sourceY + sourceH > image->height) return;
+
+  SDL_Rect source = {sourceX, sourceY, sourceW, sourceH};
+  SDL_Rect destination = {destinationX, destinationY, sourceW, sourceH};
+  if (SDL_BlitSurface(image->surface, &source, titleSurface, &destination) != 0) {
+    printf("Failed to draw title image: %s\n", SDL_GetError());
+  }
+}
+
+void gfxTitleBegin(void) {
+  if (!titleSurface) {
+    titleSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, 256, 224, 32,
+      sdlScreen->format->Rmask, sdlScreen->format->Gmask,
+      sdlScreen->format->Bmask, sdlScreen->format->Amask);
+    if (!titleSurface) {
+      printf("Failed to create title surface: %s\n", SDL_GetError());
+      return;
+    }
+  }
+  SDL_FillRect(titleSurface, NULL, SDL_MapRGB(titleSurface->format, 5, 12, 31));
+}
+
+void gfxTitleFadeBlack(uint8_t alpha) {
+  if (!titleSurface || alpha == 0) return;
+  if (SDL_LockSurface(titleSurface) != 0) {
+    printf("Failed to lock title surface: %s\n", SDL_GetError());
+    return;
+  }
+  for (int y = 0; y < titleSurface->h; y++) {
+    Uint32* row = (Uint32*)((Uint8*)titleSurface->pixels + y * titleSurface->pitch);
+    for (int x = 0; x < titleSurface->w; x++) {
+      Uint8 r, g, b;
+      SDL_GetRGB(row[x], titleSurface->format, &r, &g, &b);
+      r = (Uint8)(r * (255 - alpha) / 255);
+      g = (Uint8)(g * (255 - alpha) / 255);
+      b = (Uint8)(b * (255 - alpha) / 255);
+      row[x] = SDL_MapRGB(titleSurface->format, r, g, b);
+    }
+  }
+  SDL_UnlockSurface(titleSurface);
+}
+
+void gfxTitlePresent(void) {
+  if (!titleSurface) return;
+#ifdef MIYOOPORTS_BUILD
+  SDL_Surface* target = offscreenSurface;
+#else
+  SDL_Surface* target = sdlScreen;
+#endif
+  if (!target) return;
+
+  SDL_Rect destination = {0, 0, WINDOW_WIDTH, WINDOW_HEIGHT};
+  if (SDL_SoftStretch(titleSurface, NULL, target, &destination) != 0) {
+    printf("Failed to present title screen: %s\n", SDL_GetError());
+    return;
+  }
+  isDirty = 1;
+}
+
+void gfxTitleEnd(void) {
+  if (titleSurface) {
+    SDL_FreeSurface(titleSurface);
+    titleSurface = NULL;
+  }
+}
+
+void gfxTitlePrint(int x, int y, const char* text) {
+  if (!text || !titleSurface || !currentResolution || !currentResolution->data) return;
+  const int sourceW = currentResolution->charWidth;
+  const int sourceH = currentResolution->charHeight;
+  const int sourceBytes = (sourceW + 7) / 8;
+  Uint32 color = SDL_MapRGB(titleSurface->format, fgR, fgG, fgB);
+
+  if (SDL_LockSurface(titleSurface) != 0) {
+    printf("Failed to lock title surface: %s\n", SDL_GetError());
+    return;
+  }
+  for (int i = 0; text[i]; i++) {
+    const uint8_t c = (uint8_t)text[i];
+    if (c < 32 || c > 126) continue;
+    const uint8_t* glyph = currentResolution->data +
+      (c - 32) * sourceBytes * sourceH;
+    for (int dy = 0; dy < 12; dy++) {
+      const int y0 = dy * sourceH / 12;
+      const int y1 = ((dy + 1) * sourceH - 1) / 12;
+      for (int dx = 0; dx < 8; dx++) {
+        const int x0 = dx * sourceW / 8;
+        const int x1 = ((dx + 1) * sourceW - 1) / 8;
+        int set = 0;
+        for (int sy = y0; sy <= y1 && !set; sy++) {
+          for (int sx = x0; sx <= x1; sx++) {
+            if (glyph[sy * sourceBytes + sx / 8] & (0x80 >> (sx & 7))) {
+              set = 1;
+              break;
+            }
+          }
+        }
+        if (!set) continue;
+        const int px = x * 8 + i * 8 + dx;
+        const int py = y * 12 + dy;
+        if (px >= 0 && px < titleSurface->w && py >= 0 && py < titleSurface->h) {
+          Uint32* row = (Uint32*)((Uint8*)titleSurface->pixels + py * titleSurface->pitch);
+          row[px] = color;
+        }
+      }
+    }
+  }
+  SDL_UnlockSurface(titleSurface);
 }

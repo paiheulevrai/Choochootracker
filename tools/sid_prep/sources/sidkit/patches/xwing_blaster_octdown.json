@@ -1,0 +1,21 @@
+{
+  "name": "xwing_blaster_octdown",
+  "voice": 1,
+  "waveform": "SAWTOOTH",
+  "freq_hi": 19,
+  "freq_lo": 12,
+  "attack": 0,
+  "decay": 4,
+  "sustain": 0,
+  "release": 3,
+  "pw_hi": 0,
+  "duration_frames": 6,
+  "sweep_target_hi": 2,
+  "sweep_target_lo": 98,
+  "sweep_type": "exponential",
+  "filter_mode": "off",
+  "filter_cutoff": 100,
+  "filter_resonance": 15,
+  "filter_cutoff_sweep": 0,
+  "description": "X-wing blaster octave-down \u2014 sawtooth sweep (287Hz, half original freq)"
+}

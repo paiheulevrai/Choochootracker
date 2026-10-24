@@ -156,6 +156,9 @@ int gfxGetTouchGridPosition(int physicalX, int physicalY, int* col, int* row);
 // tracker UI and its portable renderers stay unchanged.
 struct GfxImage;
 struct GfxImage* gfxImageLoadBMP(const char* path);
+// Mutable opaque image, uploaded as width*height packed 0xAARRGGBB words.
+struct GfxImage* gfxImageCreateARGB(int width, int height);
+int gfxImageUpdateARGB(struct GfxImage* image, const uint32_t* pixels);
 void gfxImageFree(struct GfxImage* image);
 int gfxImageWidth(const struct GfxImage* image);
 int gfxImageHeight(const struct GfxImage* image);

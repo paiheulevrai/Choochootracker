@@ -172,7 +172,7 @@ static void handleAHDnoteOff(PlaybackModState* state) {
   // Do nothing - AHD is not affected by note off
 }
 
-static void handleLFO(PlaybackModState* state, uint16_t period) {
+static void handleLFO(PlaybackModState* state, uint32_t period) {
   // LFO parameters:
   // p1: shape
   // p2: trigger mode
@@ -192,6 +192,9 @@ static void handleLFO(PlaybackModState* state, uint16_t period) {
     // outValue is already set to the hold value
     return;
   }
+
+  // A live slowLFO step reduction can put the counter past the new period.
+  if (GET_TYPE(state) == ModulationType::SlowLFO) state->counter %= period;
 
   // Calculate position in cycle (0.0 to 1.0) BEFORE incrementing counter
   float phase = (float)state->counter / (float)period;
@@ -275,7 +278,7 @@ static void handleLFO(PlaybackModState* state, uint16_t period) {
     }
 
     case LFOShape::wavetable:
-      envelopeValue = ayWavetableValue(state, (uint8_t)(state->counter * 32 / period));
+      envelopeValue = ayWavetableValue(state, (uint8_t)(uint64_t{state->counter} * 32 / period));
       break;
 
     default:
@@ -353,7 +356,9 @@ void playbackModSetAYWavetables(PlaybackModState* state, const uint8_t (*ayWavet
 
 void playbackModRestart(PlaybackModState* state) {
   if (!state->modulation ||
-      (GET_TYPE(state) != ModulationType::LFO && GET_TYPE(state) != ModulationType::SLFO)) return;
+      !modulationIsTickLFO(GET_TYPE(state)) &&
+      !(GET_TYPE(state) == ModulationType::Sequence &&
+        state->modulation->p1 == static_cast<uint8_t>(SequenceSource::tranceGate))) return;
   state->counter = 0;
   state->step = 0;
   state->outValue = 0;
@@ -365,7 +370,7 @@ void playbackModNext(PlaybackModState* state) {
   uint8_t currentP2 = GET_P2(state);
 
   if (currentType != state->cachedType ||
-      ((currentType == ModulationType::LFO || currentType == ModulationType::SLFO) && currentP2 != state->cachedP2)) {
+      (modulationIsTickLFO(currentType) && currentP2 != state->cachedP2)) {
     // Type or LFO trigger mode changed - reinitialize
     const uint8_t (*ayWavetables)[32] = state->ayWavetables;
     playbackModInit(state, (Modulation*)state->modulation);
@@ -382,6 +387,9 @@ void playbackModNext(PlaybackModState* state) {
       break;
     case ModulationType::LFO:
       handleLFO(state, GET_P3(state));
+      break;
+    case ModulationType::SlowLFO:
+      handleLFO(state, modulationSlowLFOPeriod(GET_P3(state)));
       break;
     case ModulationType::SLFO:
       handleLFO(state, (uint16_t)GET_P3(state) * (GET_P4(state) ? GET_P4(state) : 1));
@@ -401,6 +409,7 @@ void playbackModNoteOff(PlaybackModState* state) {
       handleAHDnoteOff(state);
       break;
     case ModulationType::LFO:
+    case ModulationType::SlowLFO:
     case ModulationType::SLFO:
       handleLFOnoteOff(state);
       break;

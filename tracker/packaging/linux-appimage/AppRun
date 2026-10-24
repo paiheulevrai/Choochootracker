@@ -26,4 +26,8 @@ for item in "${SOURCE_DIR}"/*; do
   fi
 done
 
+# The desktop title screen loads its artwork from relative `title/` paths.
+# Launch from the seeded workspace so those assets (and all other bundled
+# relative-path content) resolve outside the read-only AppImage mount.
+cd "${DATA_DIR}"
 exec "${HERE}/usr/bin/choochootracker" "$@"

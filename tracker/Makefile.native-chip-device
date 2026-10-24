@@ -1,0 +1,11 @@
+# Developer-only ARM64 validation. Reuse the configured ARM64 toolchain.
+# Neither executable is copied into PortMaster-deploy packages.
+include Makefile.portmaster
+
+.PHONY: native-chip-validation native-chip-ui native-chip-audio
+native-chip-validation: native-chip-ui native-chip-audio
+
+native-chip-ui: $(OBJECTS) tests/native_chip_ui.cpp
+	$(CXX) $(CFLAGS) -Itests tests/native_chip_ui.cpp $(filter-out $(BUILD)/obj/platforms/shared/main.o,$(OBJECTS)) $(SDL_LIBS)  -lasound -pthread -lm -o $(BUILD)/native-chip-ui
+native-chip-audio: $(OBJECTS) tests/native_chip_audio.cpp
+	$(CXX) $(CFLAGS) -Itests tests/native_chip_audio.cpp $(filter-out $(BUILD)/obj/platforms/shared/main.o,$(OBJECTS)) $(SDL_LIBS)  -lasound -pthread -lm -o $(BUILD)/native-chip-audio

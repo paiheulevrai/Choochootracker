@@ -22,14 +22,9 @@ static uint8_t noteIndexToMidi(int noteIndex) {
   return (uint8_t)midi;
 }
 
-// PhraseRow.volume is a 0-15 value (see chipnomad_lib/playback.cpp, where
-// 0x0f/15 is the "full volume" sentinel used for accent detection).
-static uint8_t volumeToVelocity(uint8_t volume) {
-  if (volume == EMPTY_VALUE_8 || volume > 15) volume = 15;
-  int v = (volume * 127 + 7) / 15;
-  if (v < 1) v = 1;
-  if (v > 127) v = 127;
-  return (uint8_t)v;
+static uint8_t volumeToVelocity(uint16_t volume) {
+  if (volume == EMPTY_VALUE_16) return PHRASE_VOLUME_MAX;
+  return (uint8_t)(volume > PHRASE_VOLUME_MAX ? PHRASE_VOLUME_MAX : volume);
 }
 
 // Tracks one tracker track's position while walking the arrangement,

@@ -1,0 +1,60 @@
+name: PortMaster
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  portmaster:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Build PortMaster package
+        run: |
+          image=ghcr.io/monkeyx-net/portmaster-build-templates/portmaster-builder:aarch64-latest
+          docker pull "$image"
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace/tracker "$image" bash -lc \
+            "apt-get update && apt-get install -y cmake curl pkg-config && \
+              curl --fail --location --output /tmp/SDL2.tar.gz \
+                https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-2.32.10.tar.gz && \
+              tar -xzf /tmp/SDL2.tar.gz -C /tmp && \
+              cmake -S /tmp/SDL2-2.32.10 -B /tmp/SDL2-build \
+                -DCMAKE_BUILD_TYPE=Release -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF && \
+              cmake --build /tmp/SDL2-build -j4 && \
+              cmake --install /tmp/SDL2-build && ldconfig && \
+              sdl_pc=\$(find /usr/local -name sdl2.pc -print -quit) && \
+              PKG_CONFIG_LIBDIR=\$(dirname \"\$sdl_pc\"):/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig \
+                make -B -j4 -f Makefile.portmaster PortMaster-deploy \
+              COMMON_CFLAGS='-std=c++17 -Wall -g -Os -DTEST' CXX=g++ STRIP=strip"
+          unzip -t releases/choochootracker.zip
+          # The binary alone is not a usable release: native chip and FM
+          # preset libraries are loaded from these packaged asset paths.
+          # Save the full listing so grep -q cannot terminate unzip early
+          # and turn a successful match into a SIGPIPE failure under pipefail.
+          unzip -Z1 releases/choochootracker.zip > releases/package-files.txt
+          grep -Fxq 'choochootracker/instruments/FACTORY/catalog.tsv' releases/package-files.txt
+          grep -Fxq 'choochootracker/instruments/FACTORY/builtins.tsv' releases/package-files.txt
+          grep -Eq '^choochootracker/instruments/FACTORY/[^/]+\.zip$' releases/package-files.txt
+          for engine in dx7 opll vrc7 opl2 opl3 genesis arcade sid sega gb-pulse gb-noise; do
+            grep -Fxq "choochootracker/instruments/USER/$engine/README.txt" releases/package-files.txt
+          done
+          grep -Fxq 'choochootracker/licenses/miniz.txt' releases/package-files.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: choochootracker-portmaster
+          path: releases/choochootracker.zip
+          if-no-files-found: error

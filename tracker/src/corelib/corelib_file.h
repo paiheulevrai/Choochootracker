@@ -37,6 +37,15 @@ int fileIsRunningFromAppImage(void);
 void fileImportDocument(const char* mimeType, const char* relativeDirectory);
 void fileExportDocument(const char* path, const char* mimeType);
 
+// Android only: opens the folder picker to choose (or change) the workspace
+// folder, offering to copy the current files over. Other targets do nothing.
+void filePickWorkingFolder(void);
+// Android only: back to the app's private storage. Other targets do nothing.
+void fileClearWorkingFolder(void);
+// Fills buffer with a short status of the workspace folder. Returns 0 on
+// success; "Unavailable" where the feature does not exist.
+int fileGetWorkingFolderStatus(char* buffer, int bufferSize);
+
 // Check if a directory exists
 // Returns 1 if exists, 0 if not
 int fileDirectoryExists(const char* path);

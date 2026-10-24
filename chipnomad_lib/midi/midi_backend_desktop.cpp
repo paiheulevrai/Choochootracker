@@ -15,10 +15,13 @@ static void closeOutput(void*) { midiIoCloseOutput(); }
 
 static int pollInput(void*, MidiEvent* outEvent) {
   uint8_t status, data1, data2;
-  if (!midiIoPollInput(&status, &data1, &data2)) return 0;
-  // Input timestamps aren't used yet (no MIDI Clock following implemented).
-  outEvent->timestampMicros = 0;
-  outEvent->type = status & 0xf0;
+  uint64_t timestampMicros = 0;
+  if (!midiIoPollInput(&status, &data1, &data2, &timestampMicros)) return 0;
+  // Realtime bytes (0xF8 clock, 0xFA/0xFB/0xFC transport) keep their full
+  // status so the router can tell them apart; channel messages keep the
+  // existing type/channel split.
+  outEvent->timestampMicros = timestampMicros;
+  outEvent->type = status >= 0xf8 ? status : (status & 0xf0);
   outEvent->channel = status & 0x0f;
   outEvent->data1 = data1;
   outEvent->data2 = data2;
@@ -38,8 +41,9 @@ static const MidiBackend kDesktopBackend = {
   inputPortCount, inputPortName, outputPortCount, outputPortName,
   openInput, closeInput, openOutput, closeOutput,
   pollInput, scheduleOutput, flushOutputQueue, droppedCount, nowMicros,
+  nullptr, nullptr,
 #if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
-  1, 1, 0, 0, // hasInput, hasOutput, hasClockInput, hasClockOutput
+  1, 1, 1, 0, // hasInput, hasOutput, hasClockInput, hasClockOutput
 #else
   0, 0, 0, 0,
 #endif

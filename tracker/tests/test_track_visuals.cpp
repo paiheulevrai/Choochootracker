@@ -94,6 +94,40 @@ TEST_CASE_FIXTURE(VisualFixture, "Earlier per-layer settings retain modes and di
   CHECK_FALSE(blank(waveformDisplayGetBitmap(0))); // Audio's silent centre line remains visible.
 }
 
+TEST_CASE_FIXTURE(VisualFixture, "Boot screen defaults to original and persists the night option") {
+  { std::ofstream f(settingsPath); f << "themeName: ExistingTheme\n"; }
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.bootScreenNight == 0);
+  appSettings.bootScreenNight = 1;
+  REQUIRE(settingsSave() == 0);
+  initDefaultAppSettings();
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.bootScreenNight == 1);
+  CHECK(std::string(appSettings.themeName) == "ExistingTheme");
+  for (const char* value : {"-1", "2", "garbage"}) {
+    { std::ofstream f(settingsPath); f << "bootScreenNight: " << value << '\n'; }
+    REQUIRE(settingsLoad() == 0);
+    CHECK(appSettings.bootScreenNight == 0);
+  }
+}
+
+TEST_CASE_FIXTURE(VisualFixture, "Boot screen Graphics row toggles and saves without changing the theme") {
+  currentScreen = &screenGraphicsSettings;
+  screenGraphicsSettings.setup(0);
+  screenGraphicsSettings.fullRedraw();
+  ScreenData* table = mockScreenData;
+  REQUIRE(table != nullptr);
+  REQUIRE(table->onEdit(0, 6, CellEditAction::tap) == 1);
+  table->drawField(0, 6, CellState::focus);
+  CHECK(std::string(mockGfxCells[8], 11) == "Boot screen");
+  CHECK(std::string(mockGfxCells[8] + 23, 8) == "Night   ");
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.bootScreenNight == 1);
+  REQUIRE(table->onEdit(0, 6, CellEditAction::tap) == 1);
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.bootScreenNight == 0);
+}
+
 TEST_CASE_FIXTURE(VisualFixture, "One display choice switches each track and saves bulk choices") {
   currentScreen = &screenTrackVisuals;
   screenTrackVisuals.setup(0);
@@ -143,19 +177,19 @@ TEST_CASE_FIXTURE(VisualFixture, "AY Detailed display reads its own track and in
   chipnomadState->project.instruments[0].type = InstrumentType::AY1;
   auto& track = chipnomadState->uiPlaybackStatus.tracks[5];
   track.note.instrument = 0; track.note.pitchFinal = 48;
-  SoundChip* chip = chipnomadState->chips[5 / 3];
+  SoundChip* chip = chipnomadState->chips[5];
   REQUIRE(chip != nullptr);
-  chip->setRegister(7, 0x3f); chip->setRegister(10, 15);
+  chip->setRegister(7, 0x3f); chip->setRegister(8, 15);
   refreshWaveforms();
   Bitmap* bitmap = waveformDisplayGetBitmap(5);
   REQUIRE(bitmap != nullptr);
-  CHECK(bitmap->data[0] == 255); // Track 6's channel C on the second AY chip.
+  CHECK(bitmap->data[0] == 255); // Track 6's channel A on its own AY chip.
   CHECK(bitmap->data[bitmap->widthPixels] == 0);
-  chip->setRegister(7, 0x1f); // Noise only on channel C.
+  chip->setRegister(7, 0x37); // Noise only on channel A.
   refreshWaveforms();
   CHECK_FALSE(blank(waveformDisplayGetBitmap(5)));
   CHECK(bitmap->data[bitmap->widthPixels] > 0); // Noise texture below the trace.
-  chip->setRegister(7, 0x3b); chip->setRegister(10, 0x10); chip->setRegister(13, 0);
+  chip->setRegister(7, 0x3e); chip->setRegister(8, 0x10); chip->setRegister(13, 0);
   refreshWaveforms();
   bitmap = waveformDisplayGetBitmap(5);
   CHECK(std::count(bitmap->data, bitmap->data + bitmap->widthPixels * bitmap->heightPixels, 160) > 0);
@@ -198,4 +232,27 @@ TEST_CASE("Audio mini readout preserves narrow peaks and leaves padding clear") 
   std::fill_n(samples, 256, 0);
   renderTrackAudioWaveform(&bitmap, samples, 256);
   CHECK(pixels[11*16+5] == 64);
+}
+
+TEST_CASE_FIXTURE(VisualFixture, "Upstream Detailed display supports native chip voice monitors") {
+  const InstrumentType types[] = {InstrumentType::OPLL, InstrumentType::VRC7,
+    InstrumentType::OPL2, InstrumentType::OPL3, InstrumentType::DX7,
+    InstrumentType::GenesisFM, InstrumentType::ArcadeFM,
+    InstrumentType::SegaPSG, InstrumentType::GBPulse, InstrumentType::GBNoise};
+  auto& track = chipnomadState->uiPlaybackStatus.tracks[5];
+  track.note.instrument = 0;
+  track.note.pitchFinal = 48;
+  auto& voice = chipnomadState->voiceMonitors[5];
+  voice.active = 1;
+  voice.envelope = 0.5f;
+  for (int i = 0; i < VOICE_MONITOR_SAMPLES; ++i) voice.samples[i] = (i & 1) ? 0.5f : -0.5f;
+  for (auto type : types) {
+    CAPTURE((int)type);
+    chipnomadState->project.instruments[0].type = type;
+    refreshWaveforms();
+    auto* bitmap = waveformDisplayGetBitmap(5);
+    REQUIRE(bitmap != nullptr);
+    CHECK_FALSE(blank(bitmap));
+    CHECK(std::count(bitmap->data, bitmap->data + bitmap->widthPixels * bitmap->heightPixels, 160) > 0);
+  }
 }

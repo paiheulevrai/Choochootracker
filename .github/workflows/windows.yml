@@ -1,0 +1,53 @@
+name: Windows
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-SDL2
+            zip
+      - name: Build Windows package
+        run: |
+          export PATH=/ucrt64/bin:/usr/bin:$PATH
+          make -C tracker -j4 windows
+          mkdir -p releases
+          cd tracker/build/windows
+          # GITHUB_REF_NAME contains a slash on pull_request events ("NN/merge"),
+          # which breaks the zip output path. Sanitize it to a flat name.
+          ZIP_REF=$(echo "${GITHUB_REF_NAME:-manual}" | tr '/' '-')
+          strip --strip-unneeded choochootracker.exe
+          mapfile -t runtime_assets < <(find ../../packaging/common -mindepth 1 -maxdepth 1 -printf '%f\n')
+          zip -qr ../../../releases/ChooChooTracker-${ZIP_REF}-Windows.zip \
+            choochootracker.exe SDL2.dll libwinpthread-1.dll "${runtime_assets[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: choochootracker-windows
+          path: releases/*.zip
+          if-no-files-found: error

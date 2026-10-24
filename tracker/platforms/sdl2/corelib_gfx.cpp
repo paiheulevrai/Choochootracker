@@ -113,6 +113,15 @@ static int titleLogicalSizeActive = 0;
 static SDL_Texture* titleTexture = NULL;
 static void drawTrackerLabel(const char* text, int centerX, int y, int color);
 
+static Uint32 nativeTexturePixelFormat(void) {
+#ifdef MIYOOPORTS_BUILD
+  // MMIYOO documents ARGB8888 as its only confirmed correct 32-bit format.
+  return SDL_PIXELFORMAT_ARGB8888;
+#else
+  return SDL_PIXELFORMAT_RGBA8888;
+#endif
+}
+
 static void setTextureNearest(SDL_Texture* texture) {
 #if SDL_VERSION_ATLEAST(2, 0, 12)
   if (texture) SDL_SetTextureScaleMode(texture, SDL_ScaleModeNearest);
@@ -125,6 +134,16 @@ static void setTextureNearest(SDL_Texture* texture) {
 
 #ifndef WEB_BUILD
 static void useCompositionTarget(void) {
+#ifdef MIYOOPORTS_BUILD
+  // The MMIYOO backend does not reliably support render-target textures.
+  // Its physical display is already the tracker's native 640x480 canvas, so
+  // render straight to the window instead of composing through an offscreen
+  // texture. This also avoids a full-screen copy for every UI frame.
+  SDL_SetRenderTarget(renderer, NULL);
+  SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
+  SDL_RenderSetViewport(renderer, NULL);
+  SDL_RenderSetScale(renderer, 1.0f, 1.0f);
+#else
   SDL_SetRenderTarget(renderer, compositionTexture);
   // A render target already has the tracker canvas's native dimensions.
   // Do not inherit the physical window's logical viewport or scale after a
@@ -133,9 +152,14 @@ static void useCompositionTarget(void) {
   SDL_RenderSetLogicalSize(renderer, 0, 0);
   SDL_RenderSetViewport(renderer, NULL);
   SDL_RenderSetScale(renderer, 1.0f, 1.0f);
+#endif
 }
 
 static int createCompositionTexture(void) {
+#ifdef MIYOOPORTS_BUILD
+  useCompositionTarget();
+  return 1;
+#else
   compositionTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
     SDL_TEXTUREACCESS_TARGET, logicalW, logicalH);
   if (!compositionTexture) return 0;
@@ -145,6 +169,7 @@ static int createCompositionTexture(void) {
   setTextureNearest(compositionTexture);
   useCompositionTarget();
   return 1;
+#endif
 }
 
 static void destroyCompositionTexture(void) {
@@ -209,9 +234,15 @@ static void layoutVirtualPad(void) {
     dpadRightRect = (SDL_Rect){margin + dpadSize * 2 / 3, y + dpadSize / 3, dpadSize / 3, dpadSize / 3};
     aButtonRect = (SDL_Rect){actionX, y, actionSize, actionSize};
     bButtonRect = (SDL_Rect){leftActionX, y + actionSize + gap, actionSize, actionSize};
-    startButtonRect = (SDL_Rect){actionX, y + dpadSize - smallH, actionSize, smallH};
-    selectButtonRect = (SDL_Rect){leftActionX, y + actionSize * 2 + gap * 2, actionSize, smallH};
-    const int separatorY = selectButtonRect.y + selectButtonRect.h + gap * 2;
+    // Transport keys are one row below the play controls, rather than a
+    // staggered extension of the A/B diagonal.
+    const int controlsBottom = y + dpadSize > bButtonRect.y + bButtonRect.h
+      ? y + dpadSize : bButtonRect.y + bButtonRect.h;
+    const int transportY = controlsBottom + gap;
+    const int transportX = (layoutW - actionSize * 2 - gap) / 2;
+    selectButtonRect = (SDL_Rect){transportX, transportY, actionSize, smallH};
+    startButtonRect = (SDL_Rect){transportX + actionSize + gap, transportY, actionSize, smallH};
+    const int separatorY = transportY + smallH + gap * 2;
     const int stickSize = btnSize * 2;
     const int stickY = separatorY + gap * 2;
     leftStickRect = (SDL_Rect){margin, stickY, stickSize, stickSize};
@@ -227,20 +258,29 @@ static void layoutVirtualPad(void) {
     int dpadSize = sideBand - margin * 2;
     if (dpadSize > layoutH - margin * 2) dpadSize = layoutH - margin * 2;
     const int dpadY = (layoutH - dpadSize) / 2;
-    const int actionSize = btnSize + btnSize / 2;
+    // The diagonal B/A layout lets each button grow until B would touch the
+    // tracker canvas. Keep that boundary clear so the last tracker columns
+    // remain touchable.
+    const int layoutActionSize = btnSize + btnSize / 2;
+    int actionSize = btnSize * 2;
+    const int maxActionSize = (sideBand - margin - gap) / 2;
+    if (actionSize > maxActionSize) actionSize = maxActionSize;
     const int smallH = btnSize;
     const int actionRight = layoutW - margin - actionSize;
     const int actionLeft = actionRight - actionSize - gap;
-    const int y = (layoutH - (actionSize * 2 + gap * 3 + smallH * 2)) / 2;
+    // Start and Select retain the redesigned layout; only A and B grow.
+    const int y = (layoutH - (layoutActionSize * 2 + gap * 3 + smallH * 2)) / 2;
     dpadRect = (SDL_Rect){margin, dpadY, dpadSize, dpadSize};
     dpadUpRect = (SDL_Rect){margin + dpadSize / 3, dpadY, dpadSize / 3, dpadSize / 3};
     dpadDownRect = (SDL_Rect){margin + dpadSize / 3, dpadY + dpadSize * 2 / 3, dpadSize / 3, dpadSize / 3};
     dpadLeftRect = (SDL_Rect){margin, dpadY + dpadSize / 3, dpadSize / 3, dpadSize / 3};
     dpadRightRect = (SDL_Rect){margin + dpadSize * 2 / 3, dpadY + dpadSize / 3, dpadSize / 3, dpadSize / 3};
-    aButtonRect = (SDL_Rect){actionRight, y, actionSize, actionSize};
-    bButtonRect = (SDL_Rect){actionLeft, y + actionSize + gap, actionSize, actionSize};
-    startButtonRect = (SDL_Rect){actionRight, y + actionSize * 2 + gap * 2, actionSize, smallH};
-    selectButtonRect = (SDL_Rect){actionLeft, y + actionSize * 2 + gap * 3 + smallH, actionSize, smallH};
+    aButtonRect = (SDL_Rect){actionRight, dpadY, actionSize, actionSize};
+    bButtonRect = (SDL_Rect){actionLeft, dpadY + dpadSize - actionSize, actionSize, actionSize};
+    startButtonRect = (SDL_Rect){layoutW - margin - layoutActionSize,
+      y + layoutActionSize * 2 + gap * 2, layoutActionSize, smallH};
+    selectButtonRect = (SDL_Rect){layoutW - margin - layoutActionSize * 2 - gap,
+      y + layoutActionSize * 2 + gap * 3 + smallH, layoutActionSize, smallH};
     recButtonRect = delButtonRect = leftStickRect = rightStickRect = (SDL_Rect){0, 0, 0, 0};
   }
 }
@@ -251,7 +291,13 @@ GfxImage* gfxImageLoadBMP(const char* path) {
   if (!surface) return NULL;
   const int width = surface->w;
   const int height = surface->h;
-  SDL_Surface* rgba = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_RGBA32, 0);
+  SDL_Surface* rgba = SDL_ConvertSurfaceFormat(surface,
+#ifdef MIYOOPORTS_BUILD
+    SDL_PIXELFORMAT_ARGB8888,
+#else
+    SDL_PIXELFORMAT_RGBA32,
+#endif
+    0);
   SDL_FreeSurface(surface);
   if (!rgba) return NULL;
   uint8_t* pixels = (uint8_t*)rgba->pixels;
@@ -278,6 +324,22 @@ GfxImage* gfxImageLoadBMP(const char* path) {
   return image;
 }
 
+GfxImage* gfxImageCreateARGB(int width, int height) {
+  SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
+    SDL_TEXTUREACCESS_STREAMING, width, height);
+  if (!texture) return NULL;
+  GfxImage* image = (GfxImage*)malloc(sizeof(GfxImage));
+  if (!image) { SDL_DestroyTexture(texture); return NULL; }
+  image->texture = texture; image->width = width; image->height = height;
+  SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
+  setTextureNearest(texture);
+  return image;
+}
+
+int gfxImageUpdateARGB(GfxImage* image, const uint32_t* pixels) {
+  return image && pixels && SDL_UpdateTexture(image->texture, NULL, pixels, image->width * 4) == 0;
+}
+
 void gfxImageFree(GfxImage* image) {
   if (!image) return;
   SDL_DestroyTexture(image->texture);
@@ -299,7 +361,7 @@ void gfxImageDrawCrop(const GfxImage* image, int sourceX, int sourceY,
 void gfxTitleBegin(void) {
   if (!titleLogicalSizeActive) {
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
-    titleTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+    titleTexture = SDL_CreateTexture(renderer, nativeTexturePixelFormat(),
       SDL_TEXTUREACCESS_TARGET, 256, 224);
     if (!titleTexture) return;
     SDL_SetTextureBlendMode(titleTexture, SDL_BLENDMODE_NONE);
@@ -422,8 +484,14 @@ void gfxTitlePrint(int x, int y, const char* text) {
 void gfxToggleFullscreen(void) {
 #ifdef DESKTOP_BUILD
   const Uint32 flags = SDL_GetWindowFlags(window);
-  SDL_SetWindowFullscreen(window, flags & SDL_WINDOW_FULLSCREEN_DESKTOP
-    ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
+  if (SDL_SetWindowFullscreen(window, flags & SDL_WINDOW_FULLSCREEN_DESKTOP
+    ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP) == 0) {
+    // Windows can invalidate render targets during this transition without
+    // delivering a usable resize event until after the next present.
+    int width = 0, height = 0;
+    SDL_GetWindowSize(window, &width, &height);
+    gfxHandleResize(width, height);
+  }
 #endif
 }
 
@@ -436,8 +504,24 @@ static void createFontTexture(void) {
 
   int fontW = (currentResolution->charWidth + 7) / 8;  // Bytes per row
   const uint8_t* fontData = currentResolution->data;
+  int charsPerRow = 95;
+  int rows = 1;
 
-  fontTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, charW * 95, charH);
+#ifdef MIYOOPORTS_BUILD
+  // The MMIYOO renderer rejects textures wider or taller than 640x480. A
+  // single-row atlas is wider than that even for the smallest tracker font.
+  charsPerRow = 640 / charW;
+  if (charsPerRow < 1) return;
+  rows = (95 + charsPerRow - 1) / charsPerRow;
+  if (rows * charH > 480) return;
+#endif
+
+  fontTexture = SDL_CreateTexture(renderer, nativeTexturePixelFormat(),
+    SDL_TEXTUREACCESS_TARGET, charW * charsPerRow, charH * rows);
+  if (!fontTexture) {
+    fprintf(stderr, "Could not create font texture: %s\n", SDL_GetError());
+    return;
+  }
   SDL_SetTextureBlendMode(fontTexture, SDL_BLENDMODE_BLEND);
   setTextureNearest(fontTexture);
 
@@ -446,8 +530,9 @@ static void createFontTexture(void) {
   SDL_RenderClear(renderer);
 
   for (int ch = 0; ch < 95; ch++) {
-    int charX = ch * charW;
-    charRects[ch] = (SDL_Rect){charX, 0, charW, charH};
+    int charX = (ch % charsPerRow) * charW;
+    int charY = (ch / charsPerRow) * charH;
+    charRects[ch] = (SDL_Rect){charX, charY, charW, charH};
 
     for (int l = 0; l < charH; l++) {
       for (int c = 0; c < fontW; c++) {
@@ -458,7 +543,7 @@ static void createFontTexture(void) {
         for (int b = 0; b < bitsToDraw; b++) {
           if (fontByte & mask) {
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-            SDL_RenderDrawPoint(renderer, charX + c * 8 + b, l);
+            SDL_RenderDrawPoint(renderer, charX + c * 8 + b, charY + l);
           }
           mask >>= 1;
         }
@@ -806,6 +891,12 @@ void gfxUpdateScreen(void) {
 #endif
   if (isDirty) {
 #ifndef WEB_BUILD
+#ifdef MIYOOPORTS_BUILD
+    // Rendering already happened on the MMIYOO window framebuffer; copying
+    // through a texture here corrupts alpha bitmap previews on this backend.
+    SDL_RenderPresent(renderer);
+    useCompositionTarget();
+#else
     SDL_SetRenderTarget(renderer, NULL);
     setColor(bgColor);
     SDL_RenderClear(renderer);
@@ -821,6 +912,7 @@ void gfxUpdateScreen(void) {
     gfxDrawHUD();
     SDL_RenderPresent(renderer);
     useCompositionTarget();
+#endif
 #else
     gfxDrawHUD();
     SDL_RenderPresent(renderer);
@@ -874,7 +966,7 @@ Bitmap* gfxBitmapCreate(int widthChars, int heightChars) {
   // Create SDL texture for hardware-accelerated rendering
   SDL_Texture* texture = SDL_CreateTexture(
     renderer,
-    SDL_PIXELFORMAT_RGBA8888,
+    nativeTexturePixelFormat(),
     SDL_TEXTUREACCESS_STREAMING,
     bitmap->widthPixels,
     bitmap->heightPixels
@@ -924,7 +1016,12 @@ void gfxDrawBitmap(Bitmap* bitmap, int col, int row) {
     for (int y = 0; y < bitmap->heightPixels; y++) {
       for (int x = 0; x < bitmap->widthPixels; x++) {
         uint8_t alpha = bitmap->data[y * bitmap->widthPixels + x];
+#ifdef MIYOOPORTS_BUILD
+        pixelData[y * (pitch / 4) + x] = ((uint32_t)alpha << 24) |
+          ((uint32_t)fgR << 16) | ((uint32_t)fgG << 8) | fgB;
+#else
         pixelData[y * (pitch / 4) + x] = (fgR << 24) | (fgG << 16) | (fgB << 8) | alpha;
+#endif
       }
     }
 
@@ -995,7 +1092,6 @@ void gfxHandleResize(int width, int height) {
   screenW = 640;
   screenH = 480;
 #else
-  if (width == screenW && height == screenH) return;
   screenW = width;
   screenH = height;
 #endif
@@ -1005,10 +1101,11 @@ void gfxHandleResize(int width, int height) {
   SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
 #endif
 #ifndef WEB_BUILD
-  if (compositionTexture && (compositionW != logicalW || compositionH != logicalH)) {
-    destroyCompositionTexture();
-    if (!createCompositionTexture()) return;
-  }
+  // A fullscreen transition can invalidate SDL render targets even when its
+  // reported client size is unchanged.  Recreate our cached frame for every
+  // desktop resize event rather than presenting the old target.
+  destroyCompositionTexture();
+  if (!createCompositionTexture()) return;
 #endif
   gfxReloadFont();
 #ifdef TOUCH_INPUT
@@ -1064,6 +1161,15 @@ int gfxGetTouchGridPosition(int physicalX, int physicalY, int* col, int* row) {
       physicalX >= viewport.x + viewport.w || physicalY >= viewport.y + viewport.h) return 0;
   logicalX = (physicalX - viewport.x) * logicalW / viewport.w;
   logicalY = (physicalY - viewport.y) * logicalH / viewport.h;
+#elif defined(WEB_BUILD)
+  // SDL can report browser pointer positions in HiDPI backing-store pixels.
+  // Convert back into the fixed tracker logical coordinate system before hit testing.
+  int outputW = 0, outputH = 0;
+  if (renderer) SDL_GetRendererOutputSize(renderer, &outputW, &outputH);
+  if (outputW > 0 && outputH > 0) {
+    logicalX = physicalX * logicalW / outputW;
+    logicalY = physicalY * logicalH / outputH;
+  }
 #endif
   if (!charW || !charH || logicalX < offsetX || logicalY < offsetY) return 0;
   int gridX = (logicalX - offsetX) / charW;

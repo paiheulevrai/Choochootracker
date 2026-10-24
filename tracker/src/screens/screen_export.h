@@ -6,8 +6,19 @@
 
 // Common rows on the export screen:
 // 0 start row, 1 WAV (song/stems), 2 sample rate, 3 bit depth,
-// 4 folder, 5 MIDI
+// 4 folder, 5 MIDI, 6 M8S and 7 LSDJ (desktop and Android)
+#ifdef DESKTOP_BUILD
+#define SCR_EXPORT_ROWS (8) // includes the M8S and LSDJ rows
+#define EXPORT_ROW_LSDJ (7)
+#elif defined(ANDROID_BUILD)
+#define SCR_EXPORT_ROWS (7) // includes the LSDJ row, no M8S
+#define EXPORT_ROW_LSDJ (6)
+#else
 #define SCR_EXPORT_ROWS (6)
+#endif
+#ifdef EXPORT_ROW_LSDJ
+#define EXPORT_HAS_LSDJ
+#endif
 
 // Rows on the bounce-to-sample screen:
 // 0 file name, 1 sample rate, 2 bit depth, 3-5 name prefix checkboxes,

@@ -18,3 +18,26 @@ transparent entry inside their visible bounds. The title deliberately does not
 impose total OAM, per-scanline sprite, tile, or pixel budgets. Run
 `python scripts/validate_snes_title.py` with the bundled Emscripten Python to
 check the exported assets.
+
+## Optional night title
+
+Graphics → Boot screen selects Original (default) or Night on the next title
+screen. Night retains the original assets' dimensions, silhouettes, seams and
+scroll speeds. No generated landscape transitions are used. The palette
+compresses bright highlights and dark shadows into muted blue-gray tones;
+`night_mountains.bmp` removes only the old sky above the mountain silhouette.
+Regenerate these variants with `node scripts/prepare_night_title.mjs`.
+
+The sky is generated entirely from seeded, layered noise and 1,100 stars in
+`title_night_sky.h`, with ordered pixel dithering, subtle twinkles and localized
+lavender highlights. Three slow depth orbits and evolving gas wisps repeat
+exactly after four minutes. There is no static sky texture or generated seam.
+The 256×224 galaxy targets 10 Hz through one reusable image upload. Pixel
+generation is spread across draws, with only finished images uploaded, avoiding
+a full galaxy calculation on any one animation frame; scenery
+and fourteen brief shooting stars per four-minute cycle retain the original
+title drawing cadence. `night_meteor.bmp` supplies the eight-color trail palette.
+All sky buffers are allocated when Night opens and released when leaving for
+the tracker. The original scenery and train keep their independent loops;
+only the existing one-time startup fade is used. Incomplete night packages
+fall back to Original without changing the saved preference.

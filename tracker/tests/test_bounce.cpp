@@ -66,7 +66,7 @@ static void buildNoteRows(BounceFixture& f, int rows) {
   for (int r = 0; r < rows; r++) {
     f.state->project.phrases[0].rows[r].note = 48; // C-4
     f.state->project.phrases[0].rows[r].instrument = 0;
-    f.state->project.phrases[0].rows[r].volume = 15;
+    f.state->project.phrases[0].rows[r].volume = PHRASE_VOLUME_MAX;
   }
   f.state->project.chains[0].rows[0].phrase = 0;
   f.state->project.song[0][0] = 0;
@@ -214,7 +214,7 @@ TEST_CASE_FIXTURE(BounceFixture, "stopRange kills the sounding note at the bound
   // chipnomadRender writes interleaved stereo: samples * 2 floats
   float tail[512];
   int tailRendered = chipnomadRender(state, tail, 256);
-  CHECK(tailRendered == 256);
+  CHECK(tailRendered == 0); // Idle rendering must not resume a stale tick.
   for (int i = 0; i < 256 * 2; i++) {
     CHECK(tail[i] == 0.0f);
   }
@@ -330,7 +330,7 @@ TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV renders phrase selection 
   selection.endPhraseRow = 3; // 4 rows
   selection.trackMask = 1;
 
-  ExporterSelectionWAV exporter("/tmp/test_bounce_phrase.wav", &state->project, selection, 44100, 16, 1.0f);
+  ExporterSelectionWAV exporter("test_bounce_phrase.wav", &state->project, selection, 44100, 16, 1.0f);
 
   // 4 rows * 6 ticks/row * (44100/50) samples/tick = 21204 samples
   int expectedSamples = 4 * 6 * (44100 / 50);
@@ -341,7 +341,7 @@ TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV renders phrase selection 
   }
   exporter.finish();
 
-  FILE* file = fopen("/tmp/test_bounce_phrase.wav", "rb");
+  FILE* file = fopen("test_bounce_phrase.wav", "rb");
   REQUIRE(file != NULL);
   uint8_t header[44];
   REQUIRE(fread(header, 1, 44, file) == 44);
@@ -351,7 +351,7 @@ TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV renders phrase selection 
   long fileSize = ftell(file);
   CHECK(fileSize == 44 + (long)dataSize);
   fclose(file);
-  remove("/tmp/test_bounce_phrase.wav");
+  remove("test_bounce_phrase.wav");
 }
 
 TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV mutes unselected tracks") {
@@ -367,7 +367,7 @@ TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV mutes unselected tracks")
   for (int r = 0; r < 16; r++) {
     state->project.phrases[1].rows[r].note = 48;
     state->project.phrases[1].rows[r].instrument = 0;
-    state->project.phrases[1].rows[r].volume = 15;
+    state->project.phrases[1].rows[r].volume = PHRASE_VOLUME_MAX;
   }
   state->project.chains[0].rows[0].phrase = 0;
   state->project.chains[1].rows[0].phrase = 1;
@@ -385,14 +385,14 @@ TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV mutes unselected tracks")
   selection.trackMask = 0x01; // Only track 0 (silent phrase)
 
   {
-    ExporterSelectionWAV exporter("/tmp/test_bounce_mute.wav", &state->project, selection, 44100, 16, 1.0f);
+    ExporterSelectionWAV exporter("test_bounce_mute.wav", &state->project, selection, 44100, 16, 1.0f);
     while (exporter.next() != -1) {}
     exporter.finish();
   }
 
   // The whole mix must be silent: track 1 (the only one with notes) is muted
   float maxAbs = 0.0f;
-  FILE* file = fopen("/tmp/test_bounce_mute.wav", "rb");
+  FILE* file = fopen("test_bounce_mute.wav", "rb");
   REQUIRE(file != NULL);
   fseek(file, 0, SEEK_END);
   long fileSize = ftell(file);
@@ -407,16 +407,16 @@ TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV mutes unselected tracks")
   }
   free(samples);
   CHECK(maxAbs < 1e-5f);
-  remove("/tmp/test_bounce_mute.wav");
+  remove("test_bounce_mute.wav");
 
   // Positive control: selecting track 1 instead produces sound
   selection.trackMask = 0x02;
   {
-    ExporterSelectionWAV exporter("/tmp/test_bounce_unmuted.wav", &state->project, selection, 44100, 16, 1.0f);
+    ExporterSelectionWAV exporter("test_bounce_unmuted.wav", &state->project, selection, 44100, 16, 1.0f);
     while (exporter.next() != -1) {}
     exporter.finish();
   }
-  file = fopen("/tmp/test_bounce_unmuted.wav", "rb");
+  file = fopen("test_bounce_unmuted.wav", "rb");
   REQUIRE(file != NULL);
   fseek(file, 0, SEEK_END);
   fileSize = ftell(file);
@@ -432,7 +432,7 @@ TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV mutes unselected tracks")
   }
   free(samples);
   CHECK(maxAbs > 0.01f);
-  remove("/tmp/test_bounce_unmuted.wav");
+  remove("test_bounce_unmuted.wav");
 }
 
 TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV empty selection produces a valid empty WAV") {
@@ -442,20 +442,20 @@ TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV empty selection produces 
   // No track started: song row points at an empty song cell
   state->project.song[0][0] = EMPTY_VALUE_16;
 
-  ExporterSelectionWAV exporter("/tmp/test_bounce_empty.wav", &state->project, selection, 44100, 16, 1.0f);
+  ExporterSelectionWAV exporter("test_bounce_empty.wav", &state->project, selection, 44100, 16, 1.0f);
 
   int seconds = exporter.next();
   CHECK(seconds == -1);
   exporter.finish();
 
-  FILE* file = fopen("/tmp/test_bounce_empty.wav", "rb");
+  FILE* file = fopen("test_bounce_empty.wav", "rb");
   REQUIRE(file != NULL);
   uint8_t header[44];
   REQUIRE(fread(header, 1, 44, file) == 44);
   uint32_t dataSize = header[40] | (header[41] << 8) | (header[42] << 16) | ((uint32_t)header[43] << 24);
   CHECK(dataSize == 0);
   fclose(file);
-  remove("/tmp/test_bounce_empty.wav");
+  remove("test_bounce_empty.wav");
 }
 
 // Reads the peak absolute sample value from a 16-bit stereo WAV file
@@ -493,7 +493,7 @@ TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV starts tracks that enter 
   for (int r = 0; r < 16; r++) {
     state->project.phrases[1].rows[r].note = 48;
     state->project.phrases[1].rows[r].instrument = 0;
-    state->project.phrases[1].rows[r].volume = 15;
+    state->project.phrases[1].rows[r].volume = PHRASE_VOLUME_MAX;
   }
   state->project.chains[0].rows[0].phrase = 0;
   state->project.chains[1].rows[0].phrase = 1;
@@ -511,29 +511,29 @@ TEST_CASE_FIXTURE(BounceFixture, "ExporterSelectionWAV starts tracks that enter 
   selection.trackMask = 0x03; // Both tracks
 
   {
-    ExporterSelectionWAV exporter("/tmp/test_bounce_late.wav", &state->project, selection, 44100, 16, 1.0f);
+    ExporterSelectionWAV exporter("test_bounce_late.wav", &state->project, selection, 44100, 16, 1.0f);
     while (exporter.next() != -1) {}
     exporter.finish();
   }
 
   // Track 1's notes must be present in the mix
-  float maxAbs = readWavMaxAbs("/tmp/test_bounce_late.wav");
+  float maxAbs = readWavMaxAbs("test_bounce_late.wav");
   REQUIRE(maxAbs >= 0.0f);
   CHECK(maxAbs > 0.01f);
-  remove("/tmp/test_bounce_late.wav");
+  remove("test_bounce_late.wav");
 
   // Control: selecting only track 0 (empty phrase) produces silence, proving
   // the sound above comes from track 1's late-entering chain
   selection.trackMask = 0x01;
   {
-    ExporterSelectionWAV exporter("/tmp/test_bounce_late_ctrl.wav", &state->project, selection, 44100, 16, 1.0f);
+    ExporterSelectionWAV exporter("test_bounce_late_ctrl.wav", &state->project, selection, 44100, 16, 1.0f);
     while (exporter.next() != -1) {}
     exporter.finish();
   }
-  maxAbs = readWavMaxAbs("/tmp/test_bounce_late_ctrl.wav");
+  maxAbs = readWavMaxAbs("test_bounce_late_ctrl.wav");
   REQUIRE(maxAbs >= 0.0f);
   CHECK(maxAbs < 1e-5f);
-  remove("/tmp/test_bounce_late_ctrl.wav");
+  remove("test_bounce_late_ctrl.wav");
 }
 
 TEST_CASE_FIXTURE(BounceFixture, "exportSelectionLengthRows phrase level") {

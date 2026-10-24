@@ -48,17 +48,22 @@ struct PlaybackNoteState {
   uint8_t accent;
 
   uint8_t pitchFinal; // Calculated pitch value
+  uint8_t sequencePitch; // Requested pitch before a Sequence PITCH bypass
   int8_t pitchOffset; // Pitch offset (semitones)
   int16_t fineOffset; // Fine pitch offset (cents or periods, depending on linearPitch setting)
   int16_t periodOffset; // Period offset
   uint8_t volume1; // Instrument volume
   uint8_t volume2; // Instrument table volume
   uint8_t volume3; // Aux table volume
-  int8_t volumeOffset; // Volume offset
+  int16_t volumeOffset; // Phrase-volume offset in the 0-127 domain
+  uint8_t sequenceVolume; // Requested phrase volume before a Sequence VOL bypass
 
   PlaybackTableState instrumentTable;
   PlaybackTableState auxTable;
-  PlaybackFXState fx[256]; // Active FX on this note, indexed by FX enum
+  NativeFMValues nativeFM;
+  NativeFMValues nativeFMCurrent;
+  NativeFMValues nativeFMRemaining;
+  PlaybackFXState fx[fxTotalCount]; // Active FX on this note, indexed by FX ID
 
   PlaybackModState modulation[4]; // Modulation states
 
@@ -91,6 +96,9 @@ struct PlaybackTrackState {
 
   int frameCounter;
 
+  InsertAutomation inserts;
+  uint32_t insertReset;
+
   // Persistent sequencer FX state
   uint8_t speedRatio;
   uint32_t speedPhase;
@@ -120,6 +128,39 @@ struct PlaybackTrackState {
   // engine, which is the only layer that knows about real MIDI I/O.
   uint8_t midiCCPending[4];
   uint8_t midiCCValue[4];
+
+  // One-shot full-sample preview of a LAZY sample (kStartPhraseRowFull):
+  // forces sliceCount 0 in updateSampleVoices so the voice plays the whole
+  // region instead of mapping the row's note to a slice, and skips the
+  // note transposition so the sample plays at its original pitch and
+  // speed. Cleared by resetTrack so every stop path restores normal slice
+  // mapping.
+  uint8_t sliceBypass;
+
+  // RNS (random slice) runtime state: the picked slice index (0-based,
+  // valid only when rnsSeeded is set), whether a pick is currently
+  // held, and the last raw FX value seen (used to detect value changes
+  // for mode 02, pick and keep). Mode 02 holds the pick until the FX
+  // value changes or the track resets; modes 00/01 re-pick per row /
+  // per PLAY.
+  uint8_t rnsSlice;
+  uint8_t rnsSeeded;
+  uint8_t rnsLastValue;
+
+  // RNN (random note) runtime state: the picked note (valid only when
+  // rnnSeeded is set) and the last raw FX value seen, used to detect
+  // value changes for mode 02 (pick and keep).
+  uint8_t rnnPickedNote;
+  uint8_t rnnSeeded;
+  uint8_t rnnLastValue;
+};
+
+int playbackSequenceBypasses(const PlaybackTrackState* track, SequenceSource source);
+int16_t playbackSequenceGateOutput(const Modulation* modulation, uint32_t ticks);
+
+struct MidiCCRuntime {
+  uint8_t active;
+  uint8_t value;
 };
 
 struct PlaybackAYChipState {
@@ -170,6 +211,7 @@ struct PlaybackState {
   uint8_t scaleRoot;
   ScalePreset scalePreset;
   uint8_t scaleFXCommandSeen;
+  MidiCCRuntime midiCC[PROJECT_MAX_INSTRUMENTS][16];
 };
 
 // FX typedefs

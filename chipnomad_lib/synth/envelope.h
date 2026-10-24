@@ -17,8 +17,22 @@ class Envelope {
     release_ = release < 0.0f ? 0.0f : release;
     shape_ = shape;
   }
-  void noteOn() { level_ = 0.0f; enter(Stage::attack); }
+  // A retrigger resumes from the instantaneous level. Resetting to zero here
+  // creates a full-scale step when a monophonic voice receives consecutive notes.
+  void noteOn() { enter(Stage::attack); }
   void noteOff() { if (stage_ != Stage::idle) enter(Stage::release); }
+  // Used by live sample-envelope controls; keep the current level on retiming.
+  void updateDecaySustain(float decay, float sustain) {
+    if (decay_==decay && sustain_==sustain) return;
+    decay_=decay; sustain_=sustain;
+    if (stage_==Stage::decay) enter(Stage::decay);
+    else if (stage_==Stage::sustain) level_=sustain_;
+  }
+  void updateRelease(float release) {
+    if (release_==release) return;
+    release_=release;
+    if (stage_==Stage::release) enter(Stage::release);
+  }
   void kill() { stage_ = Stage::idle; level_ = 0.0f; start_ = 0.0f; samplesLeft_ = 0; }
   float next() {
     if (samplesLeft_) {
@@ -33,6 +47,7 @@ class Envelope {
     }
     return level_;
   }
+  Stage stage() const { return stage_; }
   bool active() const { return stage_ != Stage::idle; }
   float level() const { return level_; }
 
@@ -61,11 +76,6 @@ class Envelope {
   uint32_t samplesLeft_ = 0, samplesTotal_ = 0;
   uint8_t shape_ = 0x80;
   Stage stage_ = Stage::idle;
-};
-
-class PlaitsEnvelope : public Envelope {
- public:
-  void noteOn() { enter(Stage::attack); }  // Preserve the current VCA level on retrigger.
 };
 
 #endif

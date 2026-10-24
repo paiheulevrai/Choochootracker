@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <memory>
 #include <ctype.h>
 #include <chipnomad_lib.h>
 #include <corelib/corelib_file.h>
@@ -325,7 +326,7 @@ static void processChannelRow(Project* project, PhraseRow* phraseRow,
                      realLastGroove, startSpeedGroove, isFirstPattern, phraseNum, row);
 
   while (fxSlot < MAX_FX_SLOTS) {
-    phraseRow->fx[fxSlot][0] = EMPTY_VALUE_8;
+    phraseRow->fx[fxSlot].command = FX_ID_EMPTY;
     phraseRow->fx[fxSlot][1] = 0;
     fxSlot++;
   }
@@ -975,7 +976,7 @@ static int cloneInstrumentsForEnvelopes(Project* project, const InstrumentEnvelo
         emptyTable.rows[row].pitchOffset = 0;
         emptyTable.rows[row].volume = EMPTY_VALUE_8;
         for (int fx = 0; fx < 4; fx++) {
-          emptyTable.rows[row].fx[fx][0] = EMPTY_VALUE_8;
+          emptyTable.rows[row].fx[fx].command = FX_ID_EMPTY;
           emptyTable.rows[row].fx[fx][1] = 0;
         }
       }
@@ -998,7 +999,8 @@ int projectLoadVT2(Project* destination, const char* path) {
     return 1;
   }
 
-  Project p;
+  auto owned = std::make_unique<Project>();
+  Project& p = *owned;
   projectInitAY(&p);
 
   Project* project = &p;

@@ -33,6 +33,10 @@ enum Key {
 enum GamepadInputCode {
   gamepadTriggerLeft = 0x1000,
   gamepadTriggerRight,
+  // Generic numbered buttons (Android KEYCODE_BUTTON_1..16): code is
+  // gamepadExtraButton + n - 1, so any pad can be mapped by the user.
+  gamepadExtraButton = 0x2000,
+  gamepadExtraButtonCount = 16,
 };
 
 // Initialize default key mappings based on platform/keyboard layout

@@ -1,0 +1,2 @@
+kind,rate,frames,notes,seconds,mean_us,p50_us,p95_us,p99_us,worst_us,deadline_misses,part_bytes
+FM-heavy song+FX,48000,512,8,600,2095.928,2013.179,2903.271,2938.673,4409.223,0,782032

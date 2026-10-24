@@ -1,0 +1,21 @@
+Taktful - audio analysis library (BPM, key, note presence)
+https://github.com/am0k161/Taktful
+Commit: b6b4e0d ("note presence") + reconstructed include/taktful/notes.h
+        (missing from the upstream commit; rebuilt from src/notes.cpp and
+        cli/analyze_wav.cpp usage, verified against the upstream test suite)
+License: MIT (see LICENSE)
+
+Vendored files:
+  include/taktful/*.h   public API headers (13 files)
+  src/*.cpp, src/simd.h library implementation (11 translation units)
+  data/ref_profiles.h   key-profile tables included by src/key.cpp (-Idata)
+
+Not vendored: cli/, tests/, docs/, third_party/ (kiss_fft placeholder only),
+.github/, create_test_wav.cpp, prebuilt notes_probe binary.
+
+Build notes:
+  - Compile with -I<dir>/include -I<dir>/data (key.cpp includes ref_profiles.h).
+  - C++14 or later; NEON paths auto-enable when __ARM_NEON is defined
+    (aarch64 builds get them by default); TAKTFUL_ENABLE_NEON=0 forces scalar.
+  - Do not define TAKTFUL_USE_KISSFFT: third_party/kiss_fft is a placeholder
+    with no code; the built-in radix-2 FFT is used instead.

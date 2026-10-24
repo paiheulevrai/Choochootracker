@@ -7,6 +7,13 @@ class TrackTilt {
  public:
   void init(float sampleRate);
   float process(float input, int channel, uint8_t value, uint16_t pivotHz);
+  bool isNeutral(uint8_t value, uint16_t pivotHz) const {
+    return value == 0x80 && value_ == value && pivotHz_ == pivotHz && !smoothing_;
+  }
+  float passThrough(float input, int channel) {
+    lowpass_[channel & 1] = input;
+    return input;
+  }
 
  private:
   void update(uint8_t value, uint16_t pivotHz);

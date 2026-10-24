@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "playback_internal.h"
+#include "synth/sample_voice.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -30,7 +31,7 @@ static uint32_t nextConditionRandom(PlaybackTrackState* track) {
 static int phraseRowConditionsPass(PlaybackTrackState* track, PhraseRow* row, int rowIdx) {
   uint32_t visit = ++track->conditionVisits[rowIdx & 15];
   for (int i = 0; i < 3; ++i) {
-    uint8_t type = row->fx[i][0];
+    FXId type = row->fx[i].command;
     uint8_t value = row->fx[i][1];
     if (type == fxPRO) {
       if (value > 100) value = 100;
@@ -55,6 +56,9 @@ static void resetTableFXAuxState(PlaybackTableState* tableState) {
 
 static void resetNoteFX(PlaybackState* state, int trackIdx) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
+  track->note.nativeFM = {};
+  track->note.nativeFMCurrent = {};
+  track->note.nativeFMRemaining = {};
   for (int i = 0; i < fxTotalCount; i++) {
     track->note.fx[i].isOn = 0;
     track->note.fx[i].counter = 0;
@@ -63,6 +67,11 @@ static void resetNoteFX(PlaybackState* state, int trackIdx) {
 }
 
 static void resetInstrumentFX(PlaybackTrackState* track) {
+  for (int i=fxMUV; i<=fxMLV; ++i) track->note.fx[i].isOn=0;
+  for (int i=fxFPT; i<=fxFSU; ++i) track->note.fx[i].isOn=0;
+  track->note.nativeFM = {};
+  track->note.nativeFMCurrent = {};
+  track->note.nativeFMRemaining = {};
   for (int i = fxBMD; i <= fxPRS; i++) track->note.fx[i].isOn = 0;
   for (int i = fxRSN; i <= fxTCL; i++) track->note.fx[i].isOn = 0;
   for (int i = fxASL; i <= fxATY; ++i) track->note.fx[i].isOn = 0;
@@ -93,10 +102,12 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
 
   track->note.pitchBase = EMPTY_VALUE_8;
   track->note.pitchFinal = EMPTY_VALUE_8;
+  track->note.sequencePitch = 0;
   track->note.pitchOffset = 0;
   track->note.fineOffset = 0;
   track->note.instrument = EMPTY_VALUE_8;
   track->note.volume = 0;
+  track->note.sequenceVolume = 0;
   track->note.noteTriggered = 0;
   track->note.noteReleased = 0;
   track->note.noteKilled = 0;
@@ -113,6 +124,13 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   track->note.auxTable.tableIdx = EMPTY_VALUE_8;
   track->mode = PlaybackMode::stopped;
   track->queue.liveAction = LiveQueueAction::none;
+  track->sliceBypass = 0;
+  track->rnsSeeded = 0;
+  track->rnsSlice = 0;
+  track->rnsLastValue = 0xFF;
+  track->rnnSeeded = 0;
+  track->rnnPickedNote = EMPTY_VALUE_8;
+  track->rnnLastValue = 0xFF;
 
   resetNoteFX(state, trackIdx);
 
@@ -124,6 +142,17 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   memset(&track->currentPhraseRow, EMPTY_VALUE_8, sizeof(track->currentPhraseRow));
 
   resetTrackAY(state, trackIdx);
+}
+
+int playbackSequenceBypasses(const PlaybackTrackState* track, SequenceSource source) {
+  if (!track || track->note.instrument == EMPTY_VALUE_8) return 0;
+  for (const PlaybackModState& state : track->note.modulation) {
+    const Modulation* mod = state.modulation;
+    if (mod && mod->destination != 0 && mod->type == ModulationType::Sequence &&
+        mod->p1 == static_cast<uint8_t>(source) &&
+        mod->p2 == static_cast<uint8_t>(SequenceMode::bypass)) return 1;
+  }
+  return 0;
 }
 
 void tableInit(PlaybackState* state, int trackIdx, struct PlaybackTableState* table, int tableIdx, int row, int speed) {
@@ -163,13 +192,13 @@ void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* 
   Project* p = state->p;
 
   int tableRow = table->rows[fxIdx];
-  uint8_t fxType = p->tables[tableIdx].rows[tableRow].fx[fxIdx][0];
+  FXId fxType = p->tables[tableIdx].rows[tableRow].fx[fxIdx].command;
   if (fxType == fxTBL) {
     tableInit(state, trackIdx, &state->tracks[trackIdx].note.instrumentTable, p->tables[tableIdx].rows[tableRow].fx[fxIdx][1], 0, 1);
   } else if (fxType == fxTBX) {
     tableInit(state, trackIdx, &state->tracks[trackIdx].note.auxTable, p->tables[tableIdx].rows[tableRow].fx[fxIdx][1], 0, 1);
   } else {
-    initFX(state, trackIdx, p->tables[tableIdx].rows[tableRow].fx[fxIdx], table, fxIdx);
+    initFX(state, trackIdx, &p->tables[tableIdx].rows[tableRow].fx[fxIdx], table, fxIdx);
   }
 }
 
@@ -200,7 +229,7 @@ static void tableProgress(PlaybackState* state, int trackIdx, struct PlaybackTab
       }
 
       // Check HOP on current row pointing to same row
-      uint8_t fxType = p->tables[table->tableIdx].rows[row].fx[i][0];
+      FXId fxType = p->tables[table->tableIdx].rows[row].fx[i].command;
       uint8_t fxValue = p->tables[table->tableIdx].rows[row].fx[i][1];
 
       if (fxType == fxHOP && (fxValue & 0xf) == row) {
@@ -247,7 +276,7 @@ static void tableProgress(PlaybackState* state, int trackIdx, struct PlaybackTab
       }
 
       // Check HOP on new row
-      fxType = p->tables[table->tableIdx].rows[row].fx[i][0];
+      fxType = p->tables[table->tableIdx].rows[row].fx[i].command;
       fxValue = p->tables[table->tableIdx].rows[row].fx[i][1];
 
       if (fxType == fxHOP) {
@@ -296,7 +325,7 @@ void handleNoteOff(PlaybackState* state, int trackIdx) {
   track->note.noteReleased = 1;
 
   int isModernVoice = instType == InstrumentType::Braids ||
-    instType == InstrumentType::Plaits || instType == InstrumentType::PlaitsAlt || instType == InstrumentType::Sample ||
+    instType == InstrumentType::SoundFont || instType == InstrumentType::Plaits || instType == InstrumentType::PlaitsAlt || instType == InstrumentType::Sample ||
     instType == InstrumentType::DrumSynth || instType == InstrumentType::MME || instType == InstrumentType::Sintered;
 
   int hasVolumeADSR = 0;
@@ -340,12 +369,18 @@ static void initModulations(PlaybackState* state, int trackIdx, uint8_t oldInstr
   for (int i = 0; i < 4; i++) {
     const Modulation* mod = &mods[i];
 
-    // Free and structural LFOs keep their phase across notes.
-    int keepsPhase = ((mod->type == ModulationType::LFO || mod->type == ModulationType::SLFO) &&
+    // Free and structural LFOs, and rhythmic gates with matching triggers,
+    // keep their phase across notes.
+    int keepsPhase = (modulationIsTickLFO(mod->type) &&
                       (mod->p2 == static_cast<uint8_t>(LFOTrigger::free) ||
                        mod->p2 == static_cast<uint8_t>(LFOTrigger::phrase) ||
                        mod->p2 == static_cast<uint8_t>(LFOTrigger::chain))) ||
-                     (mod->type == ModulationType::FLFO && mod->p2 == static_cast<uint8_t>(LFOTrigger::free));
+                     (mod->type == ModulationType::FLFO && mod->p2 == static_cast<uint8_t>(LFOTrigger::free)) ||
+                     (mod->type == ModulationType::Sequence &&
+                      mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) &&
+                      (sequenceGateTrigger(mod) == SequenceGateTrigger::free ||
+                       sequenceGateTrigger(mod) == SequenceGateTrigger::phrase ||
+                       sequenceGateTrigger(mod) == SequenceGateTrigger::chain));
 
     // Initialize modulation if:
     // 1. Instrument changed (always reinit), OR
@@ -362,6 +397,13 @@ static void restartStructuralLFOs(PlaybackState* state, int trackIdx, int entere
   for (int i = 0; i < 4; ++i) {
     PlaybackModState* mod = &track->note.modulation[i];
     if (!mod->modulation) continue;
+    if (mod->modulation->type == ModulationType::Sequence) {
+      if (mod->modulation->p1 != static_cast<uint8_t>(SequenceSource::tranceGate)) continue;
+      SequenceGateTrigger trigger = sequenceGateTrigger(mod->modulation);
+      if ((enteredPhrase && trigger == SequenceGateTrigger::phrase) ||
+          (enteredChain && trigger == SequenceGateTrigger::chain)) playbackModRestart(mod);
+      continue;
+    }
     uint8_t trigger = (uint8_t)clampInt16((int16_t)mod->modulation->p2 + mod->p2Offset, 0, 255);
     if ((enteredPhrase && trigger == static_cast<uint8_t>(LFOTrigger::phrase)) ||
         (enteredChain && trigger == static_cast<uint8_t>(LFOTrigger::chain))) {
@@ -380,9 +422,9 @@ static void restartStructuralLFOs(PlaybackState* state, int trackIdx, int entere
   }
 }
 
-static int rowHasFX(const PhraseRow* row, uint8_t fx) {
+static int rowHasFX(const PhraseRow* row, FXId fx) {
   for (int i = 0; i < 3; ++i)
-    if (row->fx[i][0] == fx) return 1;
+    if (row->fx[i].command == fx) return 1;
   return 0;
 }
 
@@ -427,13 +469,50 @@ static void scheduleAChChidGate(PlaybackState* state, int trackIdx) {
   track->achchidGateCounter = 0;
 }
 
+// Pick a random note for RNN within the range encoded by the value's
+// low nibble: 0 any note of the pitch table (the project scale, when
+// active, snaps the pick afterwards), 1 +3 st, 2 +6, 3 +12, 4 -3,
+// 5 -6, 6 -12, 7 +/-3, 8 +/-6, 9 +/-12. Ranges 1-9 center on the
+// written note, so the random result stays musically anchored to it.
+static int rnnPickNote(uint8_t note, uint8_t range, uint16_t pitchCount) {
+  if (range == 0) {
+    int limit = pitchCount < 256 ? pitchCount : 256;
+    return limit ? (int)(utilsRandom() % limit) : (int)note;
+  }
+  static const int8_t spans[10] = {0, 3, 6, 12, -3, -6, -12, 3, 6, 12};
+  if (range >= 10) return note;
+  int span = spans[range];
+  if (span == 0) return note;
+  int magnitude = span < 0 ? -span : span;
+  // Draw a signed offset in [-span, +span]; for one-sided ranges (1-6)
+  // the sign is fixed by the span's sign, for two-sided ranges (7-9)
+  // both directions are possible.
+  int offset;
+  if (range <= 6) {
+    offset = (int)(utilsRandom() % (magnitude + 1)) * (span < 0 ? -1 : 1);
+  } else {
+    offset = (int)(utilsRandom() % (2 * magnitude + 1)) - magnitude;
+  }
+  int picked = (int)note + offset;
+  if (picked < 0) picked = 0;
+  if (picked > 0xFF) picked = 0xFF;
+  return picked;
+}
+
+// True when the RNN value changed since the last pick (used by mode 2,
+// pick and keep, to re-pick on a value change).
+static int rnnLastValueChanged(PlaybackTrackState* track, uint8_t value) {
+  return track->rnnLastValue != value;
+}
+
 void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRow, int skipDelCheck) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
   Project* p = state->p;
 
   uint8_t note = phraseRow->note;
   uint8_t instrument = phraseRow->instrument;
-  uint8_t volume = phraseRow->volume;
+  uint16_t volume = phraseRow->volume;
+  uint8_t heldPitch = track->note.pitchBase;
 
   uint8_t auxTable = EMPTY_VALUE_8;
   uint8_t auxTableRow = EMPTY_VALUE_8;
@@ -458,14 +537,15 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
 
   // Pre-scan FX for special commands
   for (int i = 0; i < 3; i++) {
-    uint8_t fxType = phraseRow->fx[i][0];
+    FXId fxType = phraseRow->fx[i].command;
     uint8_t fxValue = phraseRow->fx[i][1];
 
     if (fxType == fxSCL) {
       // SCL XY: X selects a scale, Y selects C..B. Phrase-only global FX.
+      // Inert in Note Lock mode: entry and chords follow the project scale.
       uint8_t preset = fxValue >> 4;
       uint8_t root = fxValue & 0x0f;
-      if (!state->scaleFXCommandSeen && preset < scalePresetCount && root < 12) {
+      if (!state->scaleFXCommandSeen && p->scaleMode == 0 && preset < scalePresetCount && root < 12) {
         state->scalePreset = (ScalePreset)preset;
         state->scaleRoot = root;
         state->scaleFXCommandSeen = 1;
@@ -478,7 +558,7 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     } else if (fxType == fxSLE) {
       track->slewTicks = fxValue;
     } else if (!skipDelCheck && (fxType == fxDEL && fxValue != 0)) {
-      initFX(state, trackIdx, phraseRow->fx[i], NULL, -1);
+      initFX(state, trackIdx, &phraseRow->fx[i], NULL, -1);
       return;
     } else if (fxType == fxTBL) {
       instrumentTable = fxValue;
@@ -552,7 +632,7 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
   for (int i = 0; i < 3; i++) {
     if (phraseRow->fx[i][0] != fxDEL && phraseRow->fx[i][0] != fxSLE &&
         phraseRow->fx[i][0] != fxSCL && phraseRow->fx[i][0] != fxCRD) {
-      initFX(state, trackIdx, phraseRow->fx[i], NULL, -1);
+      initFX(state, trackIdx, &phraseRow->fx[i], NULL, -1);
     }
   }
 
@@ -561,9 +641,61 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     if (note == NOTE_OFF) {
       handleNoteOff(state, trackIdx);
     } else {
+      // RNN replaces the row's note with a random one before any
+      // transposition or scale handling. First digit of the value picks
+      // the mode: 0 always random (re-picked every row), 1 random per
+      // PLAY (held until the track restarts), 2 pick and keep (held
+      // until the value changes or the track resets). Second digit
+      // limits the randomization range around the written note:
+      // 1 +3 st, 2 +6, 3 +12, 4 -3, 5 -6, 6 -12, 7 +/-3, 8 +/-6,
+      // 9 +/-12. 0 picks any note of the pitch table; the project
+      // scale, when active, snaps the pick afterwards.
+      if (track->note.fx[fxRNN].isOn) {
+        uint8_t rnnValue = track->note.fx[fxRNN].fxValue;
+        uint8_t rnnMode = rnnValue >> 4;
+        uint8_t rnnRange = rnnValue & 0x0F;
+        if (rnnMode == 2 && rnnLastValueChanged(track, rnnValue)) {
+          track->rnnSeeded = 0;
+        }
+        if (rnnMode == 0 || !track->rnnSeeded) {
+          track->rnnPickedNote = (uint8_t)rnnPickNote(note, rnnRange, p->pitchTable.length);
+          track->rnnSeeded = 1;
+          track->rnnLastValue = rnnValue;
+        }
+        note = track->rnnPickedNote;
+      }
+      // RNS picks a random slice for the triggered note (sliced sample
+      // instruments only). First digit of the value picks the mode:
+      // 0 always random (re-picked every row), 1 random per PLAY (held
+      // until the track restarts), 2 pick and keep (held until the
+      // value changes or the track resets). The second digit is unused.
+      // Picking happens here at note trigger, not in updateSampleVoices,
+      // which runs at audio rate and would re-pick thousands of times
+      // per second.
+      if (track->note.fx[fxRNS].isOn) {
+        InstrumentType rnsType = track->note.instrument == EMPTY_VALUE_8
+          ? InstrumentType::none : p->instruments[track->note.instrument].type;
+        const InstrumentSample* rnsSample = rnsType == InstrumentType::Sample
+          ? &p->instruments[track->note.instrument].chip.sample : NULL;
+        int rnsSliceCount = rnsType == InstrumentType::Sample &&
+          sampleActsAsSliced(rnsSample)
+          ? sampleDecodeSliceCount(rnsSample->slice) : 0;
+        if (rnsSliceCount) {
+          uint8_t rnsValue = track->note.fx[fxRNS].fxValue;
+          uint8_t rnsMode = rnsValue >> 4;
+          if (rnsMode == 2 && track->rnsLastValue != rnsValue) {
+            track->rnsSeeded = 0;
+          }
+          if (rnsMode == 0 || !track->rnsSeeded) {
+            track->rnsSlice = (uint8_t)(utilsRandom() % rnsSliceCount);
+            track->rnsSeeded = 1;
+            track->rnsLastValue = rnsValue;
+          }
+        }
+      }
       track->note.pitchBase = note;
       // Accent is deliberately derived from this row, never from sticky volume.
-      track->note.accent = volume == 0x0f;
+      track->note.accent = volume == PHRASE_VOLUME_MAX;
       track->note.noteTriggered = 1;
       if (track->note.instrument != EMPTY_VALUE_8 &&
           p->instruments[track->note.instrument].type == InstrumentType::AChChid)
@@ -584,14 +716,24 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
 
   InstrumentType type = track->note.instrument == EMPTY_VALUE_8 ? InstrumentType::none
     : p->instruments[track->note.instrument].type;
-  uint8_t sampleSlice = type == InstrumentType::Sample
-    ? p->instruments[track->note.instrument].chip.sample.slice : 0;
-  int slicedSample = sampleSlice == 2 || sampleSlice == 4 || sampleSlice == 8 ||
-    sampleSlice == 16 || sampleSlice == 32;
+  const InstrumentSample* sample = type == InstrumentType::Sample
+    ? &p->instruments[track->note.instrument].chip.sample : NULL;
+  int slicedSample = sampleActsAsSliced(sample);
 
   // Keep phrases chromatic; only the pitch sent to the engine is quantized.
   // Sliced PCM samples map notes to windows, so they stay unquantized.
-  if (note != EMPTY_VALUE_8 && note != NOTE_OFF && p->scaleApply && !slicedSample &&
+  // In Note Lock mode entry is already restricted to the scale, so playback
+  // quantization of plain notes is bypassed (chords below still quantize).
+  int noteLock = p->scaleMode != 0;
+  if (note != EMPTY_VALUE_8 && note != NOTE_OFF && p->scaleApply && !noteLock && !slicedSample &&
+      (p->scaleTracksMask & (1u << trackIdx)) && p->pitchTable.octaveSize == 12) {
+    uint16_t mask = state->scalePreset == scaleCustom ? p->scaleCustomMask : scalePresetMask(state->scalePreset);
+    track->note.pitchBase = scaleQuantizeNote(track->note.pitchBase, state->scaleRoot, mask, p->pitchTable.length);
+  }
+  // RNN notes follow the project scale in Note Lock mode too: manual
+  // entry is already scale-restricted there (which is why the quantizer
+  // path above is bypassed), but random picks are not, so snap them.
+  if (track->note.fx[fxRNN].isOn && noteLock && p->scaleApply && !slicedSample &&
       (p->scaleTracksMask & (1u << trackIdx)) && p->pitchTable.octaveSize == 12) {
     uint16_t mask = state->scalePreset == scaleCustom ? p->scaleCustomMask : scalePresetMask(state->scalePreset);
     track->note.pitchBase = scaleQuantizeNote(track->note.pitchBase, state->scaleRoot, mask, p->pitchTable.length);
@@ -612,9 +754,20 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     }
   }
 
+  if (note != EMPTY_VALUE_8 && note != NOTE_OFF) {
+    track->note.sequencePitch = track->note.pitchBase;
+    if (playbackSequenceBypasses(track, SequenceSource::pitch)) {
+      int fallback = clampInt(state->p->pitchTable.octaveSize * 4, 0, state->p->pitchTable.length - 1);
+      track->note.pitchBase = heldPitch != EMPTY_VALUE_8 ? heldPitch : fallback;
+      track->chordVoiceCount = 1;
+      track->chordPitchBase[0] = track->note.pitchBase;
+    }
+  }
+
   // Volume
-  if (volume != EMPTY_VALUE_8) {
-    track->note.volume = volume;
+  if (volume != EMPTY_VALUE_16) {
+    track->note.sequenceVolume = (uint8_t)volume;
+    if (!playbackSequenceBypasses(track, SequenceSource::volume)) track->note.volume = (uint8_t)volume;
   }
 }
 
@@ -837,6 +990,53 @@ int16_t playbackLiveStickOutput(const PlaybackState* state, uint8_t instrument,
   return (int16_t)clampInt(value, -32385, 32385);
 }
 
+int16_t playbackSequenceGateOutput(const Modulation* definition, uint32_t ticks) {
+  if (!definition) return 0;
+  if (definition->p1 != static_cast<uint8_t>(SequenceSource::tranceGate)) return 0;
+  uint32_t step = (uint32_t)(ticks / tranceGateTicksPerStep(sequenceGateRate(definition)));
+  uint8_t length = sequenceGateLength(definition);
+  if (!tranceGatePatternOpen(sequenceGatePattern(definition), length, step)) return 0;
+  int activeCount = 0, activeIndex = 0;
+  for (int i = 0; i < length; ++i) {
+    if (!tranceGatePatternOpen(sequenceGatePattern(definition), length, i)) continue;
+    if ((uint32_t)i == step % length) activeIndex = activeCount;
+    ++activeCount;
+  }
+  int accents = (sequenceGateAccents(definition) * activeCount + 8) / 16;
+  return accents && ((activeIndex * accents) % activeCount < accents) ? 32385 : 16192;
+}
+
+static int16_t sequenceSourceOutput(const PlaybackState* state, PlaybackTrackState* track,
+                                    PlaybackModState* mod) {
+  const Modulation* definition = mod->modulation;
+  if (!definition) return 0;
+  int raw = 0;
+  switch (static_cast<SequenceSource>(definition->p1)) {
+    case SequenceSource::pitch: {
+      int maxPitch = state->p->pitchTable.length - 1;
+      if (maxPitch > 0) {
+        int pitch = clampInt(track->note.sequencePitch + track->note.pitchOffset, 0, maxPitch);
+        raw = (pitch * 2 * 32385 + maxPitch / 2) / maxPitch - 32385;
+      }
+      break;
+    }
+    case SequenceSource::volume: {
+      int volume = clampInt(track->note.sequenceVolume + track->note.volumeOffset, 0, PHRASE_VOLUME_MAX);
+      raw = (volume * 2 * 32385 + PHRASE_VOLUME_MAX / 2) / PHRASE_VOLUME_MAX - 32385;
+      break;
+    }
+    case SequenceSource::tranceGate: {
+      raw = playbackSequenceGateOutput(definition, mod->counter);
+      ++mod->counter;
+      break;
+    }
+    default:
+      break;
+  }
+  int amount = clampInt((int)definition->amount + mod->amountOffset, -128, 127);
+  return (int16_t)clampInt(raw * amount / 127, -32385, 32385);
+}
+
 static void processModulations(PlaybackState* state, int trackIdx) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
 
@@ -847,18 +1047,19 @@ static void processModulations(PlaybackState* state, int trackIdx) {
   // cross-modulation deterministic and avoids recursive evaluation.
   for (int source = 0; source < 4; ++source) {
     PlaybackModState* mod = &track->note.modulation[source];
-    if (!mod->modulation) continue;
+    if (!mod->modulation || mod->modulation->type == ModulationType::Sequence) continue;
     int generic = instrumentGenericModDestination(type, mod->modulation->destination);
     int target, targetParameter;
     if (generic >= genericModFirstParameter && generic < genericModDestinationCount) {
       int parameter = generic - genericModFirstParameter;
       target = parameter / 4;
       targetParameter = parameter % 4;
-    } else if (generic >= genericModFirstP5 && generic < genericModTotalCount) {
+    } else if (generic >= genericModFirstP5 && generic < genericModFirstInsert) {
       target = generic - genericModFirstP5;
       targetParameter = 4;
     } else continue;
-    if (target == source || !track->note.modulation[target].modulation) continue;
+    if (target == source || !track->note.modulation[target].modulation ||
+        track->note.modulation[target].modulation->type == ModulationType::Sequence) continue;
     int16_t offset = playbackModScaleToRange(mod->outValue, 255);
     PlaybackModState* targetMod = &track->note.modulation[target];
     if (targetParameter == 0) targetMod->p1Offset += offset;
@@ -872,11 +1073,25 @@ static void processModulations(PlaybackState* state, int trackIdx) {
     PlaybackModState* mod = &track->note.modulation[i];
     // Skip if modulation not initialized or destination == 0 (no destination)
     if (!mod->modulation || mod->modulation->destination == 0 ||
-        mod->modulation->type == ModulationType::FLFO) continue;
+        mod->modulation->type == ModulationType::FLFO ||
+        mod->modulation->type == ModulationType::Sequence) continue;
     playbackModNext(mod);
     if (modulationIsLiveStick(mod->modulation->type)) {
       mod->outValue = playbackLiveStickOutput(state, track->note.instrument, i, mod->modulation);
     }
+  }
+
+  // Sequence sources are sampled after tracker FX and ordinary modulators.
+  // Their source/mode fields are deliberately not modulation destinations.
+  for (int i = 0; i < 4; ++i) {
+    PlaybackModState* mod = &track->note.modulation[i];
+    if (!mod->modulation || mod->modulation->type != ModulationType::Sequence) continue;
+    if (!modulationSequenceDestinationAllowed(&state->p->instruments[track->note.instrument], mod->modulation,
+                                              mod->modulation->destination)) {
+      mod->outValue = 0;
+      continue;
+    }
+    mod->outValue = sequenceSourceOutput(state, track, mod);
   }
 }
 
@@ -901,6 +1116,7 @@ static void handleInstrument(PlaybackState* state, int trackIdx) {
   case InstrumentType::Braids:
   case InstrumentType::Plaits:
   case InstrumentType::PlaitsAlt:
+  case InstrumentType::SoundFont:
   case InstrumentType::Sample:
   case InstrumentType::SCWF:
   case InstrumentType::BYOWTBL:
@@ -970,7 +1186,7 @@ static void nextFrame(PlaybackState* state, int trackIdx, int chipIdx) {
 
     track->note.pitchFinal = pitch;
     for (int i = 0; i < track->chordVoiceCount; ++i) {
-      int chordPitch = pitch + (int)track->chordPitchBase[i] - (int)track->chordPitchBase[0];
+      int chordPitch = pitch + (int)track->chordPitchBase[i] - (int)track->note.pitchBase;
       track->chordPitchFinal[i] = clampInt16(chordPitch, 0, p->pitchTable.length - 1);
     }
   }
@@ -1216,11 +1432,14 @@ void playbackInit(PlaybackState* state, Project* project) {
   state->liveStickWasPlaying = 0;
   state->scaleRoot = project->scaleRoot;
   state->scalePreset = project->scalePreset;
+  memset(state->midiCC, 0, sizeof(state->midiCC));
 
   initFXHandlers();
   initAYSampleTables();
 
   for (int c = 0; c < PROJECT_MAX_TRACKS; c++) {
+    memset(&state->tracks[c].inserts, 0, sizeof(InsertAutomation));
+    state->tracks[c].insertReset = 0;
     resetTrack(state, c);
     state->tracks[c].queue.mode = PlaybackMode::none;
     state->tracks[c].queue.loop = 0;
@@ -1260,6 +1479,10 @@ void playbackClearLoopRange(PlaybackState* state) {
 
 void playbackStartSong(PlaybackState* state, int songRow, int chainRow, int loop) {
   if (playbackIsPlaying(state)) return;
+  for (auto& track : state->tracks) {
+    memset(&track.inserts, 0, sizeof(track.inserts));
+    ++track.insertReset;
+  }
 
   state->scaleRoot = state->p->scaleRoot;
   state->scalePreset = state->p->scalePreset;
@@ -1281,6 +1504,10 @@ void playbackStartSong(PlaybackState* state, int songRow, int chainRow, int loop
 
 void playbackStartChain(PlaybackState* state, int trackIdx, int songRow, int chainRow, int loop) {
   if (playbackIsPlaying(state)) return;
+  for (auto& track : state->tracks) {
+    memset(&track.inserts, 0, sizeof(track.inserts));
+    ++track.insertReset;
+  }
 
   state->scaleRoot = state->p->scaleRoot;
   state->scalePreset = state->p->scalePreset;
@@ -1299,6 +1526,10 @@ void playbackStartChain(PlaybackState* state, int trackIdx, int songRow, int cha
 
 void playbackStartPhrase(PlaybackState* state, int trackIdx, int songRow, int chainRow, int loop, int startPhraseRow) {
   if (playbackIsPlaying(state)) return;
+  for (auto& track : state->tracks) {
+    memset(&track.inserts, 0, sizeof(track.inserts));
+    ++track.insertReset;
+  }
 
   state->scaleRoot = state->p->scaleRoot;
   state->scalePreset = state->p->scalePreset;
@@ -1313,6 +1544,11 @@ void playbackStartPhrase(PlaybackState* state, int trackIdx, int songRow, int ch
 }
 
 void playbackStartPhraseRow(PlaybackState* state, int trackIdx, PhraseRow* phraseRow) {
+  if (!playbackIsPlaying(state)) {
+    auto& track = state->tracks[trackIdx];
+    memset(&track.inserts, 0, sizeof(track.inserts));
+    ++track.insertReset;
+  }
   state->scaleRoot = state->p->scaleRoot;
   state->scalePreset = state->p->scalePreset;
   resetTrack(state, trackIdx);
@@ -1345,12 +1581,13 @@ static int liveChainValid(const PlaybackState* state, int trackIdx, int songRow)
 }
 
 float playbackVolumeGain(const PlaybackState* state, const PlaybackTrackState* track) {
-  float gain = clampInt(track->note.volume + track->note.volumeOffset, 0, 15) / 15.0f;
+  float gain = clampInt(track->note.volume + track->note.volumeOffset, 0, PHRASE_VOLUME_MAX) /
+               (float)PHRASE_VOLUME_MAX;
   const PlaybackTableState* tables[] = {&track->note.instrumentTable, &track->note.auxTable};
   for (const PlaybackTableState* table : tables) {
     if (table->tableIdx == EMPTY_VALUE_8) continue;
     uint8_t volume = state->p->tables[table->tableIdx].rows[table->rows[0]].volume;
-    if (volume != EMPTY_VALUE_8) gain *= volume / 15.0f;
+    if (volume != EMPTY_VALUE_8) gain *= volume / (float)PHRASE_VOLUME_MAX;
   }
   return gain;
 }
@@ -1359,6 +1596,8 @@ void playbackStartLiveChain(PlaybackState* state, int trackIdx, int songRow) {
   if (!liveChainValid(state, trackIdx, songRow)) return;
   PlaybackTrackState* track = &state->tracks[trackIdx];
   if (track->mode != PlaybackMode::stopped) return;
+  memset(&track->inserts, 0, sizeof(track->inserts));
+  ++track->insertReset;
   track->queue.mode = PlaybackMode::live;
   track->queue.songRow = songRow;
   track->queue.chainRow = 0;
@@ -1390,12 +1629,12 @@ void playbackPreviewNote(PlaybackState* state, int trackIdx, uint8_t note, uint8
   PhraseRow phraseRow = {0};
   phraseRow.note = note;
   phraseRow.instrument = instrument;
-  phraseRow.volume = 15;
+  phraseRow.volume = PHRASE_VOLUME_MAX;
 
   // Set up empty FX
   for (int i = 0; i < 3; i++) {
-    phraseRow.fx[i][0] = EMPTY_VALUE_8;
-    phraseRow.fx[i][1] = EMPTY_VALUE_8;
+    phraseRow.fx[i].command = FX_ID_EMPTY;
+    phraseRow.fx[i].value = EMPTY_VALUE_8;
   }
 
   // Use unified phrase row playback
@@ -1403,6 +1642,10 @@ void playbackPreviewNote(PlaybackState* state, int trackIdx, uint8_t note, uint8
 }
 
 void playbackStop(PlaybackState* state) {
+  for (auto& track : state->tracks) {
+    memset(&track.inserts, 0, sizeof(track.inserts));
+    ++track.insertReset;
+  }
   for (int c = 0; c < PROJECT_MAX_TRACKS; c++) {
     resetTrack(state, c);
     state->tracks[c].queue.mode = PlaybackMode::none;

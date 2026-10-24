@@ -16,7 +16,6 @@ static constexpr int sourceValueWidth = 7;
 static Bitmap* previewBitmap;
 
 static void drawPreview(const InstrumentBYOWTBL* table) {
-  if (appSettings.persistentWaveform) return;
   if (!previewBitmap) previewBitmap = gfxBitmapCreate(32, 3);
   renderSCWFPreview(previewBitmap, table, table->frameSize, table->frameIndex);
   gfxSetFgColor(appSettings.colorScheme.textInfo);

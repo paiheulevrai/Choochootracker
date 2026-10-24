@@ -24,7 +24,7 @@ static int cpBufPhraseEndCol;
 static int cpBufTableRows = 0;
 static int cpBufTableStartCol;
 static int cpBufTableEndCol;
-static uint8_t cpBufFX[16][8];
+static FXId cpBufFX[16][8];
 static int cpBufFXRows = 0;
 static int cpBufFXCols = 0;
 static int cpBufFXStartCol;
@@ -47,14 +47,19 @@ static int isFXSelection(int startCol, int endCol, int lastFXCol) {
   return startCol >= 3 && endCol <= lastFXCol;
 }
 
-static void copyFXCells(const uint8_t fx[][2], int row, int startCol, int endCol) {
-  for (int col = startCol; col <= endCol; ++col)
-    cpBufFX[row][col - startCol] = fx[(col - 3) / 2][(col - 3) % 2];
+static void copyFXCells(const FXCell* fx, int row, int startCol, int endCol) {
+  for (int col = startCol; col <= endCol; ++col) {
+    const FXCell& cell = fx[(col - 3) / 2];
+    cpBufFX[row][col - startCol] = (col - 3) % 2 ? cell.value : cell.command;
+  }
 }
 
-static void clearFXCells(uint8_t fx[][2], int startCol, int endCol) {
-  for (int col = startCol; col <= endCol; ++col)
-    fx[(col - 3) / 2][(col - 3) % 2] = (col - 3) % 2 ? 0 : EMPTY_VALUE_8;
+static void clearFXCells(FXCell* fx, int startCol, int endCol) {
+  for (int col = startCol; col <= endCol; ++col) {
+    FXCell& cell = fx[(col - 3) / 2];
+    if ((col - 3) % 2) cell.value = 0;
+    else cell.command = FX_ID_EMPTY;
+  }
 }
 
 static int canPasteFX(int lastFXCol, int startCol) {
@@ -62,9 +67,12 @@ static int canPasteFX(int lastFXCol, int startCol) {
     !((startCol - cpBufFXStartCol) & 1);
 }
 
-static void pasteFXCells(uint8_t fx[][2], int row, int lastFXCol, int startCol) {
-  for (int col = 0; col < cpBufFXCols && startCol + col <= lastFXCol; ++col)
-    fx[(startCol + col - 3) / 2][(startCol + col - 3) % 2] = cpBufFX[row][col];
+static void pasteFXCells(FXCell* fx, int row, int lastFXCol, int startCol) {
+  for (int col = 0; col < cpBufFXCols && startCol + col <= lastFXCol; ++col) {
+    FXCell& cell = fx[(startCol + col - 3) / 2];
+    if ((startCol + col - 3) % 2) cell.value = (uint8_t)cpBufFX[row][col];
+    else cell.command = cpBufFX[row][col];
+  }
 }
 
 void copyGroove(int grooveIdx, int startRow, int endRow, int isCut) {
@@ -176,7 +184,7 @@ void copyPhrase(int phraseIdx, int startCol, int startRow, int endCol, int endRo
     if (isCut) {
       if (startCol <= 0 && endCol >= 0) chipnomadState->project.phrases[phraseIdx].rows[startRow + row].note = EMPTY_VALUE_8;
       if (startCol <= 1 && endCol >= 1) chipnomadState->project.phrases[phraseIdx].rows[startRow + row].instrument = EMPTY_VALUE_8;
-      if (startCol <= 2 && endCol >= 2) chipnomadState->project.phrases[phraseIdx].rows[startRow + row].volume = EMPTY_VALUE_8;
+      if (startCol <= 2 && endCol >= 2) chipnomadState->project.phrases[phraseIdx].rows[startRow + row].volume = EMPTY_VALUE_16;
       int fxStart = startCol > 3 ? startCol : 3, fxEnd = endCol < 8 ? endCol : 8;
       if (fxStart <= fxEnd) clearFXCells(chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx, fxStart, fxEnd);
     }
@@ -214,9 +222,9 @@ int pastePhrase(int phraseIdx, int startCol, int startRow) {
           int dstPart = (dstCol - 3) % 2;
           if (srcPart == dstPart) {  // Only paste name to name, value to value
             if (srcPart == 0) {
-              chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[dstFx][0] = cpBufPhrase.rows[row].fx[srcFx][0];
+              chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[dstFx].command = cpBufPhrase.rows[row].fx[srcFx].command;
             } else {
-              chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[dstFx][1] = cpBufPhrase.rows[row].fx[srcFx][1];
+              chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[dstFx].value = cpBufPhrase.rows[row].fx[srcFx].value;
             }
           }
         }
@@ -234,9 +242,9 @@ int pastePhrase(int phraseIdx, int startCol, int startRow) {
           int fxIdx = (col - 3) / 2;
           int part = (col - 3) % 2;
           if (part == 0) {
-            chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[fxIdx][0] = cpBufPhrase.rows[row].fx[fxIdx][0];
+            chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[fxIdx].command = cpBufPhrase.rows[row].fx[fxIdx].command;
           } else {
-            chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[fxIdx][1] = cpBufPhrase.rows[row].fx[fxIdx][1];
+            chipnomadState->project.phrases[phraseIdx].rows[startRow + row].fx[fxIdx].value = cpBufPhrase.rows[row].fx[fxIdx].value;
           }
         }
       }
@@ -298,9 +306,9 @@ int pasteTable(int tableIdx, int startCol, int startRow) {
           int dstPart = (dstCol - 3) % 2;
           if (srcPart == dstPart) {  // Only paste name to name, value to value
             if (srcPart == 0) {
-              chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[dstFx][0] = cpBufTable.rows[row].fx[srcFx][0];
+              chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[dstFx].command = cpBufTable.rows[row].fx[srcFx].command;
             } else {
-              chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[dstFx][1] = cpBufTable.rows[row].fx[srcFx][1];
+              chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[dstFx].value = cpBufTable.rows[row].fx[srcFx].value;
             }
           }
         }
@@ -318,9 +326,9 @@ int pasteTable(int tableIdx, int startCol, int startRow) {
           int fxIdx = (col - 3) / 2;
           int part = (col - 3) % 2;
           if (part == 0) {
-            chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[fxIdx][0] = cpBufTable.rows[row].fx[fxIdx][0];
+            chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[fxIdx].command = cpBufTable.rows[row].fx[fxIdx].command;
           } else {
-            chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[fxIdx][1] = cpBufTable.rows[row].fx[fxIdx][1];
+            chipnomadState->project.tables[tableIdx].rows[startRow + row].fx[fxIdx].value = cpBufTable.rows[row].fx[fxIdx].value;
           }
         }
       }
@@ -388,15 +396,21 @@ int switchTableSelectionMode(ScreenData* screen) {
   getSelectionBounds(screen, &startCol, &startRow, &endCol, &endRow);
 
   if (isSingleCell(startCol, startRow, endCol, endRow)) {
-    selectColumn(screen);
+    screen->selectStartRow = 1; // Row 0 is the retrigger setting, not table data.
+    screen->selectStartCol = screen->selectAnchorCol;
+    screen->cursorRow = 16;
+    screen->cursorCol = screen->selectAnchorCol;
     return 0;
   }
-  if (isFullColumn(startCol, startRow, endCol, endRow)) {
+  if (startCol == endCol && startRow == 1 && endRow == 16) {
     selectRow(screen, 10);
     return 0;
   }
   if (isFullRow(startRow, endRow, startCol, endCol, 10)) {
-    selectAll(screen, 10);
+    screen->selectStartRow = 1;
+    screen->selectStartCol = 0;
+    screen->cursorRow = 16;
+    screen->cursorCol = 10;
     return 0;
   }
   return 1;

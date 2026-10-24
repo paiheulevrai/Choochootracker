@@ -1,6 +1,12 @@
 {
-  "buildCommand": "echo Using prebuilt WebAssembly bundle",
+  "buildCommand": "sh docs/user-guide/publish.sh",
   "outputDirectory": "web/dist",
   "framework": null,
-  "cleanUrls": true
+  "cleanUrls": true,
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "*": false
+    }
+  }
 }

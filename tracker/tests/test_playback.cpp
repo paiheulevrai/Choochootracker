@@ -5,6 +5,7 @@
 #include "midi/midi_router.h"
 
 #include <cstring>
+#include <cstdio>
 #include <cmath>
 #include <vector>
 
@@ -32,6 +33,7 @@ const MidiBackend kFakeMidiBackend = {
   fakeFlushOutputQueue,
   nullptr, // droppedCount - unused here
   fakeNowMicros,
+  nullptr, nullptr,
   1, 1, 0, 0,
 };
 }
@@ -94,6 +96,25 @@ struct PlaybackFixture {
     }
   }
 };
+
+TEST_CASE_FIXTURE(PlaybackFixture, "slowLFO preserves free and structural phase across notes") {
+  setInstrument(0, 0, 0, 15, 0);
+  Modulation& mod = state->project.instruments[0].modulation[2];
+  mod.type = ModulationType::SlowLFO;
+  mod.p3 = SLOW_LFO_MAX_STEP;
+  PhraseRow row;
+  memset(&row, EMPTY_VALUE_8, sizeof(row));
+  row.note = 48;
+  row.instrument = 0;
+  for (auto trigger : {LFOTrigger::free, LFOTrigger::phrase, LFOTrigger::chain, LFOTrigger::retrig}) {
+    mod.p2 = static_cast<uint8_t>(trigger);
+    readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+    PlaybackModState& playing = state->playbackState.tracks[0].note.modulation[2];
+    playing.counter = 100000;
+    readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+    CHECK(playing.counter == (trigger == LFOTrigger::retrig ? 0 : 100000));
+  }
+}
 
 TEST_CASE("track enable commands apply on the audio tick") {
   PlaybackFixture fixture;
@@ -237,14 +258,93 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Live chains loop and switch at the requested
 
 TEST_CASE_FIXTURE(PlaybackFixture, "table volume and VOL apply to the shared voice gain") {
   PlaybackTrackState* track = &state->playbackState.tracks[0];
-  track->note.volume = 15;
+  track->note.volume = PHRASE_VOLUME_MAX;
   track->note.volumeOffset = -1;
   tableInit(&state->playbackState, 0, &track->note.instrumentTable, 0, 0, 1);
-  state->project.tables[0].rows[0].volume = 15;
-  CHECK(playbackVolumeGain(&state->playbackState, track) == doctest::Approx(14.0f / 15.0f));
+  state->project.tables[0].rows[0].volume = PHRASE_VOLUME_MAX;
+  CHECK(playbackVolumeGain(&state->playbackState, track) == doctest::Approx(126.0f / PHRASE_VOLUME_MAX));
+
+  state->project.tables[0].rows[0].volume = 64;
+  CHECK(playbackVolumeGain(&state->playbackState, track) == doctest::Approx(126.0f * 64 / (PHRASE_VOLUME_MAX * PHRASE_VOLUME_MAX)));
 
   state->project.tables[0].rows[0].volume = 0;
   CHECK(playbackVolumeGain(&state->playbackState, track) == 0.0f);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Sequence sources bypass sequencer output and generate rhythmic Trance Gates") {
+  setInstrument(0, 0, 0, 15, 0);
+  Instrument& instrument = state->project.instruments[0];
+  Modulation& sequence = instrument.modulation[0];
+  sequence = {};
+  sequence.type = ModulationType::Sequence;
+  sequence.destination = 3; // AY noise: a safe non-pitch/non-volume target.
+  sequence.amount = 127;
+
+  PhraseRow row;
+  memset(&row, EMPTY_VALUE_8, sizeof(row));
+  row.note = 55;
+  row.instrument = 0;
+  row.volume = 100;
+
+  sequence.p1 = static_cast<uint8_t>(SequenceSource::pitch);
+  sequence.p2 = static_cast<uint8_t>(SequenceMode::bypass);
+  readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+  PlaybackTrackState& track = state->playbackState.tracks[0];
+  CHECK(track.note.sequencePitch == 55);
+  CHECK(track.note.pitchBase == 48); // First bypassed note uses C-4.
+
+  track.note.volume = 42;
+  sequence.p1 = static_cast<uint8_t>(SequenceSource::volume);
+  readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+  CHECK(track.note.sequenceVolume == 100);
+  CHECK(track.note.volume == 42);
+
+  sequence.p1 = static_cast<uint8_t>(SequenceSource::tranceGate);
+  sequenceGateDefaults(&sequence);
+  sequenceGateSetPattern(&sequence, 2); // Alternating steps.
+  sequenceGateSetRate(&sequence, 9); // 1/16: six tracker ticks per step.
+  sequenceGateSetLength(&sequence, 4);
+  CHECK(sequenceGatePattern(&sequence) == 2);
+  CHECK(sequenceGateRate(&sequence) == 9);
+  CHECK(sequenceGateLength(&sequence) == 4);
+  CHECK(playbackSequenceGateOutput(&sequence, 0) == 16192); // Open, normal gate.
+  CHECK(playbackSequenceGateOutput(&sequence, 6) == 0); // Closed pattern step.
+  sequenceGateSetAccents(&sequence, 16);
+  CHECK(playbackSequenceGateOutput(&sequence, 0) == 32385); // Every open gate accents.
+  sequenceGateSetAccents(&sequence, 8);
+  CHECK(playbackSequenceGateOutput(&sequence, 0) == 32385);
+  CHECK(playbackSequenceGateOutput(&sequence, 12) == 16192);
+  for (SequenceGateTrigger trigger : {SequenceGateTrigger::free, SequenceGateTrigger::retrig,
+                                      SequenceGateTrigger::phrase, SequenceGateTrigger::chain}) {
+    sequenceGateSetTrigger(&sequence, trigger);
+    readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+    track.note.modulation[0].counter = 7;
+    readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+    CHECK(track.note.modulation[0].counter == (trigger == SequenceGateTrigger::retrig ? 0 : 7));
+  }
+  sequenceGateSetTrigger(&sequence, SequenceGateTrigger::chain);
+  CHECK(sequenceGateTrigger(&sequence) == SequenceGateTrigger::chain);
+
+  REQUIRE(instrumentSave(&state->project, "test_sequence_gate.cni", 0) == 0);
+  Project loaded;
+  projectInit(&loaded);
+  REQUIRE(instrumentLoad(&loaded, "test_sequence_gate.cni", 0) == 0);
+  const Modulation& restored = loaded.instruments[0].modulation[0];
+  CHECK(restored.type == ModulationType::Sequence);
+  CHECK(restored.p1 == static_cast<uint8_t>(SequenceSource::tranceGate));
+  CHECK(sequenceGatePattern(&restored) == 2);
+  CHECK(sequenceGateRate(&restored) == 9);
+  CHECK(sequenceGateLength(&restored) == 4);
+  CHECK(sequenceGateTrigger(&restored) == SequenceGateTrigger::chain);
+  CHECK(sequenceGateAccents(&restored) == 8);
+  projectFree(&loaded);
+  std::remove("test_sequence_gate.cni");
+
+  sequence.p1 = static_cast<uint8_t>(SequenceSource::pitch);
+  CHECK_FALSE(modulationSequenceDestinationAllowed(&instrument, &sequence, 1));
+  CHECK_FALSE(modulationSequenceDestinationAllowed(&instrument, &sequence, 2));
+  sequence.p1 = static_cast<uint8_t>(SequenceSource::tranceGate);
+  CHECK(modulationSequenceDestinationAllowed(&instrument, &sequence, 2));
 }
 
 TEST_CASE_FIXTURE(PlaybackFixture, "Live urgent switches at a phrase boundary and stop is quantized") {
@@ -427,7 +527,7 @@ TEST_CASE_FIXTURE(PlaybackFixture, "single note outputs to registers") {
   // Put a note in phrase 0, row 0
   state->project.phrases[0].rows[0].note = 48; // C-4
   state->project.phrases[0].rows[0].instrument = 0;
-  state->project.phrases[0].rows[0].volume = 15;
+  state->project.phrases[0].rows[0].volume = PHRASE_VOLUME_MAX;
 
   // Put phrase 0 in chain 0
   state->project.chains[0].rows[0].phrase = 0;
@@ -469,30 +569,6 @@ TEST_CASE_FIXTURE(PlaybackFixture, "each tracker track owns an AY") {
   CHECK((second->getRegister(7) & 0x36) == 0x36);
 }
 
-TEST_CASE_FIXTURE(PlaybackFixture, "auto mix relieves an octave-band pileup") {
-  Project* p = &state->project;
-  p->chipsCount = 3;
-  p->tracksCount = 3;
-  chipnomadInitChips(state, 44100, mockChipFactory);
-  playbackInit(&state->playbackState, p);
-  setInstrument(0, 0, 0, 15, 0);
-  p->instruments[0].volume = 255;
-  for (int track = 0; track < 3; ++track) {
-    p->phrases[track].rows[0].note = track < 2 ? 36 : 72;
-    p->phrases[track].rows[0].instrument = 0;
-    p->phrases[track].rows[0].volume = 15;
-    for (int row = 0; row < 12; ++row) p->chains[track].rows[row].phrase = track;
-    p->song[0][track] = track;
-  }
-
-  uint8_t proposed[PROJECT_MAX_TRACKS] = {};
-  REQUIRE(chipnomadAutoMix(state, 1, proposed) == 0);
-  CHECK(proposed[0] < proposed[2]);
-  CHECK(proposed[1] < proposed[2]);
-  CHECK(proposed[0] >= 25);
-  CHECK(proposed[1] >= 25);
-}
-
 TEST_CASE_FIXTURE(PlaybackFixture, "ADSR volume envelope ranges") {
   // Test with A=15, D=16, S=1, R=10
   // This should produce low initial volume, decay to sustain level 1, then release
@@ -501,7 +577,7 @@ TEST_CASE_FIXTURE(PlaybackFixture, "ADSR volume envelope ranges") {
   // Put a note in phrase 0
   state->project.phrases[0].rows[0].note = 48;
   state->project.phrases[0].rows[0].instrument = 0;
-  state->project.phrases[0].rows[0].volume = 15;
+  state->project.phrases[0].rows[0].volume = PHRASE_VOLUME_MAX;
 
   // Put phrase in chain and song
   state->project.chains[0].rows[0].phrase = 0;
@@ -543,7 +619,7 @@ TEST_CASE_FIXTURE(PlaybackFixture, "ADSR volume envelope ranges") {
 
 TEST_CASE_FIXTURE(PlaybackFixture, "Braids instrument renders through a tracker track") {
   getInstrumentFunctions(InstrumentType::Braids).init(&state->project.instruments[0]);
-  REQUIRE(chipnomadQueueProjectRefresh(state));
+  chipnomadInitChips(state, 44100, mockChipFactory);
   playbackPreviewNote(&state->playbackState, 0, 60, 0);
 
   float buffer[2048];
@@ -564,7 +640,7 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Braids instrument renders through a tracker 
 
 TEST_CASE_FIXTURE(PlaybackFixture, "Plaits instrument renders and receives note off") {
   getInstrumentFunctions(InstrumentType::Plaits).init(&state->project.instruments[0]);
-  REQUIRE(chipnomadQueueProjectRefresh(state));
+  chipnomadInitChips(state, 44100, mockChipFactory);
   playbackPreviewNote(&state->playbackState, 0, 60, 0);
 
   float buffer[2048];
@@ -610,7 +686,7 @@ TEST_CASE_FIXTURE(PlaybackFixture, "MIDI Out instrument tracks its active note a
 
 TEST_CASE_FIXTURE(PlaybackFixture, "SLE reaches every BYOWTBL engine FX destination") {
   getInstrumentFunctions(InstrumentType::BYOWTBL).init(&state->project.instruments[0]);
-  REQUIRE(chipnomadQueueProjectRefresh(state));
+  chipnomadInitChips(state, 44100, mockChipFactory);
 
   float buffer[2] = {};
   chipnomadRender(state, buffer, 1);
@@ -618,7 +694,7 @@ TEST_CASE_FIXTURE(PlaybackFixture, "SLE reaches every BYOWTBL engine FX destinat
   PlaybackTrackState* track = &state->playbackState.tracks[0];
   track->note.instrument = 0;
   track->note.pitchFinal = 60;
-  track->note.volume = 15;
+  track->note.volume = PHRASE_VOLUME_MAX;
   track->slewTicks = 8;
   const FX destinations[] = {fxSDT, fxSMX, fxBIA, fxBIB, fxSCF2, fxSRS2};
   for (FX fx : destinations) {

@@ -33,6 +33,10 @@ const char* byteToHexOrEmpty(uint8_t byte) {
   }
 }
 
+const char* volumeToHexOrEmpty(uint16_t volume) {
+  return volume == EMPTY_VALUE_16 ? "--" : hexBytes[(uint8_t)min(volume, PHRASE_VOLUME_MAX)];
+}
+
 int min(int a, int b) {
   return a < b ? a : b;
 }

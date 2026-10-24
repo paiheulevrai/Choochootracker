@@ -1,0 +1,7 @@
+fluid-gun.ogg: unmodified compressed Gun sample, smpl bytes [0,10372), from
+FluidR3Mono_GM.sf3 in Debian fluidr3mono-gm-soundfont 2.315-7.
+https://ftp.debian.org/debian/pool/main/f/fluidr3mono-gm-soundfont/fluidr3mono-gm-soundfont_2.315-7_all.deb
+Acquired 2026-10-14. Copyright and MIT conditions: FluidR3Mono-LICENSE.txt.
+tone.sf3 and tone-exclusive.sf3 wrap this sample in original synthetic metadata
+to exercise both observed compressed-end conventions. Original acquired bank
+and package remain unchanged in the external reference-library directory.

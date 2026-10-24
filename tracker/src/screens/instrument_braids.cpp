@@ -15,7 +15,6 @@ static const char* paraphonicChordName(uint16_t color) {
 }
 
 static void drawPreview(const InstrumentBraids* braids) {
-  if (appSettings.persistentWaveform) return;
   if (!previewBitmap) previewBitmap = gfxBitmapCreate(32, 3);
   renderBraidsPreview(previewBitmap, braids);
   gfxSetFgColor(appSettings.colorScheme.textInfo);

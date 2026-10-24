@@ -12,15 +12,17 @@ OUTPUT_EXT =
 # Platform-specific flags
 ifeq ($(shell uname),Darwin)
 # macOS
-XTRA_CFLAGS = -I/opt/homebrew/include -L/opt/homebrew/lib -DDESKTOP_BUILD -DMACOS_BUILD -DGAMEPAD_SUPPORT -D__MACOSX_CORE__
+XTRA_CFLAGS = -I/opt/homebrew/include -L/opt/homebrew/lib -DDESKTOP_BUILD -DMACOS_BUILD -DGAMEPAD_SUPPORT -D__MACOSX_CORE__ \
+	-DLINK_PLATFORM_MACOSX=1 -DASIO_STANDALONE=1 -DASIO_NO_TYPEID=1 -DASIO_VERSION_NAMESPACE=link_asio_1_38_2 -Wno-multichar
 XTRA_LIBS = -lSDL2 -lm -framework CoreMIDI -framework CoreAudio -framework CoreFoundation
 else
 # Linux
-XTRA_CFLAGS = -I/usr/include -L/usr/lib -DDESKTOP_BUILD -DGAMEPAD_SUPPORT -D__LINUX_ALSA__ -D__LINUX_ALSASEQ__
+XTRA_CFLAGS = -I/usr/include -L/usr/lib -DDESKTOP_BUILD -DGAMEPAD_SUPPORT -D__LINUX_ALSA__ -D__LINUX_ALSASEQ__ \
+	-DLINK_PLATFORM_LINUX=1 -DASIO_STANDALONE=1 -DASIO_NO_TYPEID=1 -DASIO_VERSION_NAMESPACE=link_asio_1_38_2 -Wno-multichar
 XTRA_LIBS = -lSDL2 -lm -lasound
 endif
 CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(XTRA_CFLAGS)
-OUTPUT = -o $(BUILD)/chipnomad$(OUTPUT_EXT)
+OUTPUT = -o $(BUILD)/choochootracker$(OUTPUT_EXT)
 
 .PHONY: desktop
 desktop:

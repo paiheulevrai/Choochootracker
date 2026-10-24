@@ -218,6 +218,12 @@ int sampleOpApplyUndo(InstrumentSample* s, SampleUndo* slot) {
   s->channels = slot->header.channels;
   s->start = slot->header.start;
   s->end = slot->header.end;
+  // Slice state travels with the undo too: AUTO detection and the slice
+  // editors mutate the sentinel, sensitivity and bounds, so UNDO must
+  // restore them alongside the audio data (Phase 2).
+  s->slice = slot->header.slice;
+  s->autoSensitivity = slot->header.autoSensitivity;
+  memcpy(s->sliceBounds, slot->header.sliceBounds, sizeof(s->sliceBounds));
   slot->data = current;
   slot->header = currentHeader;
   slot->header.data = NULL;

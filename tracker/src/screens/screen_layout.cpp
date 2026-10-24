@@ -3,12 +3,7 @@
 #include "corelib_gfx.h"
 
 int screenScopeRows(const AppScreen* screen) {
-  if (!appSettings.persistentWaveform) return 0;
-  return screen == &screenSong || screen == &screenChain ||
-    screen == &screenPhrase || screen == &screenTable ||
-    screen == &screenInstrument || screen == &screenInstrumentPool ||
-    screen == &screenModulation || screen == &screenMixer ||
-    screen == &screenGroove ? 2 : 0;
+  return appSettings.persistentWaveform && screen == &screenSong ? 2 : 0;
 }
 
 int screenVisibleRows(void) {
@@ -18,7 +13,6 @@ int screenVisibleRows(void) {
 
 int screenModulationRowY(int row) {
   if (row < 0 || row >= 16) return -1;
-  if (appSettings.persistentWaveform) return row + 1;
   return row < 8 ? row + 2 : row + 3;
 }
 

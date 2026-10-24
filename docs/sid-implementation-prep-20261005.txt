@@ -1,0 +1,148 @@
+SID implementation preparation — October 5, 2026
+
+User direction: one SID engine, shared presets, and a Chip Variant selector on
+the instrument page. Hardware revisions are optional refinement. Preserve a
+permissive implementation and keep this effort separate from the current R36H
+instrument revision. Preparation lives on feature/sid-preparation; executable
+prototype and imported source inventory live under tools/sid_prep/.
+
+Recommended first integration
+
+Add one InstrumentType::SID, one SID preset catalog and one instrument page.
+Bank and Preset behave like the revised native engines: All when changing
+engines, synth name in the bank heading, scrollable named banks and audition
+that stops/reverts correctly on cancel. Start with the generic 6581 core and
+musically useful macros. Do not delay those features to manufacture four
+hardware labels with the same behavior behind them.
+
+The instrument page should expose:
+  Bank / Preset
+  Chip Variant (only genuinely implemented variants selectable)
+  Waveform, Pulse Width, oscillator pitch/detune, hardware ADSR
+  Filter Mode, Cutoff, Resonance and routing
+  Macro selection/rate, plus existing software amp/post controls
+
+Keep emulator quality and output level separate from Chip Variant. Store the
+chosen variant in the instrument/song. Preset browsing should preserve the
+user's variant choice unless explicitly accepting a preset's recommended model.
+Patch data are shared, but identical register settings need not sound identical
+on different SID models. Source 6581/8580 optimizations may be separate presets
+in one bank, with a recommended model tag, rather than duplicate bank trees.
+
+Variants and analogue sound
+
+6581 and 8580 are the main families. Historical specimens/revisions include
+6581 R2/R3/R4/R4AR and 8580 R5; they are not four interchangeable software
+engines with uniquely fixed filter curves. Unit variation also matters.
+Plogue's measured specimen catalog illustrates this, but its proprietary
+implementation, coefficients and presets are not reusable sources here:
+https://s3.amazonaws.com/chipsynth/C64_manual.pdf
+
+The permissive core currently has one generic 6581 cutoff mapping and simple
+multimode filter. Its API has no hardware-model selector. It is not a reSIDfp-
+quality nonlinear analogue model, and 8580/R2/R3/R4 labels would currently be
+misleading. Later, independently implemented response profiles can supply
+cutoff calibration, resonance scaling, input drive/asymmetry and DC handling.
+A small warmth control is practical but must be described as a character
+adjustment, not proof of authentic early-revision emulation. Avoid assuming
+that every early SID is uniformly warmer than every later one. Compare level-
+matched sweeps/combined waves/envelopes before attaching revision names.
+
+Voice ownership and R36H budget
+
+Each physical SID has three oscillators/envelopes and one shared filter.
+Hard sync and ring modulation involve neighboring oscillators. A single-note
+register snapshot cannot describe many famous SID sounds: timed waveform,
+pulse, pitch and filter programs provide much of their articulation.
+https://github.com/floooh/chips/blob/master/chips/m6581.h
+https://github.com/leafo/goattracker2/blob/master/readme.txt
+
+Current ChooChooTracker has eight tracks and per-note native engine instances.
+Blindly repeating that pattern for SID would be too expensive. The isolated
+R36H baseline costs roughly 25% of a CPU core for one whole SID; four approach
+100%, without the tracker. See the prototype's -O2 measurement; the -O3 follow-up is pending. The current
+dense mixed-engine fixture already uses roughly 83 ms of a 102 ms buffer at
+p95, so a general promise that SID fits on top is not supported.
+
+Prototype allocation alternatives before choosing production behavior:
+  A. One SID per SID track, three oscillators usable for a layered monophonic
+     instrument or up to three notes sharing its filter and variant. Clear
+     track isolation; requires a small measured track limit or optimization.
+  B. A shared SID pool assigning three tracks to each chip. More economical,
+     but variant/filter ownership and sync links become group-level properties
+     and conflict with an unrestricted per-instrument variant selector.
+Favor A for the requested interface, contingent on measured mixed-project
+headroom. Do not silently discard notes when a pool limit is exceeded. Chord
+behavior, voice stealing, release tails and preview allocation need explicit
+rules and a user-visible limit. Switching variants must occur through the
+existing audio command queue at a block boundary, with controlled transition
+or retrigger so filter state cannot create a loud click.
+
+Program and import model
+
+Use a bounded SID program with a schema version, identity/source metadata,
+default registers, optional recommended family, and independent timed lanes
+for waveform/gate, relative-or-absolute pitch, pulse width, filter cutoff and
+ADSR changes. Store loop/release positions and update rate explicitly. Frequency
+registers depend on chip clock; distinguish PAL/NTSC from song BPM and macro
+rate. Bound table sizes, jumps, per-tick work and input bytes. Parse/import away
+from the audio thread; malformed programs must leave the current instrument
+intact. Resolve waveform combinations and zero pulse width natively.
+
+Phase 1: original programs and the MIT SFX adaptation already prepared.
+Phase 2: GoatTracker GTI5 wave/pulse/filter/speed execution, including delays,
+relative notes, absolute notes, jumps, vibrato and hard restart. The parser
+already inventories twelve open candidates; it is not a complete player.
+Phase 3: explicit adapters for Furnace C64 instruments and SID-Wizard files,
+with their distinct macro/timing semantics. Do not identify a format solely
+by an .ins suffix. Furnace's fantasy SID2/SID3 are not hardware revisions.
+https://github.com/tildearrow/furnace/blob/master/papers/newIns.md
+https://github.com/tildearrow/furnace/blob/master/doc/7-systems/README.md
+
+For future drop-in discovery, use instruments/banks/sid/ with file signature
+checks and bounded scanning. This folder is a proposal, not currently supported
+by the installed app. A .sid file is executable song/player data, not a standard
+preset bank. A later offline analyzer could trace register writes in an isolated
+C64 emulator, detect note boundaries, reconstruct transposition and retain
+macro loops. Hardware shared-filter/sync dependencies must be reconstructed;
+copying one note's initial bytes alone is insufficient.
+
+Use explicitly reusable programs and author-supplied banks for shipping. HVSC's
+availability does not establish open redistribution terms for every constituent
+sound program. Its notice describes retained rights and contacting composers;
+no HVSC game music was included in this preparation. Procedural original
+recipes avoid making unsupported claims of famous-game authenticity.
+https://www.hvsc.c64.org/info
+
+Persistence and implementation touch points
+
+Append a stable SID type value after current engines; never renumber old types.
+Review project_instruments.h/.cpp, project_instruments_io.cpp, project_io.cpp,
+chipnomad_lib.h/.cpp, native_chip_controls.cpp, tracker instrument screens,
+model/type catalog, preset discovery and platform source/package lists.
+Use explicit field serialization with a backward-compatible schema policy;
+do not dump an enlarged C++ union into old song records. Inspect all version,
+size and switch assumptions before coding. A selected instrument must embed
+its entire program, variant and macro data in .cni/.cct so a shared song or
+archive does not depend on the original source bank remaining on disk.
+
+Phrase FX candidates: Pulse Width, Waveform, Filter Cutoff, Resonance, Filter
+Mode, Macro Rate/Restart, Sync and Ring (with a defined partner oscillator).
+Give every chooser item a title and meaningful range/unit. Preserve native
+ADSR behavior; optional software ADSR is an additional shaping layer, not a
+replacement. Preview must use the same core, program timing and variant as
+song playback. Live changes must follow existing release/commit refresh rules.
+
+Acceptance before adding to a device build
+
+Test save/load with source banks removed; old projects still load unchanged.
+Test malformed/oversized tables and bounded looping; no allocation or file I/O
+in callbacks. Check gate/release, retrigger/hard restart, duty extremes, all
+filter modes, sync/ring topology and register timing. Render low/mid/high notes
+and dense macro programs with finite samples and usable output level. Verify
+bank reset, named FX, scrolling, preview cancel and audible live preset change.
+Benchmark mixed projects and worst permitted SID allocation with real ALSA,
+track FX, waveform display and warm hardware. Require margin, not just average
+CPU below 100%. Run full host tests, rebuild web and perform normal hardware
+validation when actual app integration is made. Do not include the standalone
+probe or candidate source trees in end-user runtime packages.

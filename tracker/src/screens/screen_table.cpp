@@ -11,8 +11,8 @@ static int tableIdx = 0;
 static TableRow *tableRows = NULL;
 static int backToPhrase = 0;
 static uint8_t lastPitchValue = 0;
-static uint8_t lastVolume = 15;
-static uint8_t lastFX[2] = {0, 0};
+static uint8_t lastVolume = PHRASE_VOLUME_MAX;
+static FXCell lastFX = {FX_ID_EMPTY, 0};
 static int isFxEdit = 0;
 
 // Get instrument number for current table context
@@ -78,9 +78,8 @@ static int tableVisibleRows() { return screenVisibleRows() - (screen.topRow == 0
 
 static void init(void) {
   lastPitchValue = 0;
-  lastVolume = 15;
-  lastFX[0] = 0;
-  lastFX[1] = 0;
+  lastVolume = PHRASE_VOLUME_MAX;
+  lastFX = {FX_ID_EMPTY, 0};
   screen.cursorRow = 1;
   screen.cursorCol = 0;
   screen.topRow = 0;
@@ -141,14 +140,14 @@ static void drawField(int col, int row, CellState state) {
   } else if (col % 2 == 1 && col >= 3) {
     // FX name (columns 3,5,7,9)
     int fxIdx = (col - 3) / 2;
-    uint8_t fx = tableRows[row].fx[fxIdx][0];
-    setCellColor(state, fx == EMPTY_VALUE_8, 1);
-    gfxPrint(x, y, fxNames[fx].name);
+    FXId fx = tableRows[row].fx[fxIdx].command;
+    setCellColor(state, fx == FX_ID_EMPTY, 1);
+    gfxPrint(x, y, fx == FX_ID_EMPTY ? "---" : fxNames[fx].name);
   } else if (col % 2 == 0 && col >= 4) {
     // FX value (columns 4,6,8,10)
     int fxIdx = (col - 4) / 2;
     uint8_t value = tableRows[row].fx[fxIdx][1];
-    setCellColor(state, 0, tableRows[row].fx[fxIdx][0] != EMPTY_VALUE_8);
+    setCellColor(state, 0, tableRows[row].fx[fxIdx].command != FX_ID_EMPTY);
     gfxPrint(x, y, byteToHex(value));
   }
 }
@@ -268,7 +267,7 @@ static void draw(void) {
 
 static int editCell(int col, int row, enum CellEditAction action) {
   int handled = 0;
-  uint8_t maxVolume = 15;
+  uint8_t maxVolume = PHRASE_VOLUME_MAX;
 
   if (row == 0) {
     uint8_t mode = (uint8_t)chipnomadState->project.tables[tableIdx].retriggerMode;
@@ -304,7 +303,7 @@ static int editCell(int col, int row, enum CellEditAction action) {
     // FX (columns 3,5,7,9)
     int fxIdx = (col - 3) / 2;
     uint8_t instrumentIdx = getTableInstrumentIdx();
-    int result = editFX(action, tableRows[row].fx[fxIdx], lastFX, 1, instrumentIdx);
+    int result = editFX(action, &tableRows[row].fx[fxIdx], &lastFX, 1, instrumentIdx);
     if (result == 2) {
       drawField(col + 1, row, CellState::normal);
       handled = 1;
@@ -315,9 +314,9 @@ static int editCell(int col, int row, enum CellEditAction action) {
   } else if (col % 2 == 0 && col >= 4) {
     // FX value (columns 4,6,8,10)
     int fxIdx = (col - 4) / 2;
-    if (tableRows[row].fx[fxIdx][0] != EMPTY_VALUE_8) {
+    if (tableRows[row].fx[fxIdx].command != FX_ID_EMPTY) {
       uint8_t instrumentIdx = getTableInstrumentIdx();
-      handled = editFXValue(action, tableRows[row].fx[fxIdx], lastFX, 1, instrumentIdx);
+      handled = editFXValue(action, &tableRows[row].fx[fxIdx], &lastFX, 1, instrumentIdx);
     }
   }
 
@@ -359,7 +358,7 @@ static int onEdit(int col, int row, CellEditAction action) {
         // FX type column: show FX selection
         int fxIdx = (startCol - 3) / 2;
         uint8_t instrumentIdx = getTableInstrumentIdx();
-        fxEditFullDraw(tableRows[screen.cursorRow - 1].fx[fxIdx][0], instrumentIdx, 1);
+        fxEditFullDraw(tableRows[screen.cursorRow - 1].fx[fxIdx].command, instrumentIdx, 1);
         isFxEdit = 1;
         return 0;
       } else {
@@ -439,7 +438,7 @@ static int inputScreenNavigation(int keys, int tapCount) {
 static int onInput(int isKeyDown, int keys, int tapCount) {
   if (isFxEdit) {
     int fxIdx = (screen.cursorCol - 3) / 2;
-    int result = fxEditInput(keys, tapCount, tableRows[screen.cursorRow - 1].fx[fxIdx], lastFX);
+    int result = fxEditInput(keys, tapCount, &tableRows[screen.cursorRow - 1].fx[fxIdx], &lastFX);
     if (result) {
       isFxEdit = 0;
 
@@ -449,9 +448,9 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
         getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
 
         if (isSingleColumnSelection(&screen)) {
-          uint8_t selectedFX = tableRows[screen.cursorRow - 1].fx[fxIdx][0];
+          FXId selectedFX = tableRows[screen.cursorRow - 1].fx[fxIdx].command;
           for (int r = startRow; r <= endRow; r++) {
-            if (r > 0) tableRows[r - 1].fx[fxIdx][0] = selectedFX;
+            if (r > 0) selectInstrumentFX(&tableRows[r - 1].fx[fxIdx],selectedFX,getTableInstrumentIdx());
           }
         }
       }

@@ -185,6 +185,19 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   return 0;
 }
 
+#ifdef DESKTOP_BUILD
+int pitchTableKeyJazzTextField(KeyJazzTextField* field) {
+  ScreenData* screen = &screenPitchTableData;
+  field->screen = screen;
+  field->row = 0;
+  field->popupOpen = isCharEdit;
+  field->marksProjectModified = 1;
+  field->str = NULL;
+  if (screen->cursorRow == 0) { field->str = chipnomadState->project.pitchTable.name; field->maxLen = PROJECT_PITCH_TABLE_TITLE_LENGTH; }
+  return 1;
+}
+#endif
+
 const AppScreen screenPitchTable = {
   .init = NULL,
   .setup = setup,

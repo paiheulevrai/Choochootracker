@@ -4,7 +4,12 @@
 # Compiler settings
 CXX = c++
 CFLAGS = -std=c++17 -Wall -g -O0 -DTEST -DTEST_PORTMASTER_INPUT
+ifeq ($(OS),Windows_NT)
+# Match the Windows application build: the pinned SID core uses CRT constants.
+CFLAGS += -D_USE_MATH_DEFINES
+endif
 LDFLAGS = -lm -pthread
+include Makefile.native-chip-flags
 
 # Build directory
 BUILD_DIR = build/tests
@@ -12,12 +17,15 @@ BUILD_DIR = build/tests
 
 # Include paths
 INCLUDES = -I. -Isrc -Isrc/corelib -Isrc/screens -Isrc/import -Itests/mocks -Iexternal \
-           -I../chipnomad_lib -I../chipnomad_lib/chips -I../chipnomad_lib/external/ayumi \
-           -I../chipnomad_lib/external/mutable -I../chipnomad_lib/external/open303/Source/DSPCode \
-           -I../chipnomad_lib/external/signalsmith
+           -I../chipnomad_lib -I../chipnomad_lib/chips -I../chipnomad_lib/link -I../chipnomad_lib/external/ayumi \
+           -I../chipnomad_lib/external/gb_apu -I../chipnomad_lib/external/mutable -I../chipnomad_lib/external/open303/Source/DSPCode \
+           -I../chipnomad_lib/external/signalsmith \
+           -I../chipnomad_lib/external/taktful/include -I../chipnomad_lib/external/taktful/data
 
 # Test executable
 TEST_EXECUTABLE = $(BUILD_DIR)/run_tests$(if $(filter Windows_NT,$(OS)),.exe,)
+STRETCH_LIFETIME_EXECUTABLE = $(BUILD_DIR)/stretch_lifetime$(if $(filter Windows_NT,$(OS)),.exe,)
+BEADS_LIFETIME_EXECUTABLE = $(BUILD_DIR)/beads_lifetime$(if $(filter Windows_NT,$(OS)),.exe,)
 MEASURE_EXECUTABLE = $(BUILD_DIR)/render_engine_measurements$(if $(filter Windows_NT,$(OS)),.exe,)
 BENCHMARK_EXECUTABLE = $(BUILD_DIR)/benchmark_song$(if $(filter Windows_NT,$(OS)),.exe,)
 
@@ -30,11 +38,15 @@ TEST_SOURCES_EXCLUDED = tests/test_project_io.cpp tests/test_screen_instrument.c
 TEST_SOURCES = $(filter-out $(TEST_SOURCES_EXCLUDED),$(TEST_SOURCES_ALL))
 
 # Common sources needed by tests - use wildcards for automatic discovery
-CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/*.cpp) \
+CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/external/mutable/beads/*.cc) $(wildcard ../chipnomad_lib/external/mutable/beads/dsp/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/msfa/*.cc) ../chipnomad_lib/external/emu76489/emu76489.c ../chipnomad_lib/external/gb_apu/gb_apu.c $(wildcard ../chipnomad_lib/external/gb_apu/blargg/*.cpp) \
+                        $(wildcard ../chipnomad_lib/external/ymfm/*.cpp) \
+                        $(wildcard ../chipnomad_lib/*.cpp) \
                         $(wildcard ../chipnomad_lib/chips/*.cpp) \
                         $(wildcard ../chipnomad_lib/synth/*.cpp) \
                         $(wildcard ../chipnomad_lib/export/*.cpp) \
                         $(wildcard ../chipnomad_lib/midi/*.cpp) \
+                        $(wildcard ../chipnomad_lib/link/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/open303/Source/DSPCode/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/ayumi/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/mutable/braids/*.cc) \
@@ -55,21 +67,30 @@ CHIPNOMAD_LIB_SOURCES = $(wildcard ../chipnomad_lib/*.cpp) \
                         $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/engine2/*.cc) \
                         $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/fm/*.cc) \
                         $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/physical_modelling/*.cc) \
-                        $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/speech/*.cc)
+                        $(wildcard ../chipnomad_lib/external/mutable/plaits_alt/dsp/speech/*.cc) \
+                        $(wildcard ../chipnomad_lib/external/taktful/src/*.cpp)
 
-TRACKER_SRC_SOURCES = src/app.cpp \
+TRACKER_SRC_SOURCES = src/screens/instrument_monk.cpp src/soundbank_library.cpp src/screens/instrument_soundfont.cpp src/screens/user_preset_browser.cpp src/user_presets.cpp src/fm_catalog.cpp src/app.cpp src/support_report.cpp src/version.cpp \
+                      src/screens/edit_character.cpp \
+                      src/screens/instrument_fm_controls.cpp src/screens/instrument_opl.cpp src/screens/screen_fm_edit.cpp src/screens/screen_sid_edit.cpp src/screens/instrument_simple_chip.cpp \
+                      src/screens/screen_insert_fx.cpp \
+                      src/screens/edit_fx.cpp src/screens/help.cpp src/misc.cpp \
+                      src/screens/selection_popup.cpp \
                       src/corelib/corelib_gfx_layout.cpp \
+                      src/screens/screen_layout.cpp \
+                      src/scope_display.cpp \
+                      src/screens/screen_track_visuals.cpp \
                       src/meter_display.cpp \
                       src/monitor_display.cpp \
                       src/piano_display.cpp \
-                      src/scope_display.cpp \
-                      src/screens/screen_layout.cpp \
                       src/screens/screen_settings.cpp \
                       src/screens/screen_settings_submenus.cpp \
-                      src/screens/screen_track_visuals.cpp \
                       src/screens/screen_midi.cpp \
                       src/screens/screen_midi_channel_map.cpp \
+                      src/screens/screen_midi_cc.cpp \
                       src/string_utils.cpp \
+                      src/audio_input_manager.cpp \
+                      src/screens/screen_audio_input.cpp \
                       src/common.cpp \
                       src/export_path.cpp \
                       src/copy_paste.cpp \
@@ -85,7 +106,9 @@ TRACKER_SRC_SOURCES = src/app.cpp \
                       src/import/import_vt2.cpp \
                       src/import/import_vts.cpp \
                       src/import/pt3_tables.cpp \
-                      src/import/import_midi.cpp
+                      src/import/import_midi.cpp \
+                      src/import/import_m8s.cpp \
+                      src/import/import_lsdj.cpp
 
 # Mock sources
 MOCK_SOURCES = $(wildcard tests/mocks/*.cpp)
@@ -93,11 +116,13 @@ MOCK_SOURCES = $(wildcard tests/mocks/*.cpp)
 # Combined common sources
 COMMON_SOURCES = $(CHIPNOMAD_LIB_SOURCES) $(TRACKER_SRC_SOURCES)
 
+
 # All sources
 ALL_SOURCES = $(TEST_SOURCES) $(COMMON_SOURCES) $(MOCK_SOURCES)
 MEASURE_SOURCES = tests/render_engine_measurements.cpp $(filter-out src/copy_paste.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES)
 BENCHMARK_SOURCES = tests/benchmark_song.cpp $(COMMON_SOURCES) $(MOCK_SOURCES)
 ALL_COMPILE_SOURCES = $(sort $(ALL_SOURCES) $(MEASURE_SOURCES) $(BENCHMARK_SOURCES))
+ALL_COMPILE_SOURCES += tests/beads_lifetime.cpp
 
 # Compile each translation unit separately so -j can use every core and
 # unchanged files stay cached between test runs.
@@ -105,12 +130,13 @@ object_for = $(BUILD_DIR)/obj/$(subst ../,up/,$(basename $(1))).o
 OBJECTS := $(foreach source,$(ALL_SOURCES),$(call object_for,$(source)))
 MEASURE_OBJECTS := $(foreach source,$(MEASURE_SOURCES),$(call object_for,$(source)))
 BENCHMARK_OBJECTS := $(foreach source,$(BENCHMARK_SOURCES),$(call object_for,$(source)))
-DEPS := $(sort $(OBJECTS:.o=.d) $(MEASURE_OBJECTS:.o=.d) $(BENCHMARK_OBJECTS:.o=.d))
+BEADS_LIFETIME_OBJECTS := $(foreach source,tests/beads_lifetime.cpp $(filter-out src/copy_paste.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
+DEPS := $(sort $(OBJECTS:.o=.d) $(MEASURE_OBJECTS:.o=.d) $(BENCHMARK_OBJECTS:.o=.d) $(BEADS_LIFETIME_OBJECTS:.o=.d))
 
 define compile_source
-$(call object_for,$(1)): $(1) Makefile.test
+$(call object_for,$(1)): $(1) Makefile.test Makefile.native-chip-flags
 	@mkdir -p $$(dir $$@)
-	@$(CXX) $(CFLAGS) $(INCLUDES) -MMD -MP -c $$< -o $$@
+	@$(CXX) $(CFLAGS) $(call native_chip_opt_flags,$(1)) $(INCLUDES) -MMD -MP -c $$< -o $$@
 endef
 
 $(foreach source,$(ALL_COMPILE_SOURCES),$(eval $(call compile_source,$(source))))
@@ -118,11 +144,23 @@ $(foreach source,$(ALL_COMPILE_SOURCES),$(eval $(call compile_source,$(source)))
 
 # Default target: build and run all tests
 all: build
+	# The global new/delete hooks in stretch_lifetime corrupt the UCRT heap.
+	# Keep this Unix-only allocation regression separate from Windows tests.
+	@if [ "$(OS)" != "Windows_NT" ]; then $(STRETCH_LIFETIME_EXECUTABLE); fi
+	@if [ "$(OS)" != "Windows_NT" ]; then $(BEADS_LIFETIME_EXECUTABLE); fi
 	@$(TEST_EXECUTABLE)
 
 # Build the test executable incrementally
 .PHONY: build
-build: $(TEST_EXECUTABLE)
+build: $(TEST_EXECUTABLE) $(STRETCH_LIFETIME_EXECUTABLE) $(if $(filter Windows_NT,$(OS)),,$(BEADS_LIFETIME_EXECUTABLE))
+
+$(BEADS_LIFETIME_EXECUTABLE): $(BEADS_LIFETIME_OBJECTS)
+	@$(CXX) $(BEADS_LIFETIME_OBJECTS) $(LDFLAGS) -o $@
+
+# Keep the allocation hooks in their own process, away from the main suite.
+$(STRETCH_LIFETIME_EXECUTABLE): tests/stretch_lifetime.cpp ../chipnomad_lib/synth/stretch_processor.cpp ../chipnomad_lib/synth/stretch_processor.h Makefile.test
+	@mkdir -p $(BUILD_DIR)
+	@$(CXX) $(CFLAGS) -I../chipnomad_lib/external/signalsmith tests/stretch_lifetime.cpp ../chipnomad_lib/synth/stretch_processor.cpp $(LDFLAGS) -o $@
 
 $(TEST_EXECUTABLE): $(OBJECTS)
 	@mkdir -p $(BUILD_DIR)
@@ -147,9 +185,42 @@ $(BENCHMARK_EXECUTABLE): $(BENCHMARK_OBJECTS)
 .PHONY: benchmark-song
 benchmark-song: $(BENCHMARK_EXECUTABLE)
 
+# An independent, optimised directory keeps benchmark objects separate from
+# debug test objects. Invoke this target from the MSYS2 UCRT64 shell.
+.PHONY: benchmark-song-release
+benchmark-song-release:
+	@$(MAKE) -f Makefile.test benchmark-song BUILD_DIR=build/benchmark-release CFLAGS='-std=c++17 -O3 -w -DNDEBUG -DTEST -DTEST_PORTMASTER_INPUT -D_USE_MATH_DEFINES'
+
 # Clean build artifacts
 clean:
 	@rm -rf $(BUILD_DIR)
+
+# Sanitizer builds (T10): separate object dirs so the plain -O0 objects
+# stay cached; sanitizer instrumentation must match across every TU, so
+# these rebuild the full tree with the sanitizer flag added.
+# TSan needs -O1 (not -O0) for reliable shadow-memory tracking.
+SANITIZER_OBJECT_DIR = $(BUILD_DIR)/obj-$(1)
+define sanitizer_target
+.PHONY: $(2)
+$(2): $(BUILD_DIR)/$(2)$(if $(filter Windows_NT,$(OS)),.exe,)
+	@$(BUILD_DIR)/$(2)$(if $(filter Windows_NT,$(OS)),.exe,)
+
+$(BUILD_DIR)/$(2)$(if $(filter Windows_NT,$(OS)),.exe,): $$(foreach source,$$(ALL_SOURCES),$$(call object_for_san,$$(source),$(1)))
+	@mkdir -p $(BUILD_DIR)
+	@echo "Linking $(2)..."
+	@$$(CXX) -fsanitize=$(1) -g -O1 $$^ $$(LDFLAGS) -o $$@
+	@echo "Built: $$@"
+
+$$(foreach source,$$(ALL_COMPILE_SOURCES),$$(eval $$(call compile_source_san,$$(source),$(1))))
+endef
+object_for_san = $(BUILD_DIR)/obj-$(2)/$(subst ../,up/,$(basename $(1))).o
+define compile_source_san
+$(call object_for_san,$(1),$(2)): $(1) Makefile.test Makefile.native-chip-flags
+	@mkdir -p $$(dir $$@)
+	@$$(CXX) $$(CFLAGS) -fsanitize=$(2) -g -O1 $$(call native_chip_opt_flags,$$(1)) $$(INCLUDES) -MMD -MP -c $$< -o $$@
+endef
+$(eval $(call sanitizer_target,thread,test-tsan))
+$(eval $(call sanitizer_target,address,test-asan))
 
 # Help
 help:
@@ -160,6 +231,9 @@ help:
 	@echo "  make -f Makefile.test -j4       Build and run tests on four cores"
 	@echo "  make -f Makefile.test build     Build changed files only"
 	@echo "  make -f Makefile.test clean     Remove build artifacts"
+	@echo "  make -f Makefile.test benchmark-song-release  Build the optimised song benchmark"
+	@echo "  make -f Makefile.test test-tsan Run tests under ThreadSanitizer"
+	@echo "  make -f Makefile.test test-asan Run tests under AddressSanitizer"
 	@echo "  make -f Makefile.test help      Show this help"
 	@echo "  make -f Makefile.test debug     Show discovered source files"
 	@echo ""
@@ -170,4 +244,30 @@ help:
 	@echo "  $(TEST_EXECUTABLE) --success              Show successful assertions"
 	@echo "  $(TEST_EXECUTABLE) --help                 See all doctest options"
 
-.PHONY: all build clean help debug measurements
+.PHONY: all build clean help debug measurements test-tsan test-asan
+
+# Offline factory conversion uses the same canonical writer/readers as the app.
+FACTORY_OBJECTS = $(foreach source,tests/chip_factory.cpp $(filter-out src/copy_paste.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
+$(eval $(call compile_source,tests/chip_factory.cpp))
+$(BUILD_DIR)/chip_factory: $(FACTORY_OBJECTS)
+	@$(CXX) $(FACTORY_OBJECTS) $(LDFLAGS) -o $@
+.PHONY: chip-factory
+chip-factory: $(BUILD_DIR)/chip_factory
+
+CHIP_BENCH_OBJECTS = $(foreach source,tests/benchmark_native_chips.cpp $(filter-out src/copy_paste.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
+$(eval $(call compile_source,tests/benchmark_native_chips.cpp))
+$(BUILD_DIR)/benchmark_native_chips: $(CHIP_BENCH_OBJECTS)
+	@$(CXX) $(CHIP_BENCH_OBJECTS) $(LDFLAGS) -o $@
+.PHONY: benchmark-native-chips
+benchmark-native-chips: $(BUILD_DIR)/benchmark_native_chips
+
+CHIP_AUDITION_OBJECTS = $(foreach source,tests/chip_auditions.cpp $(filter-out src/copy_paste.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
+$(eval $(call compile_source,tests/chip_auditions.cpp))
+$(BUILD_DIR)/chip_auditions: $(CHIP_AUDITION_OBJECTS)
+	@$(CXX) $(CHIP_AUDITION_OBJECTS) $(LDFLAGS) -o $@
+.PHONY: chip-auditions
+chip-auditions: $(BUILD_DIR)/chip_auditions
+
+# Host tools own voice objects too; their header dependencies must participate
+# in incremental rebuilds when a native adapter's layout changes.
+-include $(FACTORY_OBJECTS:.o=.d) $(CHIP_BENCH_OBJECTS:.o=.d) $(CHIP_AUDITION_OBJECTS:.o=.d)

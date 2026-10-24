@@ -1,5 +1,4 @@
 // Standalone host check of the Android SDL callback, using SDL's dummy device.
-// See docs/android-audio-debugging.md for the compile command.
 #define SDL_MAIN_HANDLED
 #include <assert.h>
 #include <algorithm>

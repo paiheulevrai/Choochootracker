@@ -1,0 +1,2 @@
+kind,rate,frames,notes,seconds,mean_us,p50_us,p95_us,p99_us,worst_us,deadline_misses,part_bytes
+4WAV+2chip+2FM chord song (8 tracks)+4 inserts+sends,48000,512,11,600,7911.405,8072.459,8647.042,9041.375,20440.875,28,782032

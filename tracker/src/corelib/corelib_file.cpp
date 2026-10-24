@@ -87,17 +87,29 @@ int fileCreateDirectoryRecursive(const char* path) {
   snprintf(tmp, sizeof(tmp), "%s", path);
   size_t len = strlen(tmp);
   if (len == 0) return -1;
+#ifdef _WIN32
+  // Callers commonly build paths with '/', while the Windows APIs and the
+  // drive-prefix check below use '\\'. Normalize once so recursive creation
+  // behaves consistently for both spellings.
+  for (size_t i = 0; i < len; i++) {
+    if (tmp[i] == '/') tmp[i] = '\\';
+  }
+#endif
   if (tmp[len - 1] == '/' || tmp[len - 1] == '\\') tmp[len - 1] = 0;
   if (tmp[0] == 0) return -1;
 
   // Create each path level in turn; existing levels report EEXIST and are fine
-  for (char* p = tmp + 1; *p; p++) {
+  char* firstSeparator = tmp + 1;
+#ifdef _WIN32
+  if (tmp[1] == ':' && (tmp[2] == '/' || tmp[2] == '\\')) firstSeparator = tmp + 3;
+#endif
+  for (char* p = firstSeparator; *p; p++) {
     if (*p == '/' || *p == '\\') {
       *p = 0;
       if (!fileDirectoryExists(tmp)) {
         if (fileCreateDirectory(tmp) != 0) return -1;
       }
-      *p = '/';
+      *p = PATH_SEPARATOR;
     }
   }
   if (!fileDirectoryExists(tmp)) {
@@ -179,9 +191,39 @@ void fileExportDocument(const char* path, const char* mimeType) {
 #endif
 }
 
+void filePickWorkingFolder(void) {
+#ifdef ANDROID_BUILD
+  extern void androidWorkingFolderCommand(const char*);
+  androidWorkingFolderCommand("pickWorkingFolder");
+#endif
+}
+
+void fileClearWorkingFolder(void) {
+#ifdef ANDROID_BUILD
+  extern void androidWorkingFolderCommand(const char*);
+  androidWorkingFolderCommand("clearWorkingFolder");
+#endif
+}
+
+int fileGetWorkingFolderStatus(char* buffer, int bufferSize) {
+#ifdef ANDROID_BUILD
+  extern int androidGetWorkingFolderStatus(char*, int);
+  return androidGetWorkingFolderStatus(buffer, bufferSize);
+#else
+  snprintf(buffer, bufferSize, "Unavailable");
+  return 0;
+#endif
+}
+
 int fileDirectoryExists(const char* path) {
+#ifdef _WIN32
+  if (!path || !path[0]) return 0;
+  DWORD attributes = GetFileAttributesA(path);
+  return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
+#else
   struct stat statBuf;
   return (stat(path, &statBuf) == 0 && S_ISDIR(statBuf.st_mode)) ? 1 : 0;
+#endif
 }
 
 int fileCreateDirectory(const char* path) {
@@ -199,6 +241,17 @@ int fileDelete(const char* path) {
 FileEntry* fileListDirectory(const char* path, const char* extension, int* entryCount) {
   DIR* dir = opendir(path);
   if (!dir) {
+    // Unreadable folder (e.g. /storage/emulated above the user's storage on
+    // Android): still offer "..", otherwise the browser dead-ends there.
+    if (strcmp(path, "/") != 0) {
+      FileEntry* parentOnly = (FileEntry*)malloc(sizeof(FileEntry));
+      if (parentOnly) {
+        strcpy(parentOnly[0].name, "..");
+        parentOnly[0].isDirectory = 1;
+        *entryCount = 1;
+        return parentOnly;
+      }
+    }
     *entryCount = 0;
     return NULL;
   }
@@ -278,6 +331,36 @@ FileEntry* fileListDirectory(const char* path, const char* extension, int* entry
   }
 
   closedir(dir);
+
+  // Empty folders (and some FUSE-backed ones) list nothing at all, not even
+  // ".." - make sure there is always a way back up.
+  if (strcmp(path, "/") != 0) {
+    int hasParent = 0;
+    for (int i = 0; i < count; i++) {
+      if (strcmp(entries[i].name, "..") == 0) { hasParent = 1; break; }
+    }
+    if (!hasParent) {
+      FileEntry* grown = (FileEntry*)realloc(entries, (count + 1) * sizeof(FileEntry));
+      if (grown) {
+        entries = grown;
+        memmove(entries + 1, entries, count * sizeof(FileEntry));
+        strcpy(entries[0].name, "..");
+        entries[0].isDirectory = 1;
+        count++;
+      }
+    }
+  }
+#ifdef ANDROID_BUILD
+  // /storage/emulated is not listable by apps: no way back from there, so
+  // user storage is the top of the tree (as is the picked-folder workspace).
+  if (strcmp(path, "/storage/emulated/0") == 0 || strcmp(path, "/ChooChooTracker") == 0) {
+    int kept = 0;
+    for (int i = 0; i < count; i++) {
+      if (strcmp(entries[i].name, "..") != 0) entries[kept++] = entries[i];
+    }
+    count = kept;
+  }
+#endif
   *entryCount = count;
   return entries;
 }

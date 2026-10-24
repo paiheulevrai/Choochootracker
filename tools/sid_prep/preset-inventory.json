@@ -1,0 +1,846 @@
+{
+  "original_programs": 32,
+  "mit_sidkit_builtins": 24,
+  "cc_by_gti_candidates": 12,
+  "cc_by_unique_payloads": 12,
+  "cc_by_families": [
+    "grand-piano",
+    "acoustic-guitar",
+    "violin"
+  ],
+  "gti_candidates": [
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar/6581/acoustic-guitar-6581.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        3,
+        46,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        33
+      ],
+      "tables": {
+        "wave": [
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            255,
+            4
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            97
+          ],
+          [
+            221,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            128,
+            128
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "512fb69a88f273450d66087cc10b1955f0e68cd9781c29d4d1603ceb25e9cb74"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar/8580/acoustic-guitar-8580.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        129,
+        125,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        65
+      ],
+      "tables": {
+        "wave": [
+          [
+            8,
+            0
+          ],
+          [
+            128,
+            0
+          ],
+          [
+            128,
+            0
+          ],
+          [
+            128,
+            0
+          ],
+          [
+            64,
+            0
+          ],
+          [
+            255,
+            5
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            89
+          ],
+          [
+            43,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            144,
+            145
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "34ccedad166cd039905f335a7f9de29843c46167a179ddfaebd62409a7f2beb5"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar-tpe/6581/acoustic-guitar-tpe-6581.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        34,
+        28,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        33
+      ],
+      "tables": {
+        "wave": [
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            255,
+            6
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            118
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            128,
+            128
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "fc3e4c8118e5048aa17e6638d6e21442456c41d5163a2bb786ac60902e6884a0"
+    },
+    {
+      "path": "sources/instruments/instruments/acoustic-guitar-tpe/8580/acoustic-guitar-tpe-8580.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        239,
+        230,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        33
+      ],
+      "tables": {
+        "wave": [
+          [
+            8,
+            0
+          ],
+          [
+            48,
+            0
+          ],
+          [
+            48,
+            0
+          ],
+          [
+            48,
+            0
+          ],
+          [
+            48,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            255,
+            6
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            144,
+            129
+          ],
+          [
+            0,
+            11
+          ],
+          [
+            75,
+            255
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "b4c62adf48f3203b890ae2c39957783a23715ffa5f6618021601eebdd6a15dfc"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano/6581/grand-piano-6581.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        9,
+        3,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        65
+      ],
+      "tables": {
+        "wave": [
+          [
+            128,
+            0
+          ],
+          [
+            64,
+            0
+          ],
+          [
+            255,
+            2
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            97
+          ],
+          [
+            18,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            144,
+            241
+          ],
+          [
+            0,
+            64
+          ],
+          [
+            9,
+            199
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "0d782fffcfa33df688e36b69178250dbbf69a2e8282c8e57c6ea2067bd190c0a"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano/8580/grand-piano-8580.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        9,
+        9,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        65
+      ],
+      "tables": {
+        "wave": [
+          [
+            8,
+            0
+          ],
+          [
+            128,
+            0
+          ],
+          [
+            128,
+            0
+          ],
+          [
+            128,
+            0
+          ],
+          [
+            128,
+            0
+          ],
+          [
+            128,
+            0
+          ],
+          [
+            64,
+            0
+          ],
+          [
+            255,
+            7
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            0
+          ],
+          [
+            228,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            128,
+            128
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "e04ca166662876e37dce22514e33dc0b4a77d333f0e9212751ca273f88d760cb"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano-tpe/6581/grand-piano-tpe-6581.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        138,
+        4,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        33
+      ],
+      "tables": {
+        "wave": [
+          [
+            32,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            255,
+            2
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            128,
+            128
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "0793c79d19f40801d628f184dc00c214b2b24bf2c596d0028df6406b1a49ae71"
+    },
+    {
+      "path": "sources/instruments/instruments/grand-piano-tpe/8580/grand-piano-tpe-8580.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        183,
+        236,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        33
+      ],
+      "tables": {
+        "wave": [
+          [
+            8,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            255,
+            6
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            144,
+            177
+          ],
+          [
+            0,
+            14
+          ],
+          [
+            61,
+            255
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "489af49ed409474f23b70c726191a82434bf982af1247fe0069c2580d469f0f6"
+    },
+    {
+      "path": "sources/instruments/instruments/violin/6581/violin-6581.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        22,
+        70,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        33
+      ],
+      "tables": {
+        "wave": [
+          [
+            8,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            255,
+            7
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            81
+          ],
+          [
+            213,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            128,
+            128
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "838119ce13b92ce8e666ff69ddef183fedf122f1683ff83e667a16fe8b235154"
+    },
+    {
+      "path": "sources/instruments/instruments/violin/8580/violin-8580.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        132,
+        241,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        33
+      ],
+      "tables": {
+        "wave": [
+          [
+            8,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            255,
+            6
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            74
+          ],
+          [
+            21,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            128,
+            128
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "ae969163392273b38e5c6187c39983df341031719a57aab7dff19e1a2dd0fa3e"
+    },
+    {
+      "path": "sources/instruments/instruments/violin-tpe/6581/violin-tpe-6581.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        201,
+        5,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        33
+      ],
+      "tables": {
+        "wave": [
+          [
+            8,
+            0
+          ],
+          [
+            48,
+            0
+          ],
+          [
+            48,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            255,
+            4
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            128,
+            128
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "5b8ba1be10ad6431eacafa68036510677023fcadd9b6e28846768b17d322392d"
+    },
+    {
+      "path": "sources/instruments/instruments/violin-tpe/8580/violin-tpe-8580.ins",
+      "license": "CC-BY-4.0",
+      "status": "parsed candidate; table playback and source attribution review pending",
+      "header": [
+        169,
+        130,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        33
+      ],
+      "tables": {
+        "wave": [
+          [
+            96,
+            0
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            32,
+            0
+          ],
+          [
+            255,
+            3
+          ]
+        ],
+        "pulse": [
+          [
+            128,
+            106
+          ],
+          [
+            206,
+            0
+          ]
+        ],
+        "filter": [
+          [
+            128,
+            128
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "speed": []
+      },
+      "payload_sha256": "46977389c79d718dcf0a8fc8ef79034ecaa59421327250256bdf8a28665b3af8"
+    }
+  ],
+  "app_integration": false,
+  "hardware_variants_emulated": [
+    "generic 6581"
+  ],
+  "limitations": "GTI tables parsed but not rendered. SIDkit traces are an adaptation, not a verified equivalent player. No chip revision filters implemented."
+}

@@ -1,0 +1,36 @@
+{
+  "reviewed": "2026-10-03",
+  "decision": "24 original MIT voices per family; no third-party patch data included",
+  "format_references": [
+    {
+      "url": "https://www.plutiedev.com/format-tfi",
+      "use": "TFI42-byte format, operator ordering, signed detune mapping"
+    },
+    {
+      "url": "https://github.com/yoyz/picoloop/blob/master/synthengine/vopm/OPMdrv.cpp",
+      "use": "Original VOPM Save/Load field order and extended pan; inspected only, no player code copied"
+    }
+  ],
+  "candidates": [
+    {
+      "url": "https://chipmusic.org/forums/topic/24893/any-advice-on-user-made-patches-ym2612/",
+      "decision": "excluded",
+      "reason": "TFI megapack recommendation provides no patch-author redistribution grants; no bulk source included"
+    },
+    {
+      "url": "https://github.com/yoyz/picoloop/tree/master/synthengine/vopm",
+      "decision": "format reference only",
+      "reason": "2612orgOPMs collection has no established per-bank author clearance in this review"
+    },
+    {
+      "url": "https://github.com/hiroaki0923/YMulator-Synth",
+      "decision": "not included",
+      "reason": "application repository discovered; no compatible data-only bank with verified authorship/license established in bounded review"
+    },
+    {
+      "url": "https://github.com/little-scale/genmddj",
+      "decision": "not included",
+      "reason": "native/TFI conversion reference discovered; game-extracted material outside scope and no separate cleared bank verified"
+    }
+  ]
+}

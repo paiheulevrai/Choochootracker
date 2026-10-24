@@ -3,7 +3,7 @@
 ## Braids integration
 
 - Braids exposes 47 production models, indexed from 0 to 46. `QUESTION_MARK` is not part of the accessible set.
-- Braids still renders internally at its native 96 kHz, then a 31-tap half-band FIR decimates it into the 48 kHz master mix. This preserves its pitch/table assumptions while avoiding a 96 kHz pass through every downstream effect.
+- Braids still renders internally at its native 96 kHz, then resamples into the selected 32 or 48 kHz master mix. This preserves its pitch/table assumptions while avoiding a 96 kHz pass through every downstream effect.
 - One `BraidsVoice` belongs to each tracker track. Voices are monophonic, while AY and Braids instruments can coexist in one song.
 - Percussive models from `STRUCK_BELL` through `SNARE` keep Braids' internal `STRIKE` decay. Tonal models use the added audio-rate ADSR.
 - Braids must bypass AY register output. Treating every non-empty instrument as AY caused invalid register work until the AY path was explicitly restricted to AY1, AY2 and AYSample.
@@ -14,7 +14,7 @@
 ## Build and validation
 
 - Native Windows development uses MSYS2 UCRT64, GCC and SDL2. Docker is not required.
-- Windows and PortMaster use a fixed 48 kHz master rate. `settingsLoad` migrates old `audioSampleRate` values so an existing 96 kHz settings file cannot silently undo the optimization.
+- Audio settings offer 32 and 48 kHz master rates, defaulting to 48 kHz. `settingsLoad` migrates unsupported old `audioSampleRate` values to 48 kHz. A live rate change reinitializes the sound engines and stops playback.
 - The PortMaster source package should target `aarch64` first: the RG353V uses a 64-bit RK3566 CPU, and keeping an untested ARMHF build doubles the work without helping this target.
 - PortMaster officially supports WSL2/chroot, cross-compilation and Docker. This project uses WSL2/cross-compilation; Docker remains optional.
 
@@ -45,7 +45,7 @@
 - Plaits has two envelope routings. `TRIG` matches TRIG patched/LEVEL unpatched and reuses the envelope row's D/S storage as LPG decay/color. `VCA` holds LEVEL open and applies the ADSR after the Mutable voice. In `TRIG`, the wrapper now holds the Mutable gate high for the note duration; a repeated tracker note inserts one low block before returning high, preserving its rising-edge retrigger. VCA retriggers attack from the current level instead of resetting to zero, avoiding an amplitude discontinuity. Legacy `LEVEL` values load as `VCA`.
 - The Plaits wrapper passes pitch once to the Mutable voice; the previous integration also repeated it through the modulation input. A one-octave frequency-ratio test guards this path.
 - Reverb and Delay are shared master effects. Tracks accumulate post-fader send buses; each effect is processed once per callback, not once per track.
-- The Clouds reverb delay lengths are scaled from its original 32 kHz design to the fixed 48 kHz master rate; its LFO increments also use the actual rate. The ping-pong delay derives its sample delay from project tick rate and delay ticks.
+- The Clouds reverb delay lengths were scaled from its original 32 kHz design for the 48 kHz default master rate; at 32 kHz the same delay lengths yield longer reverb times. Its LFO increments use the actual rate. The ping-pong delay derives its sample delay from project tick rate and delay ticks.
 - `PRO` uses `00-64` as 0-100%, `MOD AB` uses a per-track phrase visit count, and conditions on one row are ANDed. `SPD` uses a rational phase accumulator and persists until replaced.
 - The scheduler advances at most one row per audio tick. High `SPD` multipliers therefore need hardware and musical validation with short grooves.
 
@@ -86,6 +86,88 @@ file tracker/build/portmaster/choochootracker.aarch64
 aarch64-linux-gnu-readelf -d tracker/build/portmaster/choochootracker.aarch64
 unzip -t releases/choochootracker.zip
 ```
+
+### Building without WSL2 (native Linux host, no Docker)
+
+When WSL2 or Docker is unavailable, the CI builder image
+(`ghcr.io/monkeyx-net/portmaster-build-templates/portmaster-builder:aarch64`)
+can be pulled from GHCR and used as a sysroot. The recipe below was validated
+end-to-end on an amd64 Ubuntu host with the `aarch64-linux-gnu` cross toolchain
+(GCC 15.2.0, compliant with the PortMaster GCC >= 10 requirement).
+
+1. Pull and extract the image rootfs (no Docker needed — registry API + tar):
+
+```sh
+# fetch.sh: resolve manifest -> layer blobs -> tar -xf into rootfs/
+# (see pm-rootfs-dl/fetch.sh for the working implementation)
+```
+
+2. Repair the image's broken dev symlinks — the extracted rootfs has absolute
+   symlinks (`/lib/aarch64-linux-gnu/...`) that escape the sysroot and make the
+   linker fall back to static libs:
+
+```sh
+cd rootfs/usr/lib/aarch64-linux-gnu
+for l in $(find . -maxdepth 1 -xtype l); do
+  ln -sf "$(basename "$(readlink "$l")")" "$l"
+done
+```
+
+3. Stage GCC 10 static archives from the image (`usr/lib/gcc/aarch64-linux-gnu/10/`)
+   into a `-B` directory: `libstdc++.a`, `libgcc.a`, `libgcc_eh.a`,
+   `libatomic.a`, `libstdc++fs.a`. No `include/` subdir — GCC 15 headers stay
+   authoritative while `-lstdc++`/`-lgcc`/`-latomic` resolve to the staged
+   glibc-2.31-compatible archives.
+
+4. Force the sysroot glibc 2.31 headers. With `--sysroot`, the cross toolchain's
+   own target include dir (`/usr/aarch64-linux-gnu/include`, glibc 2.4x)
+   outranks `-isystem` additions, producing `__isoc23_*` /
+   `__libc_single_threaded` link errors or `__attr_dealloc_free` header-mix
+   syntax errors. Only `-nostdinc` with a fully explicit chain works:
+
+```sh
+R=<rootfs>; B=<gcc10-libs>
+CXXINCS="-nostdinc \
+  -isystem /usr/aarch64-linux-gnu/include/c++/15 \
+  -isystem /usr/aarch64-linux-gnu/include/c++/15/aarch64-linux-gnu \
+  -isystem /usr/aarch64-linux-gnu/include/c++/15/backward \
+  -isystem /usr/lib/gcc-cross/aarch64-linux-gnu/15/include \
+  -isystem $R/usr/include/aarch64-linux-gnu \
+  -isystem $R/usr/include"
+```
+
+5. GCC 10's static `libstdc++.a` lacks the C++-mangled
+   `std::__throw_bad_array_new_length()` (a GCC 11+ addition; GCC 10 headers
+   inline it). Compile a one-line shim and inject it via `SDL_LIBS` (the link
+   rule places `$(SDL_LIBS)` after `$(OBJECTS)`):
+
+```cpp
+// pm_shim.cpp
+extern "C" void __cxa_throw_bad_array_new_length() __attribute__((noreturn));
+namespace std {
+  void __throw_bad_array_new_length() { __cxa_throw_bad_array_new_length(); }
+}
+```
+
+```sh
+aarch64-linux-gnu-g++ --sysroot=$R -B$B -std=c++17 -c pm_shim.cpp -o $B/pm_shim.o
+```
+
+6. Full build (drop `-B` for incremental relinks; objects stay current):
+
+```sh
+make -B -j$(nproc) -f Makefile.portmaster PortMaster-deploy \
+  COMMON_CFLAGS='-std=c++17 -Wall -g -Os -DTEST' \
+  CXX="aarch64-linux-gnu-g++ --sysroot=$R -B$B $CXXINCS -static-libstdc++ -static-libgcc" \
+  SDL_CFLAGS="-I$R/usr/local/include/SDL2" \
+  SDL_LIBS="$B/pm_shim.o -L$R/usr/local/lib -lSDL2 -Wl,--allow-shlib-undefined -L$R/usr/lib/aarch64-linux-gnu" \
+  STRIP=aarch64-linux-gnu-strip
+```
+
+Result: aarch64 PIE binary, NEEDED = libSDL2-2.0.so.0, libasound.so.2, libm,
+libpthread, libc, ld-linux only (no libstdc++/libgcc_s/libatomic — all static),
+zero GLIBCXX refs, max GLIBC_2.30 (`pthread_cond_clockwait` from GCC 10's
+static libstdc++, identical to the CI-built binary).
 
 References: [PortMaster build environments](https://portmaster.games/build-environments.html) and [PortMaster packaging guide](https://portmaster.games/packaging.html).
 

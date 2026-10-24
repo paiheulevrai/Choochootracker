@@ -1,0 +1,5 @@
+<control> default_path=./
+<global> ampeg_release=0.01 pitch_keycenter=c4
+<group> lokey=48 hikey=72 lovel=1 hivel=127 loop_mode=loop_sustain loop_start=32 loop_end=223
+<region> sample=tone.wav seq_length=2 seq_position=1 pan=-100
+<region> sample=tone.wav seq_length=2 seq_position=2 pan=100

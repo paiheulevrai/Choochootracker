@@ -1,0 +1,52 @@
+name: Raspberry Pi release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  raspberry-pi:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Build Raspberry Pi OS 64-bit package
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" -w /workspace/tracker \
+            debian:bookworm bash -euxc '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                g++ make libsdl2-dev libasound2-dev
+              make -j4 -f Makefile.linux linux-package \
+                PACKAGE_ARCH=aarch64 PACKAGE_SUFFIX=RaspberryPi-aarch64 \
+                PACKAGE_README=packaging/raspberrypi/README.txt \
+                COMMON_CFLAGS="-std=c++17 -Wall -g -Os -DTEST"
+              mkdir -p ../releases
+              mv build/linux/*-RaspberryPi-aarch64.tar.gz ../releases/
+            '
+
+      - name: Validate release packages
+        run: |
+          arm64=$(find releases -maxdepth 1 -name '*-RaspberryPi-aarch64.tar.gz' -print -quit)
+          test -n "$arm64"
+          mkdir validate
+          tar -tzf "$arm64" > validate/files.txt
+          grep -Fx 'ChooChooTracker-Linux/instruments/FACTORY/catalog.tsv' validate/files.txt
+          tar -xzf "$arm64" -C validate ChooChooTracker-Linux/choochootracker
+          readelf -h validate/ChooChooTracker-Linux/choochootracker > validate/elf-header.txt
+          grep -Eq 'Machine: +AArch64' validate/elf-header.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: choochootracker-raspberry-pi
+          path: releases/*-RaspberryPi-*.tar.gz
+          if-no-files-found: error

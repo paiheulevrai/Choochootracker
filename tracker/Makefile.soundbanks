@@ -1,0 +1,14 @@
+CXX ?= c++
+SOUNDBANK_SOURCES = $(wildcard ../chipnomad_lib/soundbank*.cpp) ../chipnomad_lib/preset_zip.cpp ../chipnomad_lib/synth/soundbank_voice.cpp ../chipnomad_lib/synth/multimode_filter.cpp ../chipnomad_lib/synth/audio_math.cpp
+.PHONY: soundbanks-probe soundbanks-test
+soundbanks-probe:
+	mkdir -p build/soundbanks
+	$(CXX) -std=c++17 -O2 -Wall -I../chipnomad_lib ../tools/soundbanks/probe.cpp $(SOUNDBANK_SOURCES) -o build/soundbanks/probe
+soundbanks-test:
+	mkdir -p build/soundbanks
+	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -Iexternal -I../chipnomad_lib -DDOCTEST_CONFIG_IMPLEMENT_WITH_MAIN tests/test_soundbanks.cpp $(SOUNDBANK_SOURCES) -o build/soundbanks/tests
+	build/soundbanks/tests
+soundbanks-benchmark:
+	mkdir -p build/soundbanks
+	$(CXX) -std=c++17 -O2 -Wall -I../chipnomad_lib ../tools/soundbanks/benchmark.cpp $(SOUNDBANK_SOURCES) -o build/soundbanks/benchmark
+	build/soundbanks/benchmark tests/fixtures/soundbanks/tone.sf2

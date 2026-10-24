@@ -12,9 +12,9 @@ static int columnCount(int row) {
   return 1;
 }
 
-// The value field starts at column 23 on the fixed 40-column char grid (see
-// screens.cpp's gfxClearRect(0, 0, 40, 20)), leaving 17 columns to work with.
-#define DEVICE_FIELD_X (23)
+// Keep the device value close to its short row label so the fixed 40-column
+// screen has room for real Android names such as Novation/Focusrite ports.
+#define DEVICE_FIELD_X (10)
 #define DEVICE_FIELD_WIDTH (40 - DEVICE_FIELD_X)
 
 // Truncates src to at most maxLen visible characters, replacing the tail
@@ -63,8 +63,8 @@ static void drawCursor(int col, int row) {
     midiDeviceLabel(row == 0, row == 0 ? appSettings.midiInputDevice : appSettings.midiOutputDevice,
       row == 0 ? appSettings.midiInputDeviceName : appSettings.midiOutputDeviceName, name, sizeof(name));
     gfxCursor(DEVICE_FIELD_X, 2 + row, (int)strlen(name));
-  } else if (row == 2 && col == 0) {
-    gfxCursor(0, 5, (int)strlen("Channel mapping"));
+  } else if ((row == 2 || row == 3) && col == 0) {
+    gfxCursor(0, 5 + row - 2, (int)strlen(row == 2 ? "Channel mapping" : "MIDI CC mapping"));
   }
 }
 
@@ -94,6 +94,9 @@ static void drawField(int col, int row, CellState state) {
   } else if (row == 2 && col == 0) {
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
     gfxPrint(0, 5, "Channel mapping");
+  } else if (row == 3 && col == 0) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxPrint(0, 6, "MIDI CC mapping");
   }
 }
 
@@ -138,12 +141,16 @@ static int onEdit(int col, int row, CellEditAction action) {
   } else if (row == 2 && col == 0 && action == CellEditAction::tap) {
     screenSetup(&screenMidiChannelMap, 0);
     return 0;
+  } else if (row == 3 && col == 0 && action == CellEditAction::tap) {
+    extern const AppScreen screenMidiCC;
+    screenSetup(&screenMidiCC, 0);
+    return 0;
   }
   return 0;
 }
 
 static ScreenData screenMidiData = {
-  .rows = 3,
+  .rows = 4,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,
@@ -168,11 +175,14 @@ static ScreenData screenMidiData = {
 };
 
 static int displayedDroppedCount = -1;
+static char displayedMidiStatus[41] = {};
 
 static void setup(int input) {
   screenMidiData.cursorRow = 0;
   screenMidiData.cursorCol = 0;
   displayedDroppedCount = -1;
+  displayedMidiStatus[0] = '\0';
+  midiRouterRequestAccess();
 }
 
 static void fullRedraw(void) {
@@ -180,11 +190,21 @@ static void fullRedraw(void) {
 }
 
 static void draw(void) {
+  const char* status = midiRouterStatusMessage();
+  if (!status) status = "";
+  if (strcmp(status, displayedMidiStatus) != 0) {
+    strncpy(displayedMidiStatus, status, 40);
+    displayedMidiStatus[40] = '\0';
+    gfxSetFgColor(appSettings.colorScheme.warning);
+    gfxClearRect(0, 7, 40, 1);
+    if (displayedMidiStatus[0]) gfxPrint(0, 7, displayedMidiStatus);
+  }
+
   // Dropped count is monotonic (see midiRouterGetDroppedCount) and only
   // means something went wrong at some point this session - once shown it
   // stays shown, rather than disappearing again on its own.
   int dropped = (int)midiRouterGetDroppedCount();
-  if (dropped == displayedDroppedCount || dropped == 0) return;
+  if (displayedMidiStatus[0] || dropped == displayedDroppedCount || dropped == 0) return;
   displayedDroppedCount = dropped;
   gfxSetFgColor(appSettings.colorScheme.warning);
   gfxClearRect(0, 7, 40, 1);

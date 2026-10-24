@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <memory>
 
 #define MIDI_ROWS_PER_BEAT 4
 #define MIDI_DEFAULT_TEMPO_USEC 500000 // 120 BPM, used when the file has no tempo meta-event
@@ -160,7 +161,8 @@ int projectLoadMidi(Project* project, const char* path) {
     return 1;
   }
 
-  Project p;
+  auto owned = std::make_unique<Project>();
+  Project& p = *owned;
   projectInitAY(&p);
   // projectLoadInternal (chipnomad_lib/project_io.cpp) always resets
   // chipsCount/tracksCount to PROJECT_MAX_TRACKS after loading a project, no

@@ -4,6 +4,7 @@
 - Author: Test
 - Frame rate: 50.000000
 - Chips count: 1
+- Track volumes: 100,100,100,100,100,100,100,100
 - Chip type: AY8910
 - *AY8910* Clock: 1773400
 - *AY8910* AY/YM: 0

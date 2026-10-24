@@ -1,3 +1,7 @@
+#include "opl_patch.h"
+#include "opll_presets.h"
+#include "four_op_patch.h"
+#include "simple_chip_presets.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -14,6 +18,16 @@
 #include "synth/plaits_voice.h"
 #include "synth/sintered_voice.h"
 #include "chips/chips.h"
+#include "chipnomad_lib.h"
+#include "fm_catalog.h"
+#include "user_presets.h"
+#include "synth/opll_voice.h"
+#include "synth/opl_voice.h"
+#include "synth/four_op_voice.h"
+#include "synth/dx7_voice.h"
+#include "synth/simple_chip_voice.h"
+#include "synth/sid_voice.h"
+#include <memory>
 
 namespace fs = std::filesystem;
 
@@ -220,6 +234,39 @@ bool renderSintered() {
   }
   return true;
 }
+
+// Full factory inventory at the same reference gain/pitches as the other engines.
+// Native envelopes remain active; percussion uses the documented 250 ms window.
+bool renderNativeChips() {
+  auto project=std::make_unique<Project>(); projectInit(project.get()); fillFXNames();
+  const std::string folder="packaging/common/instruments/FACTORY";
+  for(const auto* catalog:{"catalog.tsv","builtins.tsv"}) {
+    std::vector<FMPresetEntry> entries;
+    if(!loadFMCatalog((folder+"/"+catalog).c_str(),entries))return false;
+    for(size_t index=0;index<entries.size();++index) {
+      const auto& entry=entries[index];
+      if(!loadFMPreset(folder,entry,project.get(),0))return false;
+      const auto& inst=project->instruments[0];
+      // OPLL and VRC7 share the same programmable YM2413 voice adapter and gain.
+      const std::string family=isOPLL(inst.type)?"opll-vrc7":userPresetFolder(inst.type);
+      const auto directory=fs::path("measurements")/family;fs::create_directories(directory);
+      for(float note:kNotes) {
+        const size_t frames=entry.category=="Percussion"?kDrumFrames:kFrames;
+        std::vector<float> mono(frames),stereo(frames*2);
+        if(isOPL(inst.type)){OPLVoice voice;voice.init(kSampleRate);voice.configure(inst.type,&inst.chip.opl,note*100,.9f);voice.noteOn();voice.render(stereo.data(),frames);}
+        else if(isFourOp(inst.type)){FourOpVoice voice;voice.init(kSampleRate);voice.configure(inst.type,&inst.chip.fourOp,note*100,.9f);voice.noteOn();voice.render(stereo.data(),frames);}
+        else if(isOPLL(inst.type)){OPLLVoice voice;voice.init(kSampleRate);voice.configure(&inst.chip.opll,note*100,.9f);voice.noteOn();voice.render(mono.data(),frames);}
+        else if(inst.type==InstrumentType::DX7){DX7Part voice;voice.init(kSampleRate);voice.voices[0].configure(&inst.chip.dx7,note*100,.9f);voice.voices[0].noteOn();voice.render(mono.data(),frames);}
+        else if(inst.type==InstrumentType::SID){SIDVoice voice;voice.init(kSampleRate);voice.configure(&inst.chip.sid,note*100,.9f);voice.noteOn();voice.render(mono.data(),frames);}
+        else{SimpleChipVoice voice;voice.init(kSampleRate);voice.configure(inst.type,&inst.chip.simpleChip,note*100,.9f);voice.noteOn();voice.render(mono.data(),frames);}
+        if(isOPL(inst.type)||isFourOp(inst.type))for(size_t i=0;i<frames;++i)mono[i]=(stereo[2*i]+stereo[2*i+1])*.5f;
+        char name[160];snprintf(name,sizeof(name),"%s_%02d_p%zu_n%.0f.wav",family.c_str(),int(inst.type),index,note);
+        if(!writeWav(directory/name,mono))return false;
+      }
+    }
+  }
+  projectFree(project.get());return true;
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -228,15 +275,16 @@ int main(int argc, char** argv) {
                    std::strcmp(family, "plaits") && std::strcmp(family, "plaits-alt") &&
                    std::strcmp(family, "plaits-vca") && std::strcmp(family, "plaits-alt-vca") &&
                    std::strcmp(family, "pcm") && std::strcmp(family, "ay") && std::strcmp(family, "ym") &&
-                   std::strcmp(family, "bogie") && std::strcmp(family, "mme") && std::strcmp(family, "sintered"))) {
-    std::fputs("Usage: render_engine_measurements [all|braids|plaits|plaits-alt|pcm|ay|ym|bogie|mme|sintered]\n", stderr);
+                   std::strcmp(family, "bogie") && std::strcmp(family, "mme") && std::strcmp(family, "sintered") && std::strcmp(family, "native-chips"))) {
+    std::fputs("Usage: render_engine_measurements [all|braids|plaits|plaits-alt|pcm|ay|ym|bogie|mme|sintered|native-chips]\n", stderr);
     return 2;
   }
   std::printf("Rendering %s measurement WAVs...\n", family);
   const bool all = !std::strcmp(family, "all");
   if ((all && (!renderBraids() || !renderPlaitsFamily<PlaitsVoice>("plaits") ||
                !renderPlaitsFamily<PlaitsAltVoice>("plaits-alt") || !renderPcmReference() ||
-               !renderAYFamily(false) || !renderAYFamily(true) || !renderBogie() || !renderMME() || !renderSintered())) ||
+               !renderAYFamily(false) || !renderAYFamily(true) || !renderBogie() || !renderMME() || !renderSintered() || !renderNativeChips())) ||
+      (!all && !std::strcmp(family, "native-chips") && (!renderPcmReference() || !renderNativeChips())) ||
       (!all && !std::strcmp(family, "braids") && !renderBraids()) ||
       (!all && !std::strcmp(family, "plaits") && !renderPlaitsFamily<PlaitsVoice>("plaits")) ||
       (!all && !std::strcmp(family, "plaits-alt") && !renderPlaitsFamily<PlaitsAltVoice>("plaits-alt")) ||

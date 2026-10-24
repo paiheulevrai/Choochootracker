@@ -38,12 +38,12 @@ int16_t playbackApplyVolumeEnvelope(PlaybackModState* mod, int maxVolume, int* s
 // For LFO: adds to volumeOffset
 // For ADSR/AHD: rewrites the volume directly
 // Returns 1 if note should be stopped (ADSR release complete), 0 otherwise
-int playbackApplyVolumeModulation(PlaybackModState* mod, int8_t* volumeOffset, uint8_t* volume, int maxVolume) {
+int playbackApplyVolumeModulation(PlaybackModState* mod, int16_t* volumeOffset, uint8_t* volume, int maxVolume) {
   int stopNote = 0;
 
   if (modulationIsAdditive(mod->modulation->type)) {
     // LFO: Add to volumeOffset
-    *volumeOffset += playbackModScaleToRange(mod->outValue, 127);
+    *volumeOffset += playbackModScaleToRange(mod->outValue, PHRASE_VOLUME_MAX);
   } else {
     // ADSR/AHD: Rewrite volume
     int16_t envelopeVolume = playbackApplyVolumeEnvelope(mod, maxVolume, &stopNote);

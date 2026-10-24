@@ -1,0 +1,61 @@
+name: MiyooPorts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  miyooports:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes curl git p7zip-full xz-utils zip unzip
+      - name: Fetch Miyoo SDK
+        run: |
+          cache="$RUNNER_TEMP/miyoo"
+          mkdir -p "$cache/toolchain" "$cache/sdl/lib" "$cache/sdl/include"
+          curl --fail --location --retry 3 --output "$cache/toolchain.tar.xz" \
+            https://github.com/shauninman/miyoomini-toolchain-buildroot/releases/download/v0.0.3/miyoomini-toolchain.tar.xz
+          tar -xf "$cache/toolchain.tar.xz" -C "$cache/toolchain"
+          curl --fail --location --retry 3 --output "$cache/sdl.tar.gz" \
+            https://github.com/XK9274/sdl2_miyoo/releases/download/sdl2-miyoo-f6319cf9/libSDL2-miyoo-nogl-f6319cf9.tar.gz
+          tar -xzf "$cache/sdl.tar.gz" -C "$cache/sdl/lib"
+          ln -s libSDL2-2.0.so.0 "$cache/sdl/lib/libSDL2.so"
+          git clone --depth 1 --branch sdl2-miyoo-f6319cf9 https://github.com/XK9274/sdl2_miyoo.git "$cache/sdl-source"
+          mkdir -p "$cache/sdl/include/SDL2" "$cache/sdl/include/SDL"
+          cp "$cache/sdl-source"/include/*.h "$cache/sdl/include/SDL2/"
+          cp "$cache/sdl-source"/include/*.h "$cache/sdl/include/SDL/"
+          test -f "$cache/sdl/lib/libSDL2-2.0.so.0"
+          test -f "$cache/sdl/lib/libneonarmmiyoo.so"
+      - name: Build MiyooPorts package
+        run: |
+          cache="$RUNNER_TEMP/miyoo"
+          toolchain=$(find "$cache/toolchain" -type f -path '*/bin/arm-linux-gnueabihf-g++' -printf '%h\n' | sed 's#/bin$##' | head -1)
+          test -n "$toolchain"
+          make -C tracker -j4 -f Makefile.miyooports MiyooPorts-deploy \
+            MIYOO_TOOLCHAIN="$toolchain" MIYOO_SDL2_ROOT="$cache/sdl"
+          package=$(find releases -maxdepth 1 -type f -name '*-MiyooPorts.zip' -print -quit)
+          test -n "$package"
+          unzip -t "$package"
+          package_7z="${package%.zip}.7z"
+          (cd tracker/build/miyooports/package && 7z a "$GITHUB_WORKSPACE/$package_7z" Roms)
+          7z l "$package_7z"
+          unzip -p "$package" 'Roms/PORTS/Games/ChooChooTracker/choochootracker' > choochootracker.miyoo
+          ! readelf -V choochootracker.miyoo | grep -Eq 'GLIBC_(2\.29|[3-9]\.)'
+          ! readelf -d choochootracker.miyoo | grep -q 'libstdc++'
+          unzip -l "$package" | grep -Fq 'Roms/PORTS/Games/ChooChooTracker/libs/libSDL2-2.0.so.0'
+          unzip -l "$package" | grep -Fq 'Roms/PORTS/Games/ChooChooTracker/libs/libneonarmmiyoo.so'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: choochootracker-miyooports
+          path: |
+            releases/*-MiyooPorts.zip
+            releases/*-MiyooPorts.7z
+          if-no-files-found: error

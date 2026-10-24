@@ -13,14 +13,14 @@ static int sampleButtonDown;
 static constexpr int sourceValueX = 9;
 static constexpr int sourceValueWidth = 7;
 static constexpr int editLabelX = 17;
-static constexpr int editLabelWidth = 4;
+static constexpr int editLabelWidth = 8;
 static Bitmap* samplePreviewBitmap;
 static int samplePreviewWidth, samplePreviewHeight;
 static const char* stretchLabels[] = {"Off", "1 beat", "2 beats", "1 bar", "2 bars", "4 bars", "8 bars"};
 
 static void updateSamplePreview(const InstrumentSample* sample) {
-  int width = appSettings.persistentWaveform ? 15 : 32;
-  int height = appSettings.persistentWaveform ? 2 : 3;
+  int width = 32;
+  int height = 3;
   if (width != samplePreviewWidth || height != samplePreviewHeight) {
     gfxBitmapFree(samplePreviewBitmap);
     samplePreviewBitmap = gfxBitmapCreate(width, height);
@@ -37,7 +37,7 @@ static void updateSamplePreview(const InstrumentSample* sample) {
 static void drawSamplePreview(void) {
   if (!samplePreviewBitmap) return;
   gfxSetFgColor(appSettings.colorScheme.textInfo);
-  gfxDrawBitmap(samplePreviewBitmap, 0, appSettings.persistentWaveform ? 15 : 16);
+  gfxDrawBitmap(samplePreviewBitmap, 0, 16);
 }
 
 static void onSampleCancelled(void) {
@@ -54,7 +54,15 @@ static void onSampleLoaded(const char* path) {
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
   char error[64];
   audioManager.pause();
-  if (sampleLoadWav16(path, &instrument->chip.sample, error, sizeof(error))) {
+  // Cue-aware load (Phase 4): a WAV written by SAVE TO SAMPLE carries its
+  // slice points as cue chunks. They only seed the editor when the
+  // instrument has no slice mode yet - a project reload must keep its own
+  // stored bounds (the .cct slice line is parsed before the WAV load).
+  uint32_t cueFrames[PROJECT_SAMPLE_MAX_SLICES];
+  uint8_t cueCount = 0;
+  const int loadResult = sampleLoadWav16Cues(path, &instrument->chip.sample, cueFrames,
+                                             &cueCount, error, sizeof(error));
+  if (loadResult) {
     screenMessage(MESSAGE_TIME * 3, "%s", error);
   } else {
     // A fresh sample starts with the full playback region: the previous
@@ -63,6 +71,18 @@ static void onSampleLoaded(const char* path) {
     // Region when the Sample Edit screen is entered.
     instrument->chip.sample.start = 0;
     instrument->chip.sample.end = 255;
+    // The loop wrap marker belongs to the old audio: a new file starts
+    // unlooped. Project reload is unaffected - the .cct loop start line is
+    // parsed before the WAV load and does not go through this path.
+    instrument->chip.sample.loopStart = 0;
+    if (cueCount > 0 && sampleDecodeSliceMode(instrument->chip.sample.slice) == sliceModeOff) {
+      // Cues seed an AUTO-mode sample with manual bounds: the sentinel
+      // count matches the cue count and playback stays full-sample until
+      // the user picks a mode (AUTO/EQUAL act as sliced, LAZY ignores).
+      InstrumentSample* sample = &instrument->chip.sample;
+      for (uint8_t i = 0; i < cueCount; ++i) sample->sliceBounds[i] = cueFrames[i];
+      sample->slice = sampleEncodeSlice(sliceModeAuto, cueCount);
+    }
     const char* separator = strrchr(path, PATH_SEPARATOR);
     const char* filename = separator ? separator + 1 : path;
     if (!instrument->name[0]) {
@@ -82,7 +102,14 @@ static void onSampleLoaded(const char* path) {
     screenMessage(MESSAGE_TIME, "PCM16 %lu frames %lu Hz",
       (unsigned long)instrument->chip.sample.frameCount,
       (unsigned long)instrument->chip.sample.sampleRate);
+    // Loading a sample replaces any completed take: the editor hosts one
+    // thing at a time (a recording or a sample), so the take's WAV is
+    // deleted and its state reset before the editor is re-entered.
+    sampleEditorDiscardRecording(cInstrument);
   }
+  // The loader frees the previous PCM buffer.  Publish the replacement while
+  // audio is still paused so the callback cannot render its stale snapshot.
+  chipnomadQueueProjectRefresh(chipnomadState);
   audioManager.resume();
   screenSetup(&screenInstrument, cInstrument);
 }
@@ -94,7 +121,9 @@ static int sampleHasFile(const InstrumentSample* sample) {
 static int getColumnCount(int row) {
   if (row < 3) return instrumentCommonColumnCount(row);
   if (row == 3) {
-    return sampleHasFile(&chipnomadState->project.instruments[cInstrument].chip.sample) ? 2 : 1;
+    // Row 3 always offers the EDIT/REC button (recording works with no
+    // armed input; the editor handles both loading and recording).
+    return 2;
   }
   return row == 9 ? 5 : 2;
 }
@@ -116,7 +145,11 @@ static void drawStatic(void) {
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   if (instrumentCommonDrawVoicePostCursor(col, row)) return;
-  else if (row == 3) gfxCursor(col ? editLabelX : sourceValueX, 6, col ? editLabelWidth : sourceValueWidth);
+  else if (row == 3) {
+    const int x = col == 0 ? sourceValueX : editLabelX;
+    const int w = col == 0 ? sourceValueWidth : editLabelWidth;
+    gfxCursor(x, 6, w);
+  }
   else gfxCursor(col ? 26 : sourceValueX,row+4,col?8:sourceValueWidth);
 }
 
@@ -144,19 +177,22 @@ static void drawField(int col, int row, CellState state) {
     gfxClearRect(col?26:sourceValueX,row+4,col?8:sourceValueWidth,1);
   }
   switch (row) {
-    case 3:
+    case 3: {
       if (col == 0) {
         gfxPrint(sourceValueX, 6, sampleHasFile(sample) ? shortSampleFilename(sample->path, 7) : "Load");
-        if (!sampleHasFile(sample)) gfxClearRect(editLabelX, 6, editLabelWidth, 1);
       } else {
-        gfxPrint(editLabelX, 6, "EDIT");
+        // One button for both worlds: REC when the instrument has no
+        // sample, EDIT/REC once one is loaded. Both open the merged
+        // sample editor, which hosts recording and editing alike.
+        gfxPrint(editLabelX, 6, sampleHasFile(sample) ? "EDIT/REC" : "REC");
       }
       break;
+    }
     case 4: if(!col) gfxPrintf(sourceValueX,8,"%+d st",sample->pitch); break;
     case 5:
       if (!col) gfxPrint(sourceValueX, 9, stretchLabels[sample->stretchMode <= 6 ? sample->stretchMode : 0]);
       break;
-    case 6: if(!col) { static const char* m[]={"Off","Loop","Ping"}; gfxPrint(sourceValueX,10,m[sample->loopMode<=2?sample->loopMode:0]); } break;
+    case 6: if(!col) { static const char* m[]={"Off","Loop","Loop X","Ping","Ping X"}; gfxPrint(sourceValueX,10,m[sample->loopMode<=4?sample->loopMode:0]); } break;
     case 7:
       if (!col) {
         // Speed is inert while Stretch drives the duration: dim it.
@@ -178,7 +214,7 @@ static int onEdit(int col, int row, CellEditAction action) {
   int handled = 0;
   switch (row) {
     case 3:
-      if (col == 1 && action == CellEditAction::tap && sampleHasFile(sample)) {
+      if (col == 1 && action == CellEditAction::tap) {
         screenSetup(&screenSampleSettings, cInstrument);
         return 1;
       }
@@ -190,7 +226,9 @@ static int onEdit(int col, int row, CellEditAction action) {
       handled = edit8noLast(action, &index, 1, 0, 6);
       if (handled) {
         sample->stretchMode = index;
-        // Stretch and Slice are mutually exclusive: enabling one disables the other.
+        // Stretch and Slice are mutually exclusive: enabling one disables
+        // the other (the sentinel's mode resets to Off; bounds stay in
+        // memory so toggling back restores them).
         if (sample->stretchMode) sample->slice = 0;
         projectModified = 1;
         // Repaint the dimmed Speed field and the new Stretch value.
@@ -198,7 +236,7 @@ static int onEdit(int col, int row, CellEditAction action) {
       }
       return handled;
     }
-    case 6: handled=!col?edit8noLast(action,&sample->loopMode,1,0,2):0; break;
+    case 6: handled=!col?edit8noLast(action,&sample->loopMode,1,0,4):0; break;
     case 7:
       // Speed is inert while Stretch drives the duration.
       if (sample->stretchMode != 0) return 0;
@@ -225,6 +263,11 @@ static int loadAdjacentSample(int direction) {
 static int isCellValid(int col, int row) {
   // Speed is inert while Stretch drives the duration: skip it in navigation.
   if (!col && row == 7 && chipnomadState->project.instruments[cInstrument].chip.sample.stretchMode != 0) return 0;
+  if (row == 3) {
+    // The EDIT/REC button is always available: recording works with no
+    // armed input, and the editor handles an empty sample.
+    return 1;
+  }
   return 1;
 }
 

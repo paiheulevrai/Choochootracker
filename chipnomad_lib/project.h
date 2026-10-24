@@ -5,12 +5,13 @@
 #include <stdint.h>
 #include "project_instruments.h"
 #include "project_constants.h"
+#include "insert_fx.h"
 
 // Song data structures
 
 // FX
 
-enum FX {
+enum FX : FXId {
   // Sequencer FX
   fxARP, // Arpeggio
   fxARC, // Arpeggio config
@@ -203,9 +204,62 @@ enum FX {
   // aChChid tie. Appended to preserve project FX IDs.
   fxATY,
 
+  // Track insert addresses: appended; existing and reserved IDs remain stable.
+  fxF11, fxF12, fxF13, fxF14, fxF15, fxF16, fxF17, fxF18, fxF21, fxF22, fxF23, fxF24, fxF25, fxF26, fxF27, fxF28,
+
+  // Sample slice select: plays the numbered slice regardless of the note.
+  // Appended to preserve project FX IDs.
+  fxSLI,
+
+  // Native tone controls append IDs to preserve existing projects.
+  fxFBR, fxFFB,
+  fxCMD, fxCNR, fxCND, fxCNS, fxCSP, fxCSS, fxCSD, fxCEI, fxCEP, fxCED,
+  fxFO1, fxFO2, fxFO3, fxFO4, fxFO5, fxFO6,
+  fxSCP, fxSCT, fxSRN, fxSWV, fxSFTY, fxSMR, fxSRG, fxSSY,
+  fxFET, fxFTD, fxFDT, fxFHR, fxFLR, fxFLD,
+  fxSAT, fxSDE, fxSSU, fxSRL, fxSPR,
+  // Absolute native output levels. Earlier personal command IDs are retired.
+  fxOL1, fxOL2, fxOL3, fxOL4, fxOL5, fxOL6,
+  fxFBK,
+  // Direct FM parameter IDs are also used by fixed-operator modulation.
+  // Leave the removed selector ID unassigned; keep saved command IDs stable.
+  fxOAR = fxFBK + 2, fxODR, fxOSR, fxORR, fxOSL, fxODT, fxOMU, fxOFI, fxOFM, fxOE1, fxOE2, fxOE4,
+  fxLFR, fxLAD, fxLPD, fxLAS, fxLPS, fxLEN,
+  // Absolute panorama controls. Appended to preserve project FX IDs.
+  fxPAN, // Instrument pan
+  fxTPN, // Track pan
+  // Append only: saved FX identifiers remain stable.
+  fxFPT, fxFVL, fxFPN, fxFCF, fxFRS, fxFAT, fxFDC, fxFRL,
+  fxFHD, fxFSU,
+
+  // MONK native controls, appended without changing existing song IDs.
+  fxMUV, fxMDT, fxMVS, fxMDM, fxMDR, fxMLV,
+
+  // Random slice / random note lane FX, appended without changing
+  // existing song IDs.
+  fxRNS, // Sample FX: random slice selection
+  fxRNN, // Sequencer FX: random note
+
+  // Sample loop start (relative). Appended to preserve project FX IDs.
+  fxLST, // Sample FX: loop start offset (relative)
+
   // Total count - must be last
   fxTotalCount
 };
+
+static_assert(fxF28 - fxF11 == 15, "Contiguous insert commands");
+
+struct NativeFXInfo {
+  int maximum;
+  int preset;
+  bool relative;
+  int minimum = 0;
+  const char* label = nullptr;
+};
+bool instrumentNativeFXInfo(const Instrument* instrument, int fx, NativeFXInfo* info, int op = 0);
+bool instrumentDirectFMInfo(const Instrument* instrument, int fx, NativeFXInfo* info, int op = 0);
+const char* directFMName(int fx);
+int instrumentFMOperatorCount(const Instrument* instrument);
 
 enum ScalePreset : uint8_t {
   scaleChromatic,
@@ -227,9 +281,10 @@ enum ScalePreset : uint8_t {
 const char* scalePresetName(ScalePreset preset);
 uint16_t scalePresetMask(ScalePreset preset);
 uint8_t scaleQuantizeNote(uint8_t note, uint8_t root, uint16_t mask, uint16_t pitchCount);
+uint8_t scaleSnapNoteUp(uint8_t note, uint8_t root, uint16_t mask, uint16_t pitchCount);
 
 struct FXName {
-  enum FX fx;
+  FXId fx;
   char name[4];
 };
 
@@ -241,7 +296,7 @@ struct FXGroup {
   InstrumentType instType;  // InstrumentType::none for non-instrument groups
 };
 
-extern FXName fxNames[256]; // All names
+extern FXName fxNames[fxTotalCount]; // All names
 extern FXGroup fxGroups[]; // FX groups
 extern int fxGroupCount; // Number of FX groups
 
@@ -272,11 +327,29 @@ union ChipSetup {
 
 // Tables
 
+struct FXCell {
+  FXId command;
+  uint8_t value;
+  // Indexed access is retained temporarily for the column-oriented UI.
+  struct Component {
+    FXCell* cell;
+    bool isCommand;
+    operator int() const { return isCommand && cell->command == FX_ID_EMPTY ? EMPTY_VALUE_8 : (isCommand ? cell->command : cell->value); }
+    Component& operator=(FXId v) {
+      if (isCommand) cell->command = v;
+      else cell->value = (uint8_t)v;
+      return *this;
+    }
+  };
+  Component operator[](int index) { return {this, index == 0}; }
+  FXId operator[](int index) const { return index == 0 ? command : value; }
+};
+
 struct TableRow {
   uint8_t pitchFlag;
   uint8_t pitchOffset;
   uint8_t volume;
-  uint8_t fx[4][2];
+  FXCell fx[4];
 };
 
 enum class TableRetriggerMode : uint8_t { instrument, phrase, chain, free };
@@ -297,8 +370,9 @@ struct Groove {
 struct PhraseRow {
   uint8_t note;
   uint8_t instrument;
-  uint8_t volume;
-  uint8_t fx[3][2];
+  // Phrase volume is 00-7F; FFFF means an omitted/inherited volume in memory.
+  uint16_t volume;
+  FXCell fx[3];
 };
 
 struct Phrase {
@@ -326,6 +400,14 @@ struct PitchTable {
   char noteNames[PROJECT_MAX_PITCHES][4];
 };
 
+struct MidiCCMapping {
+  uint8_t enabled;
+  uint8_t channel;
+  uint8_t cc;
+  uint8_t instrument;
+  uint8_t destination;
+};
+
 struct Project {
   char title[PROJECT_TITLE_LENGTH + 1];
   char author[PROJECT_TITLE_LENGTH + 1];
@@ -338,8 +420,12 @@ struct Project {
   uint8_t signedTrackSpeed;
   uint8_t perceptualEffects;
 
-  // Global 12-TET playback quantizer. Phrase data always stays chromatic.
+  // Global 12-TET scale engine. Phrase data always stays chromatic.
+  // scaleMode: 0 = Quantizer (playback quantization, SCL FX active), 1 =
+  // Note Lock (entry locked to scale notes, SCL FX inert, quantization
+  // bypassed).
   uint8_t scaleApply;
+  uint8_t scaleMode;
   uint8_t scaleTracksMask;
   uint8_t scaleRoot;
   ScalePreset scalePreset;
@@ -347,19 +433,38 @@ struct Project {
 
   int tracksCount;
   uint8_t trackVolume[PROJECT_MAX_TRACKS];
+  uint8_t trackPan[PROJECT_MAX_TRACKS];
   uint8_t trackReverbSend[PROJECT_MAX_TRACKS];
   uint8_t trackDelaySend[PROJECT_MAX_TRACKS];
   uint8_t trackTilt[PROJECT_MAX_TRACKS];
+  InsertConfig trackInserts[PROJECT_MAX_TRACKS][2];
+  InsertConfig masterInserts[2];
   uint16_t tiltPivotHz;
   uint8_t reverbReturn;
   uint8_t reverbTime;
   uint8_t reverbDamping;
   uint16_t reverbFilterCutoffHz;
+  uint16_t reverbHighpassCutoffHz;
+  uint8_t reverbAlgorithm; // 0 Clouds, 1 Beads
+  uint8_t beadsReverbTime;
+  uint8_t beadsReverbTone;
+  uint16_t beadsReverbHighpassCutoffHz;
   uint8_t delayReturn;
   uint8_t delayReverbSend;
   uint8_t delayTicks;
   uint8_t delayFeedback;
   uint16_t delayFilterCutoffHz;
+  uint8_t delayAlgorithm; // 0 Ping-pong, 1 Tape Echo
+  uint8_t tapeDivision; // 0 1/16, 1 1/8T, 2 1/8, 3 1/8., 4 1/4, 5 1/4., 6 1/2
+  uint8_t tapeHeads; // 0 H1, 1 H2, 2 H3, 3 H1+H2, 4 H1+H3, 5 H2+H3, 6 H1+H2+H3
+  uint8_t tapeTone;
+  uint8_t tapeFlutter;
+  uint8_t tapeSpring;
+  // Sample save destination preference (Phase 4): 0 = ask every time,
+  // 1 = write slice points into the WAV (cue chunks), 2 = keep them in the
+  // project only. Set by the save dialog's "don't ask again" checkbox.
+  uint8_t sampleSaveChoice;
+  MidiCCMapping midiCCMappings[PROJECT_MAX_MIDI_CC_MAPPINGS];
 
   PitchTable pitchTable;
 
@@ -393,6 +498,7 @@ int projectSave(Project* p, const char* path);
 int instrumentSave(Project* p, const char* path, int instrumentIdx);
 // Load instrument from a file
 int instrumentLoad(Project* p, const char* path, int instrumentIdx);
+int instrumentLoadMemory(Project* p, const uint8_t* bytes, size_t size, int instrumentIdx);
 
 // Is chain empty?
 int8_t chainIsEmpty(Project* p, int chain);

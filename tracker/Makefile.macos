@@ -18,7 +18,8 @@ SDL2_FRAMEWORK = platforms/macos/Frameworks/SDL2.framework
 
 # macOS-specific flags (Universal Binary: ARM64 + x86_64)
 # Using SDL2.framework for better portability
-XTRA_CFLAGS = -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 -F$(SDL2_FRAMEWORK)/.. -DDESKTOP_BUILD -DMACOS_BUILD -D__MACOSX_CORE__
+XTRA_CFLAGS = -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 -F$(SDL2_FRAMEWORK)/.. -DDESKTOP_BUILD -DMACOS_BUILD -D__MACOSX_CORE__ \
+	-DLINK_PLATFORM_MACOSX=1 -DASIO_STANDALONE=1 -DASIO_NO_TYPEID=1 -DASIO_VERSION_NAMESPACE=link_asio_1_38_2 -Wno-multichar
 XTRA_LIBS = -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 -F$(SDL2_FRAMEWORK)/.. -framework SDL2 -framework Cocoa -framework CoreMIDI -framework CoreAudio -framework CoreFoundation -lm -rpath @executable_path/../Frameworks
 CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SOURCES) $(XTRA_CFLAGS)
 OUTPUT = -o $(BUILD)/chipnomad$(OUTPUT_EXT)

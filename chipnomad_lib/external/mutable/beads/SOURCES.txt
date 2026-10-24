@@ -1,0 +1,31 @@
+Mutable Instruments Beads insert DSP
+Upstream: https://github.com/pichenettes/eurorack/tree/f4cfa7697095a28d292bff758beb51deb49b5a86/beads
+Revision: f4cfa7697095a28d292bff758beb51deb49b5a86
+License: MIT; original Emilie Gillet notices remain in every upstream file.
+
+Vendored: processor and dependent DSP headers, delay clock/controller, trigger
+ generator, mu-law and generated resources. Firmware, hardware drivers, automatic
+ wavetable synth and tests are excluded. Uses the tracker's existing stmlib.
+Local changes: fixed 12-frame scratch arrays replace variable-length stack arrays;
+ a scoped thread-local RNG preserves the upstream generator while separating
+ instances from each other and the instrument DSP.
+
+Host adaptation is chipnomad_lib/beads_insert.cpp. Stereo digital quality runs at
+48 kHz in fixed 12-frame quanta, with precomputed streaming FIR rate conversion.
+Original granular engine, envelopes, voice scheduling, feedback, freeze and
+size-controlled delay mode are retained. Seed is latched, external CV is absent,
+and the internal reverb is off. No auto wavetable fallback or hardware auto-gain.
+Scatter applies uniform internal position randomness at full amount and size
+randomness at half amount; pitch and envelope randomization remain zero.
+Shape/Freeze: low seven bits select the envelope; high bit freezes recording.
+Mix is a smoothed linear host dry/wet blend with an exact zero-mix dry path.
+Recording/state storage is prepared lazily on the producer thread for selected
+slots, in a bounded pool of at most 18 instances (two slots per track/master).
+Project snapshots carry retained handles to the audio thread. Parameter edits
+reuse the same instance; removed instances remain alive through their fade-out.
+The producer reclaims storage after snapshot/chain handles are released; neither
+allocation nor destruction happens in sync/process. Allocation failure leaves
+only the unavailable Beads slot dry, with other insert effects still working.
+The stereo recording capacity remains 4 seconds (192000 frames).
+
+This is an adaptation of Beads, not an emulation of its panel/CV hardware.

@@ -1,0 +1,141 @@
+{
+  "repository": "https://github.com/asb2m10/dexed",
+  "revision": "2e182b3db85c09083ab13c8b9b00565ce7d9ff85",
+  "subdirectory": "Source/msfa",
+  "license": "Apache-2.0",
+  "files": [
+    {
+      "path": "aligned_buf.h",
+      "upstream_sha256": "6140a81aacae153220ce80aa58f5d7efcd5b3a2c8389fef14ed35deb14d62caf",
+      "vendored_sha256": "d208033fd0790ff398f790f8afcc3c229abd52f1e3b519ee045ab62021225226",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "env.cc",
+      "upstream_sha256": "a6d10f3cab97bf081ec551883aa39abdf40c1c5339f1009ba837f3e1027dcbbf",
+      "vendored_sha256": "de9f434721dda4aa9a369f711416fd68a860b374b64d50921a56fecfb99e5cec",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "env.h",
+      "upstream_sha256": "6936df4cc9dc41c2ee4a3fd19a2669976e3e245e7a7795392bd561cd778abe36",
+      "vendored_sha256": "80429da723c0f4c4262ff3a92d60919e9d1a3aa609963842aee0e1d97ac726ab",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "exp2.cc",
+      "upstream_sha256": "dff6dfd8af6f0a470360c2d2fa98aa7ae5208c27b83c9229ffccbc84815930da",
+      "vendored_sha256": "a43f5bb6718dddc4b91ad9a8fc5c01a4df8dc3cbd4dda0f99ee79c496f44c7bc",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "exp2.h",
+      "upstream_sha256": "23aa480e221e5d1f928a5ccab654a9c01a80eb0b610fd66d9364af09d18cdda8",
+      "vendored_sha256": "3df4040523bac9dc922a173fbecb422c2733c6d67e5577228cddd129162aa540",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "fm_core.cc",
+      "upstream_sha256": "3febb3b2d73299636982c373126db4263ba67f5001241d5cbb1bd50357829e87",
+      "vendored_sha256": "0af102aa4e043c43eb99ebd1332988da58d79a20299b3c797441ba7c366fc2de",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "fm_core.h",
+      "upstream_sha256": "528389d74d0e136a4f8167047e5ed11730f2663938eb71454c8922780ee4a280",
+      "vendored_sha256": "15eb7fb35d2514eaae018cda037befbb9b8c4d1bacd729764ef0c6143125c3e7",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "fm_op_kernel.cc",
+      "upstream_sha256": "ad00f2c63bf8163624a367478969f5a250568a9c6c0dcee348a4eb0b7848b21b",
+      "vendored_sha256": "1b61912376be22dd285af2379e52df1623d418985ad254bd323ead6fa8953d1b",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "fm_op_kernel.h",
+      "upstream_sha256": "77c12aae2c5c3c2cacd541e693e4fdbc28f474c8446aa5d6711cf4908ebb07e6",
+      "vendored_sha256": "99f3c85e9e508c751abd2d52c0644d6dc57347c6e070950dd3051dd217763379",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "freqlut.cc",
+      "upstream_sha256": "f46ddab0d296f1a82d2ef6826f7e431cad97967418a37fdb486052a4187dcaf8",
+      "vendored_sha256": "c9ced962a8bec8683637b82d471fe5e09bb1046312d9dfa867b26864f7798e30",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "freqlut.h",
+      "upstream_sha256": "d319ee2d35e8e8e2c860b6fc2a2d1382bf5782d1d147264914325ca41f89f00b",
+      "vendored_sha256": "8d041e4a57216d04012e07a851f7c2f4bbf9bcb0f32d5684d4b38bb68f5c5f6b",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "lfo.cc",
+      "upstream_sha256": "63a4da54b7a9d6161f355ac3a4a293e21c63e1295ca43c8fe1fcd586fe529729",
+      "vendored_sha256": "05d21a0b0b7f3d2d1789e42f245f1d8827d30c7638603fa17c34bc6224aa3508",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "lfo.h",
+      "upstream_sha256": "d21527675911a53f6d05b0c1ece3eeb08b906ae4513c36a8e2de02d628934ec4",
+      "vendored_sha256": "4cba653a2cb4c8a38c1df13b2eb6edbe8c76546214ce13ea02bea0078042eee7",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "pitchenv.cc",
+      "upstream_sha256": "99529ae7ed0ccc153af765da100f205ed84cbf56113f2db1ec24e29175e85078",
+      "vendored_sha256": "2110029cf5a0d41db3caeaeb560dae70d73e6eb85e44f667a60479b746652282",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "pitchenv.h",
+      "upstream_sha256": "be825b9272fe59bd7faf47b4878fdbd756f502ca3b4364d2934a7f5dafa0abe4",
+      "vendored_sha256": "90c1f220d99510d57d0944fc10d49106a30a3dbcfacaa0cf30c8250b1e3f5b11",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "sin.cc",
+      "upstream_sha256": "ebb96ae8460af68da025659a329f72d2c64301673ad83ef54a7ac20590ad7e65",
+      "vendored_sha256": "7647ea3f8b120bb17c172346e0868f6c58978c74554609e1eab2991281bad53e",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "sin.h",
+      "upstream_sha256": "b57300e93e18a4262d7f0dec84642a7da228704bec1fddd481d2ab85ed805311",
+      "vendored_sha256": "b01272a15bdfaf5207beb9e3abed78bf74a0be55e7b8a4d6649aa49928be7254",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "synth.h",
+      "upstream_sha256": "8aa3de2de1a7d303b34cae2b0cf0837e9e476ab640ff02dbf4d59ccf23e96b50",
+      "vendored_sha256": "b047970e2dc2cd4272b04336804d07f1cc75057f37abab0a52aebcf76c870c93",
+      "license": "Apache-2.0"
+    },
+    {
+      "path": "note.cc",
+      "origin": "Adapted from Source/msfa/dx7note.cc and dx7note.h at the pinned revision; ordinary equal-tempered tuning supplied by ChooChoo adapter",
+      "license": "Apache-2.0",
+      "vendored_sha256": "6caa02634e01fb2f108ebfc4e3d418f1a548888f82db6913f3e45d5b18077753"
+    },
+    {
+      "path": "note.h",
+      "origin": "Adapted from Source/msfa/dx7note.cc and dx7note.h at the pinned revision; ordinary equal-tempered tuning supplied by ChooChoo adapter",
+      "license": "Apache-2.0",
+      "vendored_sha256": "97d3d278cc484f9bf9ed6b3e615ece18cf22bf3577a133a06b7b0ace7118fbe1"
+    }
+  ],
+  "patch_log": "PATCHES.md",
+  "excluded": [
+    "Dexed application",
+    "JUCE",
+    "controllers.h application coupling",
+    "MTS",
+    "microtuning",
+    "MPE",
+    "portamento framework",
+    "alternate FM engines",
+    "Android/JNI",
+    "upstream preset data"
+  ]
+}

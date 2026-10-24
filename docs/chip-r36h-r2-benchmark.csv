@@ -1,0 +1,5 @@
+kind,rate,frames,notes,seconds,mean_us,p50_us,p95_us,p99_us,worst_us,deadline_misses,part_bytes,fm_amp_enabled
+4WAV+2chip+2FM song (8 tracks)+4 inserts+sends,48000,512,8,30,7441.224,7702.625,7989.042,8041.833,8299.375,0,782928,0
+4WAV+2chip+2FM chord song (8 tracks)+4 inserts+sends,48000,512,11,30,7709.263,7964.541,8283.333,8347.792,8670.958,0,782928,0
+4WAV+2chip+2FM song (8 tracks)+4 inserts+sends,48000,512,8,30,7513.280,7740.250,8151.208,8257.667,9367.167,0,782928,1
+4WAV+2chip+2FM chord song (8 tracks)+4 inserts+sends,48000,512,11,30,7888.301,7998.666,8583.750,8668.333,8994.125,0,782928,1

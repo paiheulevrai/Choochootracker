@@ -1,6 +1,7 @@
 #include "playback.h"
 #include "playback_internal.h"
 #include <stdio.h>
+#include <algorithm>
 #include <string.h>
 
 PlaybackFXHandler fxHandlers[fxTotalCount] = {};
@@ -124,8 +125,13 @@ static void initFX_PBN(PlaybackState* state, PlaybackTrackState* track, int trac
     speed = state->p->grooves[track->grooveIdx].speed[track->grooveRow];
   }
   if (speed == 0) speed = 1;
-  int value = (int8_t)(fx->fxValue) << 8; // Use 24.8 fixed point math
-  if (state->p->linearPitch) {
+  int value = int(int8_t(fx->fxValue)) * 256; // Use 24.8 fixed point math
+  const auto* instrument = track->note.instrument == EMPTY_VALUE_8 ? nullptr :
+    &state->p->instruments[track->note.instrument];
+  if (instrument && instrument->type==InstrumentType::SoundFont &&
+      instrument->chip.soundfont.controls.bendStepCents>0) {
+    value *= std::clamp(int(instrument->chip.soundfont.controls.bendStepCents),1,100);
+  } else if (state->p->linearPitch) {
     // Linear pitch mode: multiply by 25 for cents
     value *= 25;
   }
@@ -228,7 +234,7 @@ static void restartFX_VOL(PlaybackState* state, PlaybackTrackState* track, int t
 }
 
 static void handleFX_VOL(PlaybackState* state, PlaybackTrackState* track, int trackIdx, int chipIdx, PlaybackFXState* fx) {
-  track->note.volumeOffset += fx->acc;
+  track->note.volumeOffset += fx->acc * (PHRASE_VOLUME_MAX / 15);
 }
 
 // VSL - Volume slide
@@ -247,7 +253,7 @@ static void initFX_VSL(PlaybackState* state, PlaybackTrackState* track, int trac
 
 static void handleFX_VSL(PlaybackState* state, PlaybackTrackState* track, int trackIdx, int chipIdx, PlaybackFXState* fx) {
   fx->acc += fx->d.bend.speed;
-  track->note.volumeOffset += fx->acc >> 8;
+  track->note.volumeOffset += (fx->acc >> 8) * (PHRASE_VOLUME_MAX / 15);
 }
 
 // GRV - Track groove
@@ -351,7 +357,7 @@ static void handleFX_RET(PlaybackState* state, PlaybackTrackState* track, int tr
     restartFX(state, trackIdx);
     fx->acc += volumeOffset;
   }
-  track->note.volumeOffset += fx->acc;
+  track->note.volumeOffset += fx->acc * (PHRASE_VOLUME_MAX / 15);
 }
 
 // PVB - Pitch vibrato
@@ -362,6 +368,19 @@ static void restartFX_PVB(PlaybackState* state, PlaybackTrackState* track, int t
 static void handleFX_PVB(PlaybackState* state, PlaybackTrackState* track, int trackIdx, int chipIdx, PlaybackFXState* fx) {
   int scale = state->p->linearPitch ? 10 : 1;
   track->note.fineOffset += vibratoCommonLogic(fx, scale);
+}
+
+// LST - Sample loop start (relative). The signed value shifts the loop
+// start marker from its current position; the offset accumulates across
+// rows and survives retriggers until the next note trigger. Consumption
+// happens at audio rate in updateSampleVoices.
+static void initFX_LST(PlaybackState* state, PlaybackTrackState* track, int trackIdx, PlaybackFXState* fx, PlaybackTableState *tableState, int tableFXColumn) {
+  (void)state; (void)track; (void)trackIdx; (void)tableState; (void)tableFXColumn;
+  fx->acc += (int8_t)fx->fxValue;
+}
+
+static void restartFX_LST(PlaybackState* state, PlaybackTrackState* track, int trackIdx, PlaybackFXState* fx) {
+  // Do nothing - LST should keep the accumulated offset
 }
 
 
@@ -393,18 +412,69 @@ static void handleFX_PSL(PlaybackState* state, PlaybackTrackState* track, int tr
 // General FX handling functions
 //
 
-void initFX(PlaybackState* state, int trackIdx, uint8_t* fx, PlaybackTableState* tableState, int tableFXColumn) {
-  if (fx[0] == EMPTY_VALUE_8 || fx[0] >= fxTotalCount) return;
-  if (tableState != NULL && (fx[0] == fxSCL || fx[0] == fxCRD)) return;
+void initFX(PlaybackState* state, int trackIdx, const FXCell* fx, PlaybackTableState* tableState, int tableFXColumn) {
+  if (fx->command == FX_ID_EMPTY || fx->command >= fxTotalCount) return;
+  if (tableState != NULL && (fx->command == fxSCL || fx->command == fxCRD)) return;
 
   PlaybackTrackState* track = &state->tracks[trackIdx];
+  if (fx->command >= fxF11 && fx->command <= fxF28) {
+    int address = fx->command - fxF11, slot = address / 8, parameter = address % 8;
+    int module = state->p->trackInserts[trackIdx][slot].module;
+    if (parameter < insertDescriptor(module).count) {
+      track->inserts.values[slot][parameter] = insertClamp(module, parameter, fx->value);
+      track->inserts.valid[slot] |= 1 << parameter;
+    }
+    return;
+  }
+  if (fx->command >= fxMUV && fx->command <= fxMLV) {
+    if (track->note.instrument == EMPTY_VALUE_8 ||
+        state->p->instruments[track->note.instrument].type != InstrumentType::Monk) return;
+    auto& control = track->note.fx[fx->command];
+    control.isOn = 1;
+    control.fxValue = fx->command == fxMUV ? clampInt(fx->value, 1, 10) : fx->value;
+    return;
+  }
+  if (fx->command >= fxFPT && fx->command <= fxFSU) {
+    if (track->note.instrument == EMPTY_VALUE_8 ||
+        state->p->instruments[track->note.instrument].type != InstrumentType::SoundFont) return;
+    auto& f = track->note.fx[fx->command];
+    f.isOn = 1;
+    f.fxValue = fx->command == fxFPT ? std::min(int(fx->value), 48) : fx->value;
+    return;
+  }
+  if (fx->command >= fxOAR && fx->command <= fxLEN) {
+    if (track->note.instrument == EMPTY_VALUE_8) return;
+    const auto* instrument = &state->p->instruments[track->note.instrument];
+    if (!instrumentFXAvailableForInstrument(instrument, fx->command)) return;
+    constexpr int op = 0;
+    NativeFXInfo info{};
+    if (!instrumentDirectFMInfo(instrument, fx->command, &info, op)) return;
+    int value = clampInt(fx->value, info.minimum, info.maximum);
+    if (fx->command >= fxOAR && fx->command <= fxOE4) {
+      int n=fx->command-fxOAR;
+      auto& target=track->note.nativeFM.operators[op][n];
+      if(!target)track->note.nativeFMCurrent.operators[op][n]=value+1;
+      if(target!=value+1)track->note.nativeFMRemaining.operators[op][n]=track->slewTicks;
+      target=value+1;
+      return;
+    }
+    if (fx->command >= fxLFR) {
+      int n=fx->command-fxLFR;
+      auto& target=track->note.nativeFM.global[n];
+      if(!target)track->note.nativeFMCurrent.global[n]=value+1;
+      if(target!=value+1)track->note.nativeFMRemaining.global[n]=track->slewTicks;
+      target=value+1;
+      return;
+    }
+    return;
+  }
   // STA is a spelling alias for SST, so both commands share one runtime
   // state and the most recent one wins just like two SST commands would.
-  uint8_t fxIdx = fx[0] == fxSTA ? fxSST : fx[0];
+  FXId fxIdx = fx->command == fxSTA ? fxSST : fx->command;
   PlaybackFXState* fxState = &track->note.fx[fxIdx];
 
   fxState->isOn = 1;
-  fxState->fxValue = fx[1];
+  fxState->fxValue = fx->value;
 
   if (fxHandlers[fxIdx].init) {
     fxHandlers[fxIdx].init(state, track, trackIdx, fxState, tableState, tableFXColumn);
@@ -416,6 +486,7 @@ void initFXHandlers(void) {
   fxHandlers[fxARP] = (PlaybackFXHandler){NULL, handleFX_ARP, restartFX_ARP};
   fxHandlers[fxARC] = (PlaybackFXHandler){initFX_ARC, NULL, NULL};
   fxHandlers[fxPVB] = (PlaybackFXHandler){NULL, handleFX_PVB, restartFX_PVB};
+  fxHandlers[fxLST] = (PlaybackFXHandler){initFX_LST, NULL, restartFX_LST};
   fxHandlers[fxPBN] = (PlaybackFXHandler){initFX_PBN, handleFX_PBN, NULL};
   fxHandlers[fxPSL] = (PlaybackFXHandler){initFX_PSL, handleFX_PSL, NULL};
   fxHandlers[fxPIT] = (PlaybackFXHandler){initFX_PIT, handleFX_PIT, restartFX_PIT};

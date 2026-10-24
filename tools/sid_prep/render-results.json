@@ -1,0 +1,1458 @@
+[
+  {
+    "program": "originals-00-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "14.991304981",
+      "peak": "0.057327"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.006870819978435256,
+    "wav_sha256": "725411daaad423cec92d26261b9fec1fb961de1cd754906a1af983564f4015a8",
+    "ac_rms_all": 0.007011938220986769
+  },
+  {
+    "program": "originals-00-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "17.099085007",
+      "peak": "0.056518"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.007171073634312739,
+    "wav_sha256": "85fdf2cb25a542ab58234b2a0d7bdce8c7efcc1118cb59cf4d44844db02fc168",
+    "ac_rms_all": 0.006205196985933476
+  },
+  {
+    "program": "originals-00-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "16.863542080",
+      "peak": "0.057614"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0075626702052670886,
+    "wav_sha256": "b4445770924d4a008a9173764a43a8edb0d2a3a8138146ef0c8f8a4c9278c4a3",
+    "ac_rms_all": 0.006603673563872731
+  },
+  {
+    "program": "originals-01-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "17.827995533",
+      "peak": "0.057632"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.007093119886636743,
+    "wav_sha256": "43172d26e35bba0d55f07977524de13747398c9c6178463a98629519dc247dda",
+    "ac_rms_all": 0.007062733277235099
+  },
+  {
+    "program": "originals-01-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "17.127403677",
+      "peak": "0.057449"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.007516510008965094,
+    "wav_sha256": "a428de6215f80a9f08a52bcd92bf6a33ce458e94c8601a6e1384150d9f02c671",
+    "ac_rms_all": 0.008090623830538256
+  },
+  {
+    "program": "originals-01-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "18.483710375",
+      "peak": "0.057731"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008215068221434918,
+    "wav_sha256": "48d2744c18c7d09d65404ae175e712add1b8e20e2eed51bb789b0199a1adf534",
+    "ac_rms_all": 0.008116071094700018
+  },
+  {
+    "program": "originals-02-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "20.171851329",
+      "peak": "0.057938"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.00866589271424897,
+    "wav_sha256": "c8c057d972b7c7dbba531e668c371c14ffd0b824050caa1ee77e43730bd2dbab",
+    "ac_rms_all": 0.008858277667137576
+  },
+  {
+    "program": "originals-02-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "21.758641492",
+      "peak": "0.057434"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008982252283437705,
+    "wav_sha256": "3a0d795940434b3ca586c206f1cde6159bc1ba2fd6f09994a8fa8425d5214158",
+    "ac_rms_all": 0.008114252151468401
+  },
+  {
+    "program": "originals-02-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "22.548677085",
+      "peak": "0.059566"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.010292134917232968,
+    "wav_sha256": "2635b01e64a5b44472517510aefeb89015f696c1ef304f17ed6b2d7b39b65fc3",
+    "ac_rms_all": 0.009278916364545926
+  },
+  {
+    "program": "originals-03-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "24.249288797",
+      "peak": "0.058990"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01080767552065693,
+    "wav_sha256": "ca50670e796078153b42e1b7f4e9dbd5d947717aa865d849c01a67c4f2ff4838",
+    "ac_rms_all": 0.009735712029983173
+  },
+  {
+    "program": "originals-03-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "26.731346952",
+      "peak": "0.060760"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012016129695233682,
+    "wav_sha256": "9315693646140aa5bd875096e56d71d182cba3b96fad28fd9bedbe94b9811496",
+    "ac_rms_all": 0.009556659663634708
+  },
+  {
+    "program": "originals-03-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "23.653846322",
+      "peak": "0.045990"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.010116943792095223,
+    "wav_sha256": "f6649564f37afc0940792ad4244320db00d4d169e135195cc848d2907fff93da",
+    "ac_rms_all": 0.008698997290148752
+  },
+  {
+    "program": "originals-04-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "96.915089580",
+      "peak": "0.081085"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.014281411422475373,
+    "wav_sha256": "2983352b0ab30f2a6254c61963e9b984f7133ceea998fb17197331dee8bf10a2",
+    "ac_rms_all": 0.018307136880284153
+  },
+  {
+    "program": "originals-04-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "97.349701296",
+      "peak": "0.079955"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01450575596421667,
+    "wav_sha256": "31568bd5a005ae8a300074dfa01a35c95399d31962de47d39d70a8701e371eab",
+    "ac_rms_all": 0.018371811195709888
+  },
+  {
+    "program": "originals-04-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "97.913882204",
+      "peak": "0.075791"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.014914641950496554,
+    "wav_sha256": "937c7bb83900af6f0e0e32cbf1cc249cb5d24c7f7347ca5d289a9b35f86be8a6",
+    "ac_rms_all": 0.01846997944280304
+  },
+  {
+    "program": "originals-05-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "83.967588146",
+      "peak": "0.079508"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.018220797316652854,
+    "wav_sha256": "d6007f0fa90d60c875e59f39c73622c05cd3aaf3890e239939b1b8a87323ef8f",
+    "ac_rms_all": 0.017607176578157597
+  },
+  {
+    "program": "originals-05-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "84.507447150",
+      "peak": "0.080742"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.018415611111450257,
+    "wav_sha256": "533d06a6e67bd4234a68a45ebb7f13e90b25224c7c235aeb9b849d71e51f4a16",
+    "ac_rms_all": 0.017698932692296762
+  },
+  {
+    "program": "originals-05-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "85.504475415",
+      "peak": "0.080077"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01878625986214032,
+    "wav_sha256": "f2a0f4b10df038ccbb1c6c7fcbe28ec24ee2c5d64493df4a3086e1f06febe266",
+    "ac_rms_all": 0.017853249150784057
+  },
+  {
+    "program": "originals-06-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "57.049781872",
+      "peak": "0.078886"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.019879920515218853,
+    "wav_sha256": "7525f989f28429289da48dee4fa0f7174dfec8fc47716d4df5999a3d461e05b7",
+    "ac_rms_all": 0.015570144210967697
+  },
+  {
+    "program": "originals-06-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "57.747532104",
+      "peak": "0.080180"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.020108482304635453,
+    "wav_sha256": "03235ffd0e5dc36a78dcb556d4418a2d330bd53bf1cf69180281d1cbf5be3f26",
+    "ac_rms_all": 0.015500880924240281
+  },
+  {
+    "program": "originals-06-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "58.992983981",
+      "peak": "0.081111"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.020531740601644595,
+    "wav_sha256": "ec8e88b81ea3d3315b34b9017c09095d2e6af1c6b93a708f1605948ad6f48577",
+    "ac_rms_all": 0.015781464186958964
+  },
+  {
+    "program": "originals-07-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "27.200286069",
+      "peak": "0.079631"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.017237855496547886,
+    "wav_sha256": "0eeb7d96f0689ef849ed50ec44816fcd62df3a2d8786e58dfe0527e577a33a23",
+    "ac_rms_all": 0.011420091593277802
+  },
+  {
+    "program": "originals-07-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "28.105473362",
+      "peak": "0.080827"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01759686871526616,
+    "wav_sha256": "0b065d8252f43fc79931c68b957e60fb09728461d9ff57661f2e756334c7312e",
+    "ac_rms_all": 0.011622464126123933
+  },
+  {
+    "program": "originals-07-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "30.440832961",
+      "peak": "0.081568"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.018399215224192196,
+    "wav_sha256": "7c0ba723373709010e7dbdf5f2ebb0ad62bf944436c70c40239312717a45667d",
+    "ac_rms_all": 0.01212714373774378
+  },
+  {
+    "program": "originals-08-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "2.804224821",
+      "peak": "0.054649"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0006786870717820327,
+    "wav_sha256": "d97d0da3a45f3867aa7251f98f3348d525a66161479630430b2ceddf24b5833d",
+    "ac_rms_all": 0.003671366362671068
+  },
+  {
+    "program": "originals-08-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "2.879329837",
+      "peak": "0.056877"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0006930225742458317,
+    "wav_sha256": "77a32991f622d51d373a0547fc486af4d09500072b2e55191636617b3f59297a",
+    "ac_rms_all": 0.0038279690301329357
+  },
+  {
+    "program": "originals-08-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "2.897052193",
+      "peak": "0.056720"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0006922040527731396,
+    "wav_sha256": "f3cde1e12185476cb412e1b2845c378643cb84cd1801d81a1fb1379410409a47",
+    "ac_rms_all": 0.0038312203593993902
+  },
+  {
+    "program": "originals-09-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "3.145895680",
+      "peak": "0.081601"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.00117540971728844,
+    "wav_sha256": "b2d710109a9b06ed029679498c04f9001d10e88175bece854c5548ee2c26003f",
+    "ac_rms_all": 0.0038891839156826456
+  },
+  {
+    "program": "originals-09-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "3.318186070",
+      "peak": "0.068986"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0012024415495785446,
+    "wav_sha256": "7b7fa76246c3c962d2ffd4ff5bf8e74253c6ccfa1f1b0c6a65912053b93d045f",
+    "ac_rms_all": 0.003977367723897774
+  },
+  {
+    "program": "originals-09-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "3.343915419",
+      "peak": "0.059108"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0012227719342226926,
+    "wav_sha256": "ca62cb2c15529d3feadceefdf059009f65d48c20a95448ee3c5055efc85b272b",
+    "ac_rms_all": 0.004050855247089995
+  },
+  {
+    "program": "originals-10-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "6.181409017",
+      "peak": "0.056888"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.004935363746351095,
+    "wav_sha256": "4bea08da626f9eb18c2abb63770ba16c3e204573e815a0557d39c72217c22bae",
+    "ac_rms_all": 0.005375895363938645
+  },
+  {
+    "program": "originals-10-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "6.319802443",
+      "peak": "0.057556"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.004997242559918841,
+    "wav_sha256": "329d79d3ac56387134cebecc312359296e5fa74a67dfc2f44030b535ee5b13cf",
+    "ac_rms_all": 0.00542108914564594
+  },
+  {
+    "program": "originals-10-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "6.381251335",
+      "peak": "0.057259"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0050597706642879275,
+    "wav_sha256": "282f7e0a62dafac677aa6ce82ab88ddb7817e3b897197dda9a6fb33328b9eb8f",
+    "ac_rms_all": 0.005585118194155566
+  },
+  {
+    "program": "originals-11-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "11.187562415",
+      "peak": "0.059384"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008532401871808426,
+    "wav_sha256": "a5d8aeaf9ab293ddd28b4daf9294b3bcec980ff6f4d8894d6502de3b60f5fc91",
+    "ac_rms_all": 0.007048159141435547
+  },
+  {
+    "program": "originals-11-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "11.323343979",
+      "peak": "0.057707"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008627932607106483,
+    "wav_sha256": "1167c928ed655b072a74f9b7d94002149682955f6fb1125e76fd6b923c27cceb",
+    "ac_rms_all": 0.007051265090769453
+  },
+  {
+    "program": "originals-11-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "11.542929390",
+      "peak": "0.057220"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008794576792701153,
+    "wav_sha256": "899877bca52a742a2b0cfa7f168dccc2d31c80b3285147c3d8e0718c40bbbc72",
+    "ac_rms_all": 0.007324115266683548
+  },
+  {
+    "program": "originals-12-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "127.562416805",
+      "peak": "0.069842"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01708652024150652,
+    "wav_sha256": "a25f69e7aa9529d24c174193782ad766eab2fb206507c43f5654644ce672df01",
+    "ac_rms_all": 0.021181976241839078
+  },
+  {
+    "program": "originals-12-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "127.635191474",
+      "peak": "0.070231"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.017110851060655727,
+    "wav_sha256": "866a226a00ccb2c1cba0d685f6c2e4ec3e6a0db9296d130abdd491aaf73be88a",
+    "ac_rms_all": 0.021191644757795284
+  },
+  {
+    "program": "originals-12-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "127.794002447",
+      "peak": "0.069467"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.017226317101002003,
+    "wav_sha256": "2fe84c0e6341d4fafe0992c522ff143695d9de7071d67dd5a99cf160d5686794",
+    "ac_rms_all": 0.021218823639278406
+  },
+  {
+    "program": "originals-13-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "110.657670218",
+      "peak": "0.069032"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.021516233265648547,
+    "wav_sha256": "f1d4c436c11193036f5212840d01ea44895a8663e5e4519f77cbd73ec46c3787",
+    "ac_rms_all": 0.020347991256383827
+  },
+  {
+    "program": "originals-13-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "110.762297015",
+      "peak": "0.069732"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.021539819763201115,
+    "wav_sha256": "ff03ca7d954caaefe3550a9ab4a76653e54ac3adda5f613a879e7b25d49d89bf",
+    "ac_rms_all": 0.020360219307538133
+  },
+  {
+    "program": "originals-13-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "110.824761316",
+      "peak": "0.070230"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.021553399762919378,
+    "wav_sha256": "cc72b72a2151a0dac3d55a8d54851a447da0b101b65c10f2bba22d7b566dcc39",
+    "ac_rms_all": 0.02037155932230398
+  },
+  {
+    "program": "originals-14-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "77.191042598",
+      "peak": "0.069293"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.02349415081105639,
+    "wav_sha256": "14d86d42910cc73765507f4eb1ab6b380d9b59a042bc118202d46083dc2d3ba4",
+    "ac_rms_all": 0.01802362344728228
+  },
+  {
+    "program": "originals-14-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "77.253476873",
+      "peak": "0.069882"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.023510403279440525,
+    "wav_sha256": "cdc571d60e8894b63a2d293ba41b171d1db95ffbecb419aa30af4065af1dda5e",
+    "ac_rms_all": 0.018033328404682292
+  },
+  {
+    "program": "originals-14-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "77.283467321",
+      "peak": "0.070053"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.02352405036721703,
+    "wav_sha256": "3bff9c92e3bfe6e461197c50fad0911b6a614436b7c5b445b34e7e32322edc0d",
+    "ac_rms_all": 0.018040345917602445
+  },
+  {
+    "program": "originals-15-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "34.563610605",
+      "peak": "0.069528"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.020181362139969596,
+    "wav_sha256": "bc1e3a56c3aebfce51e6e63d17ecc263d5f461dc816638bdf18b67038a6feb01",
+    "ac_rms_all": 0.01283184701212275
+  },
+  {
+    "program": "originals-15-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "34.795538170",
+      "peak": "0.069699"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.020275747149575234,
+    "wav_sha256": "f8c728e86c590f582c7c8a6d6761cbc94ff2c244104adf9ba378cd83439fa591",
+    "ac_rms_all": 0.012876095127051089
+  },
+  {
+    "program": "originals-15-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "35.540111940",
+      "peak": "0.069653"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0205129162583137,
+    "wav_sha256": "f4c747e4edc3d73bb9fa24c25731138b7db25e88c55c540b4fddb9b4ba41dafa",
+    "ac_rms_all": 0.01302847372399668
+  },
+  {
+    "program": "originals-16-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "11.557386485",
+      "peak": "0.058244"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008423979080443206,
+    "wav_sha256": "2ed24b619dac8944aa931a80dcc0c0671902858534211ec32bc6c8be830460fd",
+    "ac_rms_all": 0.007237836164595785
+  },
+  {
+    "program": "originals-16-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "11.508768289",
+      "peak": "0.057864"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008487970671868092,
+    "wav_sha256": "911a46622a1b33a55d61895c1f50d2d94e18e76f093d7b9000dd85f204eeb0ae",
+    "ac_rms_all": 0.007221047687315754
+  },
+  {
+    "program": "originals-16-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "11.531208103",
+      "peak": "0.057988"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008464976816868057,
+    "wav_sha256": "ac7c231b22a8865b075b60ccd626366369b9bd2b15b77caaed93531e41dff938",
+    "ac_rms_all": 0.007228405421900908
+  },
+  {
+    "program": "originals-17-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "15.923203117",
+      "peak": "0.058244"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.010338523813669067,
+    "wav_sha256": "6068967087234a7daf5ce9cf5750bfd49d6e9e4abd16f7bdfc6e87443f0c015e",
+    "ac_rms_all": 0.00830548615734219
+  },
+  {
+    "program": "originals-17-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "15.871125765",
+      "peak": "0.057864"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.010283593235938315,
+    "wav_sha256": "c87640200c45d55e16eaf612f54efff63a29208d4243b7fa136ca422902d2968",
+    "ac_rms_all": 0.008290657199680428
+  },
+  {
+    "program": "originals-17-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "15.852883679",
+      "peak": "0.057988"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.010310021755237344,
+    "wav_sha256": "d3d43b3581a9cf3d7e221d1e9d2a7f6f004d31f624e4666e3b5c4f7778cc18a6",
+    "ac_rms_all": 0.008285555208895847
+  },
+  {
+    "program": "originals-18-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "19.775969862",
+      "peak": "0.058244"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.011066188462074111,
+    "wav_sha256": "8d20a730ba085358b781b6ffa21461ecc9f37854414373142378d3c43dcc8d8f",
+    "ac_rms_all": 0.009092183679434313
+  },
+  {
+    "program": "originals-18-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "19.734728409",
+      "peak": "0.058092"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.011037476589314305,
+    "wav_sha256": "2278cc8097a279ff2041591a41fd9d68f052f339d33335371bf135d647577af7",
+    "ac_rms_all": 0.009080886314958982
+  },
+  {
+    "program": "originals-18-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "19.758739501",
+      "peak": "0.057988"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.011061832991177847,
+    "wav_sha256": "ec7b8f8271c0b7cd0a0b3b1250781c17e5f60c13d17b18dec00f8a8b3bd262c2",
+    "ac_rms_all": 0.009086787657534713
+  },
+  {
+    "program": "originals-19-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "48.928869839",
+      "peak": "0.058274"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.014117413464345283,
+    "wav_sha256": "738ee94016563081e009e62395d3e048e21c597fd6eb96258b5876d2bb27914c",
+    "ac_rms_all": 0.013490701418712827
+  },
+  {
+    "program": "originals-19-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "48.921362599",
+      "peak": "0.058196"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.014113526831879062,
+    "wav_sha256": "aba1304a09ed0b2d9a6077276354a959c11ba8a443efdfebf17d3124eb938560",
+    "ac_rms_all": 0.013486556057314584
+  },
+  {
+    "program": "originals-19-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "48.943515902",
+      "peak": "0.058031"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.014140643680858447,
+    "wav_sha256": "e1eeaf3f17d2acc95ee2afdb6174d4258fa55aca884240910935e167489f01e4",
+    "ac_rms_all": 0.013493538691390942
+  },
+  {
+    "program": "originals-20-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "0.016527381",
+      "peak": "0.017378"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0005207484655304088,
+    "wav_sha256": "661fabdbb40ed1fca3fc72fa2ab93a5f52443151a762859e6513114e56b45f2c",
+    "ac_rms_all": 0.0002815973171361081
+  },
+  {
+    "program": "originals-21-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "0.154391350",
+      "peak": "0.048274"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0014847634237583863,
+    "wav_sha256": "0023f75cb58a18b412787803f15d771f58ee928f0231645d9bccf06840ffc660",
+    "ac_rms_all": 0.0008707152789502565
+  },
+  {
+    "program": "originals-22-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "0.160024313",
+      "peak": "0.031330"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.001166233988181555,
+    "wav_sha256": "552793644451313608b4caba7a6d9934ac895209e3d1e6abf526542f6ca54d7d",
+    "ac_rms_all": 0.000900312349806395
+  },
+  {
+    "program": "originals-23-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "0.293623466",
+      "peak": "0.027911"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0011322397806666673,
+    "wav_sha256": "0c49d81ab2a1be720611580a56195d90a97b136d946e80b80a2749c894ae4a0b",
+    "ac_rms_all": 0.0012164065781376076
+  },
+  {
+    "program": "originals-24-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "44.328171414",
+      "peak": "0.053345"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012308200178118834,
+    "wav_sha256": "e2c039ea223b1d131f30762b71ebc02da92f27f227346d7f458a712dd6928755",
+    "ac_rms_all": 0.012815176437560803
+  },
+  {
+    "program": "originals-24-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "44.273856975",
+      "peak": "0.054797"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012288309787081555,
+    "wav_sha256": "d8e6b361cbb1ab5db57eb8e9085a5d2eee002d01bca6f7d79aeb9f5c212db880",
+    "ac_rms_all": 0.012803777733906532
+  },
+  {
+    "program": "originals-24-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "44.157929479",
+      "peak": "0.056391"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012217783775592203,
+    "wav_sha256": "10d938f86c4a80e25cbe91cfea4ab23f87aa9975b2385454a4f5c3006fb49076",
+    "ac_rms_all": 0.012780055662301152
+  },
+  {
+    "program": "originals-25-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "44.365626336",
+      "peak": "0.053345"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012307153162322018,
+    "wav_sha256": "a9d34215450884e8ff358fddc040dafdfc68015d347ba59851f52cab54f1261c",
+    "ac_rms_all": 0.012820955037899233
+  },
+  {
+    "program": "originals-25-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "44.312314187",
+      "peak": "0.055480"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01228792587889008,
+    "wav_sha256": "3da150ec5a761d475ec4c2803bcaaa1d1447888f371a1d7042545764e7d69901",
+    "ac_rms_all": 0.012809680329425388
+  },
+  {
+    "program": "originals-25-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "44.195951874",
+      "peak": "0.056617"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012217702259847502,
+    "wav_sha256": "55adea4fa09a6a19285bb84b6b65eccedb1a8367e51850e7935d476a37dac5c8",
+    "ac_rms_all": 0.01278591798192477
+  },
+  {
+    "program": "originals-26-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "45.379813867",
+      "peak": "0.053345"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012307181656661234,
+    "wav_sha256": "3bdabc553cba49b7034f9d061aeca3e8c806101d42d34d83266e88c33cb56993",
+    "ac_rms_all": 0.012910060204125514
+  },
+  {
+    "program": "originals-26-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "45.315641410",
+      "peak": "0.055934"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012284385029629821,
+    "wav_sha256": "63bbb057d2aa4ff859d62b31324f8a11fb7314f4fa12fd43af13d9beea64d548",
+    "ac_rms_all": 0.012896949773167011
+  },
+  {
+    "program": "originals-26-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "45.201778284",
+      "peak": "0.056843"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012217100885567482,
+    "wav_sha256": "2d296645a7fafc6b3c1d3d1cc0c66f366799cca73a401266c23388b758485a55",
+    "ac_rms_all": 0.012873818371329534
+  },
+  {
+    "program": "originals-27-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "44.472926363",
+      "peak": "0.054356"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01230831647426487,
+    "wav_sha256": "b4767c9df46bbbdc5cdee4c88b7c7c44969eadcc4c6f4e380ebdabd3f010d8de",
+    "ac_rms_all": 0.01283717429363321
+  },
+  {
+    "program": "originals-27-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "44.423875391",
+      "peak": "0.056390"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012293579012838,
+    "wav_sha256": "30ac6937e7c69f3c991353d0b43df23ba8cadf70da0a5674751bf85460ddd53f",
+    "ac_rms_all": 0.012826726700388638
+  },
+  {
+    "program": "originals-27-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "44.300522118",
+      "peak": "0.056843"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.012218735160318704,
+    "wav_sha256": "be9a83f6ef8171902db5b28c9216c2c97fb4005b76cba1825e004fbc5a320a41",
+    "ac_rms_all": 0.012801519857364533
+  },
+  {
+    "program": "originals-28-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "62.595291519",
+      "peak": "0.069797"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.011230123155344393,
+    "wav_sha256": "d8bdeaa9932525ae9bed7a20f1280ff079c37f96c79e8ba3d3dfabcd195ecd9b",
+    "ac_rms_all": 0.014813195268367427
+  },
+  {
+    "program": "originals-28-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "62.686994924",
+      "peak": "0.075809"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01133234819802054,
+    "wav_sha256": "ba605825cba8808ca4703528cdfc964ef7e4ccaf7bc206c73d56ae53794ea1ef",
+    "ac_rms_all": 0.014783889585392637
+  },
+  {
+    "program": "originals-28-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "62.997855450",
+      "peak": "0.074044"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.011541490230232647,
+    "wav_sha256": "49926753c5312c004fc500fd12b76569c20141439720b4262c2344e8c3df86e8",
+    "ac_rms_all": 0.01483901815638146
+  },
+  {
+    "program": "originals-29-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "54.419346530",
+      "peak": "0.071205"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.014302257014953145,
+    "wav_sha256": "f47958cee66a5799a7452116787377c99d9686278d9888ff86b6284a822e44dc",
+    "ac_rms_all": 0.014215358547781992
+  },
+  {
+    "program": "originals-29-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "54.543529168",
+      "peak": "0.075880"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.014395357597949758,
+    "wav_sha256": "9427552dcc2da38d2dd88fd7f0d32548af4011f37cbaef51e57027c0ee4cacdd",
+    "ac_rms_all": 0.014238831997774107
+  },
+  {
+    "program": "originals-29-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "54.851954355",
+      "peak": "0.077077"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.014554356262313356,
+    "wav_sha256": "16efaadfda0d3ec28f31e9f0bbd6f327610a42e3db236d16af73c6ea7e39f681",
+    "ac_rms_all": 0.014298404148895872
+  },
+  {
+    "program": "originals-30-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "39.371154572",
+      "peak": "0.076125"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.015712274060251018,
+    "wav_sha256": "089a65ef7f5f1d32a57df046cafed5165d3af4f71466578fd0d6a64d320be5ef",
+    "ac_rms_all": 0.012832896140636076
+  },
+  {
+    "program": "originals-30-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "39.754882394",
+      "peak": "0.076468"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.015823357030786623,
+    "wav_sha256": "b38495fb9d9e3b13653b664684025ff6c7fc7c58152258c35c6237250a6e6e6e",
+    "ac_rms_all": 0.012944768210795408
+  },
+  {
+    "program": "originals-30-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "40.163395812",
+      "peak": "0.076295"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01600711692718475,
+    "wav_sha256": "80a968a5ed019c76d459a6607ca8d168601ead6f4405bf2fe5057c7a2bec0edd",
+    "ac_rms_all": 0.013027419237288724
+  },
+  {
+    "program": "originals-31-48.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "19.045929902",
+      "peak": "0.076110"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.014033586200397135,
+    "wav_sha256": "62c7691135ae5bc40e54e892b117e5a0dc96695b25479cb08101572aac751a2f",
+    "ac_rms_all": 0.009481836260159858
+  },
+  {
+    "program": "originals-31-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "19.309298617",
+      "peak": "0.077467"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01412144068386283,
+    "wav_sha256": "dca2af0879e5017074bba7d36386c83a696ce93b3025c42b96f1922c753201f8",
+    "ac_rms_all": 0.009556747615654301
+  },
+  {
+    "program": "originals-31-72.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "19.947985173",
+      "peak": "0.077487"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01437813393248942,
+    "wav_sha256": "559c1acd4dd02faf41ee7dae00d5a29468edc346f4968ab7b2bacd0c1268674a",
+    "ac_rms_all": 0.009722547275049846
+  },
+  {
+    "program": "sidkit-00-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "5.636272022",
+      "peak": "0.057573"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008279696679628815,
+    "wav_sha256": "17577f77f3139c5238a4c0c3ecf4cd5d458834e5518de7515fd64042a1dfe5ab",
+    "ac_rms_all": 0.005273837190630948
+  },
+  {
+    "program": "sidkit-01-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "5.302421808",
+      "peak": "0.057286"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.00523601565252619,
+    "wav_sha256": "d2472d639a0fa2b8518fe0d6227399ad307b1c9c06d855495eda97de13b35fda",
+    "ac_rms_all": 0.005108563443141929
+  },
+  {
+    "program": "sidkit-02-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "2.937213460",
+      "peak": "0.064343"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.005347495893040623,
+    "wav_sha256": "f1957f42e6121433e0c051810ae6a9843c55a4d15b38865adc9e8c4c927a7d28",
+    "ac_rms_all": 0.0037901956076470565
+  },
+  {
+    "program": "sidkit-03-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "3.668697386",
+      "peak": "0.058350"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.00251195102295255,
+    "wav_sha256": "82104af1c2854900a03e68dd25c9ed778bff81a33a6822334010474660b8da0f",
+    "ac_rms_all": 0.004305861844397365
+  },
+  {
+    "program": "sidkit-04-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "7.790685299",
+      "peak": "0.053909"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0057300095259582885,
+    "wav_sha256": "ad9292618a73d61679803f344eb2392719625cada4b6edf48594e6445fe87622",
+    "ac_rms_all": 0.00407380695915526
+  },
+  {
+    "program": "sidkit-05-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "0.050214775",
+      "peak": "0.001511"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.00010373041148775398,
+    "wav_sha256": "41ce759cfedf9776434c49e6efb6fff351311cf3d056236c9ca3a329a9df8b61",
+    "ac_rms_all": 9.043914012224658e-05
+  },
+  {
+    "program": "sidkit-06-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "2.516013665",
+      "peak": "0.055331"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.006651140072968613,
+    "wav_sha256": "9c57c698f27b6d3e50a0963849dbc10ede2d1b350eb72e9d6e899abaf158a947",
+    "ac_rms_all": 0.003568106681935911
+  },
+  {
+    "program": "sidkit-07-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "33.539506038",
+      "peak": "0.058350"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01889641139225141,
+    "wav_sha256": "5c86de51b3d7f13af74029ce05e681dedbbc3c935d4c3a3c8b9286542ca121a4",
+    "ac_rms_all": 0.012364019434174684
+  },
+  {
+    "program": "sidkit-08-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "10.647920287",
+      "peak": "0.056534"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.007887396248330436,
+    "wav_sha256": "da116be06d1f648b432892b555494e8693069d8ee1d1a18fe106d29c5fd9f5bf",
+    "ac_rms_all": 0.006813180652457785
+  },
+  {
+    "program": "sidkit-09-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "19.837998038",
+      "peak": "0.053510"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008991654317945318,
+    "wav_sha256": "28958196fe82e4e568c95c6ff03e7e0bfb516bc464b86101c17412a4d4d45e20",
+    "ac_rms_all": 0.008862300896923728
+  },
+  {
+    "program": "sidkit-10-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "0.412374940",
+      "peak": "0.055307"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.001131321086677891,
+    "wav_sha256": "646bc06c1fbc3a77426113b5cca9c3d2e3bfc0241f8123f09fa8904c62604d47",
+    "ac_rms_all": 0.0014602509447205285
+  },
+  {
+    "program": "sidkit-11-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "8.555349536",
+      "peak": "0.057505"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.010277162206058446,
+    "wav_sha256": "0a28d5e9153fc8a50553c33fbee0bcb9a58cf6d4505d74583bea98bf281ef547",
+    "ac_rms_all": 0.006456127346321536
+  },
+  {
+    "program": "sidkit-12-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "0.142444971",
+      "peak": "0.047057"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0,
+    "wav_sha256": "2aa2a06719b5dea2eaf3ab61d9b138e883a5fb100d401c8f6e3485969aeb3ca9",
+    "ac_rms_all": 0.0008596168450857417
+  },
+  {
+    "program": "sidkit-13-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "1.382724987",
+      "peak": "0.057024"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.000484938258783669,
+    "wav_sha256": "dbf2789ef5d79a1d379202f69422cba16b9e5986cd56d2102ff1bb44872623b8",
+    "ac_rms_all": 0.0026587912831094623
+  },
+  {
+    "program": "sidkit-14-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "1.294134220",
+      "peak": "0.055971"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0033997257187997633,
+    "wav_sha256": "00acf10467b6c6640380dba217430d72f2bda19070a41119b04d1afa565ed4b7",
+    "ac_rms_all": 0.0025744068166397944
+  },
+  {
+    "program": "sidkit-15-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "1.830762161",
+      "peak": "0.056403"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.003907665219939668,
+    "wav_sha256": "6edf4f8abfc51e0b62c17ea21c7648c997e7a6316960985aacd931c99099da82",
+    "ac_rms_all": 0.003050137759744201
+  },
+  {
+    "program": "sidkit-16-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "3.103710546",
+      "peak": "0.056414"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.005673936398292408,
+    "wav_sha256": "b5497be0110537fd6d96eeb839e847d62b53d0ce0ee4656d42677c01f5088535",
+    "ac_rms_all": 0.003948948334563656
+  },
+  {
+    "program": "sidkit-17-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "1.547592714",
+      "peak": "0.058350"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.0036618229202534124,
+    "wav_sha256": "c76bacef12de4ad383fbc78a6ecf07f2e909db28d9083f107bb26021d9252808",
+    "ac_rms_all": 0.0028243216042132366
+  },
+  {
+    "program": "sidkit-18-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "29.811747215",
+      "peak": "0.057719"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.011229506527072166,
+    "wav_sha256": "267ae39d735f62c78691de054045fd680adcc83ce308c0c6555d09fab8b89652",
+    "ac_rms_all": 0.01087282661086281
+  },
+  {
+    "program": "sidkit-19-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "8.243079373",
+      "peak": "0.058350"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.008905708784876695,
+    "wav_sha256": "f7f100d7e8f45daa5f825db6e9099bf3169679ff75fd4d0ad6cdfc46d64981b7",
+    "ac_rms_all": 0.006410399650524011
+  },
+  {
+    "program": "sidkit-20-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "64.330625803",
+      "peak": "0.058350"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.022456062784714948,
+    "wav_sha256": "5a5457b455db49a431364208cc47cae1b5e81e584edbad0361020084f0b98d97",
+    "ac_rms_all": 0.016779812444746064
+  },
+  {
+    "program": "sidkit-21-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "36.979647373",
+      "peak": "0.057596"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.014944569522183957,
+    "wav_sha256": "89db0553dfebaf3e35660e59062cd41757ff66477703d05c78487023707bc500",
+    "ac_rms_all": 0.012568424735533745
+  },
+  {
+    "program": "sidkit-22-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "4.812842783",
+      "peak": "0.057879"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.004980214032085337,
+    "wav_sha256": "ebc91aed65aa688b63c0c6c3ced14eb04e3ea310ae4957f799fc05b59e41425a",
+    "ac_rms_all": 0.004905330940593791
+  },
+  {
+    "program": "sidkit-23-60.regs",
+    "exit": 0,
+    "metrics": {
+      "samples": "192243",
+      "energy": "68.495895170",
+      "peak": "0.057799"
+    },
+    "error": "",
+    "ac_rms_first_second": 0.01366569024018547,
+    "wav_sha256": "894785af2e4d3ddf2698e3218f0d65aa1cd958390ebd79225c6668673bc64920",
+    "ac_rms_all": 0.014447886210063725
+  }
+]

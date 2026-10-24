@@ -2,6 +2,8 @@
 
 PLATFORM = portmaster
 include Makefile.common
+NATIVE_CHIP_OPT_FLAGS ?= -O3
+include Makefile.native-chip-flags
 
 LIBS = $(COMMON_LIBS) platforms/sdl2 ../chipnomad_lib/external/rtmidi
 CXX = aarch64-linux-gnu-g++
@@ -19,7 +21,12 @@ else
 SDL_CFLAGS := $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --cflags sdl2)
 SDL_LIBS := $(shell PKG_CONFIG_LIBDIR=$(PKG_CONFIG_LIBDIR) $(PKG_CONFIG) --libs sdl2)
 endif
-CFLAGS = $(COMMON_CFLAGS) $(INCLUDES) $(SDL_CFLAGS) -DPORTMASTER_BUILD -D__LINUX_ALSASEQ__ -DGAMEPAD_SUPPORT -DTOUCH_INPUT
+# PortMaster consoles are CPU-bound by the SDL UI too.  Keep the debug
+# information, but optimize the entire application for execution speed rather
+# than binary size; the DSP sources already use the same policy.
+PORTMASTER_CFLAGS = $(filter-out -Os,$(COMMON_CFLAGS)) -O3
+CFLAGS = $(PORTMASTER_CFLAGS) $(INCLUDES) $(SDL_CFLAGS) -DPORTMASTER_BUILD -D__LINUX_ALSASEQ__ -DGAMEPAD_SUPPORT -DTOUCH_INPUT \
+	-DLINK_PLATFORM_LINUX=1 -DASIO_STANDALONE=1 -DASIO_NO_TYPEID=1 -DASIO_VERSION_NAMESPACE=link_asio_1_38_2 -Wno-multichar
 TARGET = $(BUILD)/choochootracker.aarch64
 OUTPUT = -o $(TARGET)
 
@@ -28,9 +35,9 @@ OBJECTS := $(foreach source,$(SOURCES),$(call object_for,$(source)))
 DEPS := $(OBJECTS:.o=.d)
 
 define compile_source
-$(call object_for,$(1)): $(1) Makefile.portmaster Makefile.common
+$(call object_for,$(1)): $(1) Makefile.portmaster Makefile.common Makefile.native-chip-flags
 	@mkdir -p $$(dir $$@)
-	@$(CXX) $(CFLAGS) -MMD -MP -c $$< -o $$@
+	@$(CXX) $(CFLAGS) $(call native_chip_opt_flags,$(1)) -MMD -MP -c $$< -o $$@
 endef
 
 $(foreach source,$(SOURCES),$(eval $(call compile_source,$(source))))
@@ -45,7 +52,7 @@ PortMaster: $(BUILD)/choochootracker.aarch64
 
 $(BUILD)/choochootracker.aarch64: $(OBJECTS)
 	mkdir -p $(BUILD)
-	$(CXX) $(COMMON_CFLAGS) $(OBJECTS) $(SDL_LIBS) -lasound -pthread -lm $(OUTPUT)
+	$(CXX) $(PORTMASTER_CFLAGS) $(OBJECTS) $(SDL_LIBS)  -lasound -pthread -lm -latomic $(OUTPUT)
 	$(STRIP) $(BUILD)/choochootracker.aarch64
 
 .PHONY: PortMaster-deploy
@@ -57,6 +64,8 @@ PortMaster-deploy: PortMaster
 	cp -r packaging/common/. $(PORT_DIR)/
 	cp ../docs/USER_MANUAL.md $(PORT_DIR)/
 	cp ../LICENSE $(PORT_DIR)/licenses/LICENSE.choochootracker.md
+	cp ../chipnomad_lib/external/insert_fx/LICENSE-JM-Formant $(PORT_DIR)/licenses/
+	cp ../chipnomad_lib/external/taktful/LICENSE $(PORT_DIR)/licenses/LICENSE.taktful.md
 	cp packaging/portmaster/license/* $(PORT_DIR)/licenses/
 	cp packaging/portmaster/ChooChooTracker.sh $(PACKAGE_ROOT)/
 	cp packaging/portmaster/port.json packaging/portmaster/README.md packaging/portmaster/gameinfo.xml packaging/portmaster/cover.png packaging/portmaster/screenshot.png $(PORT_DIR)/

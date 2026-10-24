@@ -1,0 +1,6 @@
+[submodule "chipnomad_lib/external/ableton_link"]
+	path = chipnomad_lib/external/ableton_link
+	url = https://github.com/Ableton/link
+[submodule "chipnomad_lib/external/asio"]
+	path = chipnomad_lib/external/asio
+	url = https://github.com/chriskohlhoff/asio

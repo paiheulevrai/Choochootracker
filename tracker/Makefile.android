@@ -7,7 +7,7 @@ include Makefile.common
 
 # Android-specific settings - use common libs + sdl2 platform with mobile features
 LIBS = $(COMMON_LIBS) platforms/sdl2
-ANDROID_SOURCES = platforms/android/corelib_assets.cpp
+ANDROID_SOURCES = platforms/android/corelib_assets.cpp platforms/android/midi_backend_android.cpp platforms/android/link_backend_android.cpp platforms/android/saf_storage.cpp platforms/android/extra_buttons_android.cpp
 OUTPUT_EXT =
 
 # NDK settings
@@ -36,8 +36,13 @@ AR = $(TOOLCHAIN)/bin/llvm-ar
 STRIP = $(TOOLCHAIN)/bin/llvm-strip
 
 # Android-specific flags
-XTRA_CFLAGS = -DANDROID_BUILD -DMOBILE_BUILD -DMOBILE_LIFECYCLE -DTOUCH_INPUT -DGAMEPAD_SUPPORT -fPIC -I$(SDL2_INCLUDE)
-XTRA_LIBS = -static-libstdc++ -L$(SDL2_LIB)/$(ARCH) -lSDL2 -lm -llog -landroid
+XTRA_CFLAGS = -DANDROID_BUILD -DMOBILE_BUILD -DMOBILE_LIFECYCLE -DTOUCH_INPUT -DGAMEPAD_SUPPORT -fPIC -I$(SDL2_INCLUDE) \
+	-DLINK_PLATFORM_LINUX=1 -DASIO_STANDALONE=1 -DASIO_NO_TYPEID=1 -DASIO_VERSION_NAMESPACE=link_asio_1_38_2 -Wno-multichar
+# The picked-folder (SAF) workspace is served by platforms/android/saf_storage.cpp,
+# which intercepts these libc calls for paths under /ChooChooTracker.
+SAF_WRAP = $(addprefix -Wl$(comma)--wrap=,fopen open stat lstat access mkdir remove unlinkat rename chdir getcwd realpath opendir readdir closedir)
+comma := ,
+XTRA_LIBS = -static-libstdc++ -L$(SDL2_LIB)/$(ARCH) -lSDL2 -lm -llog -landroid -latomic $(SAF_WRAP)
 
 # Android's Windows linker can fail without diagnostics when LTO combines the
 # complete tracker in one process. Keep release optimisation, skip only LTO.
@@ -55,10 +60,10 @@ android-lib:
 
 .PHONY: android-apk
 android-apk: android-lib
-	cd platforms/android && ./gradlew assembleRelease
+	cd platforms/android && ./gradlew assembleStoreRelease assembleDirectRelease
 
 android-bundle: android-lib
-	cd platforms/android && ./gradlew bundleRelease
+	cd platforms/android && ./gradlew bundleStoreRelease
 
 .PHONY: android-deploy
 android-deploy: android-apk android-bundle
@@ -66,8 +71,9 @@ android-deploy: android-apk android-bundle
 	@mkdir -p ../../releases
 	@rm -rf /tmp/chipnomad-android-package
 	@mkdir -p /tmp/chipnomad-android-package
-	@cp platforms/android/app/build/outputs/apk/release/app-release.apk /tmp/chipnomad-android-package/ChooChooTracker-universal-release.apk
-	@cp platforms/android/app/build/outputs/bundle/release/app-release.aab /tmp/chipnomad-android-package/ChooChooTracker-release.aab
+	@cp platforms/android/app/build/outputs/apk/store/release/app-store-release.apk /tmp/chipnomad-android-package/ChooChooTracker-store-release.apk
+	@cp platforms/android/app/build/outputs/apk/direct/release/app-direct-release.apk /tmp/chipnomad-android-package/ChooChooTracker-direct-release.apk
+	@cp platforms/android/app/build/outputs/bundle/storeRelease/app-store-release.aab /tmp/chipnomad-android-package/ChooChooTracker-store-release.aab
 	@cd /tmp/chipnomad-android-package && zip -r ChooChooTracker-$$(date +%Y-%m-%d)-Android.zip .
 	@mv /tmp/chipnomad-android-package/ChooChooTracker-*-Android.zip ../../releases/
 	@rm -rf /tmp/chipnomad-android-package

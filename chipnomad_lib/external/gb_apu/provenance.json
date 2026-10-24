@@ -1,0 +1,56 @@
+{
+  "origin": "https://github.com/ITotalJustice/gb_apu",
+  "revision": "3d73d0df027a82d854cacd72a179c2d6a1a9703e",
+  "fetched": "2026-10-03",
+  "license": "MIT",
+  "use": "runtime",
+  "files": [
+    {
+      "path": "chipnomad_lib/external/gb_apu/LICENCE.txt",
+      "upstream_path": "LICENCE.txt",
+      "sha256": "5ca618cbc3309400c5a79ef5acb2a8467a5ae599ef23965738ffaba9522812ef"
+    },
+    {
+      "path": "chipnomad_lib/external/gb_apu/README.md",
+      "upstream_path": "README.md",
+      "sha256": "87056d7584c4393fe2356532c9fd8c4583052ec0d94ec4d001516afd478d9314"
+    },
+    {
+      "path": "chipnomad_lib/external/gb_apu/gb_apu.c",
+      "upstream_path": "gb_apu.c",
+      "sha256": "6175d4600325bd7f03ae4b22b71b47aa92e00dfd6cc4e0a34d9da31ccfc581e3"
+    },
+    {
+      "path": "chipnomad_lib/external/gb_apu/gb_apu.h",
+      "upstream_path": "gb_apu.h",
+      "sha256": "f486012c0240c51594f68dc5e956d0d64acfd654880253965bc66386bd3bc7f2"
+    },
+    {
+      "path": "chipnomad_lib/external/gb_apu/blargg/blip_wrap.h",
+      "upstream_path": "blargg/blip_wrap.h",
+      "sha256": "a834a903dd2b8771774025972774b05abbd886077b61bd9dc84563bf9937d7cf"
+    },
+    {
+      "path": "chipnomad_lib/external/gb_apu/blargg/blip_wrap.cpp",
+      "upstream_path": "blargg/blip_wrap.cpp",
+      "sha256": "9fa1853e4ad4e85a087e20ce389b28ff4082b82ab8fd84ebe4386c922ce2f0b4"
+    },
+    {
+      "path": "chipnomad_lib/external/gb_apu/blargg/Blip_Buffer.h",
+      "upstream_path": "blargg/Blip_Buffer.h",
+      "sha256": "2a738f7757897b74a8dc0bb966a0089eed29f6902933fe9f8570d93a72810333"
+    },
+    {
+      "path": "chipnomad_lib/external/gb_apu/blargg/Blip_Buffer.cpp",
+      "upstream_path": "blargg/Blip_Buffer.cpp",
+      "sha256": "aa147c88607c9819cbadd2913a5d0c0ed52822720f13714791d8dc761d9f7fc2"
+    }
+  ],
+  "modifications": [
+    {
+      "path": "gb_apu.c",
+      "description": "Explicit calloc cast and equivalent zero-filled positional table initializers for GCC 9 C++17; no synthesis change.",
+      "patched_sha256": "1d1fa85b28bee19169297175511498609d96d424b21a16ad8d3699695fe9791b"
+    }
+  ]
+}

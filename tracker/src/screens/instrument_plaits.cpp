@@ -22,7 +22,6 @@ static int usesChordNames(const InstrumentPlaits* p) {
 }
 
 static void drawPreview(const InstrumentPlaits* plaits) {
-  if (appSettings.persistentWaveform) return;
   if (!previewBitmap) previewBitmap = gfxBitmapCreate(32, 3);
   renderPlaitsPreview(previewBitmap, plaits, isAlt());
   gfxSetFgColor(appSettings.colorScheme.textInfo);
@@ -114,7 +113,7 @@ static void drawField(int col, int row, CellState state) {
     }
     uint8_t values[] = {p->attack, p->decay, p->sustain, p->release, p->envelopeShape};
     uint8_t value = p->envelopeMode == 0 ? values[col + 1] : values[col];
-    gfxPrint(col == 4 ? 35 : 7 + col * 5, 14, byteToHex(value));
+    gfxPrint(col == 4 ? 31 : 7 + col * 5, 14, byteToHex(value));
     if (p->envelopeMode != 0) {
       instrumentCommonDrawEnvelopePreview(p->attack, p->decay, p->sustain, p->release, p->envelopeShape);
     }

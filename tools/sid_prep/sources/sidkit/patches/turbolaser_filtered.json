@@ -1,0 +1,21 @@
+{
+  "name": "turbolaser_filtered",
+  "voice": 1,
+  "waveform": "SAWTOOTH",
+  "freq_hi": 52,
+  "freq_lo": 203,
+  "attack": 0,
+  "decay": 7,
+  "sustain": 0,
+  "release": 6,
+  "pw_hi": 0,
+  "duration_frames": 18,
+  "sweep_target_hi": 2,
+  "sweep_target_lo": 28,
+  "sweep_type": "exponential",
+  "filter_mode": "off",
+  "filter_cutoff": 144,
+  "filter_resonance": 15,
+  "filter_cutoff_sweep": 0,
+  "description": "Turbolaser \u2014 heavy sawtooth sweep, band-pass resonance (794Hz, matches original)"
+}

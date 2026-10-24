@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "banks": [
+    {
+      "id": 1,
+      "key": "fatman-2op",
+      "name": "The Fat Man 2-op",
+      "author": "K. Weston Phelan and George Alistair Sanger",
+      "url": "https://raw.githubusercontent.com/Wohlstand/libADLMIDI/7ae146967cd63ad6de7211c163c7f21d0ee7ac30/fm_banks_new/fatman-2op.woplx",
+      "revision": "7ae146967cd63ad6de7211c163c7f21d0ee7ac30",
+      "sha256": "cc2febac5964b368c094269db3d6ae3cf36b8df3692b46d732e63f929bb1a5f2",
+      "fetched": "2026-10-03",
+      "license": "MIT",
+      "license_evidence": "BANK_INFO",
+      "path": "tools/chip_banks/sources/fatman-2op.woplx",
+      "use": "preset data",
+      "status": "converted and canonical reload/render checked"
+    },
+    {
+      "id": 2,
+      "key": "fatman-4op",
+      "name": "The Fat Man 4-op",
+      "author": "K. Weston Phelan and George Alistair Sanger",
+      "url": "https://raw.githubusercontent.com/Wohlstand/libADLMIDI/7ae146967cd63ad6de7211c163c7f21d0ee7ac30/fm_banks_new/fatman-4op.woplx",
+      "revision": "7ae146967cd63ad6de7211c163c7f21d0ee7ac30",
+      "sha256": "c52394265e77f509474e1ada817aa435671240d6fd75da8d5e40ccc25553557c",
+      "fetched": "2026-10-03",
+      "license": "MIT",
+      "license_evidence": "BANK_INFO",
+      "path": "tools/chip_banks/sources/fatman-4op.woplx",
+      "use": "preset data",
+      "status": "converted and canonical reload/render checked"
+    },
+    {
+      "id": 3,
+      "key": "dmxopl3",
+      "name": "DMXOPL3",
+      "author": "Shannon Freeman (sneakernets)",
+      "url": "https://raw.githubusercontent.com/Wohlstand/libADLMIDI/7ae146967cd63ad6de7211c163c7f21d0ee7ac30/fm_banks_new/DMXOPL3-by-sneakernets-GS.woplx",
+      "revision": "7ae146967cd63ad6de7211c163c7f21d0ee7ac30",
+      "sha256": "2ae59fbe1085eddb2413dc0932d869b634df5214868982c263bb6035b73ee124",
+      "fetched": "2026-10-03",
+      "license": "MIT",
+      "license_evidence": "BANK_INFO",
+      "path": "tools/chip_banks/sources/dmxopl3.woplx",
+      "use": "preset data",
+      "status": "converted and canonical reload/render checked"
+    }
+  ],
+  "dx7_sources": [
+    {
+      "id": 101,
+      "key": "opendx7",
+      "name": "OpenDX7 Originals",
+      "path": "tools/chip_banks/sources/dx7/opendx7-patch.js",
+      "format": "opendx7-literals",
+      "license": "MIT",
+      "author": "Keith Adler",
+      "revision": "26c9b3650ed57102de9ededf6dc4adf23cb5fde6",
+      "url": "https://github.com/keithadler/opendx7",
+      "license_evidence": "README describes original designs; MIT source header and repository LICENSE",
+      "sha256": "40f9f2f472b8855d8664aaebf92f882c85b83ec9c7b828e26c354117e8e72341",
+      "fetched": "2026-10-03",
+      "status": "approved"
+    },
+    {
+      "id": 102,
+      "key": "yse-originals",
+      "name": "YSE Originals",
+      "path": "tools/chip_banks/sources/dx7/yse-originals.syx",
+      "format": "syx",
+      "license": "CC0-1.0",
+      "author": "YSE contributors",
+      "revision": "911ea2d4fcfe749d81a7b1e679c66e3cd07aefeb",
+      "url": "https://github.com/yvanvds/yse-soundengine",
+      "license_evidence": "CONTENT-LICENSES.md explicitly dedicates content/fm/original/yse_originals.syx to CC0; four recipes repeated with names",
+      "sha256": "f21c468359d23861184829e31ebfa442701c5973a1c24787da1c47739a6a55b2",
+      "fetched": "2026-10-03",
+      "status": "approved"
+    },
+    {
+      "id": 103,
+      "key": "choochoo-dx7",
+      "name": "ChooChoo DX7 Originals",
+      "path": "tools/chip_banks/sources/dx7/choochoo-originals.json",
+      "format": "native-json",
+      "license": "CC0-1.0",
+      "author": "ChooChooTracker contributors",
+      "revision": "recipe-v1",
+      "url": "tools/chip_banks/dx7_originals.py",
+      "license_evidence": "Original authored parameter recipes; CC0-1.0",
+      "sha256": "98d65d2c83c242e1a19f63519ceb9457cf8ca205afaa53ce48241c1a430711a9",
+      "fetched": "2026-10-03",
+      "status": "approved"
+    }
+  ]
+}

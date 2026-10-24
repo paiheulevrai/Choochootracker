@@ -2,6 +2,7 @@
 #define __CHIPNOMAD_LIB__PROJECT_INSTRUMENTS_H__
 
 #include <stdlib.h>
+#include "soundbank_controls.h"
 #include <stdint.h>
 #include "project_constants.h"
 
@@ -26,6 +27,19 @@ enum class InstrumentType : uint8_t {
   MME = 12,
   Sintered = 13,
   Midi = 16,
+  OPLL = 17,
+  VRC7 = 18,
+  OPL2 = 19,
+  OPL3 = 20,
+  SegaPSG = 21,
+  GBPulse = 22,
+  GBNoise = 23,
+  DX7 = 24,
+  GenesisFM = 25,
+  ArcadeFM = 26,
+  SID = 27,
+  SoundFont = 28,
+  Monk = 29,
   totalCount,
 };
 
@@ -33,13 +47,30 @@ enum class ModulationType : uint8_t {
   ADSR = 0,
   AHD = 1,
   LFO = 2,
-  SLFO = 3,
+  SLFO = 3, // syncLFO: retain the saved type ID and timing.
   FLFO = 4,
   StickLinear = 5,
   StickVelocity = 6, // Legacy project value, no longer exposed.
   StickRate = 7,
+  SlowLFO = 8,
+  Sequence = 9,
   totalCount,
 };
+
+enum class SequenceSource : uint8_t {
+  pitch = 0,
+  volume = 1,
+  tranceGate = 2,
+  totalCount,
+};
+
+enum class SequenceMode : uint8_t {
+  normal = 0,
+  bypass = 1,
+  totalCount,
+};
+
+enum class SequenceGateTrigger : uint8_t { free, retrig, phrase, chain, totalCount };
 
 enum class StickAxis : uint8_t {
   leftVertical = 0,
@@ -78,12 +109,71 @@ struct Modulation {
   ModulationType type;
   uint8_t destination;
   int8_t amount;
-  uint8_t p1; // ADSR: A, AHD: A, LFO: Shape
-  uint8_t p2; // ADSR: D, AHD: H, LFO: Trig
-  uint8_t p3; // ADSR: S, AHD: D, LFO: Period
-  uint8_t p4; // ADSR: R, AHD: -, LFO: -, SLFO: multiplier
-  uint8_t p5; // LFO/SLFO/FLFO Wavetable: AY wavetable index
+  uint8_t p1; // ADSR: A, AHD: A, LFO: Shape, Sequence: source
+  uint8_t p2; // ADSR: D, AHD: H, LFO: Trig, Sequence: mode
+  uint8_t p3; // ADSR: S, AHD: D, LFO: Period, Sequence Trance Gate: Pattern
+  uint8_t p4; // ADSR: R, AHD: -, LFO: -, Sequence Trance Gate: Rate/Length
+  uint8_t p5; // LFO/SLFO/FLFO Wavetable, Sequence Trance Gate: Trigger/Accents
 };
+
+uint8_t sequenceGatePattern(const Modulation* modulation);
+uint8_t sequenceGateRate(const Modulation* modulation);
+uint8_t sequenceGateLength(const Modulation* modulation);
+SequenceGateTrigger sequenceGateTrigger(const Modulation* modulation);
+uint8_t sequenceGateAccents(const Modulation* modulation);
+void sequenceGateDefaults(Modulation* modulation);
+void sequenceGateSetPattern(Modulation* modulation, uint8_t value);
+void sequenceGateSetRate(Modulation* modulation, uint8_t value);
+void sequenceGateSetLength(Modulation* modulation, uint8_t value);
+void sequenceGateSetTrigger(Modulation* modulation, SequenceGateTrigger value);
+void sequenceGateSetAccents(Modulation* modulation, uint8_t value);
+
+// Equal ratios across the full byte: round(256 * 2^(9 * step / 255)).
+// Nine octaves: 00=256, 55=2048, AA=16384, FF=131072 ticks.
+// Precomputed to keep exponentiation out of the playback path.
+inline constexpr uint32_t SLOW_LFO_PERIODS[256] = {
+  256, 262, 269, 275, 282, 289, 296, 304,
+  311, 319, 327, 335, 343, 352, 361, 369,
+  379, 388, 398, 407, 418, 428, 439, 449,
+  461, 472, 484, 496, 508, 520, 533, 547,
+  560, 574, 588, 603, 618, 633, 649, 665,
+  681, 698, 715, 733, 751, 770, 789, 808,
+  828, 849, 870, 891, 914, 936, 959, 983,
+  1007, 1032, 1058, 1084, 1111, 1139, 1167, 1196,
+  1225, 1256, 1287, 1319, 1351, 1385, 1419, 1454,
+  1490, 1527, 1565, 1604, 1643, 1684, 1726, 1768,
+  1812, 1857, 1903, 1950, 1999, 2048, 2099, 2151,
+  2204, 2259, 2314, 2372, 2431, 2491, 2552, 2616,
+  2680, 2747, 2815, 2885, 2956, 3029, 3104, 3181,
+  3260, 3341, 3423, 3508, 3595, 3684, 3775, 3869,
+  3965, 4063, 4163, 4266, 4372, 4480, 4591, 4705,
+  4822, 4941, 5063, 5189, 5317, 5449, 5584, 5722,
+  5864, 6009, 6158, 6310, 6467, 6627, 6791, 6959,
+  7132, 7308, 7489, 7675, 7865, 8059, 8259, 8464,
+  8673, 8888, 9108, 9334, 9565, 9802, 10044, 10293,
+  10548, 10809, 11077, 11351, 11633, 11921, 12216, 12518,
+  12828, 13146, 13472, 13805, 14147, 14498, 14857, 15225,
+  15602, 15988, 16384, 16790, 17206, 17632, 18068, 18516,
+  18974, 19444, 19926, 20419, 20925, 21443, 21974, 22519,
+  23076, 23648, 24233, 24834, 25449, 26079, 26725, 27386,
+  28065, 28760, 29472, 30202, 30950, 31716, 32502, 33307,
+  34132, 34977, 35843, 36731, 37641, 38573, 39528, 40507,
+  41510, 42538, 43592, 44671, 45778, 46911, 48073, 49264,
+  50484, 51734, 53015, 54328, 55674, 57052, 58465, 59913,
+  61397, 62918, 64476, 66073, 67709, 69386, 71104, 72865,
+  74670, 76519, 78414, 80356, 82346, 84385, 86475, 88617,
+  90812, 93061, 95365, 97727, 100147, 102628, 105169, 107774,
+  110443, 113178, 115981, 118853, 121797, 124813, 127904, 131072,
+};
+constexpr uint8_t SLOW_LFO_MAX_STEP = 255;
+inline uint32_t modulationSlowLFOPeriod(uint8_t step) {
+  return SLOW_LFO_PERIODS[step];
+}
+
+inline bool modulationIsTickLFO(ModulationType type) {
+  return type == ModulationType::LFO || type == ModulationType::SLFO ||
+         type == ModulationType::SlowLFO;
+}
 
 // AY Instruments
 
@@ -211,6 +301,13 @@ struct InstrumentDrumSynth : InstrumentVoicePostSettings {
 // cross-modulation algorithm.  The six controls deliberately have a stable
 // position in the UI even though their musical interpretation varies by model.
 enum class MMEModel : uint8_t { ring, fold, cross, vpm, sync, logic, vocode, totalCount };
+struct InstrumentMonk {
+  uint8_t attack, decay, sustain, release;
+  uint8_t vowel, character, breath, glide, vibrato, rate;
+  uint8_t unison, detune, voiceSpread, delayMix, delayRate, level;
+  uint8_t factory;
+};
+
 struct InstrumentMME : InstrumentVoicePostSettings {
   MMEModel model;
   uint8_t waves;
@@ -243,6 +340,9 @@ struct InstrumentPlaits : InstrumentVoicePostSettings {
 
 #define PROJECT_SAMPLE_PATH_LENGTH 255
 
+// Maximum number of slices per sample (all slice modes, plan decision D7).
+#define PROJECT_SAMPLE_MAX_SLICES 64
+
 struct InstrumentSample : InstrumentVoicePostSettings {
   char path[PROJECT_SAMPLE_PATH_LENGTH + 1];
   uint32_t sampleRate;
@@ -253,10 +353,21 @@ struct InstrumentSample : InstrumentVoicePostSettings {
   uint16_t speedPercent;
   uint8_t start;
   uint8_t end;
-  uint8_t loopMode; // 0: off, 1: loop, 2: ping-pong
-  uint8_t slice; // 0: off, else even divisions 2/4/8/16/32
+  uint8_t loopMode; // 0: off, 1: loop, 2: loop X-fade, 3: ping-pong, 4: ping-pong X-fade
+  // Loop start marker, 0-255 normalized like start/end. Where the loop wraps
+  // back to when a loop mode is active (instrument loopMode != 0 or SPL >= 02).
+  // Inert otherwise; 0 means the loop wraps to the Region START, which keeps
+  // old projects bit-identical.
+  uint8_t loopStart;
+  // Slice sentinel (see sample_voice.h): 0 off, 1..64 EQUAL, 65..128 AUTO,
+  // 129..192 LAZY (value - 64/128 is the slice count).
+  uint8_t slice;
   uint8_t stretchMode; // 0: off, 1: 1 beat, 2: 2 beats, 3: 1 bar, 4: 2 bars, 5: 4 bars, 6: 8 bars
   uint8_t speedAlgorithm; // 0: dirty granular playback, 1: clean Signalsmith stretch
+  uint8_t autoSensitivity; // AUTO transient detection strength, 1..99 (50 = default)
+  // Manual slice boundaries in frames (start of each slice; the last slice
+  // ends at the loop end marker). Empty (all zero) = even/auto placement.
+  uint32_t sliceBounds[PROJECT_SAMPLE_MAX_SLICES];
 };
 
 // Playback window mapping: Start/End are stored as 0-255 normalized values;
@@ -305,7 +416,127 @@ struct InstrumentMidi {
   uint8_t ccNumber[4];
 };
 
+// Optional tracker VCA around a native FM patch. Native operator envelopes stay
+// intact. The inherited filter fields remain zero/reserved in this amp-only UI.
+struct InstrumentFMAmp : InstrumentVoicePostSettings {
+  uint8_t enabled;
+};
+// Runtime overrides store native value + 1, so native zero is distinct from unset.
+struct NativeFMValues {
+  uint16_t operators[6][12];
+  uint16_t global[6];
+};
+
+struct InstrumentFMTone {
+  NativeFMValues direct;
+  int8_t brightness; // Modulator output-level offset, -63..63; zero preserves preset.
+  uint8_t feedback; // 0 preserves preset; 1..8 select feedback 0..7.
+  uint8_t operatorLevel[6]; // Runtime absolute level + 1; zero uses saved patch.
+};
+
+struct InstrumentOPLL {
+  uint8_t schema;
+  uint8_t program; // 1..15 ROM identity, zero is a custom tone
+  int8_t fineTune; // cents
+  uint8_t patch[8]; // complete tone, portable with the song
+  uint16_t bankId;
+  char presetName[64];
+  InstrumentFMAmp amp;
+  InstrumentFMTone tone;
+};
+
+enum class OPLTopology : uint8_t { twoOperator, fourOperator, dualVoice };
+struct OPLOperator {
+  uint8_t multiplier, level, attack, decay, sustain, release, waveform, keyScale;
+  uint8_t vibrato, tremolo, sustained, rateScale;
+};
+struct InstrumentOPL {
+  uint8_t schema;
+  OPLTopology topology;
+  OPLOperator operators[4]; // Native order: mod1, carrier1, mod2, carrier2.
+  uint8_t feedback[2], connection[2], pan[2]; // pan: 1 left, 2 right, 3 both
+  uint8_t deepVibrato, deepTremolo, percussion, fixedNote, drumKey, volumeModel;
+  int16_t noteOffset[2];
+  int8_t secondDetune, velocityOffset;
+  uint16_t keyOnDuration, keyOffDuration; // Source estimates, never tail cutoffs.
+  int8_t fineTune;
+  uint16_t bankId, sourceBank, sourceProgram;
+  char presetName[64];
+  InstrumentFMAmp amp;
+  InstrumentFMTone tone;
+};
+
+// Bounded, owned source sequences. Zero format preserves legacy patch behavior.
+// Format 1: canonical Furnace sequence macros; format 2: GoatTracker GTI5.
+struct ChipProgram {
+  uint8_t format, rate;
+  uint16_t size;
+  uint8_t data[512];
+};
+
+struct InstrumentSimpleChip : InstrumentVoicePostSettings {
+  uint8_t schema, preset;
+  uint8_t mode; // Sega: tone/white/periodic. Pulse: 4 duties. Noise: 15/7 bits.
+  uint8_t noiseRate, noiseDivisor, noiseShift;
+  uint8_t envelopeInitial, envelopePeriod, envelopeIncrease;
+  uint8_t sweepPeriod, sweepShift, sweepNegate;
+  int8_t fineTune;
+  uint8_t segaBassExtension; // Lower the virtual clock for notes below the 10-bit divider range.
+  ChipProgram program;
+};
+
+// Four-operator Yamaha native order: S1, S2, S3, S4 (M1,C1,M2,C2).
+struct FourOpOperator {
+  uint8_t multiplier, detune, level, keyScale, attack, decay, sustainRate;
+  uint8_t release, sustainLevel, ssg, detune2, amplitudeMod;
+};
+struct InstrumentFourOp {
+  uint8_t schema, algorithm, feedback, pan, amplitudeSensitivity, pitchSensitivity;
+  uint8_t lfoEnabled, lfoRate, lfoWave, amplitudeDepth, pitchDepth, operatorMask;
+  FourOpOperator operators[4];
+  int8_t fineTune;
+  uint16_t bankId, sourceProgram;
+  char presetName[64];
+  InstrumentFMAmp amp;
+  InstrumentFMTone tone;
+};
+
+struct InstrumentDX7 {
+  uint8_t schema;
+  uint8_t voice[155]; // Canonical Yamaha VCED: OP6..OP1, global parameters, name.
+  int8_t fineTune;
+  uint8_t velocity; // Native velocity; software tracker volume remains separate.
+  uint16_t bankId, sourceProgram;
+  char presetName[64];
+  InstrumentFMAmp amp;
+  InstrumentFMTone tone;
+};
+
+struct InstrumentSID {
+  uint8_t schema;
+  uint16_t value[25];
+  uint16_t bankId;
+  char presetName[64];
+  ChipProgram program;
+};
+
+struct InstrumentSoundFont {
+  char bank[512]; // root-relative source, optionally ZIP::member
+  char preset[128]; // stable program identity, never a browser index
+  uint32_t prepared; // session-only generation-checked handle
+  SoundbankControls controls;
+};
+
 union InstrumentChipData {
+  InstrumentSoundFont soundfont;
+  InstrumentSID sid;
+  InstrumentFourOp fourOp;
+  InstrumentDX7 dx7;
+  InstrumentSimpleChip simpleChip;
+
+  InstrumentOPL opl;
+
+  InstrumentOPLL opll;
   InstrumentAY1 ay;
   InstrumentAY2 ay2;
   InstrumentAYSample aySample;
@@ -317,6 +548,7 @@ union InstrumentChipData {
   InstrumentAChChid achchid;
   InstrumentDrumSynth drumSynth;
   InstrumentMME mme;
+  InstrumentMonk monk;
   InstrumentSintered sintered;
   InstrumentMidi midi;
 };
@@ -327,6 +559,7 @@ struct Instrument {
   uint8_t tableSpeed;
   uint8_t transposeEnabled;
   uint8_t volume;
+  uint8_t pan;
   Modulation modulation[4];
   InstrumentChipData chip;
 };
@@ -342,21 +575,38 @@ struct InstrumentFunctions {
 
 // This is metadata, not an audio abstraction: renderers keep their typed
 // paths while screens, validation and motion routing share this one catalogue.
-enum class InstrumentCategory : uint8_t { none, chip, sample, synth, drums, midi };
-enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme, sintered, midi };
+enum class InstrumentCategory : uint8_t { none, chip, sample, synth, drums, midi, fm };
+enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme, sintered, midi, opll, opl, simpleChip, dx7, soundfont, monk };
 enum class InstrumentMotionValue : uint8_t { raw, speed, cutoff };
 
-static constexpr uint8_t instrumentNoFX = 0xff;
+static constexpr FXId instrumentNoFX = FX_ID_EMPTY;
+
+// Reserved destinations shared by all instruments for MIDI CC mappings.
+// 0 is the explicit "no destination" option; keep the other values below
+// the runtime MIDI CC destination table size.
+enum MidiCCDestination : uint8_t {
+  midiCCDestinationNone = 0,
+  midiCCDestinationAttack = 11,
+  midiCCDestinationDecay = 12,
+  midiCCDestinationSustain = 13,
+  midiCCDestinationRelease = 14,
+  midiCCDestinationSongPlayStop = 15,
+  midiCCDestinationTrackMute = 16,
+  midiCCDestinationTrackSolo = 17,
+  midiCCDestinationTrackVolume = 18,
+  midiCCDestinationTrackReverbSend = 19,
+  midiCCDestinationTrackDelaySend = 20,
+};
 
 struct InstrumentModDestination {
   const char* name;
-  uint8_t fx;                 // FX enum value, or instrumentNoFX.
+  FXId fx;                    // Lane FX identifier, or instrumentNoFX.
   uint16_t range;             // Native modulation range.
   InstrumentMotionValue value;
 };
 
 struct InstrumentFX {
-  uint8_t fx;                 // FX enum value (kept byte-sized to avoid a project.h cycle).
+  FXId fx;
   const char* name;
 };
 
@@ -375,19 +625,30 @@ InstrumentFunctions getInstrumentFunctions(InstrumentType type);
 const InstrumentDefinition* getInstrumentDefinition(InstrumentType type);
 const InstrumentModDestination* instrumentModDestination(InstrumentType type, int destination);
 int instrumentMotionDestination(const Instrument* instrument, int destination,
-                                uint8_t* fx, int* base, int* range,
+                                FXId* fx, int* base, int* range,
                                 InstrumentMotionValue* value);
-int instrumentFXAvailable(InstrumentType type, uint8_t fx);
-int instrumentFXAvailableForInstrument(const Instrument* instrument, uint8_t fx);
+int instrumentCCDestinationAvailable(const Instrument* instrument, int destination);
+int instrumentCCDestinationValue(const Instrument* instrument, int destination, uint8_t cc);
+int instrumentSetCCDestination(Instrument* instrument, int destination, uint8_t cc);
+int instrumentFXAvailable(InstrumentType type, FXId fx);
+int instrumentFXAvailableForInstrument(const Instrument* instrument, FXId fx);
 int instrumentModDestinationAvailable(const Instrument* instrument, int destination);
 int drumSynthMacroUsed(DrumSynthEngine engine, int macro);
 InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument);
+InstrumentFMAmp* instrumentFMAmpSettings(Instrument* instrument);
+InstrumentFMTone* instrumentFMToneSettings(Instrument* instrument);
+const InstrumentModDestination* instrumentNativeModDestination(InstrumentType type, int generic);
+// Piecewise mapping gives an exact 80 neutral and preserves all old 00-7E steps.
+inline int fmBrightnessFromByte(int v) { return v<=128 ? ((v*63+64)/128)-63 : ((v-128)*63+63)/127; }
+inline int fmBrightnessToByte(int v) { return v<=0 ? ((v+63)*128+31)/63 : 128+(v*127+31)/63; }
+int instrumentNativeControlValue(const Instrument* instrument, int generic);
 const char* instrumentModDestinationName(InstrumentType type, int destination);
 const char* instrumentModDestinationNameForInstrument(const Instrument* instrument, int destination);
 int instrumentModDestinationMax(InstrumentType type);
 int instrumentGenericModDestination(InstrumentType type, int destination);
 int modulationIsLiveStick(ModulationType type);
 int modulationIsAdditive(ModulationType type);
+int modulationSequenceDestinationAllowed(const Instrument* instrument, const Modulation* modulation, int destination);
 
 enum GenericModDestination {
   genericModReverbSend = 0,
@@ -403,7 +664,33 @@ enum GenericModDestination {
   genericModTriggerColor,
   genericModFirstP5,
   genericModFirstInsert = genericModFirstP5 + 4,
-  genericModTotalCount = genericModFirstInsert + 16,
+  genericModFMBrightness = genericModFirstInsert + 16,
+  genericModFMFeedback,
+  genericModChipMode,
+  genericModChipNoiseRate,
+  genericModChipNoiseDivisor,
+  genericModChipNoiseShift,
+  genericModChipSweepPeriod,
+  genericModChipSweepShift,
+  genericModChipSweepDirection,
+  genericModChipEnvelopeInitial,
+  genericModChipEnvelopePeriod,
+  genericModChipEnvelopeDirection,
+  genericModFMOperator1, genericModFMOperator2, genericModFMOperator3,
+  genericModFMOperator4, genericModFMOperator5, genericModFMOperator6,
+  genericModSIDPulse, genericModSIDCutoff, genericModSIDResonance, genericModSIDWave,
+  genericModSIDFilterMode, genericModSIDMacroRate, genericModSIDRing, genericModSIDSync,
+  genericModFMTime, genericModFMDecay, genericModFMDetune, genericModFMRatio,
+  genericModFMLFORate, genericModFMLFODepth,
+  genericModSIDAttack, genericModSIDDecay, genericModSIDSustain, genericModSIDRelease,
+  genericModSIDPartner,
+  genericModFirstDirectFM,
+  // Appended to preserve the numeric destinations stored by existing songs.
+  genericModInstrumentPan = genericModFirstDirectFM + 78,
+  genericModTrackPan,
+  genericModTotalCount,
 };
+
+bool nativeFMModTarget(int generic,int* fx,int* op);
 
 #endif // __CHIPNOMAD_LIB__PROJECT_INSTRUMENTS_H__

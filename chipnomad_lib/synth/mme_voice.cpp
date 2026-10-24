@@ -42,6 +42,17 @@ float MMEVoice::oscillator(float phase, int shape) const {
   }
 }
 
+float MMEVoice::pairedOscillator(float phase, bool oscillatorB, float pairPosition) const {
+  static constexpr int shapes[5][2] = {
+    {0, 0}, {1, 0}, {2, 1}, {0, 2}, {3, 3}
+  };
+  int pair = (int)pairPosition;
+  if (pair >= 4) return oscillator(phase, shapes[4][oscillatorB]);
+  float blend = pairPosition - pair;
+  float from = oscillator(phase, shapes[pair][oscillatorB]);
+  return from + (oscillator(phase, shapes[pair + 1][oscillatorB]) - from) * blend;
+}
+
 // Adapted from Mutable Instruments Warps' diode ring-modulator model (MIT).
 float MMEVoice::diode(float x) const {
   float sign = x > 0.0f ? 1.0f : -1.0f;
@@ -83,9 +94,8 @@ void MMEVoice::render(float* output, size_t frames) {
   if (!active_) { memset(output, 0, frames * sizeof(float)); return; }
   const float interval = (parameters_.interval - 128) / 128.0f;
   const float ratio = powf(2.0f, interval * 2.0f);
-  const int pair = parameters_.waves * 5 / 256;
-  const int shapeA = pair == 0 ? 0 : pair == 1 ? 1 : pair == 2 ? 2 : pair == 3 ? 0 : 3;
-  const int shapeB = pair == 0 ? 0 : pair == 1 ? 0 : pair == 2 ? 1 : pair == 3 ? 2 : 3;
+  // Morph both source oscillators across the five waveform-pair endpoints.
+  const float pairPosition = parameters_.waves * (4.0f / 255.0f);
   const float amount = parameters_.amount / 255.0f, flow = parameters_.flow / 255.0f;
   static constexpr float shaperGain[7][9] = {
     {0.992512f, .874683f, .761782f, .721170f, .701094f, 1.011484f, 1.035431f, .415567f, .251189f},
@@ -115,8 +125,8 @@ void MMEVoice::render(float* output, size_t frames) {
       phaseB_ += (resetPhase - phaseB_) * amount;
     }
     const float injected = feedback_ * feedbackGain;
-    float a = tanhf(oscillator(phaseA_, shapeA) + injected * (.35f + .75f * flow));
-    float b = tanhf(oscillator(phaseB_, shapeB) - injected * (1.10f - .50f * flow));
+    float a = tanhf(pairedOscillator(phaseA_, false, pairPosition) + injected * (.35f + .75f * flow));
+    float b = tanhf(pairedOscillator(phaseB_, true, pairPosition) - injected * (1.10f - .50f * flow));
     float sample = 0.0f;
     switch (parameters_.model) {
       case MMEModel::ring: {
@@ -129,17 +139,17 @@ void MMEVoice::render(float* output, size_t frames) {
         sample = fabsf(fmodf(sum + 1.0f, 4.0f) - 2.0f) - 1.0f; break;
       }
       case MMEModel::cross: {
-        float ab = oscillator(phaseA_ + (b + feedback_) * amount * 0.28f, shapeA);
-        float ba = oscillator(phaseB_ + (a + feedback_) * amount * 0.28f, shapeB);
+        float ab = pairedOscillator(phaseA_ + (b + feedback_) * amount * 0.28f, false, pairPosition);
+        float ba = pairedOscillator(phaseB_ + (a + feedback_) * amount * 0.28f, true, pairPosition);
         sample = ab + (ba - ab) * flow; break;
       }
       case MMEModel::vpm: {
-        float ab = oscillator(phaseA_ + (b + feedback_) * amount * .45f, shapeA);
-        float ba = oscillator(phaseB_ + (a + feedback_) * amount * .45f, shapeB);
+        float ab = pairedOscillator(phaseA_ + (b + feedback_) * amount * .45f, false, pairPosition);
+        float ba = pairedOscillator(phaseB_ + (a + feedback_) * amount * .45f, true, pairPosition);
         sample = ab + (ba - ab) * flow; break;
       }
       case MMEModel::sync: {
-        sample = oscillator(phaseB_, shapeB) + a * (amount * .18f); break;
+        sample = pairedOscillator(phaseB_, true, pairPosition) + a * (amount * .18f); break;
       }
       case MMEModel::logic: {
         int16_t ia = (int16_t)(a * 32767.0f), ib = (int16_t)(b * 32767.0f);

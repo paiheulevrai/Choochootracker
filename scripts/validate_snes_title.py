@@ -10,6 +10,10 @@ ASSETS = {
     "snes_sky.bmp": (512, 224), "snes_scene.bmp": (435, 112),
     "snes_foreground.bmp": (512, 88), "snes_viaduct.bmp": (187, 72),
     "snes_train.bmp": (240, 32), "snes_logo.bmp": (152, 36),
+    "night_mountains.bmp": (512, 224),
+    "night_scene.bmp": (435, 112), "night_foreground.bmp": (512, 88),
+    "night_viaduct.bmp": (187, 72), "night_train.bmp": (240, 32),
+    "night_logo.bmp": (152, 36), "night_meteor.bmp": (8, 1),
 }
 
 

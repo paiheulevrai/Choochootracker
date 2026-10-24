@@ -8,11 +8,15 @@ extern "C" {
 #include <stdint.h>
 #include "corelib_gfx.h"
 
+enum class InstrumentType : uint8_t;
+
 struct InstrumentSCWF;
 struct InstrumentBraids;
 struct InstrumentAChChid;
 struct InstrumentPlaits;
 struct InstrumentMME;
+struct Instrument;
+struct InstrumentSimpleChip;
 
 /**
  * @brief Initialize waveform display system
@@ -54,6 +58,9 @@ void renderBraidsPreview(Bitmap* bitmap, const struct InstrumentBraids* instrume
 void renderAChChidPreview(Bitmap* bitmap, const struct InstrumentAChChid* instrument);
 void renderPlaitsPreview(Bitmap* bitmap, const struct InstrumentPlaits* instrument, int alt);
 void renderMMEPreview(Bitmap* bitmap, const struct InstrumentMME* instrument);
+void renderFMPreview(Bitmap* bitmap, const struct Instrument* instrument);
+void renderSimpleChipPreview(Bitmap* bitmap, InstrumentType type,
+                             const struct InstrumentSimpleChip* instrument);
 void renderFloatPreview(Bitmap* bitmap, const float* samples, uint32_t count);
 
 /**

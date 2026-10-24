@@ -166,10 +166,27 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
       fullRedraw();
     }
   } else {
+    if (keys == keyOpt) {
+      if (onCancelled) onCancelled();
+      return 1;
+    }
     return screenInput(&screenData, isKeyDown, keys, tapCount);
   }
   return 0;
 }
+
+#ifdef DESKTOP_BUILD
+int createFolderKeyJazzTextField(KeyJazzTextField* field) {
+  ScreenData* screen = &screenData;
+  field->screen = screen;
+  field->row = 0;
+  field->popupOpen = isCharEdit;
+  field->marksProjectModified = 0;
+  field->str = NULL;
+  if (screen->cursorRow == 0) { field->str = folderName; field->maxLen = 16; }
+  return 1;
+}
+#endif
 
 const AppScreen screenCreateFolder = {
   .init = NULL,

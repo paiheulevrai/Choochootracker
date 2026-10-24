@@ -6,8 +6,12 @@
 #include <vector>
 
 #include "chipnomad_lib.h"
+#include "audio_monitor.h"
 #include "playback.h"
 #include "project.h"
+#include "screens/screens.h"
+
+void getSelectionBounds(ScreenData*, int*, int*, int*, int*) {}
 
 namespace {
 constexpr int kBlockFrames = 2048;
@@ -42,10 +46,14 @@ void configureVariant(Project* project, const char* variant) {
         character = &instrument.chip.byowtbl.filterCharacter;
       if (character && *character >= 3) *character = 1;
     }
+  } else if (!std::strcmp(variant, "no-inserts")) {
+    for (auto& inserts : project->trackInserts)
+      for (auto& insert : inserts) insert.module = insertOff;
+    for (auto& insert : project->masterInserts) insert.module = insertOff;
   }
 }
 
-double render(Project* project, int sampleRate, int seconds, volatile double* checksum) {
+double render(Project* project, int sampleRate, int seconds, const char* variant, volatile double* checksum) {
   ChipNomadState* state = chipnomadCreate();
   if (!state) return -1.0;
   state->ownsProjectResources = 0;
@@ -54,6 +62,8 @@ double render(Project* project, int sampleRate, int seconds, volatile double* ch
   playbackInit(&state->playbackState, &state->audioProject);
   chipnomadInitChips(state, sampleRate, nullptr);
   chipnomadReserveRenderBuffers(state, kBlockFrames);
+  state->benchmarkBypassPan = !std::strcmp(variant, "no-pan");
+  if (!std::strcmp(variant, "no-monitor")) state->audioMonitor->setEnabled(false);
   playbackStartSong(&state->playbackState, 0, 0, 1);
 
   std::vector<float> buffer(kBlockFrames * 2);
@@ -76,7 +86,7 @@ double render(Project* project, int sampleRate, int seconds, volatile double* ch
 }  // namespace
 
 int main(int argc, char** argv) {
-  const char* path = argc > 1 ? argv[1] : "projects/alf dance.cct";
+  const char* path = argc > 1 ? argv[1] : "packaging/common/projects/alf dance.cct";
   const int sampleRate = argc > 2 ? std::atoi(argv[2]) : 96000;
   const char* variant = argc > 3 ? argv[3] : "full";
   if (sampleRate != 48000 && sampleRate != 96000) {
@@ -89,14 +99,21 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "Cannot load %s: %s\n", path, projectFileError);
     return 1;
   }
+  const char* variants[] = {"full", "no-effects", "no-tilt", "no-drive", "no-inserts", "no-pan", "no-monitor"};
+  bool knownVariant = false;
+  for (const char* candidate : variants) knownVariant |= !std::strcmp(candidate, variant);
+  if (!knownVariant) {
+    std::fprintf(stderr, "Unknown variant: %s\n", variant);
+    return 1;
+  }
   configureVariant(&project, variant);
   std::printf("variant: %s, sample rate: %d\n", variant, sampleRate);
 
   volatile double checksum = 0.0;
-  if (render(&project, sampleRate, kWarmupSeconds, &checksum) < 0.0) return 1;
+  if (render(&project, sampleRate, kWarmupSeconds, variant, &checksum) < 0.0) return 1;
   std::vector<double> results;
   for (int round = 0; round < kRounds; ++round) {
-    double elapsed = render(&project, sampleRate, kMeasuredSeconds, &checksum);
+    double elapsed = render(&project, sampleRate, kMeasuredSeconds, variant, &checksum);
     if (elapsed < 0.0) return 1;
     results.push_back(elapsed);
     std::printf("round %d: %.6f s (%.2f%% realtime)\n", round + 1, elapsed,

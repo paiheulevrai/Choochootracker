@@ -1,0 +1,5 @@
+# Developer-only SDL UI integration; use SDL_VIDEODRIVER=dummy and dummy audio.
+include Makefile.desktop
+SOURCES := $(filter-out platforms/shared/main.cpp,$(SOURCES)) tests/native_chip_ui.cpp
+BUILD_BASE = build/native-chip-ui
+OUTPUT = -o $(BUILD)/choochootracker

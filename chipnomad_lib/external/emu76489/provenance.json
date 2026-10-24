@@ -1,0 +1,31 @@
+{
+  "origin": "https://github.com/digital-sound-antiques/emu76489",
+  "revision": "c0fa097060e022db237163d79704025435042997",
+  "fetched": "2026-10-03",
+  "license": "MIT",
+  "use": "runtime",
+  "files": [
+    {
+      "path": "chipnomad_lib/external/emu76489/LICENSE",
+      "upstream_path": "LICENSE",
+      "sha256": "e0db14654c1f977ec384c3fad3baf6e1f4d21c8369946823bbb6d4e06ebc372b"
+    },
+    {
+      "path": "chipnomad_lib/external/emu76489/emu76489.c",
+      "upstream_path": "emu76489.c",
+      "sha256": "8680fd1139fe65b0ad339db1e38f4a83c8ac4c2fff9bded26d12b2752cb219db"
+    },
+    {
+      "path": "chipnomad_lib/external/emu76489/emu76489.h",
+      "upstream_path": "emu76489.h",
+      "sha256": "00ef9706d0779c1e3e2ebb1346175c69c05009f6750940a74e8ab51d16be9596"
+    }
+  ],
+  "modifications": [
+    {
+      "path": "emu76489.c",
+      "description": "Sega integrated variant: clock derived noise on actual tone-2 rising edge; fixed-rate counter uses full bounded period. Runtime calls at master/16 so increments are at most two.",
+      "patched_sha256": "dad1fdcd061025fa2bd262a21cca29167c7cf72fc3039dd16640a889ab037c04"
+    }
+  ]
+}

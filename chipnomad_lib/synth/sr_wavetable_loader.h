@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 struct InstrumentSample;
 
@@ -12,5 +13,10 @@ struct InstrumentSample;
 int srWavetableLoadWav(const char* path, InstrumentSample* table,
                      uint16_t* frameSize, uint16_t* frameCount,
                      char* error, size_t errorSize);
+
+// Reads from an already-open WAV, including embedded archive entries.
+int srWavetableLoadWavFile(FILE* file, const char* path, InstrumentSample* table,
+                         uint16_t* frameSize, uint16_t* frameCount,
+                         char* error, size_t errorSize);
 
 #endif

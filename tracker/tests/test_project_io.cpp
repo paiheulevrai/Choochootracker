@@ -4,6 +4,7 @@
 #include "project_io_common.h"
 
 #include <cstring>
+#include <cstdio>
 
 struct TestFixture {
   TestFixture() {
@@ -94,7 +95,7 @@ TEST_CASE_FIXTURE(TestFixture, "projectLoad_version_1_0_format") {
   CHECK(std::strcmp(p.title, "Legacy Project") == 0);
 }
 
-TEST_CASE_FIXTURE(TestFixture, "projectSave_always_version_3_0") {
+TEST_CASE_FIXTURE(TestFixture, "projectSave_uses_version_6_0") {
   Project p;
   projectInit(&p);
 
@@ -117,14 +118,23 @@ TEST_CASE_FIXTURE(TestFixture, "projectSave_always_version_3_0") {
   int result = projectSave(&p, "tests/test_v3_output.cnm");
   CHECK(result == 0);
 
-  // Read the file and check it starts with version 3.0
+  // Read the file and check it starts with version 6.0
   FILE* file = fopen("tests/test_v3_output.cnm", "r");
   CHECK(file != nullptr);
   char firstLine[256];
   char* readResult = fgets(firstLine, sizeof(firstLine), file);
   CHECK(readResult != nullptr);
-  CHECK(std::strstr(firstLine, "# ChooChooTracker Module 3.0") != nullptr);
+  CHECK(std::strstr(firstLine, "# ChooChooTracker Module 11.0") != nullptr);
   fclose(file);
+}
+
+TEST_CASE("new panorama defaults are centred") {
+  Project p;
+  projectInit(&p);
+  for (int track = 0; track < PROJECT_MAX_TRACKS; ++track)
+    CHECK(p.trackPan[track] == 128);
+  for (int instrument = 0; instrument < PROJECT_MAX_INSTRUMENTS; ++instrument)
+    CHECK(p.instruments[instrument].pan == 128);
 }
 
 TEST_CASE_FIXTURE(TestFixture, "projectLoad_real_file_skytrain_funk") {
@@ -412,4 +422,30 @@ TEST_CASE_FIXTURE(TestFixture, "projectSaveLoad_no_wavetables") {
       CHECK(p2.ayWavetables[wt][i] == 0);
     }
   }
+}
+
+TEST_CASE("phrase volume supports the full 00-7F range and an empty value") {
+  Project saved, loaded;
+  projectInit(&saved);
+  projectInit(&loaded);
+  saved.tracksCount = saved.chipsCount = 1;
+  saved.song[0][0] = 0;
+  saved.chains[0].rows[0].phrase = 0;
+  for (int row = 0; row < 3; ++row) {
+    saved.phrases[0].rows[row].note = 40 + row;
+    saved.phrases[0].rows[row].instrument = 0;
+  }
+  saved.phrases[0].rows[0].volume = 0;
+  saved.phrases[0].rows[1].volume = 0x40;
+  saved.phrases[0].rows[2].volume = PHRASE_VOLUME_MAX;
+
+  const char* path = "build/tests/phrase_volume_range.cct";
+  REQUIRE(projectSave(&saved, path) == 0);
+  REQUIRE(projectLoad(&loaded, path) == 0);
+  CHECK(projectFileVersion == 11);
+  CHECK(loaded.phrases[0].rows[0].volume == 0);
+  CHECK(loaded.phrases[0].rows[1].volume == 0x40);
+  CHECK(loaded.phrases[0].rows[2].volume == PHRASE_VOLUME_MAX);
+  CHECK(loaded.phrases[0].rows[3].volume == EMPTY_VALUE_16);
+  std::remove(path);
 }

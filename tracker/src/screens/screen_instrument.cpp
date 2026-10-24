@@ -6,16 +6,21 @@
 #include "chipnomad_lib.h"
 #include "project_utils.h"
 #include "screen_instrument.h"
+#include "user_presets.h"
+#include "user_preset_browser.h"
 #include "waveform_display.h"
 #include "copy_paste.h"
 #include "file_browser.h"
 #include "import_vts.h"
 #include "selection_popup.h"
+#include "simple_chip_presets.h"
+#include "audio_manager.h"
 #include <string.h>
 #include <stdio.h>
 #include <strings.h>
 #include <math.h>
 #include <chrono>
+#include <initializer_list>
 
 extern const AppScreen screenInstrumentPool;
 
@@ -26,13 +31,30 @@ static Bitmap* envelopePreviewBitmap = NULL;
 static Bitmap* livePreviewBitmap = NULL;
 static int livePreviewWasActive = 0;
 static std::chrono::steady_clock::time_point livePreviewRefresh;
+static std::chrono::steady_clock::time_point livePreviewLastActivity;
+static int livePreviewInstrument = -1;
+static InstrumentType livePreviewType = InstrumentType::none;
+static int livePreviewTrack = -1;
+
+static void resetLivePreview() {
+  livePreviewWasActive = 0;
+  livePreviewRefresh = {};
+  livePreviewLastActivity = {};
+  livePreviewInstrument = -1;
+  livePreviewTrack = -1;
+}
 
 static SelectionItem instrumentTypeChip[] = {
+  {"SID / C64", (int)InstrumentType::SID, NULL, 0},
   {NULL, (int)InstrumentType::AY1, NULL, 0},
   {NULL, (int)InstrumentType::AY2, NULL, 0},
   {NULL, (int)InstrumentType::AYSample, NULL, 0},
+  {NULL, (int)InstrumentType::SegaPSG, NULL, 0},
+  {NULL, (int)InstrumentType::GBPulse, NULL, 0},
+  {NULL, (int)InstrumentType::GBNoise, NULL, 0},
 };
 static SelectionItem instrumentTypeSynth[] = {
+  {NULL, (int)InstrumentType::Monk, NULL, 0},
   {NULL, (int)InstrumentType::AChChid, NULL, 0},
   {NULL, (int)InstrumentType::Braids, NULL, 0},
   {NULL, (int)InstrumentType::Plaits, NULL, 0},
@@ -47,26 +69,39 @@ static SelectionItem instrumentTypeSample[] = {
   {NULL, (int)InstrumentType::Sample, NULL, 0},
   {NULL, (int)InstrumentType::SCWF, NULL, 0},
   {NULL, (int)InstrumentType::BYOWTBL, NULL, 0},
+  {NULL, (int)InstrumentType::SoundFont, NULL, 0},
+};
+static SelectionItem instrumentTypeFM[] = {
+  {"OPLL / YM2413", (int)InstrumentType::OPLL, NULL, 0},
+  {"VRC7 / DS1001", (int)InstrumentType::VRC7, NULL, 0},
+  {"AdLib / YM3812", (int)InstrumentType::OPL2, NULL, 0},
+  {"OPL3 / YMF262", (int)InstrumentType::OPL3, NULL, 0},
+  {"Genesis / YM2612", (int)InstrumentType::GenesisFM, NULL, 0},
+  {"Arcade / YM2151", (int)InstrumentType::ArcadeFM, NULL, 0},
+  {"DX7 FM", (int)InstrumentType::DX7, NULL, 0},
 };
 static SelectionItem instrumentTypeMidi[] = {
   {NULL, (int)InstrumentType::Midi, NULL, 0},
 };
 static const SelectionItem instrumentTypeCategories[] = {
-  {"CHIP", -1, instrumentTypeChip, 3},
+  {"CHIP", -1, instrumentTypeChip, 7},
   {"DRUMS", -1, instrumentTypeDrums, 2},
-  {"SAMPLE", -1, instrumentTypeSample, 3},
-  {"SYNTH", -1, instrumentTypeSynth, 5},
+  {"SAMPLE", -1, instrumentTypeSample, 4},
+  {"SYNTH", -1, instrumentTypeSynth, sizeof(instrumentTypeSynth) / sizeof(instrumentTypeSynth[0])},
   {"MIDI", -1, instrumentTypeMidi, 1},
+  {"FM", -1, instrumentTypeFM, sizeof(instrumentTypeFM) / sizeof(instrumentTypeFM[0])},
 };
 
 static const InstrumentType instrumentTypesQuickCycle[] = {
   InstrumentType::none, InstrumentType::DrumSynth, InstrumentType::Sintered,
   InstrumentType::AY1, InstrumentType::AY2, InstrumentType::AYSample,
-  InstrumentType::SCWF, InstrumentType::BYOWTBL, InstrumentType::Sample,
+  InstrumentType::SCWF, InstrumentType::BYOWTBL, InstrumentType::Sample, InstrumentType::SoundFont,
   InstrumentType::AChChid, InstrumentType::Braids,
   InstrumentType::Plaits, InstrumentType::PlaitsAlt,
-  InstrumentType::MME,
-  InstrumentType::Midi,
+  InstrumentType::MME, InstrumentType::Monk,
+  InstrumentType::SegaPSG, InstrumentType::GBPulse, InstrumentType::GBNoise,
+  InstrumentType::GenesisFM, InstrumentType::ArcadeFM, InstrumentType::DX7, InstrumentType::Midi, InstrumentType::OPLL, InstrumentType::VRC7, InstrumentType::OPL2, InstrumentType::OPL3,
+  InstrumentType::SID,
 };
 
 static int editInstrumentType(CellEditAction action, InstrumentType* type) {
@@ -105,15 +140,29 @@ static const InstrumentFormat importFormats[] = {
   { ".vts", instrumentLoadVTS, "VTS sample imported", "Failed to import VTS" },
 };
 
+struct InstrumentLoad {
+  const char* path;
+  int instrument;
+  ImportHandler handler;
+};
+
+static int loadInstrument(void* userdata) {
+  auto* load = static_cast<InstrumentLoad*>(userdata);
+  return load->handler ? load->handler(load->path, load->instrument) :
+    instrumentLoad(&chipnomadState->project, load->path, load->instrument);
+}
+
 static void onInstrumentLoaded(const char* path) {
   int result = 1;
   const char* ext = strrchr(path, '.');
   int formatHandled = 0;
+  if(ext&&!strcasecmp(ext,".syx")){instrumentFMImportSysEx(path);return;}
 
   if (ext != NULL) {
     for (size_t i = 0; i < sizeof(importFormats) / sizeof(importFormats[0]); i++) {
       if (strcasecmp(ext, importFormats[i].extension) == 0) {
-        result = importFormats[i].handler(path, cInstrument);
+        InstrumentLoad load{path, cInstrument, importFormats[i].handler};
+        result = audioManager.mutateProject(loadInstrument, &load);
         if (result == 0) {
           screenMessage(MESSAGE_TIME, importFormats[i].successMsg);
         } else {
@@ -126,7 +175,8 @@ static void onInstrumentLoaded(const char* path) {
   }
 
   if (!formatHandled) {
-    result = instrumentLoad(&chipnomadState->project, path, cInstrument);
+    InstrumentLoad load{path, cInstrument, nullptr};
+    result = audioManager.mutateProject(loadInstrument, &load);
     if (result == 0) {
       screenMessage(MESSAGE_TIME, "Instrument loaded");
     } else {
@@ -156,10 +206,15 @@ static void onInstrumentSaved(const char* folderPath) {
   getInstrumentFilename(filename, sizeof(filename));
   snprintf(fullPath, sizeof(fullPath), "%s%s%s.cni", folderPath, PATH_SEPARATOR_STR, filename);
 
+  auto& instrument = chipnomadState->project.instruments[cInstrument];
+  const bool monk = instrument.type == InstrumentType::Monk;
+  const uint8_t previousBank = monk ? instrument.chip.monk.factory : 0;
+  if (monk) instrument.chip.monk.factory = 0;
   if (instrumentSave(&chipnomadState->project, fullPath, cInstrument) == 0) {
+    if (monk) projectModified = 1;
     strncpy(appSettings.instrumentPath, folderPath, PATH_LENGTH);
     appSettings.instrumentPath[PATH_LENGTH - 1] = 0;
-  }
+  } else if (monk) instrument.chip.monk.factory = previousBank;
   screenSetup(&screenInstrument, cInstrument);
 }
 
@@ -183,6 +238,10 @@ static void setInstrumentType(InstrumentType newType) {
     screenSetup(&screenInstrument, cInstrument);
     return;
   }
+  const bool liveSwitch = chipnomadState->sampleRate > 0 &&
+    chipnomadCanSwitchInstrumentLive(oldType) &&
+    chipnomadCanSwitchInstrumentLive(newType);
+  if (liveSwitch) audioManager.ensureInstrumentVoices(newType);
   InstrumentVoicePostSettings savedEnvelope = {};
   InstrumentVoicePostSettings* oldPost = voicePostSettings(instrument, oldType);
   int preserveEnvelope = oldPost && (oldPost->attack || oldPost->decay || oldPost->sustain || oldPost->release);
@@ -190,7 +249,7 @@ static void setInstrumentType(InstrumentType newType) {
   getInstrumentFunctions(oldType).free(instrument);
   instrument->type = newType;
   getInstrumentFunctions(newType).init(instrument);
-  if (preserveEnvelope) {
+  if (preserveEnvelope && !isSimpleChip(newType)) {
     InstrumentVoicePostSettings* post = voicePostSettings(instrument, newType);
     if (post) {
       post->attack = savedEnvelope.attack; post->decay = savedEnvelope.decay;
@@ -198,6 +257,8 @@ static void setInstrumentType(InstrumentType newType) {
       post->envelopeShape = savedEnvelope.envelopeShape;
     }
   }
+  if (!liveSwitch && audioManager.reinitializeChips)
+    audioManager.reinitializeChips();
   ScreenData* screen = instrumentScreen();
   screen->cursorRow = screen->cursorCol = screen->topRow = 0;
   projectModified = 1;
@@ -261,13 +322,15 @@ static ScreenData screenInstrumentNone = {
 };
 
 static ScreenData* instrumentScreen(void) {
+  // Slot navigation can redraw directly without running setup().
+  instrumentFMSetContext(cInstrument, chipnomadState->project.instruments[cInstrument].type);
   static ScreenData* const screens[] = {
     &screenInstrumentNone, &screenInstrumentAY, &screenInstrumentAY2,
     &screenInstrumentAYSample, &screenInstrumentBraids, &screenInstrumentSample,
     &screenInstrumentSCWF, &screenInstrumentBYOWTBL, &screenInstrumentPlaits, &screenInstrumentAChChid,
     &screenInstrumentDrumSynth, &screenInstrumentMME,
     &screenInstrumentSintered,
-    &screenInstrumentMidi,
+    &screenInstrumentMidi, &screenInstrumentOPLL, &screenInstrumentOPL, &screenInstrumentSimpleChip, &screenInstrumentOPL, &screenInstrumentSoundFont, &screenInstrumentMonk,
   };
   InstrumentScreenKind kind = getInstrumentDefinition(chipnomadState->project.instruments[cInstrument].type)->screen;
   ScreenData* data = screens[(int)kind];
@@ -282,14 +345,22 @@ static void init(void) {
   screenInstrumentNone.cursorRow = 0;
   screenInstrumentNone.cursorCol = 0;
   SelectionItem* groups[] = {instrumentTypeChip, instrumentTypeSample, instrumentTypeSynth, instrumentTypeDrums, instrumentTypeMidi};
-  const int counts[] = {3, 3, 5, 2, 1};
+  const int counts[] = {7, 4, sizeof(instrumentTypeSynth) / sizeof(instrumentTypeSynth[0]), 2, 1};
   for (int group = 0; group < 5; ++group)
     for (int item = 0; item < counts[group]; ++item)
       groups[group][item].label = getInstrumentDefinition((InstrumentType)groups[group][item].value)->uiName;
 }
 
+#ifdef DESKTOP_BUILD
+static void keyJazzReleaseAll(void);
+#endif
+
 static void setup(int input) {
   isCharEdit = 0;
+  resetLivePreview();
+#ifdef DESKTOP_BUILD
+  keyJazzReleaseAll(); // a key held while leaving the screen never sends its release here
+#endif
   if (input != -1) {
     cInstrument = input;
   }
@@ -301,6 +372,15 @@ static void fullRedraw(void) {
 }
 
 static void draw(void) {
+  if (chipnomadState->project.instruments[cInstrument].type==InstrumentType::SoundFont) {
+    auto& d=screenInstrumentSoundFont;
+    for (int row : {3,4}) for (int col=0; col<d.getColumnCount(row); ++col)
+      d.drawField(col,row,d.cursorRow==row && d.cursorCol==col ? CellState::focus : CellState::normal);
+    d.drawCursor(d.cursorCol,d.cursorRow);
+  }
+  instrumentSIDDrawHints();
+  // Field redraws may paint their static preview. The live scope owns this
+  // region for the frame, including frames between waveform refreshes.
   instrumentCommonDrawLivePreview();
 }
 
@@ -318,7 +398,7 @@ int instrumentCommonColumnCount(int row) {
   } else if (row == 1) {
     return 15; // Instrument name
   } else if (row == 2) {
-    return 3; // Transpose, table speed, volume
+    return 4; // Transpose, table speed, volume, pan
   }
   return 1; // Default value
 }
@@ -336,8 +416,9 @@ void instrumentCommonDrawStatic(void) {
 
   gfxPrint(0, 3, "Name");
   gfxPrint(0, 4, "Transp.");
-  gfxPrint(15, 4, "Tbl.Tic");
-  gfxPrint(28, 4, "Vol");
+  gfxPrint(14, 4, "TIC");
+  gfxPrint(28, 3, "PAN");
+  gfxPrint(28, 4, "VOL");
 }
 
 void instrumentCommonDrawCursor(int col, int row) {
@@ -358,9 +439,11 @@ void instrumentCommonDrawCursor(int col, int row) {
     gfxCursor(8, 4, 3);
   } else if (row == 2 && col == 1) {
     // Table tic speed
-    gfxCursor(23, 4, 2);
+    gfxCursor(18, 4, 2);
   } else if (row == 2 && col == 2) {
     gfxCursor(32, 4, 2);
+  } else if (row == 2 && col == 3) {
+    gfxCursor(32, 3, 2);
   }
 }
 
@@ -391,9 +474,11 @@ void instrumentCommonDrawField(int col, int row, CellState state) {
     gfxPrintf(8, 4, chipnomadState->project.instruments[cInstrument].transposeEnabled ? "On " : "Off");
   } else if (row == 2 && col == 1) {
     // Table tic speed
-    gfxPrint(23, 4, byteToHex(chipnomadState->project.instruments[cInstrument].tableSpeed));
+    gfxPrint(18, 4, byteToHex(chipnomadState->project.instruments[cInstrument].tableSpeed));
   } else if (row == 2 && col == 2) {
     gfxPrint(32, 4, byteToHex(chipnomadState->project.instruments[cInstrument].volume));
+  } else if (row == 2 && col == 3) {
+    gfxPrint(32, 3, byteToHex(chipnomadState->project.instruments[cInstrument].pan));
   }
 }
 
@@ -414,13 +499,13 @@ void instrumentCommonDrawVoicePostStatic(int drawEnvelope) {
     gfxPrint(11, 14, "D");
     gfxPrint(16, 14, "S");
     gfxPrint(21, 14, "R");
-    gfxPrint(27, 14, "Shape");
+    gfxPrint(27, 14, "SHP");
   }
 }
 
 int instrumentCommonDrawVoicePostCursor(int col, int row) {
   if (row == 9) {
-    gfxCursor(col == 4 ? 35 : 7 + col * 5, 14, 2);
+    gfxCursor(col == 4 ? 31 : 7 + col * 5, 14, 2);
     return 1;
   }
   if (col && row >= 4 && row <= 8) {
@@ -447,7 +532,7 @@ int instrumentCommonDrawVoicePostField(int col, int row, CellState state,
   if (row == 9) {
     const uint8_t values[] = {post->attack, post->decay, post->sustain, post->release, post->envelopeShape};
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxPrint(col == 4 ? 35 : 7 + col * 5, 14, byteToHex(values[col]));
+    gfxPrint(col == 4 ? 31 : 7 + col * 5, 14, byteToHex(values[col]));
     instrumentCommonDrawEnvelopePreview(post->attack, post->decay, post->sustain, post->release, post->envelopeShape);
     return 1;
   }
@@ -509,7 +594,14 @@ static void drawEnvelopePreviewSegment(Bitmap* bitmap, int x0, float start, int 
 }
 
 void instrumentCommonDrawEnvelopePreview(uint8_t attack, uint8_t decay, uint8_t sustain, uint8_t release, uint8_t shape) {
-  if (!envelopePreviewBitmap) envelopePreviewBitmap = gfxBitmapCreate(17, 3);
+  const int columns = 17;
+  const int rows = 3;
+  if (envelopePreviewBitmap && (envelopePreviewBitmap->widthPixels != columns * gfxGetCharWidth() ||
+      envelopePreviewBitmap->heightPixels != rows * gfxGetCharHeight())) {
+    gfxBitmapFree(envelopePreviewBitmap);
+    envelopePreviewBitmap = nullptr;
+  }
+  if (!envelopePreviewBitmap) envelopePreviewBitmap = gfxBitmapCreate(columns, rows);
   if (!envelopePreviewBitmap) return;
 
   Bitmap* bitmap = envelopePreviewBitmap;
@@ -525,12 +617,19 @@ void instrumentCommonDrawEnvelopePreview(uint8_t attack, uint8_t decay, uint8_t 
   drawEnvelopePreviewSegment(bitmap, decayEnd, sustainLevel, releaseStart, sustainLevel, shape);
   drawEnvelopePreviewSegment(bitmap, releaseStart, sustainLevel, width, 0.0f, shape);
   gfxSetFgColor(appSettings.colorScheme.textTitles);
-  gfxDrawBitmap(bitmap, 6, 15);
+  const int column = 6;
+  gfxDrawBitmap(bitmap, column, 15);
 }
 
 void instrumentCommonDrawLivePreview(void) {
-  if (!appSettings.persistentWaveform) {
+  const auto type = chipnomadState->project.instruments[cInstrument].type;
+  if (livePreviewInstrument != cInstrument || livePreviewType != type) {
+    resetLivePreview();
+    livePreviewInstrument = cInstrument;
+    livePreviewType = type;
+  }
   const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
+  const auto now = std::chrono::steady_clock::now();
   int track = -1;
   for (int i = 0; i < chipnomadState->project.tracksCount; ++i) {
     if (playback->tracks[i].note.instrument == cInstrument &&
@@ -538,27 +637,41 @@ void instrumentCommonDrawLivePreview(void) {
         (track < 0 || i == *pSongTrack)) track = i;
   }
   if (track < 0) {
-    if (livePreviewWasActive) currentScreen->fullRedraw();
-    livePreviewWasActive = 0;
-    livePreviewRefresh = {};
-    return;
+    if (!livePreviewWasActive) return;
+    // Audio monitors are briefly inactive while a render chunk is assembled.
+    // Hold through those gaps and short note gaps instead of flashing static.
+    const bool quiet = now - livePreviewLastActivity >= std::chrono::milliseconds(250);
+    if (quiet && !playback->isPlaying) {
+      resetLivePreview();
+      currentScreen->fullRedraw();
+      return;
+    }
+    if (quiet) {
+      // Stay in live mode across song rests, showing silence rather than an
+      // indefinitely frozen note. Resume immediately when a voice returns.
+      const float silence = 0.0f;
+      renderFloatPreview(livePreviewBitmap, &silence, 1);
+      livePreviewRefresh = {};
+    }
+  } else {
+    if (!livePreviewBitmap) livePreviewBitmap = gfxBitmapCreate(32, 3);
+    if (!livePreviewBitmap) return;
+    livePreviewLastActivity = now;
+    int hz = appSettings.waveformRefreshHz;
+    if (hz < 1 || hz > 60) hz = 30;
+    if (track != livePreviewTrack || livePreviewRefresh == std::chrono::steady_clock::time_point() ||
+        std::chrono::duration<float>(now - livePreviewRefresh).count() >= 1.0f / hz) {
+      renderFloatPreview(livePreviewBitmap, chipnomadState->voiceMonitors[track].samples,
+                         VOICE_MONITOR_SAMPLES);
+      livePreviewRefresh = now;
+      livePreviewTrack = track;
+    }
   }
-  if (!livePreviewBitmap) livePreviewBitmap = gfxBitmapCreate(32, 3);
-  const auto now = std::chrono::steady_clock::now();
-  int hz = appSettings.waveformRefreshHz;
-  if (hz < 1 || hz > 60) hz = 30;
-  if (livePreviewRefresh == std::chrono::steady_clock::time_point() ||
-      std::chrono::duration<float>(now - livePreviewRefresh).count() >= 1.0f / hz) {
-    gfxClearRect(0, 16, 32, 3);
-    renderFloatPreview(livePreviewBitmap, chipnomadState->voiceMonitors[track].samples,
-                       VOICE_MONITOR_SAMPLES);
-    livePreviewRefresh = now;
-  }
+  // Cached bitmap pixels are transparent; clear on every draw, not only when
+  // resampling, so a control's static preview cannot show through underneath.
+  gfxClearRect(0, 16, 32, 3);
   gfxSetFgColor(appSettings.colorScheme.textInfo);
   gfxDrawBitmap(livePreviewBitmap, 0, 16);
-  livePreviewWasActive = 1;
-  return;
-  }
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
   InstrumentVoicePostSettings* post = voicePostSettings(instrument, instrument->type);
   if (post && instrument->type != InstrumentType::DrumSynth && instrument->type != InstrumentType::Sintered &&
@@ -568,6 +681,7 @@ void instrumentCommonDrawLivePreview(void) {
     instrumentCommonDrawEnvelopePreview(post->attack, post->decay, post->sustain,
                                         post->release, post->envelopeShape);
   }
+  livePreviewWasActive = 1;
 }
 
 int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
@@ -587,7 +701,7 @@ int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
     }
   } else if (row == 0 && col == 1) {
     // Load instrument (supports .cni and .vts formats)
-    fileBrowserSetup("LOAD INSTRUMENT", ".cni,.vts", appSettings.instrumentPath, onInstrumentLoaded, onInstrumentCancelled);
+    fileBrowserSetup("LOAD INSTRUMENT", ".cni,.vts,.syx", appSettings.instrumentPath, onInstrumentLoaded, onInstrumentCancelled);
     screenSetup(&screenFileBrowser, 0);
   } else if (row == 0 && col == 2) {
     // Save instrument
@@ -598,7 +712,14 @@ int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
     } else {
       char filename[32];
       getInstrumentFilename(filename, sizeof(filename));
-      fileBrowserSetupFolderMode("SAVE INSTRUMENT", appSettings.instrumentPath, filename, ".cni", onInstrumentSaved, onInstrumentCancelled);
+      UserPresets destination;
+      const char* folder = appSettings.instrumentPath;
+      if (chipnomadState->project.instruments[cInstrument].type == InstrumentType::Monk &&
+          setupUserPresetLibrary(destination, InstrumentType::Monk, false)) {
+        fileCreateDirectoryRecursive(destination.rootPath().c_str());
+        folder = destination.rootPath().c_str();
+      }
+      fileBrowserSetupFolderMode("SAVE INSTRUMENT", folder, filename, ".cni", onInstrumentSaved, onInstrumentCancelled);
       screenSetup(&screenFileBrowser, 0);
     }
   } else if (row == 1) {
@@ -617,6 +738,11 @@ int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
     handled = edit8noLast(action, &chipnomadState->project.instruments[cInstrument].tableSpeed, 16, 1, 255);
   } else if (row == 2 && col == 2) {
     handled = edit8noLast(action, &chipnomadState->project.instruments[cInstrument].volume, 16, 0, 255);
+  } else if (row == 2 && col == 3) {
+    if (action == CellEditAction::clear) {
+      chipnomadState->project.instruments[cInstrument].pan = 0x80;
+      handled = 1;
+    } else handled = edit8noLast(action, &chipnomadState->project.instruments[cInstrument].pan, 16, 0, 255);
   }
 
   if (handled) projectModified = 1;
@@ -729,6 +855,107 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
 static ScreenPlaybackLevel getPlaybackLevel(void) {
   return ScreenPlaybackLevel::phrase;
 }
+
+#ifdef DESKTOP_BUILD
+int instrumentKeyJazzTextField(KeyJazzTextField* field) {
+  ScreenData* screen = instrumentScreen();
+  field->screen = screen;
+  field->row = 1;
+  field->popupOpen = isCharEdit;
+  field->marksProjectModified = 1;
+  field->str = NULL;
+  if (screen->cursorRow == 1 && chipnomadState->project.instruments[cInstrument].type != InstrumentType::Monk) { field->str = chipnomadState->project.instruments[cInstrument].name; field->maxLen = PROJECT_INSTRUMENT_NAME_LENGTH; }
+  return 1;
+}
+
+// Key jazz on the Instrument screen: with key jazz on (Esc, the same toggle as
+// the Name field's text entry), the note keys audition the instrument on the
+// current track, like an external MIDI keyboard does, without entering any
+// note. On the Name field the keys type text instead. Last-note priority:
+// releasing a key falls back to the previous key still held, and the sound is
+// released when none is left.
+static int keyJazzBaseNote = 48;
+static int keyJazzHeld[32];
+static int keyJazzHeldCount = 0;
+
+static int keyJazzClamp(int note) {
+  int maxNote = chipnomadState->project.pitchTable.length - 1;
+  return note < 0 ? 0 : note > maxNote ? maxNote : note;
+}
+
+static void keyJazzSound(int offset) {
+  PlaybackMode mode = chipnomadGetPlaybackStatus(chipnomadState)->tracks[*pSongTrack].mode;
+  if (mode != PlaybackMode::stopped && mode != PlaybackMode::phraseRow) return; // the song is playing this track
+  if (instrumentIsEmpty(&chipnomadState->project, cInstrument)) return;
+  chipnomadQueuePlaybackPreviewNote(chipnomadState, *pSongTrack, (uint8_t)keyJazzClamp(keyJazzBaseNote + offset), cInstrument);
+}
+
+static void keyJazzReleaseAll(void) {
+  if (keyJazzHeldCount) chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
+  keyJazzHeldCount = 0;
+}
+
+int instrumentKeyJazzHandleRawKey(InputCode input, int isDown) {
+  if (input.deviceType != InputDeviceType::keyboard) return 0;
+
+  if (inputIsKeyJazzToggle(input)) {
+    // The text handler flips the state right after this: start on the
+    // octave the instrument's first note is in, and let go of anything held.
+    if (isDown) {
+      if (!keyJazzTextIsEnabled()) {
+        uint16_t octaveSize = chipnomadState->project.pitchTable.octaveSize;
+        int first = instrumentFirstNote(&chipnomadState->project, cInstrument);
+        keyJazzBaseNote = octaveSize > 0 ? (first / octaveSize) * octaveSize : first;
+      }
+      keyJazzReleaseAll();
+    }
+    return 0;
+  }
+
+  if (!keyJazzTextIsEnabled()) return 0;
+
+  KeyJazzTextField field;
+  instrumentKeyJazzTextField(&field);
+  if (field.popupOpen || field.str) {   // popup open, or typing in the Name field
+    keyJazzReleaseAll();
+    return 0;
+  }
+  // Ctrl shortcuts only bypass key-down: a note held before Ctrl was pressed
+  // must still be released by its key-up, or the preview would stay on.
+  if (isDown && inputIsCtrlHeld()) return 0;
+
+  int octaveDelta = inputKeyJazzOctaveDelta(input);
+  if (octaveDelta != 0) {
+    if (isDown) {
+      uint16_t octaveSize = chipnomadState->project.pitchTable.octaveSize;
+      keyJazzBaseNote = keyJazzClamp(keyJazzBaseNote + octaveDelta * (int)octaveSize);
+      screenMessage(MESSAGE_TIME, "KEY JAZZ octave: %s", chipnomadState->project.pitchTable.noteNames[keyJazzBaseNote]);
+    }
+    return 1;
+  }
+
+  int offset = inputKeyJazzNoteOffset(input);
+  if (offset < 0) return 0;   // not a note key: normal input (arrows, Play...)
+
+  int held = -1;
+  for (int i = 0; i < keyJazzHeldCount; i++) if (keyJazzHeld[i] == offset) held = i;
+  if (isDown) {
+    if (held >= 0) return 1;  // key repeat
+    if (instrumentIsEmpty(&chipnomadState->project, cInstrument)) {
+      screenMessage(MESSAGE_TIME, "Instrument is empty");
+      return 1;
+    }
+    if (keyJazzHeldCount < 32) keyJazzHeld[keyJazzHeldCount++] = offset;
+    keyJazzSound(offset);
+  } else if (held >= 0) {
+    for (int i = held; i < keyJazzHeldCount - 1; i++) keyJazzHeld[i] = keyJazzHeld[i + 1];
+    keyJazzHeldCount--;
+    if (keyJazzHeldCount) keyJazzSound(keyJazzHeld[keyJazzHeldCount - 1]);
+    else chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
+  }
+  return 1;
+}
+#endif
 
 const AppScreen screenInstrument = {
   .init = init,

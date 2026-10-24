@@ -24,6 +24,7 @@ class MMEVoice {
 
  private:
   float oscillator(float phase, int shape) const;
+  float pairedOscillator(float phase, bool oscillatorB, float pairPosition) const;
   float diode(float x) const;
   float shaper(float x) const;
   float vocode(float modulator, float carrier);

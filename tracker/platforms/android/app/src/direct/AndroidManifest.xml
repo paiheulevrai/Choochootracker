@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Direct/F-Droid build defaults to /sdcard/ChooChooTracker on Android
+         11+, with private and SAF folders available in Settings. Android 10
+         uses SAF; the Play Store flavor uses SAF on all versions. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+</manifest>
