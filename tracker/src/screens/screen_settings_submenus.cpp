@@ -50,27 +50,27 @@ static void audioCursor(int, int row) {
 static void audioField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   if (row == 0) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, 2, "Sample rate");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, 2, "Sample rate");
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
     gfxPrintf(23, 2, "%d kHz", appSettings.audioSampleRate / 1000);
   } else if (row == 1) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, 3, "Buffer size");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, 3, "Buffer size");
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
     gfxClearRect(23, 3, 4, 1);
     gfxPrintf(23, 3, "%d", appSettings.audioBufferSize);
   } else if (row == 2) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, 4, "Audio Output");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, 4, "Audio Output");
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
     gfxClearRect(14, 4, 16, 1);
     gfxPrintf(14, 4, "%.16s", appSettings.audioOutputDeviceName[0] ?
       appSettings.audioOutputDeviceName : "Default");
   } else if (row == 4) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, 6, "Audio Input");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, 6, "Audio Input");
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
     gfxClearRect(23, 6, 3, 1);
     gfxPrint(23, 6, audioInputArmedCount() > 0 ? "ON" : "OFF");
   } else {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, 5, "CPU load");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, 5, "CPU load");
     drawAudioCpuLoad();
   }
 }
@@ -180,7 +180,7 @@ static void controlsCursor(int, int row) {
 static void controlsField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   const int y = controlsRowY(row);
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   if (row == 0) { gfxPrint(0, y, " - Repeat delay"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrintf(23, y, "%03d", appSettings.keyRepeatDelay); }
   else if (row == 1) { gfxPrint(0, y, " - Repeat speed"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrintf(23, y, "%03d", appSettings.keyRepeatSpeed); }
   else if (row == 2) { gfxPrint(0, y, "Stick live mode"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(23, y, appSettings.stickLiveMode == StickLiveMode::free ? "FREE  " : appSettings.stickLiveMode == StickLiveMode::toggle ? "TOGGLE" : "HOLD  "); }
@@ -222,7 +222,7 @@ static void synthStatic(void) { gfxSetFgColor(appSettings.colorScheme.textTitles
 static void synthCursor(int, int row) { gfxCursor(23, 2 + row, row == 0 ? 6 : row == 1 ? 3 : row == 2 ? 6 : 4); }
 static void synthField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   if (row == 0) {
     static const char* names[] = {"LOW   ", "MEDIUM", "HIGH  ", "BEST  "};
     gfxPrint(0, 2, "AY Quality"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(23, 2, names[appSettings.quality]);
@@ -255,7 +255,7 @@ static void mixerStatic(void) { gfxSetFgColor(appSettings.colorScheme.textTitles
 static void mixerCursor(int, int row) { gfxCursor(23, 2 + row, 4); }
 static void mixerField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor(cs.textDefault); gfxPrint(0, 2 + row, row == 0 ? "Mix volume" : "Tilt pivot");
+  gfxSetFgColor(cs.textLabel); gfxPrint(0, 2 + row, row == 0 ? "Mix volume" : "Tilt pivot");
   gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
   if (row == 0) gfxPrintf(23, 2, "%03d%%", (int)(appSettings.mixVolume * 100.0f + .5f)); else gfxPrintf(23, 3, "%u Hz", chipnomadState->project.tiltPivotHz);
 }
@@ -276,30 +276,30 @@ static void graphicsField(int, int row, CellState state) {
   } else if (row == 1) {
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, y, "Load font");
   } else if (row == 2) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, y, "Song waveform");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Song waveform");
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(23, y, appSettings.persistentWaveform ? "ON " : "OFF");
   } else if (row == 3) {
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, y, "Track visuals");
   } else if (row == 4) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, y, "Waveform FPS");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Waveform FPS");
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrintf(23, y, "%02d FPS", appSettings.waveformRefreshHz);
   } else if (row == 5) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, y, "Renderer");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Renderer");
     gfxSetFgColor(cs.textInfo); gfxPrint(23, y, gfxGetRendererType());
   } else if (row == 6) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, y, "Boot screen");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Boot screen");
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
     gfxPrint(23, y, appSettings.bootScreenNight ? "Night   " : "Original");
   } else if (row == 7) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, y, "Playback counter");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Playback counter");
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
     gfxPrint(23, y, appSettings.playbackCounterMode ? "Time" : "Bars");
   } else if (row == 8) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, y, " - Rows per bar");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, y, " - Rows per bar");
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
     gfxPrintf(23, y, "%02u", appSettings.playbackBarRows);
   } else if (row == 9) {
-    gfxSetFgColor(cs.textDefault); gfxPrint(0, y, " - Ticks per row");
+    gfxSetFgColor(cs.textLabel); gfxPrint(0, y, " - Ticks per row");
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
     gfxPrintf(23, y, "%03u", appSettings.playbackBarTicks);
   }

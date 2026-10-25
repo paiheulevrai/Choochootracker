@@ -80,7 +80,7 @@ static void drawColHeader(int col, CellState state) {
 
 static void drawField(int col, int row, CellState state) {
   if (row == 0 && col == 0) {
-    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxSetFgColor(appSettings.colorScheme.textLabel);
     gfxPrint(0, 2, "MIDI In");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
     char name[DEVICE_FIELD_WIDTH + 1];
@@ -88,7 +88,7 @@ static void drawField(int col, int row, CellState state) {
     gfxClearRect(DEVICE_FIELD_X, 2, DEVICE_FIELD_WIDTH, 1);
     gfxPrint(DEVICE_FIELD_X, 2, name);
   } else if (row == 1 && col == 0) {
-    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxSetFgColor(appSettings.colorScheme.textLabel);
     gfxPrint(0, 3, "MIDI Out");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
     char name[DEVICE_FIELD_WIDTH + 1];

@@ -49,7 +49,7 @@ static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0, 0, "PITCH TABLE");
 
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 2, "Name");
 }
 

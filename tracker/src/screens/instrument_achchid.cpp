@@ -45,7 +45,7 @@ static int isCellValid(int col,int row) {
 static void drawStatic() {
   instrumentCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrint(0,6,"OSCILLATOR"); gfxPrint(20,6,"303 FILTER");
-  gfxSetFgColor(appSettings.colorScheme.textDefault); gfxPrint(0,7,"Wave");
+  gfxSetFgColor(appSettings.colorScheme.textLabel); gfxPrint(0,7,"Wave");
   if (isBraids()) { gfxPrint(0,8,"Model"); gfxPrint(0,9,"Timbre"); gfxPrint(0,10,"Color"); gfxPrint(0,11,"Shaper"); }
   else if (isSID()) { gfxPrint(0,8,"Shape"); gfxPrint(0,9,"Width"); gfxPrint(0,10,"Shaper"); }
   else gfxPrint(0,8,"Fine");

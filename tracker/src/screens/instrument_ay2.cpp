@@ -178,14 +178,14 @@ static void drawStatic(void) {
   drawOscillatorHeaders();
 
   // Top block labels (y 7-9)
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(COL_LEFT_X, 7, "Pitch");
   gfxPrint(COL_LEFT_X, 8, "Fine");
   gfxPrint(COL_RIGHT_X, 7, "Mode");
   // Row 8-9 labels are dynamic (Pitch/N and Fine/D or N and D)
 
   // Bottom block labels (y 12-14)
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(COL_LEFT_X, 12, "Period");
   gfxPrint(COL_RIGHT_X, 12, "Pitch");
   gfxPrint(COL_RIGHT_X, 13, "Fine");
@@ -284,7 +284,7 @@ static void drawField(int col, int row, CellState state) {
         break;
       case 5: // Envelope pitch/N
         // Draw the label for this row
-        gfxSetFgColor(appSettings.colorScheme.textDefault);
+        gfxSetFgColor(appSettings.colorScheme.textLabel);
         gfxPrint(COL_RIGHT_X, y, isAutoEnv ? "N    " : "Pitch");
         // Draw the value
         gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
@@ -297,7 +297,7 @@ static void drawField(int col, int row, CellState state) {
         break;
       case 6: // Envelope fine/D
         // Draw the label for this row
-        gfxSetFgColor(appSettings.colorScheme.textDefault);
+        gfxSetFgColor(appSettings.colorScheme.textLabel);
         gfxPrint(COL_RIGHT_X, y, isAutoEnv ? "D    " : "Fine ");
         // Draw the value
         gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
@@ -327,7 +327,7 @@ static void drawField(int col, int row, CellState state) {
       case 11: // Software osc P1
         if (softwareOscHasP1(ay2->oscSoftware.type)) {
           // Draw the label for this row
-          gfxSetFgColor(appSettings.colorScheme.textDefault);
+          gfxSetFgColor(appSettings.colorScheme.textLabel);
           gfxPrint(COL_RIGHT_X, y, softwareOscP1Name(ay2->oscSoftware.type));
           // Draw the value
           gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
@@ -359,7 +359,7 @@ static void drawField(int col, int row, CellState state) {
       case 12: // Software osc P2
         if (softwareOscHasP2(ay2->oscSoftware.type)) {
           // Draw the label for this row
-          gfxSetFgColor(appSettings.colorScheme.textDefault);
+          gfxSetFgColor(appSettings.colorScheme.textLabel);
           gfxPrint(COL_RIGHT_X, y, softwareOscP2Name(ay2->oscSoftware.type));
           // Draw the value
           gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);

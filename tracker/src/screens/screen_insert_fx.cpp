@@ -72,6 +72,7 @@ static void field(int col, int row, CellState) {
       insertDescribe(decoded, sizeof(decoded), c.module, p, c.values[p]);
       snprintf(label, sizeof(label), "VOW %.3s", decoded);
     }
+    gfxSetFgColor(appSettings.colorScheme.textLabel);
     gfxPrintf(x, y(row), "%d %-8s", p + 1, label);
     gfxSetFgColor(appSettings.colorScheme.textValue);
     gfxPrintf(x + 12, y(row), "%02X", c.values[p]);

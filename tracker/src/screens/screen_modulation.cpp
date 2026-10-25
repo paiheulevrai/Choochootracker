@@ -394,7 +394,7 @@ static void drawStatic(void) {
     gfxPrintf(COL_LEFT_X, baseY, "Mod%d", block == 0 ? 1 : 2);
     gfxPrintf(COL_RIGHT_X, baseY, "Mod%d", block == 0 ? 3 : 4);
 
-    gfxSetFgColor(cs.textDefault);
+    gfxSetFgColor(cs.textLabel);
     gfxPrint(COL_LEFT_X, baseY + 1, "Dest");
     gfxPrint(COL_LEFT_X, baseY + 2, "Amt");
     gfxPrint(COL_RIGHT_X, baseY + 1, "Dest");
@@ -492,7 +492,7 @@ static void drawField(int col, int row, CellState state) {
       if (paramIdx >= paramCount(mod)) break;
 
       // Draw the label
-      gfxSetFgColor(appSettings.colorScheme.textDefault);
+      gfxSetFgColor(appSettings.colorScheme.textLabel);
       gfxClearRect(labelX, y, 6, 1);
       const char* label = paramLabel(mod, paramIdx);
       if (label) gfxPrint(labelX, y, label);

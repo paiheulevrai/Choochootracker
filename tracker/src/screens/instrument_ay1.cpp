@@ -32,7 +32,7 @@ static int getColumnCount(int row) {
 static void drawStatic(void) {
   instrumentCommonDrawStatic();
 
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 6, "Tone");
   gfxPrint(0, 7, "Noise");
   gfxPrint(0, 8, "Env");

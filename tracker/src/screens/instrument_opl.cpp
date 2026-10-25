@@ -203,7 +203,7 @@ int sidY(int row){return row==5?9:row==6?12:row==7?13:14;}
 int sidX(int col,int row){return row==8?7+col*5:col?(row==5?24:26):9;}
 int sidWidth(int col,int row){return row==5&&!col?5:row==6?3:row==5|| (row==7&&!col)?3:2;}
 int columns(int row){if(sid()&&row>=4)return row==4||row==5||row==7?2:row==6?1:4;return row<3?instrumentCommonColumnCount(row):row==5&&fmEditSupported(current()->type)?2:row==6?2:row==8?5:1;}
-void drawStatic(){instrumentCommonDrawStatic();gfxSetFgColor(appSettings.colorScheme.textDefault);gfxPrint(0,6,"Bank:");gfxPrint(0,7,sid()?"Preset:":"Preset");if(sid()){
+void drawStatic(){instrumentCommonDrawStatic();gfxSetFgColor(appSettings.colorScheme.textLabel);gfxPrint(0,6,"Bank:");gfxPrint(0,7,sid()?"Preset:":"Preset");if(sid()){
  gfxPrint(0,9,"Wave:");gfxPrint(20,9,"PW:");
  gfxPrint(0,11,"Filter:");gfxPrint(0,12,"Mode:");
  gfxPrint(0,13,"Cutoff:");gfxPrint(20,13,"Reso:");

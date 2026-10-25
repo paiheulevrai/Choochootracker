@@ -1032,7 +1032,7 @@ static void settingsDrawStatic(void) {
   gfxSetFgColor(cs.textTitles);
   gfxPrint(0, 0, "SAMPLE EDIT");
   drawFilenameRow();
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(0, 2, "Input");
   gfxPrint(monLabelX, 2, "MON");
   // While a recording is running the live capture waveform owns the
@@ -1042,7 +1042,7 @@ static void settingsDrawStatic(void) {
     updateSamplePreview(sample, &editorView, &editorSelection);
     drawSamplePreview();
   }
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(0, fieldY(2), "Region");
   gfxPrint(markerLabelX, fieldY(2), "START");
   gfxPrint(endLabelX, fieldY(2), "END");

@@ -25,7 +25,7 @@ static int columns(int row) {
 static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0, 0, "SCALE");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 2, "Mode");
   gfxPrint(0, 3, "Root");
   gfxPrint(0, 4, "Scale");

@@ -26,7 +26,7 @@ void instrumentFMRefreshStaticWaveform() {
 }
 
 void instrumentFMAmpDrawStatic() {
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 12, "Amp env");
   gfxPrint(0, 10, "Bright"); gfxPrint(19, 10, "Feedback");
   gfxPrint(0, 14, "ADSR");

@@ -48,7 +48,7 @@ static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) 
 static void drawStatic(void) {
   instrumentCommonDrawStatic(); InstrumentMME* m = &chipnomadState->project.instruments[cInstrument].chip.mme;
   gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrint(0, 6, "Model"); gfxPrint(0, 7, "MME");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   for (int i = 0; i < 6; ++i) gfxPrint(0, 8 + i, macroName(m->model, i));
   instrumentCommonDrawVoicePostStatic(1);
   drawPreview(m);

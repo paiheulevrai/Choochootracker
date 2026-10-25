@@ -135,7 +135,7 @@ static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0, 0, "Key Mapping");
 
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   for (int i = 0; i < 11; i++) {
     gfxPrint(0, i + 2, buttonNames[i]);
   }

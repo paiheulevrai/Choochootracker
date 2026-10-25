@@ -16,8 +16,11 @@ static void colorThemeDrawField(int col, int row, CellState state);
 static int colorThemeOnEdit(int col, int row, CellEditAction action);
 static void fullRedraw(void);
 
+// One row per colour, then the theme name and the Save/Load/Reset buttons.
+enum { kColorRows = 11, kNameRow = kColorRows, kButtonRow = kColorRows + 1 };
+
 static ScreenData screenColorThemeData = {
-  .rows = 12,
+  .rows = kButtonRow + 1,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,
@@ -91,6 +94,7 @@ static const char* colorNames[] = {
   "Text Empty",
   "Text Info",
   "Text Default",
+  "Text Labels",
   "Text Value",
   "Text Titles",
   "Play Markers",
@@ -105,12 +109,13 @@ static int* getColorPtr(int row) {
     case 1: return &appSettings.colorScheme.textEmpty;
     case 2: return &appSettings.colorScheme.textInfo;
     case 3: return &appSettings.colorScheme.textDefault;
-    case 4: return &appSettings.colorScheme.textValue;
-    case 5: return &appSettings.colorScheme.textTitles;
-    case 6: return &appSettings.colorScheme.playMarkers;
-    case 7: return &appSettings.colorScheme.cursor;
-    case 8: return &appSettings.colorScheme.selection;
-    case 9: return &appSettings.colorScheme.warning;
+    case 4: return &appSettings.colorScheme.textLabel;
+    case 5: return &appSettings.colorScheme.textValue;
+    case 6: return &appSettings.colorScheme.textTitles;
+    case 7: return &appSettings.colorScheme.playMarkers;
+    case 8: return &appSettings.colorScheme.cursor;
+    case 9: return &appSettings.colorScheme.selection;
+    case 10: return &appSettings.colorScheme.warning;
     default: return NULL;
   }
 }
@@ -127,11 +132,11 @@ static void draw(void) {
 }
 
 int colorThemeColumnCount(int row) {
-  if (row < 10) {
+  if (row < kColorRows) {
     return 3; // R, G, B
-  } else if (row == 10) {
+  } else if (row == kNameRow) {
     return THEME_NAME_LENGTH; // Theme name field
-  } else if (row == 11) {
+  } else if (row == kButtonRow) {
     return 3; // Save, Load, Reset
   }
   return 1;
@@ -143,13 +148,13 @@ void colorThemeDrawStatic(void) {
   gfxSetFgColor(cs.textTitles);
   gfxPrint(0, 0, "COLOR THEME");
 
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(17, 1, "R  G  B");
   gfxPrint(0, 17, "Theme name");
 }
 
 void colorThemeDrawCursor(int col, int row) {
-  if (row < 10) {
+  if (row < kColorRows) {
     if (col == 0) {
       gfxCursor(17, row + 2, 2); // R column
     } else if (col == 1) {
@@ -157,9 +162,9 @@ void colorThemeDrawCursor(int col, int row) {
     } else if (col == 2) {
       gfxCursor(23, row + 2, 2); // B column
     }
-  } else if (row == 10) {
+  } else if (row == kNameRow) {
     gfxCursor(17 + col, 17, 1); // Theme name field
-  } else if (row == 11) {
+  } else if (row == kButtonRow) {
     if (col == 0) {
       gfxCursor(17, 18, 4); // Save
     } else if (col == 1) {
@@ -171,8 +176,8 @@ void colorThemeDrawCursor(int col, int row) {
 }
 
 void colorThemeDrawRowHeader(int row, CellState state) {
-  if (row < 10) {
-    gfxSetFgColor(appSettings.colorScheme.textDefault);
+  if (row < kColorRows) {
+    gfxSetFgColor(appSettings.colorScheme.textLabel);
     gfxPrint(0, row + 2, colorNames[row]);
 
     // Draw color preview as part of row header
@@ -191,7 +196,7 @@ void colorThemeDrawColHeader(int col, CellState state) {
 void colorThemeDrawField(int col, int row, CellState state) {
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
 
-  if (row < 10) {
+  if (row < kColorRows) {
     int* colorPtr = getColorPtr(row);
     if (!colorPtr) return;
 
@@ -207,11 +212,11 @@ void colorThemeDrawField(int col, int row, CellState state) {
     } else if (col == 2) {
       gfxPrintf(23, row + 2, "%02X", b);
     }
-  } else if (row == 10) {
+  } else if (row == kNameRow) {
     // Theme name field
     gfxClearRect(17, 17, THEME_NAME_LENGTH, 1);
     gfxPrintf(17, 17, "%s", appSettings.themeName);
-  } else if (row == 11) {
+  } else if (row == kButtonRow) {
     // Buttons
     if (col == 0) {
       gfxPrint(17, 18, "Save");
@@ -224,7 +229,7 @@ void colorThemeDrawField(int col, int row, CellState state) {
 }
 
 int colorThemeOnEdit(int col, int row, CellEditAction action) {
-  if (row < 10) {
+  if (row < kColorRows) {
     int* colorPtr = getColorPtr(row);
     if (!colorPtr) return 0;
 
@@ -255,7 +260,7 @@ int colorThemeOnEdit(int col, int row, CellEditAction action) {
     }
 
     return handled;
-  } else if (row == 10) {
+  } else if (row == kNameRow) {
     // Theme name editing
     int res = editCharacter(action, appSettings.themeName, col, THEME_NAME_LENGTH);
     if (res == 1) {
@@ -263,7 +268,7 @@ int colorThemeOnEdit(int col, int row, CellEditAction action) {
     } else if (res > 1) {
       return 1;
     }
-  } else if (row == 11 && action == CellEditAction::tap) {
+  } else if (row == kButtonRow && action == CellEditAction::tap) {
     // Buttons
     if (col == 0) {
       // Save
@@ -292,7 +297,7 @@ int colorThemeOnEdit(int col, int row, CellEditAction action) {
 }
 
 static int inputScreenNavigation(int keys, int tapCount) {
-  if (keys == keyOpt && screenColorThemeData.cursorRow != 10) {
+  if (keys == keyOpt && screenColorThemeData.cursorRow != kNameRow) {
     screenSetup(&screenSettings, 0);
     return 1;
   }
@@ -319,11 +324,11 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
 int colorThemeKeyJazzTextField(KeyJazzTextField* field) {
   ScreenData* screen = &screenColorThemeData;
   field->screen = screen;
-  field->row = 10;
+  field->row = kNameRow;
   field->popupOpen = isCharEdit;
   field->marksProjectModified = 0;
   field->str = NULL;
-  if (screen->cursorRow == 10) { field->str = appSettings.themeName; field->maxLen = THEME_NAME_LENGTH; }
+  if (screen->cursorRow == kNameRow) { field->str = appSettings.themeName; field->maxLen = THEME_NAME_LENGTH; }
   return 1;
 }
 #endif

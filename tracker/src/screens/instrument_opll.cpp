@@ -30,9 +30,10 @@ static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) 
 static void drawStatic() {
   instrumentCommonDrawStatic();
   instrumentFMAmpDrawStatic();
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
+  gfxPrint(0, 6, "Bank"); gfxPrint(0, 7, "Preset"); gfxPrint(0, 9, "Fine ct");
   gfxSetFgColor(appSettings.colorScheme.textDefault);
-  gfxPrint(0, 6, "Bank"); gfxPrint(9, 6, current()->type == InstrumentType::VRC7 ? "VRC7 / DS1001" : "OPLL / YM2413");
-  gfxPrint(0, 7, "Preset"); gfxPrint(0, 9, "Fine ct");
+  gfxPrint(9, 6, current()->type == InstrumentType::VRC7 ? "VRC7 / DS1001" : "OPLL / YM2413");
 }
 static void drawCursor(int col, int row) {
   if (row == 5) { instrumentFMToneDrawCursor(col); return; }

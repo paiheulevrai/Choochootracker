@@ -71,7 +71,7 @@ static void drawStatic(void) {
   instrumentCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0, 7, "SOURCE");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 8, "Table A"); gfxPrint(0, 9, "Table B");
   gfxPrint(0, 10, "Pos A"); gfxPrint(0, 11, "Pos B");
   gfxPrint(0, 12, "Detune"); gfxPrint(0, 13, "Mix");

@@ -35,7 +35,7 @@ int homeX(int col, int row) { return row == 1 ? commonX[col] : row == 3 && col ?
 int homeWidth(int col, int row) { return row == 1 ? (col ? 2 : 3) : row == 2 ? 7 : row == 3 ? (col ? 4 : 19) : 2; }
 void homeStatic() {
   gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrintf(0, 0, "INSTRUMENT %02X", cInstrument);
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 2, "Type"); gfxPrint(0, 3, "TR"); gfxPrint(8, 3, "TIC");
   gfxPrint(18, 3, "VOL"); gfxPrint(27, 3, "PAN");
   gfxPrint(0, homeY[2], "Bank"); gfxPrint(0, homeY[3], "Preset");

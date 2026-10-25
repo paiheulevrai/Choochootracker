@@ -203,7 +203,7 @@ static void drawStatic(void) {
   }
 
   // Sample params labels (y 8-13)
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(COL_LEFT_X, 8, "Rate");
   gfxPrint(COL_LEFT_X, 9, "Start");
   gfxPrint(COL_LEFT_X, 10, "Length");
@@ -215,12 +215,12 @@ static void drawStatic(void) {
   drawOscillatorHeaders();
 
   // Tone labels (y 9-10)
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(COL_RIGHT_X, 9, "Pitch");
   gfxPrint(COL_RIGHT_X, 10, "Fine");
 
   // Noise period label (y 13)
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(COL_RIGHT_X, 13, "Period");
 
   // Update and draw sample preview

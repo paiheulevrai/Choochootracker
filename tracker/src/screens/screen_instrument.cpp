@@ -499,7 +499,7 @@ void instrumentCommonDrawStatic(void) {
   gfxSetFgColor(cs.textTitles);
   gfxPrintf(0, 0, "INSTRUMENT %02X", cInstrument);
 
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(0, 2, "Type");
 
   if (chipnomadState->project.instruments[cInstrument].type == InstrumentType::none) return;
@@ -582,7 +582,7 @@ void instrumentCommonDrawVoicePostStatic(int drawEnvelope) {
     instrumentVoicePostSettings(&chipnomadState->project.instruments[cInstrument]);
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(18, 7, "FILTER");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(18, 8, "Type");
   gfxPrint(18, 9, "Mode");
   gfxPrint(18, 10, post && post->filterCharacter >= 5 && post->filterCharacter <= 7
@@ -592,7 +592,7 @@ void instrumentCommonDrawVoicePostStatic(int drawEnvelope) {
   if (drawEnvelope) {
     gfxSetFgColor(appSettings.colorScheme.textTitles);
     gfxPrint(0, 14, "ADSR");
-    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxSetFgColor(appSettings.colorScheme.textLabel);
     gfxPrint(6, 14, "A");
     gfxPrint(11, 14, "D");
     gfxPrint(16, 14, "S");

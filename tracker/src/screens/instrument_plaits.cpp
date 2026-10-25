@@ -68,7 +68,7 @@ static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0, 6, "Model");
   gfxPrint(0, 7, "SOURCE");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 8, "Harmonic");
   gfxPrint(0, 9, "Timbre");
   gfxPrint(0, 10, "Morph");

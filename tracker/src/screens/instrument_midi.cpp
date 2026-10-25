@@ -21,14 +21,14 @@ static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) 
 
 static void drawStatic(void) {
   instrumentCommonDrawStatic();
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 6, "Channel");
   gfxPrint(0, 7, "Program");
   gfxPrint(0, 8, "Bank high (CC0)");
   gfxPrint(0, 9, "Bank low (CC32)");
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0, 11, "CC row FX");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 12, "MC1 number");
   gfxPrint(0, 13, "MC2 number");
   gfxPrint(0, 14, "MC3 number");

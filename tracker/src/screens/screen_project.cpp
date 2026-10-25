@@ -276,6 +276,7 @@ void projectCommonDrawStatic(void) {
   gfxPrint(8, 0, appTitle);
   gfxPrintf(0, 1, "v%s (%s)", appVersion, appBuild);
 
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(0, 5, "File");
   gfxPrint(0, 6, "Title");
   gfxPrint(0, 7, "Author");

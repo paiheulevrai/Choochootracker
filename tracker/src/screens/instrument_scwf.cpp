@@ -79,7 +79,7 @@ static void drawStatic(void) {
   instrumentCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0,7,"SOURCE");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0,8,"Osc A"); gfxPrint(0,9,"Osc B");
   gfxPrint(0,10,"Detune"); gfxPrint(0,11,"Mix");
   instrumentCommonDrawVoicePostStatic(1);

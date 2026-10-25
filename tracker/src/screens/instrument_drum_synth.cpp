@@ -52,7 +52,7 @@ static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) 
 static void drawStatic(void) {
   instrumentCommonDrawStatic(); InstrumentDrumSynth* d = &chipnomadState->project.instruments[cInstrument].chip.drumSynth;
   gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrint(0, 6, "Model"); gfxPrint(0, 7, "SOUND");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   for (int i = 0; i < 6; ++i) gfxPrint(0, 8 + i, drumSynthMacroUsed(d->engine, i) ? macroName(d->engine, i) : "---");
   instrumentCommonDrawVoicePostStatic(0);
 }

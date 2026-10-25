@@ -125,11 +125,13 @@ static void drawStatic(void) {
     gfxPrint(22, 12, "LEVEL");
   } else if (mixerPage == 1) {
     gfxPrint(0, 0, beadsReverb() ? "BEADS REVERB" : "CLOUDS REVERB");
+    gfxSetFgColor(appSettings.colorScheme.textLabel);
     gfxPrint(0, 3, "Algorithm"); gfxPrint(0, 4, "Return"); gfxPrint(0, 5, "Time");
     if (beadsReverb()) { gfxPrint(0, 6, "Tone"); gfxPrint(0, 7, "HP filter"); }
     else { gfxPrint(0, 6, "Damping"); gfxPrint(0, 7, "LP filter"); gfxPrint(0, 8, "HP filter"); }
   } else {
     gfxPrint(0, 0, tapeEcho() ? "TAPE ECHO" : "PING-PONG DELAY");
+    gfxSetFgColor(appSettings.colorScheme.textLabel);
     gfxPrint(0, 3, "Algorithm"); gfxPrint(0, 4, "Return"); gfxPrint(0, 5, "To Reverb");
     if (tapeEcho()) {
       gfxPrint(0, 6, "Time"); gfxPrint(0, 7, "Heads"); gfxPrint(0, 8, "Feedback");

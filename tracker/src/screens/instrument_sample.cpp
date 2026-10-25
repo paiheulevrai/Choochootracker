@@ -133,7 +133,7 @@ static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0,6,"Sample");
   gfxPrint(0,7,"SOURCE");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0,8,"Pitch"); gfxPrint(0,9,"Stretch");
   gfxPrint(0,10,"Loop"); gfxPrint(0,11,"Speed");
   instrumentCommonDrawVoicePostStatic(1);

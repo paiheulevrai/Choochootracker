@@ -25,7 +25,7 @@ static uint8_t* macro(InstrumentSintered* s, int i) { uint8_t* values[] = {&s->d
 static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) : row == 3 ? 1 : row <= 8 ? 2 : 1; }
 static void drawStatic(void) {
   instrumentCommonDrawStatic(); InstrumentSintered* s = &chipnomadState->project.instruments[cInstrument].chip.sintered;
-  gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrint(0, 6, "Model"); gfxPrint(0, 7, "SINTERED"); gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrint(0, 6, "Model"); gfxPrint(0, 7, "SINTERED"); gfxSetFgColor(appSettings.colorScheme.textLabel);
   for (int i = 0; i < 6; ++i) gfxPrint(0, 8 + i, macroName(s->model, i)); instrumentCommonDrawVoicePostStatic(0);
 }
 static void drawCursor(int col, int row) { if (row < 3) { instrumentCommonDrawCursor(col, row); return; } if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostCursor(col, row); return; } InstrumentSintered* s = &chipnomadState->project.instruments[cInstrument].chip.sintered; gfxCursor(11, row == 3 ? 6 : row + 4, row == 3 ? 3 + strlen(modelName(s->model)) : 2); }

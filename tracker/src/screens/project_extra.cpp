@@ -11,7 +11,7 @@ static int getColumnCount(int row) {
 
 static void drawStatic(void) {
   projectCommonDrawStatic();
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 17, "Pitch table");
   gfxPrint(0, 18, "Scale");
 }

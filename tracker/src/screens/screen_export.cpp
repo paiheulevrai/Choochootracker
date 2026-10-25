@@ -201,12 +201,12 @@ void exportCommonDrawStatic(void) {
   gfxSetFgColor(cs.textTitles);
   gfxPrint(0, 0, "EXPORT");
 
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(0, 2, "Start row");
 
   gfxSetFgColor(cs.textValue);
   gfxPrint(0, 4, "WAV");
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(0, 5, "Sample rate");
   gfxPrint(0, 6, "Bit depth");
   gfxPrint(0, 7, "Folder");
@@ -696,7 +696,7 @@ static void bounceDrawStatic(void) {
   gfxSetFgColor(cs.textTitles);
   gfxPrint(0, 0, "BOUNCE TO SAMPLE");
 
-  gfxSetFgColor(cs.textDefault);
+  gfxSetFgColor(cs.textLabel);
   gfxPrint(BOUNCE_NAME_LABEL_X, 2, "File name");
   gfxPrint(0, 3, "Sample rate");
   gfxPrint(0, 4, "Bit depth");

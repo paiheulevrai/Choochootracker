@@ -28,6 +28,7 @@ struct ColorScheme {
   int textEmpty;
   int textInfo;
   int textDefault;
+  int textLabel;    // names of settings, a little dimmer than their values
   int textValue;
   int textTitles;
   int playMarkers;
@@ -204,6 +205,9 @@ int settingsLoad(void);
 int saveTheme(const char* path);
 int loadTheme(const char* path);
 void resetToDefaultColors(void);
+// Text Default dimmed towards the background: the label colour for themes
+// that don't set one.
+int defaultLabelColor(const ColorScheme& scheme);
 void initDefaultKeyMapping(void);
 void resetKeyMappingToDefaults(void);
 
