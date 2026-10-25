@@ -1,3 +1,4 @@
+#include "field_style.h"
 #include "screen_project.h"
 #include "common.h"
 #include "corelib/corelib_file.h"
@@ -336,12 +337,10 @@ void projectCommonDrawField(int col, int row, CellState state) {
     gfxPrintf(7, 5, "%s", appSettings.projectFilename);
   } else if (row == 2) {
     // Title
-    gfxClearRect(7, 6, PROJECT_TITLE_LENGTH, 1);
-    gfxPrintf(7, 6, "%s", chipnomadState->project.title);
+    fieldDrawText(7, 6, chipnomadState->project.title, PROJECT_TITLE_LENGTH, state);
   } else if (row == 3) {
     // Author
-    gfxClearRect(7, 7, PROJECT_TITLE_LENGTH, 1);
-    gfxPrintf(7, 7, "%s", chipnomadState->project.author);
+    fieldDrawText(7, 7, chipnomadState->project.author, PROJECT_TITLE_LENGTH, state);
   } else if (row == 4) {
     // Linear pitch
     gfxPrint(13, 9, chipnomadState->project.linearPitch ? "ON " : "OFF");

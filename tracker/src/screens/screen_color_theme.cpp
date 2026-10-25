@@ -17,7 +17,7 @@ static int colorThemeOnEdit(int col, int row, CellEditAction action);
 static void fullRedraw(void);
 
 // One row per colour, then the theme name and the Save/Load/Reset buttons.
-enum { kColorRows = 11, kNameRow = kColorRows, kButtonRow = kColorRows + 1 };
+enum { kColorRows = 13, kNameRow = kColorRows, kButtonRow = kColorRows + 1 };
 
 static ScreenData screenColorThemeData = {
   .rows = kButtonRow + 1,
@@ -95,9 +95,11 @@ static const char* colorNames[] = {
   "Text Info",
   "Text Default",
   "Text Labels",
+  "Named Values",
   "Text Value",
   "Text Titles",
   "Play Markers",
+  "Value Bars",
   "Cursor",
   "Selection",
   "Warning"
@@ -110,12 +112,14 @@ static int* getColorPtr(int row) {
     case 2: return &appSettings.colorScheme.textInfo;
     case 3: return &appSettings.colorScheme.textDefault;
     case 4: return &appSettings.colorScheme.textLabel;
-    case 5: return &appSettings.colorScheme.textValue;
-    case 6: return &appSettings.colorScheme.textTitles;
-    case 7: return &appSettings.colorScheme.playMarkers;
-    case 8: return &appSettings.colorScheme.cursor;
-    case 9: return &appSettings.colorScheme.selection;
-    case 10: return &appSettings.colorScheme.warning;
+    case 5: return &appSettings.colorScheme.textNames;
+    case 6: return &appSettings.colorScheme.textValue;
+    case 7: return &appSettings.colorScheme.textTitles;
+    case 8: return &appSettings.colorScheme.playMarkers;
+    case 9: return &appSettings.colorScheme.valueBar;
+    case 10: return &appSettings.colorScheme.cursor;
+    case 11: return &appSettings.colorScheme.selection;
+    case 12: return &appSettings.colorScheme.warning;
     default: return NULL;
   }
 }

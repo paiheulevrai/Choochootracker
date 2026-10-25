@@ -6,6 +6,7 @@
 #include "project_utils.h"
 #include "screen_instrument.h"
 #include "selection_popup.h"
+#include "field_style.h"
 #include <math.h>
 #include <string.h>
 
@@ -426,6 +427,39 @@ static void hint(const Modulation* mod, int modRow) {
   }
 }
 
+// The bar after a field's value: where the value sits in its range, and the
+// width of the value it follows. False for fields without one.
+static bool valueBar(const Modulation* mod, int modRow, float* position, bool* bipolar, int* valueWidth) {
+  *bipolar = false;
+  *valueWidth = 2;
+  const int paramIdx = modRow - 3;
+  if (modRow == 2) {
+    *bipolar = true;
+    *position = (mod->amount + 128) / 255.0f;
+    return true;
+  }
+  if (paramIdx < 0 || paramIdx >= paramCount(mod)) return false;
+  switch (mod->type) {
+    case ModulationType::ADSR:
+    case ModulationType::AHD:
+      *position = (&mod->p1)[paramIdx] / 255.0f;
+      return true;
+    case ModulationType::LFO:
+    case ModulationType::SlowLFO:
+      *position = mod->p3 / 255.0f;
+      return paramIdx == 2;
+    case ModulationType::SLFO:
+      *position = paramIdx == 2 ? mod->p3 / 255.0f : (mod->p4 - 1) / 63.0f;
+      return paramIdx == 2 || paramIdx == 3;
+    case ModulationType::StickRate:
+      *position = (mod->p2 - 1) / 254.0f;
+      *valueWidth = 3;
+      return paramIdx == 1;
+    default:
+      return false;
+  }
+}
+
 static void drawCursor(int col, int row) {
   int y = rowToY(row);
   int valX = col == 0 ? COL_LEFT_VAL : COL_RIGHT_VAL;
@@ -434,6 +468,13 @@ static void drawCursor(int col, int row) {
   Modulation* mod = &chipnomadState->project.instruments[cInstrument].modulation[modIdx];
   hint(mod, modRow);
 
+  float position;
+  bool bipolar;
+  int valueWidth;
+  if (valueBar(mod, modRow, &position, &bipolar, &valueWidth)) {
+    gfxCursor(valX, y, valueWidth + kFieldBarWidth);  // the value and its bar
+    return;
+  }
   switch (modRow) {
     case 0: gfxCursor(valX, y, strlen(mod->type == ModulationType::Sequence &&
                                       mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) ? "TGATE" : modTypeName(mod->type))); break;
@@ -468,7 +509,15 @@ static void drawField(int col, int row, CellState state) {
   int modIdx = getModIndex(col, row);
   Modulation* mod = &chipnomadState->project.instruments[cInstrument].modulation[modIdx];
 
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  // The selected field's label lights up with its value. ModN is a title.
+  if (modRow == 0) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxPrintf(labelX, y, "Mod%d", modIdx + 1);
+  } else if (modRow <= 2) {
+    fieldDrawLabel(labelX, y, modRow == 1 ? "Dest" : "Amt", state);
+  }
+  // Names (sources, destinations, shapes) and numbers have their own colours.
+  gfxSetFgColor(modRow <= 1 ? fieldNameColor(state) : fieldValueColor(state));
 
   switch (modRow) {
     case 0: // Type (on header row)
@@ -492,14 +541,18 @@ static void drawField(int col, int row, CellState state) {
       if (paramIdx >= paramCount(mod)) break;
 
       // Draw the label
-      gfxSetFgColor(appSettings.colorScheme.textLabel);
       gfxClearRect(labelX, y, 6, 1);
       const char* label = paramLabel(mod, paramIdx);
-      if (label) gfxPrint(labelX, y, label);
+      if (label) fieldDrawLabel(labelX, y, label, state);
 
-      // Draw the value
-      gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-      gfxClearRect(valX, y, 6, 1);
+      // Draw the value: numbers in the value colour, choices as names
+      gfxSetFgColor(fieldValueColor(state));
+      gfxClearRect(valX, y, 3 + kFieldBarWidth, 1);
+      const bool named = ((modulationIsTickLFO(mod->type) || mod->type == ModulationType::FLFO) && paramIdx <= 1) ||
+        ((mod->type == ModulationType::StickLinear || mod->type == ModulationType::StickRate) && paramIdx == 0) ||
+        (mod->type == ModulationType::Sequence &&
+         (mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) ? paramIdx == 3 : true));
+      if (named) gfxSetFgColor(fieldNameColor(state));
 
       if (mod->type == ModulationType::AHD || mod->type == ModulationType::ADSR) {
         uint8_t* params = &mod->p1;
@@ -539,6 +592,12 @@ static void drawField(int col, int row, CellState state) {
       break;
     }
   }
+
+  float position;
+  bool bipolar;
+  int valueWidth;
+  if (valueBar(mod, modRow, &position, &bipolar, &valueWidth))
+    fieldDrawBar(valX + valueWidth, y, kFieldBarWidth, position, state, bipolar);
 }
 
 static int onEdit(int col, int row, enum CellEditAction action) {

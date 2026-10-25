@@ -6,6 +6,7 @@
 #include "chipnomad_lib.h"
 #include "project_utils.h"
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "user_presets.h"
 #include "user_preset_browser.h"
 #include "waveform_display.h"
@@ -538,9 +539,15 @@ void instrumentCommonDrawCursor(int col, int row) {
 }
 
 void instrumentCommonDrawField(int col, int row, CellState state) {
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  const Instrument& instrument = chipnomadState->project.instruments[cInstrument];
+  // The selected field's label lights up with its value.
+  static const struct { int row, col, x, y; const char* text; } labels[] = {
+    {0, 0, 0, 2, "Type"}, {2, 0, 0, 4, "Transp."}, {2, 1, 14, 4, "TIC"}, {2, 2, 28, 4, "VOL"}, {2, 3, 28, 3, "PAN"}};
+  for (const auto& label : labels)
+    if (label.row == row && label.col == col) fieldDrawLabel(label.x, label.y, label.text, state);
+  if (row == 1) fieldDrawLabel(0, 3, "Name", state);
 
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(fieldValueColor(state));
 
   if (row == 0 && col == 0) {
     // Instrument type
@@ -557,11 +564,11 @@ void instrumentCommonDrawField(int col, int row, CellState state) {
     gfxPrint(29, 2, "Save");
   } else if (row == 1) {
     // Instrument name
-    gfxClearRect(8, 3, PROJECT_INSTRUMENT_NAME_LENGTH, 1);
-    gfxPrintf(8, 3, "%s", chipnomadState->project.instruments[cInstrument].name);
+    fieldDrawText(8, 3, instrument.name, PROJECT_INSTRUMENT_NAME_LENGTH, state);
   } else if (row == 2 && col == 0) {
     // Transpose
-    gfxPrintf(8, 4, chipnomadState->project.instruments[cInstrument].transposeEnabled ? "On " : "Off");
+    gfxSetFgColor(fieldNameColor(state));
+    gfxPrintf(8, 4, instrument.transposeEnabled ? "On " : "Off");
   } else if (row == 2 && col == 1) {
     // Table tic speed
     gfxPrint(18, 4, byteToHex(chipnomadState->project.instruments[cInstrument].tableSpeed));
@@ -606,6 +613,10 @@ int instrumentCommonDrawVoicePostCursor(int col, int row) {
     gfxCursor(col == 4 ? 31 : 7 + col * 5, 14, 2);
     return 1;
   }
+  if (col && row == 8) {
+    gfxCursor(26, 12, 2 + kFieldBarWidth);  // Reso and its bar
+    return 1;
+  }
   if (col && row >= 4 && row <= 8) {
     InstrumentVoicePostSettings* post = instrumentVoicePostSettings(&chipnomadState->project.instruments[cInstrument]);
     int width = 2;
@@ -628,13 +639,17 @@ int instrumentCommonDrawVoicePostField(int col, int row, CellState state,
                                         const InstrumentVoicePostSettings* post) {
   if (row == 9) {
     const uint8_t values[] = {post->attack, post->decay, post->sustain, post->release, post->envelopeShape};
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    static const char* const labels[] = {"A", "D", "S", "R", "SHP"};
+    fieldDrawLabel(col == 4 ? 27 : 6 + col * 5, 14, labels[col], state);
+    gfxSetFgColor(fieldValueColor(state));
     gfxPrint(col == 4 ? 31 : 7 + col * 5, 14, byteToHex(values[col]));
     instrumentCommonDrawEnvelopePreview(post->attack, post->decay, post->sustain, post->release, post->envelopeShape);
     return 1;
   }
   if (!col || row < 4 || row > 8) return 0;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  static const char* const labels[] = {"Type", "Mode", "Slope", "Cutoff", "Reso"};
+  fieldDrawLabel(18, row + 4, labels[row - 4], state);
+  gfxSetFgColor(row <= 6 ? fieldNameColor(state) : fieldValueColor(state));
   gfxClearRect(26, row + 4, 8, 1);
   switch (row) {
     case 4: gfxPrint(26, 8, filterCharacterName(post->filterCharacter)); break;
@@ -645,7 +660,10 @@ int instrumentCommonDrawVoicePostField(int col, int row, CellState state,
       else gfxPrint(26, 10, post->filterSlope24dB ? "24 dB" : "12 dB");
       break;
     case 7: gfxPrintf(26, 11, "%u Hz", post->filterCutoffHz); break;
-    case 8: gfxPrint(26, 12, byteToHex(post->filterResonance)); break;
+    case 8:
+      gfxPrint(26, 12, byteToHex(post->filterResonance));
+      fieldDrawBar(28, 12, kFieldBarWidth, post->filterResonance / 255.0f, state);
+      break;
   }
   return 1;
 }

@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "corelib_gfx.h"
 #include "corelib/corelib_file.h"
 #include "file_browser.h"
@@ -150,6 +151,7 @@ static void drawCursor(int col, int row) {
     const int w = col == 0 ? sourceValueWidth : editLabelWidth;
     gfxCursor(x, 6, w);
   }
+  else if (!col && row == 7) gfxCursor(sourceValueX, 11, 2 + kFieldBarWidth);  // Speed and its bar
   else gfxCursor(col ? 26 : sourceValueX,row+4,col?8:sourceValueWidth);
 }
 
@@ -169,7 +171,15 @@ static void drawField(int col, int row, CellState state) {
   InstrumentSample* sample = &chipnomadState->project.instruments[cInstrument].chip.sample;
   if (instrumentCommonDrawVoicePostField(col, row, state, sample)) return;
   int stretchOn = sample->stretchMode != 0;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  // The selected field's label lights up with its value; Sample is a title.
+  static const char* const labels[] = {"Pitch", "Stretch", "Loop", "Speed"};
+  if (row == 3 && col == 0) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxPrint(0, 6, "Sample");
+  } else if (!col && row >= 4 && row <= 7) {
+    fieldDrawLabel(0, row + 4, labels[row - 4], state);
+  }
+  gfxSetFgColor(row == 5 || row == 6 ? fieldNameColor(state) : fieldValueColor(state));
   if (row == 3) {
     if (col == 0) gfxClearRect(sourceValueX, 6, sourceValueWidth, 1);
     else gfxClearRect(editLabelX, 6, editLabelWidth, 1);
@@ -197,7 +207,10 @@ static void drawField(int col, int row, CellState state) {
       if (!col) {
         // Speed is inert while Stretch drives the duration: dim it.
         if (stretchOn) gfxSetFgColor(appSettings.colorScheme.textEmpty);
-        gfxPrint(sourceValueX, 11, byteToHex(controlFromRange(sample->speedPercent, 500)));
+        const uint8_t speed = controlFromRange(sample->speedPercent, 500);
+        gfxPrint(sourceValueX, 11, byteToHex(speed));
+        if (stretchOn) gfxClearRect(sourceValueX + 2, 11, kFieldBarWidth, 1);
+        else fieldDrawBar(sourceValueX + 2, 11, kFieldBarWidth, speed / 255.0f, state);
       }
       break;
   }

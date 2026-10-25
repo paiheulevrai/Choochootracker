@@ -116,7 +116,9 @@ void initDefaultAppSettings(void) {
   appSettings.colorScheme.textEmpty = 0x10284a;
   appSettings.colorScheme.textInfo = 0x52799b;
   appSettings.colorScheme.textDefault = 0xc9bfa5;
-  appSettings.colorScheme.textLabel = 0x989283;
+  appSettings.colorScheme.textLabel = 0x7d8fa6;
+  appSettings.colorScheme.textNames = 0x9fcf8f;
+  appSettings.colorScheme.valueBar = 0x64d6ff;
   appSettings.colorScheme.textValue = 0xffd665;
   appSettings.colorScheme.textTitles = 0xe6b84f;
   appSettings.colorScheme.playMarkers = 0x64d6ff;
@@ -313,7 +315,9 @@ int settingsSave(void) {
   fprintf(file, "colorTextEmpty: 0x%06x\n", appSettings.colorScheme.textEmpty);
   fprintf(file, "colorTextInfo: 0x%06x\n", appSettings.colorScheme.textInfo);
   fprintf(file, "colorTextDefault: 0x%06x\n", appSettings.colorScheme.textDefault);
-  fprintf(file, "colorTextLabel: 0x%06x\n", appSettings.colorScheme.textLabel);
+  fprintf(file, "colorTextLabels: 0x%06x\n", appSettings.colorScheme.textLabel);
+  fprintf(file, "colorNamedValues: 0x%06x\n", appSettings.colorScheme.textNames);
+  fprintf(file, "colorValueBars: 0x%06x\n", appSettings.colorScheme.valueBar);
   fprintf(file, "colorTextValue: 0x%06x\n", appSettings.colorScheme.textValue);
   fprintf(file, "colorTextTitles: 0x%06x\n", appSettings.colorScheme.textTitles);
   fprintf(file, "colorPlayMarkers: 0x%06x\n", appSettings.colorScheme.playMarkers);
@@ -358,7 +362,8 @@ int settingsLoad(void) {
   FILE* file = fopen(settingsPath, "r");
   if (file == NULL) return 1;
 
-  appSettings.colorScheme.textLabel = -1;  // derived below when the file has none
+  // Colours the file doesn't have are filled in after reading it.
+  appSettings.colorScheme.textLabel = appSettings.colorScheme.textNames = appSettings.colorScheme.valueBar = -1;
   bool hasClockSource = false;
   while (fgets(lineBuffer, sizeof(lineBuffer), file) != NULL) {
     char* line = lineBuffer;
@@ -585,8 +590,12 @@ int settingsLoad(void) {
       sscanf(line + 15, "0x%x", &appSettings.colorScheme.textInfo);
     } else if (strncmp(line, "colorTextDefault: ", 18) == 0) {
       sscanf(line + 18, "0x%x", &appSettings.colorScheme.textDefault);
-    } else if (strncmp(line, "colorTextLabel: ", 16) == 0) {
-      sscanf(line + 16, "0x%x", &appSettings.colorScheme.textLabel);
+    } else if (strncmp(line, "colorTextLabels: ", 17) == 0) {
+      sscanf(line + 17, "0x%x", &appSettings.colorScheme.textLabel);
+    } else if (strncmp(line, "colorNamedValues: ", 18) == 0) {
+      sscanf(line + 18, "0x%x", &appSettings.colorScheme.textNames);
+    } else if (strncmp(line, "colorValueBars: ", 16) == 0) {
+      sscanf(line + 16, "0x%x", &appSettings.colorScheme.valueBar);
     } else if (strncmp(line, "colorTextValue: ", 16) == 0) {
       sscanf(line + 16, "0x%x", &appSettings.colorScheme.textValue);
     } else if (strncmp(line, "colorTextTitles: ", 17) == 0) {
@@ -649,7 +658,7 @@ int settingsLoad(void) {
   }
 
   fclose(file);
-  if (appSettings.colorScheme.textLabel < 0) appSettings.colorScheme.textLabel = defaultLabelColor(appSettings.colorScheme);
+  colorSchemeFillMissing(&appSettings.colorScheme);
   if (appSettings.audioSampleRate != 32000 && appSettings.audioSampleRate != 48000)
     appSettings.audioSampleRate = kAudioSampleRate;
   // 4,906 was the legacy platform default; other values are rounded to the
@@ -677,13 +686,21 @@ int settingsLoad(void) {
   return 0;
 }
 
-int defaultLabelColor(const ColorScheme& scheme) {
-  int color = 0;
-  for (int shift = 0; shift <= 16; shift += 8) {
-    const int text = (scheme.textDefault >> shift) & 0xff, ground = (scheme.background >> shift) & 0xff;
-    color |= (ground + (text - ground) * 3 / 4) << shift;
+void colorSchemeFillMissing(ColorScheme* scheme) {
+  // The built-in Choo palette has its own choices; other themes get labels
+  // as Text Default dimmed a quarter of the way to the background, names
+  // as Text Default and bars in the cursor colour.
+  const bool choo = scheme->textDefault == 0xc9bfa5 && scheme->background == 0x050c1f;
+  if (scheme->textLabel < 0) {
+    int color = 0;
+    for (int shift = 0; shift <= 16; shift += 8) {
+      const int text = (scheme->textDefault >> shift) & 0xff, ground = (scheme->background >> shift) & 0xff;
+      color |= (ground + (text - ground) * 3 / 4) << shift;
+    }
+    scheme->textLabel = choo ? 0x7d8fa6 : color;
   }
-  return color;
+  if (scheme->textNames < 0) scheme->textNames = choo ? 0x9fcf8f : scheme->textDefault;
+  if (scheme->valueBar < 0) scheme->valueBar = choo ? 0x64d6ff : scheme->cursor;
 }
 
 void resetToDefaultColors(void) {
@@ -691,13 +708,14 @@ void resetToDefaultColors(void) {
   appSettings.colorScheme.textEmpty = 0x002638;
   appSettings.colorScheme.textInfo = 0x4878b0;
   appSettings.colorScheme.textDefault = 0xa0d0f0;
-  appSettings.colorScheme.textLabel = defaultLabelColor(appSettings.colorScheme);
+  appSettings.colorScheme.textLabel = appSettings.colorScheme.textNames = appSettings.colorScheme.valueBar = -1;
   appSettings.colorScheme.textValue = 0xe2ebf8;
   appSettings.colorScheme.textTitles = 0xbfdf50;
   appSettings.colorScheme.playMarkers = 0xefe000;
   appSettings.colorScheme.cursor = 0x7ddcff;
   appSettings.colorScheme.selection = 0x00d090;
   appSettings.colorScheme.warning = 0xff4040;
+  colorSchemeFillMissing(&appSettings.colorScheme);
 }
 
 int saveTheme(const char* path) {
@@ -708,7 +726,9 @@ int saveTheme(const char* path) {
   fprintf(file, "colorTextEmpty: 0x%06x\n", appSettings.colorScheme.textEmpty);
   fprintf(file, "colorTextInfo: 0x%06x\n", appSettings.colorScheme.textInfo);
   fprintf(file, "colorTextDefault: 0x%06x\n", appSettings.colorScheme.textDefault);
-  fprintf(file, "colorTextLabel: 0x%06x\n", appSettings.colorScheme.textLabel);
+  fprintf(file, "colorTextLabels: 0x%06x\n", appSettings.colorScheme.textLabel);
+  fprintf(file, "colorNamedValues: 0x%06x\n", appSettings.colorScheme.textNames);
+  fprintf(file, "colorValueBars: 0x%06x\n", appSettings.colorScheme.valueBar);
   fprintf(file, "colorTextValue: 0x%06x\n", appSettings.colorScheme.textValue);
   fprintf(file, "colorTextTitles: 0x%06x\n", appSettings.colorScheme.textTitles);
   fprintf(file, "colorPlayMarkers: 0x%06x\n", appSettings.colorScheme.playMarkers);
@@ -727,7 +747,8 @@ int loadTheme(const char* path) {
   // First reset to defaults to ensure all colors have valid values
   resetToDefaultColors();
 
-  appSettings.colorScheme.textLabel = -1;  // derived below when the file has none
+  // Colours the file doesn't have are filled in after reading it.
+  appSettings.colorScheme.textLabel = appSettings.colorScheme.textNames = appSettings.colorScheme.valueBar = -1;
   while (fgets(lineBuffer, sizeof(lineBuffer), file) != NULL) {
     char* line = lineBuffer;
     if (strncmp(line, "colorBackground: ", 17) == 0) {
@@ -738,8 +759,12 @@ int loadTheme(const char* path) {
       sscanf(line + 15, "0x%x", &appSettings.colorScheme.textInfo);
     } else if (strncmp(line, "colorTextDefault: ", 18) == 0) {
       sscanf(line + 18, "0x%x", &appSettings.colorScheme.textDefault);
-    } else if (strncmp(line, "colorTextLabel: ", 16) == 0) {
-      sscanf(line + 16, "0x%x", &appSettings.colorScheme.textLabel);
+    } else if (strncmp(line, "colorTextLabels: ", 17) == 0) {
+      sscanf(line + 17, "0x%x", &appSettings.colorScheme.textLabel);
+    } else if (strncmp(line, "colorNamedValues: ", 18) == 0) {
+      sscanf(line + 18, "0x%x", &appSettings.colorScheme.textNames);
+    } else if (strncmp(line, "colorValueBars: ", 16) == 0) {
+      sscanf(line + 16, "0x%x", &appSettings.colorScheme.valueBar);
     } else if (strncmp(line, "colorTextValue: ", 16) == 0) {
       sscanf(line + 16, "0x%x", &appSettings.colorScheme.textValue);
     } else if (strncmp(line, "colorTextTitles: ", 17) == 0) {
@@ -756,7 +781,7 @@ int loadTheme(const char* path) {
   }
 
   fclose(file);
-  if (appSettings.colorScheme.textLabel < 0) appSettings.colorScheme.textLabel = defaultLabelColor(appSettings.colorScheme);
+  colorSchemeFillMissing(&appSettings.colorScheme);
   return 0;
 }
 
