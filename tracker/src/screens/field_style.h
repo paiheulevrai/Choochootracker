@@ -6,8 +6,9 @@
 
 #include "screens.h"
 
-// Characters a value bar takes after its value.
-constexpr int kFieldBarWidth = 6;
+// Characters a value bar takes after its value, and on pages where the
+// next column starts closer.
+constexpr int kFieldBarWidth = 6, kFieldShortBarWidth = 4;
 
 // The label in the label colour, or lit like the value when selected.
 void fieldDrawLabel(int x, int y, const char* label, CellState state);

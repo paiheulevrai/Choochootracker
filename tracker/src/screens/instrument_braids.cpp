@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "model_catalog.h"
@@ -58,21 +59,43 @@ static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   if (instrumentCommonDrawVoicePostCursor(col, row)) return;
   else if (row == 3) gfxCursor(12, 6, 3 + strlen(modelCatalogName(InstrumentType::Braids, chipnomadState->project.instruments[cInstrument].chip.braids.model)));
-  else if (!col) gfxCursor(11, row + 4, row == 5 && chipnomadState->project.instruments[cInstrument].chip.braids.model == 40 ? strlen(paraphonicChordName(chipnomadState->project.instruments[cInstrument].chip.braids.color)) : 2);
+  else if (!col) gfxCursor(11, row + 4, row == 5 && chipnomadState->project.instruments[cInstrument].chip.braids.model == 40 ? strlen(paraphonicChordName(chipnomadState->project.instruments[cInstrument].chip.braids.color)) : 2 + kFieldShortBarWidth);
 }
 
 static void drawField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
   InstrumentBraids* b = &chipnomadState->project.instruments[cInstrument].chip.braids;
   if (instrumentCommonDrawVoicePostField(col, row, state, b)) return;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  // The selected field's label lights up with its value; Model is a title.
+  if (row == 3) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxPrint(0, 6, "Model");
+  } else if (!col) {
+    fieldDrawLabel(0, row + 4, row == 4 ? "Timbre" : "Color", state);
+  }
+  gfxSetFgColor(fieldValueColor(state));
   if (row == 3) gfxClearRect(11, 6, 29, 1); else gfxClearRect(col ? 26 : 11, row + 4, col ? 8 : 7, 1);
   switch (row) {
-    case 3: gfxPrintf(12, 6, "%02d %s", b->model, modelCatalogName(InstrumentType::Braids, b->model)); break;
-    case 4: if (!col) gfxPrint(11,8,byteToHex(controlFromRange(b->timbre, 32767))); break;
+    case 3:
+      gfxPrintf(12, 6, "%02d", b->model);
+      gfxSetFgColor(fieldNameColor(state));
+      gfxPrint(15, 6, modelCatalogName(InstrumentType::Braids, b->model));
+      break;
+    case 4: if (!col) {
+      const uint8_t value = controlFromRange(b->timbre, 32767);
+      gfxPrint(11, 8, byteToHex(value));
+      fieldDrawBar(13, 8, kFieldShortBarWidth, value / 255.0f, state);
+      break;
+    }
     case 5: if (!col) {
-      if (b->model == 40) gfxPrint(11,9,paraphonicChordName(b->color));
-      else gfxPrint(11,9,byteToHex(controlFromRange(b->color, 32767)));
+      if (b->model == 40) {
+        gfxSetFgColor(fieldNameColor(state));
+        gfxPrint(11, 9, paraphonicChordName(b->color));
+      } else {
+        const uint8_t value = controlFromRange(b->color, 32767);
+        gfxPrint(11, 9, byteToHex(value));
+        fieldDrawBar(13, 9, kFieldShortBarWidth, value / 255.0f, state);
+      }
       break;
     }
   }

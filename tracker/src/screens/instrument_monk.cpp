@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "corelib_gfx.h"
 #include "corelib_file.h"
 #include "user_preset_browser.h"
@@ -43,16 +44,26 @@ void homeStatic() {
     gfxPrint(col ? 20 : 0, homeY[row], monkControls[homeParameters[row-4][col]].name);
   gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrint(0, 8, "VOICE"); gfxPrint(0, 13, "UNISON");
 }
+// The left column's controls get bars; the right column's values sit too
+// close to the track list for one.
+bool homeBar(int col, int row) { return row > 4 && !col; }
 void homeCursor(int col, int row) {
   if (row == 0) instrumentCommonDrawCursor(col, 0);
-  else gfxCursor(homeX(col, row), homeY[row], homeWidth(col, row));
+  else gfxCursor(homeX(col, row), homeY[row], homeWidth(col, row) + (homeBar(col, row) ? kFieldBarWidth : 0));
 }
 void homeField(int col, int row, CellState state) {
   if (row == 0) { instrumentCommonDrawField(col, 0, state); return; }
   int x = homeX(col, row), y = homeY[row];
   gfxClearRect(x, y, homeWidth(col, row), 1);
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   const auto& m = current().chip.monk;
+  // The selected field's label lights up with its value.
+  static const int headerX[] = {0, 8, 18, 27};
+  static const char* const header[] = {"TR", "TIC", "VOL", "PAN"};
+  if (row == 1 && col < 4) fieldDrawLabel(headerX[col], 3, header[col], state);
+  else if (row == 2) fieldDrawLabel(0, y, "Bank", state);
+  else if (row == 3 && !col) fieldDrawLabel(0, y, "Preset", state);
+  else if (row >= 4) fieldDrawLabel(col ? 20 : 0, y, monkControls[homeParameters[row-4][col]].name, state);
+  gfxSetFgColor(row == 2 || (row == 1 && !col) ? fieldNameColor(state) : fieldValueColor(state));
   if (row == 1) {
     if (!col) gfxPrint(x, y, current().transposeEnabled ? "On " : "Off");
     else gfxPrint(x, y, byteToHex(col == 1 ? current().tableSpeed : col == 2 ? current().volume : current().pan));
@@ -62,7 +73,13 @@ void homeField(int col, int row, CellState state) {
     gfxPrintf(x, y, col ? "EDIT" : "%.19s", current().name);
   }
   else {
-    gfxPrint(x, y, byteToHex(monkValue(m, homeParameters[row-4][col])));
+    const int parameter = homeParameters[row-4][col];
+    gfxPrint(x, y, byteToHex(monkValue(m, parameter)));
+    if (homeBar(col, row)) {
+      const auto& control = monkControls[parameter];
+      fieldDrawBar(x + 2, y, kFieldBarWidth,
+        float(monkValue(m, parameter) - control.minimum) / float(control.maximum - control.minimum), state);
+    }
     if (row == 4) {
       const char* vowels[] = {"A", "E", "I", "O", "U"};
       int nearest = (m.vowel * 4 + 127) / 255;

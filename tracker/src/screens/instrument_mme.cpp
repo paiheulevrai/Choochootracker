@@ -1,3 +1,4 @@
+#include "field_style.h"
 #include "screen_instrument.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -58,17 +59,30 @@ static void drawCursor(int col, int row) {
   if (row < 3) { instrumentCommonDrawCursor(col, row); return; }
   if (row == 10) { instrumentCommonDrawVoicePostCursor(col, 9); return; }
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostCursor(col, row); return; }
-  gfxCursor(11, row == 3 ? 6 : row + 4, row == 3 ? 3 + strlen(modelName(m->model)) : 2);
+  gfxCursor(11, row == 3 ? 6 : row + 4, row == 3 ? 3 + strlen(modelName(m->model)) : 2 + kFieldShortBarWidth);
 }
 static void drawField(int col, int row, CellState state) {
   if (row < 3) { instrumentCommonDrawField(col, row, state); return; }
   InstrumentMME* m = &chipnomadState->project.instruments[cInstrument].chip.mme;
   if (row == 10) { instrumentCommonDrawVoicePostField(col, 9, state, m); return; }
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostField(col, row, state, m); return; }
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  // The selected field's label lights up with its value; Model is a title.
+  if (row == 3) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxPrint(0, 6, "Model");
+  } else {
+    fieldDrawLabel(0, row + 4, macroName(m->model, row - 4), state);
+  }
+  gfxSetFgColor(fieldValueColor(state));
   gfxClearRect(11, row == 3 ? 6 : row + 4, row == 3 ? 20 : 7, 1);
-  if (row == 3) gfxPrintf(11, 6, "%02d %s", (int)m->model, modelName(m->model));
-  else if (uint8_t* value = macro(m, row - 4)) gfxPrint(11, row + 4, byteToHex(*value));
+  if (row == 3) {
+    gfxPrintf(11, 6, "%02d", (int)m->model);
+    gfxSetFgColor(fieldNameColor(state));
+    gfxPrint(14, 6, modelName(m->model));
+  } else if (uint8_t* value = macro(m, row - 4)) {
+    gfxPrint(11, row + 4, byteToHex(*value));
+    fieldDrawBar(13, row + 4, kFieldShortBarWidth, *value / 255.0f, state);
+  }
 }
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);

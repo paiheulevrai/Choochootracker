@@ -59,8 +59,9 @@ void fieldDrawBar(int x, int y, int width, float position, CellState state, bool
   Bitmap* b = barBitmap(width);
   if (!b) return;
   gfxBitmapClear(b);
-  // A band through the middle of the row, starting a little after the value.
-  const int left = gfxGetCharWidth() / 4, right = b->widthPixels;
+  // A band through the middle of the row, a little apart from the text on
+  // either side.
+  const int left = gfxGetCharWidth() / 4, right = b->widthPixels - gfxGetCharWidth() / 8;
   const int top = (int)lroundf(b->heightPixels * 0.3f), bottom = (int)lroundf(b->heightPixels * 0.72f);
   const int span = right - left;
   if (position < 0.0f) position = 0.0f;

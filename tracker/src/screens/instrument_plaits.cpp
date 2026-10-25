@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "model_catalog.h"
@@ -80,7 +81,7 @@ static void drawStatic(void) {
   if (p->envelopeMode == 0) {
     gfxSetFgColor(lpgControlsActive(p) ? appSettings.colorScheme.textTitles : appSettings.colorScheme.textInfo);
     gfxPrint(0, 14, lpgControlsActive(p) ? "LPG" : "LPG N/A");
-    gfxSetFgColor(lpgControlsActive(p) ? appSettings.colorScheme.textDefault : appSettings.colorScheme.textInfo);
+    gfxSetFgColor(lpgControlsActive(p) ? appSettings.colorScheme.textLabel : appSettings.colorScheme.textInfo);
     gfxPrint(6, 14, "D"); gfxPrint(11, 14, "C");
   }
 }
@@ -96,7 +97,7 @@ static void drawCursor(int col, int row) {
     return;
   }
   else if (row == 3) gfxCursor(12, 6, 3 + strlen(modelCatalogName(isAlt() ? InstrumentType::PlaitsAlt : InstrumentType::Plaits, p->engine)));
-  else if (!col) gfxCursor(11, row + 4, row == 4 && usesChordNames(p) ? strlen(plaitsChordName(p->harmonics)) : row == 8 ? (p->envelopeMode == 0 ? 4 : 3) : 2);
+  else if (!col) gfxCursor(11, row + 4, row == 4 && usesChordNames(p) ? strlen(plaitsChordName(p->harmonics)) : row == 8 ? (p->envelopeMode == 0 ? 4 : 3) : 2 + kFieldShortBarWidth);
 }
 
 static void drawField(int col, int row, CellState state) {
@@ -104,8 +105,10 @@ static void drawField(int col, int row, CellState state) {
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
   if ((row != 9 || p->envelopeMode != 0) &&
       instrumentCommonDrawVoicePostField(col, row, state, p)) return;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(fieldValueColor(state));
   if (row == 9) {
+    if (p->envelopeMode == 0 && lpgControlsActive(p)) fieldDrawLabel(col ? 11 : 6, 14, col ? "C" : "D", state);
+    gfxSetFgColor(fieldValueColor(state));
     if (p->envelopeMode == 0 && !lpgControlsActive(p)) {
       gfxSetFgColor(appSettings.colorScheme.textInfo);
       gfxPrint(7 + col * 5, 14, "--");
@@ -119,19 +122,41 @@ static void drawField(int col, int row, CellState state) {
     }
     return;
   }
+  // The selected field's label lights up with its value; Model is a title.
+  static const char* const labels[] = {"Harmonic", "Timbre", "Morph", "Main/Aux", "Env Mode"};
+  if (row == 3) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxPrint(0, 6, "Model");
+  } else if (!col && row <= 8) {
+    fieldDrawLabel(0, row + 4, labels[row - 4], state);
+  }
+  gfxSetFgColor(fieldValueColor(state));
   if (row == 3) gfxClearRect(11, 6, 29, 1);
   else gfxClearRect(col ? 26 : 11, row + 4, col ? 8 : 7, 1);
+  // A number with its bar, for the source controls.
+  auto number = [&](uint8_t value) {
+    gfxPrint(11, row + 4, byteToHex(value));
+    fieldDrawBar(13, row + 4, kFieldShortBarWidth, value / 255.0f, state);
+  };
   switch (row) {
-    case 3: gfxPrintf(12, 6, "%02d %s", p->engine, modelCatalogName(isAlt() ? InstrumentType::PlaitsAlt : InstrumentType::Plaits, p->engine)); break;
+    case 3:
+      gfxPrintf(12, 6, "%02d", p->engine);
+      gfxSetFgColor(fieldNameColor(state));
+      gfxPrint(15, 6, modelCatalogName(isAlt() ? InstrumentType::PlaitsAlt : InstrumentType::Plaits, p->engine));
+      break;
     case 4: if (!col) {
-      if (usesChordNames(p)) gfxPrint(11, 8, plaitsChordName(p->harmonics));
-      else gfxPrint(11, 8, byteToHex(controlFromRange(p->harmonics, 32767)));
+      if (usesChordNames(p)) {
+        gfxSetFgColor(fieldNameColor(state));
+        gfxPrint(11, 8, plaitsChordName(p->harmonics));
+      } else {
+        number(controlFromRange(p->harmonics, 32767));
+      }
       break;
     }
-    case 5: if (!col) gfxPrint(11, 9, byteToHex(controlFromRange(p->timbre, 32767))); break;
-    case 6: if (!col) gfxPrint(11, 10, byteToHex(controlFromRange(p->morph, 32767))); break;
-    case 7: if (!col) gfxPrint(11, 11, byteToHex(p->auxMix)); break;
-    case 8: if (!col) gfxPrint(11, 12, p->envelopeMode == 0 ? "TRIG" : "VCA"); break;
+    case 5: if (!col) number(controlFromRange(p->timbre, 32767)); break;
+    case 6: if (!col) number(controlFromRange(p->morph, 32767)); break;
+    case 7: if (!col) number(p->auxMix); break;
+    case 8: if (!col) { gfxSetFgColor(fieldNameColor(state)); gfxPrint(11, 12, p->envelopeMode == 0 ? "TRIG" : "VCA"); } break;
   }
 }
 
