@@ -51,6 +51,14 @@ void homeStatic() {
 }
 // Every control but the vowel, which shows its letters instead, has a bar.
 bool homeBar(int, int row) { return row > 4; }
+// The live control each bar follows: Voice, Breath, Glide, Vibrato, VibRate,
+// Voices, Detune and Spread, in the order the engine reports them.
+const int homeLiveCells[8][2] = {{0, 5}, {1, 5}, {0, 6}, {1, 6}, {0, 7}, {0, 8}, {1, 8}, {0, 9}};
+int homeLiveControl(int col, int row) {
+  for (int i = 0; i < 8; ++i)
+    if (homeLiveCells[i][0] == col && homeLiveCells[i][1] == row) return liveSource1 + i;
+  return -1;
+}
 void homeCursor(int col, int row) {
   if (row == 0) instrumentCommonDrawCursor(col, 0);
   else gfxCursor(homeX(col, row), homeY[row], homeWidth(col, row) + (homeBar(col, row) ? kFieldBarWidth : 0));
@@ -81,7 +89,8 @@ void homeField(int col, int row, CellState state) {
     if (homeBar(col, row)) {
       const auto& control = monkControls[parameter];
       fieldDrawNumber(x, y, monkValue(m, parameter), state,
-        float(monkValue(m, parameter) - control.minimum) / float(control.maximum - control.minimum));
+        float(monkValue(m, parameter) - control.minimum) / float(control.maximum - control.minimum), false,
+        instrumentLivePosition(homeLiveControl(col, row)));
     } else {
       gfxPrint(x, y, byteToHex(monkValue(m, parameter)));
     }
@@ -205,6 +214,13 @@ ScreenData screenInstrumentMonk = {
   .isCellValid = nullptr, .getLoopRange = nullptr,
 };
 const AppScreen screenMonkEdit = {nullptr, editor::setup, editor::redraw, editor::draw, editor::input, editor::level};
+
+bool instrumentMonkLiveCell(int control, int* col, int* row) {
+  if (control < liveSource1 || control > liveSource8 || currentScreen != &screenInstrument) return false;
+  *col = homeLiveCells[control - liveSource1][0];
+  *row = homeLiveCells[control - liveSource1][1];
+  return true;
+}
 
 bool instrumentMonkTouchCell(int col, int row, int* targetCol, int* targetRow) {
   if (currentScreen == &screenMonkEdit) {

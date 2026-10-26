@@ -81,8 +81,14 @@ static void drawField(int col, int row, CellState state) {
     gfxSetFgColor(fieldNameColor(state));
     gfxPrint(x + 3, 6, modelName(m->model));
   } else if (uint8_t* value = macro(m, row - 4)) {
-    fieldDrawNumber(x, row + 4, *value, state);
+    fieldDrawNumber(x, row + 4, *value, state, -1.0f, false, instrumentLivePosition(liveSource1 + row - 4));
   }
+}
+bool instrumentMMELiveCell(int control, int* col, int* row) {
+  if (control < liveSource1 || control > liveSource6) return false;  // the six macros
+  *col = 0;
+  *row = 4 + control - liveSource1;
+  return true;
 }
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);

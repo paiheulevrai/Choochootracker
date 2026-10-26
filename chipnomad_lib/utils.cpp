@@ -81,6 +81,12 @@ uint8_t controlFromRange(int value, int max) {
   return (uint8_t)((clampInt(value, 0, max) * 255 + max / 2) / max);
 }
 
+uint8_t controlFromLogRange(int value, int minimum, int maximum) {
+  if (value <= minimum) return 0;
+  if (value >= maximum) return 255;
+  return (uint8_t)lroundf(255.0f * logf((float)value / minimum) / logf((float)maximum / minimum));
+}
+
 int controlToRange(uint8_t control, int max) {
   if (max <= 0) return 0;
   return ((int)control * max + 127) / 255;

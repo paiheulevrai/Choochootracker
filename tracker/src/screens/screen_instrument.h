@@ -13,10 +13,21 @@ void instrumentCommonDrawEnvelopePreview(uint8_t attack, uint8_t decay, uint8_t 
 void instrumentCommonDrawLivePreview(void);
 int instrumentCommonOnEdit(int col, int row, CellEditAction action);
 // While a track plays the current instrument: what it plays for a
-// LiveControl, as 00-FF, or -1 to show the set value.
+// LiveControl, as 00-FF, or -1 to show the set value; and the same as a
+// bar position for fieldDrawNumber (0 to 1, or -1).
 int instrumentLiveValue(int control);
-// The cell where the Plaits page shows a live control, if it has one.
+float instrumentLivePosition(int control);
+// The cell where a page shows a live control, if it has one.
+bool instrumentSampleLiveCell(int control, int* col, int* row);
+bool instrumentSCWFLiveCell(int control, int* col, int* row);
+bool instrumentBYOWTBLLiveCell(int control, int* col, int* row);
+bool instrumentBraidsLiveCell(int control, int* col, int* row);
 bool instrumentPlaitsLiveCell(int control, int* col, int* row);
+bool instrumentMMELiveCell(int control, int* col, int* row);
+bool instrumentDrumSynthLiveCell(int control, int* col, int* row);
+bool instrumentSinteredLiveCell(int control, int* col, int* row);
+bool instrumentAChChidLiveCell(int control, int* col, int* row);
+bool instrumentMonkLiveCell(int control, int* col, int* row);
 void instrumentCommonDrawVoicePostStatic(int drawEnvelope);
 int instrumentCommonDrawVoicePostCursor(int col, int row);
 int instrumentCommonDrawVoicePostField(int col, int row, CellState state, const InstrumentVoicePostSettings* post);

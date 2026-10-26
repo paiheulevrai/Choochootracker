@@ -56,13 +56,8 @@ static void drawStatic() {
 }
 // Cutoff and decay are shown as 00-FF along their logarithmic ranges; the
 // line below gives them in Hz and ms while they are selected.
-static uint8_t logarithmicControl(uint16_t value, uint16_t minimum, uint16_t maximum) {
-  if (value <= minimum) return 0;
-  if (value >= maximum) return 255;
-  return (uint8_t)lroundf(255.0f * logf((float)value / minimum) / logf((float)maximum / minimum));
-}
-static uint8_t cutoffControl(const InstrumentAChChid* a) { return logarithmicControl(a->cutoff, 200, FILTER_CUTOFF_MAX_HZ); }
-static uint8_t decayControl(const InstrumentAChChid* a) { return logarithmicControl(a->decay, 200, 2000); }
+static uint8_t cutoffControl(const InstrumentAChChid* a) { return controlFromLogRange(a->cutoff, 200, FILTER_CUTOFF_MAX_HZ); }
+static uint8_t decayControl(const InstrumentAChChid* a) { return controlFromLogRange(a->decay, 200, 2000); }
 static void drawCursor(int col,int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   InstrumentAChChid* a = instrument();
@@ -110,16 +105,27 @@ static void drawField(int col,int row,CellState state) {
     gfxSetFgColor(fieldNameColor(state));
     gfxPrint(x+3,y,sidShapes[a->sidShape >= 1 && a->sidShape <= 8 ? a->sidShape : 4]);
   }
-  else if(isBraids() && row==5 && !col) fieldDrawNumber(x,y,controlFromRange(a->timbre,32767),state);
-  else if(isBraids() && row==6 && !col) fieldDrawNumber(x,y,controlFromRange(a->color,32767),state);
-  else if(isBraids() && row==7 && !col) fieldDrawNumber(x,y,a->saturation,state);
+  // While a track plays the instrument, each bar follows what it plays.
+  else if(isBraids() && row==5 && !col) fieldDrawNumber(x,y,controlFromRange(a->timbre,32767),state,-1.0f,false,instrumentLivePosition(liveSource1));
+  else if(isBraids() && row==6 && !col) fieldDrawNumber(x,y,controlFromRange(a->color,32767),state,-1.0f,false,instrumentLivePosition(liveSource2));
+  else if(isBraids() && row==7 && !col) fieldDrawNumber(x,y,a->saturation,state,-1.0f,false,instrumentLivePosition(liveSource3));
   else if(isSID() && row==5 && !col) fieldDrawNumber(x,y,controlFromRange(a->sidPulseWidth,4095),state);
   else if(isSID() && row==6 && !col) fieldDrawNumber(x,y,a->saturation,state);
-  else if(col && row==3) fieldDrawNumber(x,y,cutoffControl(a),state);
-  else if(col && row==4) fieldDrawNumber(x,y,controlFromRange(a->resonance,100),state);
-  else if(col && row==5) fieldDrawNumber(x,y,controlFromRange(a->envMod,100),state);
-  else if(col && row==6) fieldDrawNumber(x,y,decayControl(a),state);
-  else if(col && row==7) fieldDrawNumber(x,y,controlFromRange(a->accent,100),state);
+  else if(col && row==3) fieldDrawNumber(x,y,cutoffControl(a),state,-1.0f,false,instrumentLivePosition(liveCutoff));
+  else if(col && row==4) fieldDrawNumber(x,y,controlFromRange(a->resonance,100),state,-1.0f,false,instrumentLivePosition(liveResonance));
+  else if(col && row==5) fieldDrawNumber(x,y,controlFromRange(a->envMod,100),state,-1.0f,false,instrumentLivePosition(liveSource4));
+  else if(col && row==6) fieldDrawNumber(x,y,decayControl(a),state,-1.0f,false,instrumentLivePosition(liveSource5));
+  else if(col && row==7) fieldDrawNumber(x,y,controlFromRange(a->accent,100),state,-1.0f,false,instrumentLivePosition(liveSource6));
+}
+bool instrumentAChChidLiveCell(int control, int* col, int* row) {
+  // Timbre, Color and Shaper only exist with the Braids wave.
+  static const int cells[liveControlCount][2] = {{0, 5}, {0, 6}, {0, 7}, {1, 5}, {1, 6}, {1, 7},
+                                                 {-1, 0}, {-1, 0}, {-1, 0}, {-1, 0}, {1, 3}, {1, 4}};
+  if (control < 0 || control >= liveControlCount || cells[control][0] < 0) return false;
+  if (control <= liveSource3 && !isBraids()) return false;
+  *col = cells[control][0];
+  *row = cells[control][1];
+  return true;
 }
 static int onEdit(int col,int row,CellEditAction action) {
   if(row<3) return instrumentCommonOnEdit(col,row,action);

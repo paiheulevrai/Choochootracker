@@ -83,8 +83,17 @@ static void drawField(int col, int row, CellState state) {
     gfxSetFgColor(fieldNameColor(state));
     gfxPrint(x + 3, 6, engineName(d->engine));
   } else if (used) {
-    if (uint8_t* value = macro(d, row - 4)) fieldDrawNumber(x, row + 4, *value, state);
+    if (uint8_t* value = macro(d, row - 4))
+      fieldDrawNumber(x, row + 4, *value, state, -1.0f, false, instrumentLivePosition(liveSource1 + row - 4));
   } else gfxPrint(x, row + 4, "--");
+}
+bool instrumentDrumSynthLiveCell(int control, int* col, int* row) {
+  // The model's macros; unused ones show no value.
+  if (control < liveSource1 || control > liveSource6) return false;
+  if (!drumSynthMacroUsed(chipnomadState->project.instruments[cInstrument].chip.drumSynth.engine, control - liveSource1)) return false;
+  *col = 0;
+  *row = 4 + control - liveSource1;
+  return true;
 }
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);

@@ -99,10 +99,18 @@ static void drawField(int col, int row, CellState state) {
   char name[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
   if (row == 3) gfxPrint(sourceValueX, 8, table->oscillator[0].path[0] ? shortFilename(table->oscillator[0].path, name) : "Load");
   else if (row == 4) gfxPrint(sourceValueX, 9, table->oscillator[1].path[0] ? shortFilename(table->oscillator[1].path, name) : "Load");
-  else if (row == 5) fieldDrawNumber(sourceValueX, 10, table->frameIndex[0], state);
-  else if (row == 6) fieldDrawNumber(sourceValueX, 11, table->frameIndex[1], state);
-  else if (row == 7) fieldDrawNumber(sourceValueX, 12, table->detune, state, table->detune / float(SCWF_DETUNE_MAX));
-  else fieldDrawNumber(sourceValueX, 13, table->mix, state);
+  else if (row == 5) fieldDrawNumber(sourceValueX, 10, table->frameIndex[0], state, -1.0f, false, instrumentLivePosition(liveSource1));
+  else if (row == 6) fieldDrawNumber(sourceValueX, 11, table->frameIndex[1], state, -1.0f, false, instrumentLivePosition(liveSource2));
+  else if (row == 7) fieldDrawNumber(sourceValueX, 12, table->detune, state, table->detune / float(SCWF_DETUNE_MAX), false,
+                                     instrumentLivePosition(liveSource3));
+  else fieldDrawNumber(sourceValueX, 13, table->mix, state, -1.0f, false, instrumentLivePosition(liveSource4));
+}
+
+bool instrumentBYOWTBLLiveCell(int control, int* col, int* row) {
+  if (control < liveSource1 || control > liveSource4) return false;  // Pos A, Pos B, Detune, Mix
+  *col = 0;
+  *row = 5 + control - liveSource1;
+  return true;
 }
 
 static int edit(int col, int row, CellEditAction action) {

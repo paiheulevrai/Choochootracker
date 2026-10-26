@@ -48,8 +48,14 @@ static void drawField(int col, int row, CellState state) {
     gfxSetFgColor(fieldNameColor(state));
     gfxPrint(x + 3, 6, modelName(s->model));
   } else {
-    fieldDrawNumber(x, row + 4, *macro(s, row - 4), state);
+    fieldDrawNumber(x, row + 4, *macro(s, row - 4), state, -1.0f, false, instrumentLivePosition(liveSource1 + row - 4));
   }
+}
+bool instrumentSinteredLiveCell(int control, int* col, int* row) {
+  if (control < liveSource1 || control > liveSource6) return false;  // the six macros
+  *col = 0;
+  *row = 4 + control - liveSource1;
+  return true;
 }
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action); InstrumentSintered* s = &chipnomadState->project.instruments[cInstrument].chip.sintered;

@@ -34,6 +34,7 @@
 #include "track_bounce.h"
 #include <math.h>
 #include <algorithm>
+#include <initializer_list>
 #include <atomic>
 #include <cmath>
 #include <new>
@@ -2096,6 +2097,19 @@ static void updateSoundbankVoices(ChipNomadState* state) {
   }
 }
 
+// Records what a track plays for the controls its instrument page shows
+// as bars: positions along each bar (00-FF), sources in page order, then
+// the filter's cutoff and resonance (-1 for none).
+static void recordLiveControls(PlaybackTrackState* track, std::initializer_list<int> sources,
+                               int cutoff = -1, int resonance = -1) {
+  track->liveInstrument = track->note.instrument;
+  int control = liveSource1;
+  for (int value : sources)
+    if (control <= liveSource10) track->liveControls[control++] = (uint8_t)clampInt(value, 0, 255);
+  if (cutoff >= 0) track->liveControls[liveCutoff] = (uint8_t)clampInt(cutoff, 0, 255);
+  if (resonance >= 0) track->liveControls[liveResonance] = (uint8_t)clampInt(resonance, 0, 255);
+}
+
 static void updateAudioInputVoices(ChipNomadState* state) {
   if (!state->audioInputVoices[0][0]) return;
   for (int t = 0; t < state->audioProject.tracksCount; ++t) {
@@ -2274,6 +2288,7 @@ static void updateSampleVoices(ChipNomadState* state) {
     end = clampInt(end, 0, 255);
     cutoff = clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
     resonance = clampInt(resonance, 0, 255);
+    recordLiveControls(track, {controlFromRange(speedPercent, 500)}, filterControlFromCutoff((float)cutoff), resonance);
     if (track->note.fx[fxEAT].isOn) attack = track->note.fx[fxEAT].fxValue;
     if (track->note.fx[fxEDC].isOn) decay = track->note.fx[fxEDC].fxValue;
     if (track->note.fx[fxESU].isOn) sustain = track->note.fx[fxESU].fxValue;
@@ -2380,6 +2395,11 @@ static void updateSCWFVoices(ChipNomadState* state) {
     mix = clampInt(mix, 0, 255);
     cutoff = clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
     resonance = clampInt(resonance, 0, 255);
+    if (instrument->type == InstrumentType::BYOWTBL)
+      recordLiveControls(track, {frameIndex[0], frameIndex[1], detune * 255 / SCWF_DETUNE_MAX, mix},
+                         filterControlFromCutoff((float)cutoff), resonance);
+    else
+      recordLiveControls(track, {detune * 255 / SCWF_DETUNE_MAX, mix}, filterControlFromCutoff((float)cutoff), resonance);
     if (track->note.fx[fxEAT].isOn) attack = track->note.fx[fxEAT].fxValue;
     if (track->note.fx[fxEDC].isOn) decay = track->note.fx[fxEDC].fxValue;
     if (track->note.fx[fxESU].isOn) sustain = track->note.fx[fxESU].fxValue;
@@ -2441,6 +2461,11 @@ static void updateAChChidVoices(ChipNomadState* state) {
         case 9: if (a->wave == AChChidWave::braids) color += playbackModScaleToRange(mod->outValue, 32767); break;
       }
     }
+    recordLiveControls(track, {controlFromRange(clampInt(timbre, 0, 32767), 32767), controlFromRange(clampInt(color, 0, 32767), 32767),
+                               a->saturation, controlFromRange(clampInt(envMod, 0, 100), 100),
+                               controlFromLogRange(clampInt(decay, 200, 2000), 200, 2000), controlFromRange(clampInt(accent, 0, 100), 100)},
+                       controlFromLogRange(clampInt(cutoff, 200, FILTER_CUTOFF_MAX_HZ), 200, FILTER_CUTOFF_MAX_HZ),
+                       controlFromRange(clampInt(resonance, 0, 100), 100));
     for (int slot = 0; slot < track->chordVoiceCount; ++slot)
       voices[slot]->configure((uint8_t)a->wave, a->fineTune, a->model, (uint16_t)clampInt(timbre, 0, 32767), (uint16_t)clampInt(color, 0, 32767), a->saturation, a->sidShape, a->sidPulseWidth,
         (uint16_t)clampInt(cutoff, 200, FILTER_CUTOFF_MAX_HZ), (uint8_t)clampInt(resonance, 0, 100),
@@ -2491,6 +2516,9 @@ static void updateDrumSynthVoices(ChipNomadState* state) {
     configured.decay = (uint8_t)clampInt(decay, 0, 255); configured.tone = (uint8_t)clampInt(tone, 0, 255);
     configured.sweep = (uint8_t)clampInt(sweep, 0, 255); configured.noise = (uint8_t)clampInt(noise, 0, 255);
     configured.fm = (uint8_t)clampInt(fm, 0, 255); configured.drive = (uint8_t)clampInt(drive, 0, 255);
+    recordLiveControls(track, {configured.decay, configured.tone, configured.sweep, configured.noise, configured.fm, configured.drive},
+                       filterControlFromCutoff((float)clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ)),
+                       clampInt(resonance, 0, 255));
     for (int slot = 0; slot < track->chordVoiceCount; ++slot) {
       uint8_t note = track->chordPitchFinal[slot];
       int cents = note == EMPTY_VALUE_8 ? 6000 :
@@ -2540,6 +2568,9 @@ static void updateMMEVoices(ChipNomadState* state) {
     configured.waves = (uint8_t)clampInt(waves, 0, 255); configured.interval = (uint8_t)clampInt(interval, 0, 255);
     configured.amount = (uint8_t)clampInt(amount, 0, 255); configured.flow = (uint8_t)clampInt(flow, 0, 255);
     configured.feedback = (uint8_t)clampInt(feedback, 0, 255); configured.shaper = (uint8_t)clampInt(shaper, 0, 255);
+    recordLiveControls(track, {configured.waves, configured.interval, configured.amount, configured.flow, configured.feedback, configured.shaper},
+                       filterControlFromCutoff((float)clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ)),
+                       clampInt(resonance, 0, 255));
     int attack = configured.attack, decay = configured.decay, sustain = configured.sustain, release = configured.release;
     int shape = configured.envelopeShape, triggerDecay = 0, triggerColor = 0;
     if (track->note.fx[fxEAT].isOn) attack = track->note.fx[fxEAT].fxValue;
@@ -2602,6 +2633,10 @@ static void updateMonkVoices(ChipNomadState* state) {
     configured.vowel = (uint8_t)clampInt(vowel, 0, 255); configured.character = (uint8_t)clampInt(character, 0, 255);
     configured.breath = (uint8_t)clampInt(breath, 0, 255); configured.glide = (uint8_t)clampInt(glide, 0, 255);
     configured.vibrato = (uint8_t)clampInt(vibrato, 0, 255); configured.rate = (uint8_t)clampInt(rate, 0, 255);
+    recordLiveControls(track, {configured.character, configured.breath, configured.glide, configured.vibrato, configured.rate,
+                               (configured.unison - monkControls[monkUnison].minimum) * 255 /
+                                 (monkControls[monkUnison].maximum - monkControls[monkUnison].minimum),
+                               configured.detune, configured.voiceSpread});
     int attack = configured.attack, decay = configured.decay, sustain = configured.sustain, release = configured.release;
     if (track->note.fx[fxEAT].isOn) attack = track->note.fx[fxEAT].fxValue;
     if (track->note.fx[fxEDC].isOn) decay = track->note.fx[fxEDC].fxValue;
@@ -2656,6 +2691,9 @@ static void updateSinteredVoices(ChipNomadState* state) {
     configured.decay = (uint8_t)clampInt(decay, 0, 255); configured.mod = (uint8_t)clampInt(mod, 0, 255);
     configured.a = (uint8_t)clampInt(a, 0, 255); configured.b = (uint8_t)clampInt(b, 0, 255);
     configured.motion = (uint8_t)clampInt(motion, 0, 255); configured.c = (uint8_t)clampInt(c, 0, 255);
+    recordLiveControls(track, {configured.decay, configured.mod, configured.a, configured.b, configured.motion, configured.c},
+                       filterControlFromCutoff((float)clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ)),
+                       clampInt(resonance, 0, 255));
     for (int slot = 0; slot < track->chordVoiceCount; ++slot) {
       uint8_t note = track->chordPitchFinal[slot];
       int cents = note == EMPTY_VALUE_8 ? 6000 :
@@ -2724,6 +2762,8 @@ static void updateBraidsVoices(ChipNomadState* state) {
     color = clampInt(color, 0, 32767);
     cutoff = clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
     resonance = clampInt(resonance, 0, 255);
+    recordLiveControls(track, {controlFromRange(timbre, 32767), controlFromRange(color, 32767)},
+                       filterControlFromCutoff((float)cutoff), resonance);
     if (track->note.fx[fxEAT].isOn) attack = track->note.fx[fxEAT].fxValue;
     if (track->note.fx[fxEDC].isOn) decay = track->note.fx[fxEDC].fxValue;
     if (track->note.fx[fxESU].isOn) sustain = track->note.fx[fxESU].fxValue;
@@ -2760,13 +2800,9 @@ static void updateBraidsVoices(ChipNomadState* state) {
 // Records what a Plaits track plays, as the 00-FF values its page shows.
 static void recordPlaitsControls(PlaybackTrackState* track, int harmonics, int timbre, int morph,
                                  int auxMix, int cutoff, int resonance) {
-  track->liveInstrument = track->note.instrument;
-  track->liveControls[liveSource1] = controlFromRange(harmonics, 32767);
-  track->liveControls[liveSource2] = controlFromRange(timbre, 32767);
-  track->liveControls[liveSource3] = controlFromRange(morph, 32767);
-  track->liveControls[liveSource4] = (uint8_t)auxMix;
-  track->liveControls[liveCutoff] = filterControlFromCutoff((float)cutoff);
-  track->liveControls[liveResonance] = (uint8_t)resonance;
+  recordLiveControls(track, {controlFromRange(harmonics, 32767), controlFromRange(timbre, 32767),
+                             controlFromRange(morph, 32767), auxMix},
+                     filterControlFromCutoff((float)cutoff), resonance);
 }
 
 static void updatePlaitsVoices(ChipNomadState* state) {

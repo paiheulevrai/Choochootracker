@@ -208,10 +208,17 @@ static void drawField(int col, int row, CellState state) {
         if (stretchOn) gfxSetFgColor(appSettings.colorScheme.textEmpty);
         const uint8_t speed = controlFromRange(sample->speedPercent, 500);
         if (stretchOn) gfxPrint(sourceValueX, 11, byteToHex(speed));
-        else fieldDrawNumber(sourceValueX, 11, speed, state);
+        else fieldDrawNumber(sourceValueX, 11, speed, state, -1.0f, false, instrumentLivePosition(liveSource1));
       }
       break;
   }
+}
+
+bool instrumentSampleLiveCell(int control, int* col, int* row) {
+  if (control != liveSource1) return false;  // Speed
+  *col = 0;
+  *row = 7;
+  return true;
 }
 
 static int onEdit(int col, int row, CellEditAction action) {

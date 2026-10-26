@@ -135,8 +135,7 @@ static void drawField(int col, int row, CellState state) {
   // A number and its bar; while a track plays the instrument, the bar
   // follows what it plays.
   auto number = [&](uint8_t value, int control) {
-    const int live = instrumentLiveValue(control);
-    fieldDrawNumber(x, row + 4, value, state, -1.0f, false, live < 0 ? -1.0f : live / 255.0f);
+    fieldDrawNumber(x, row + 4, value, state, -1.0f, false, instrumentLivePosition(control));
   };
   if (row == 3) gfxClearRect(x, 6, 34 - x, 1);
   else if (!col) gfxClearRect(x, row + 4, kFieldNumberWidth, 1);

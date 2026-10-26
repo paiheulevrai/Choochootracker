@@ -494,19 +494,37 @@ int instrumentLiveValue(int control) {
   return shownLiveFor == cInstrument && control >= 0 && control < liveControlCount ? shownLive[control] : -1;
 }
 
-// The cell that shows a live control on the current page.
+float instrumentLivePosition(int control) {
+  const int value = instrumentLiveValue(control);
+  return value < 0 ? -1.0f : value / 255.0f;
+}
+
+// The cell that shows a live control on the current page: the page's own
+// controls first, then the shared filter's cutoff and resonance.
 static bool liveCell(int control, int* col, int* row) {
-  if (control == liveCutoff || control == liveResonance) {
-    if (!instrumentVoicePostSettings(&chipnomadState->project.instruments[cInstrument])) return false;
+  bool (*pageCell)(int, int*, int*) = NULL;
+  switch (chipnomadState->project.instruments[cInstrument].type) {
+    case InstrumentType::Sample: pageCell = instrumentSampleLiveCell; break;
+    case InstrumentType::SCWF: pageCell = instrumentSCWFLiveCell; break;
+    case InstrumentType::BYOWTBL: pageCell = instrumentBYOWTBLLiveCell; break;
+    case InstrumentType::Braids: pageCell = instrumentBraidsLiveCell; break;
+    case InstrumentType::Plaits:
+    case InstrumentType::PlaitsAlt: pageCell = instrumentPlaitsLiveCell; break;
+    case InstrumentType::MME: pageCell = instrumentMMELiveCell; break;
+    case InstrumentType::DrumSynth: pageCell = instrumentDrumSynthLiveCell; break;
+    case InstrumentType::Sintered: pageCell = instrumentSinteredLiveCell; break;
+    case InstrumentType::AChChid: pageCell = instrumentAChChidLiveCell; break;
+    case InstrumentType::Monk: pageCell = instrumentMonkLiveCell; break;
+    default: break;
+  }
+  if (pageCell && pageCell(control, col, row)) return true;
+  if ((control == liveCutoff || control == liveResonance) &&
+      instrumentVoicePostSettings(&chipnomadState->project.instruments[cInstrument])) {
     *col = 1;
     *row = control == liveCutoff ? 7 : 8;
     return true;
   }
-  switch (chipnomadState->project.instruments[cInstrument].type) {
-    case InstrumentType::Plaits:
-    case InstrumentType::PlaitsAlt: return instrumentPlaitsLiveCell(control, col, row);
-    default: return false;
-  }
+  return false;
 }
 
 static void drawLiveValues(void) {
@@ -732,9 +750,8 @@ int instrumentCommonDrawVoicePostField(int col, int row, CellState state,
       break;
     case 7: case 8: {
       // While a track plays the instrument, the bar shows what it plays.
-      const int live = instrumentLiveValue(row == 7 ? liveCutoff : liveResonance);
       fieldDrawNumber(x, y, row == 7 ? filterControlFromCutoff(post->filterCutoffHz) : post->filterResonance, state,
-                      -1.0f, false, live < 0 ? -1.0f : live / 255.0f);
+                      -1.0f, false, instrumentLivePosition(row == 7 ? liveCutoff : liveResonance));
       break;
     }
   }

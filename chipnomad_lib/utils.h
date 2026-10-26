@@ -19,6 +19,8 @@ int clampInt(int value, int min, int max);
 
 // User controls share this scale while projects retain native values.
 uint8_t controlFromRange(int value, int max);
+// value along a logarithmic range from minimum to maximum, as 00-FF.
+uint8_t controlFromLogRange(int value, int minimum, int maximum);
 int controlToRange(uint8_t control, int max);
 
 // Convert cents value to frequency in Hz (with safeguards)

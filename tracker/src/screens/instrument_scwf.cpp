@@ -106,8 +106,16 @@ static void drawField(int col, int row, CellState state) {
   char name[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
   if (row == 3) gfxPrint(sourceValueX, 8, scwf->oscillator[0].path[0] ? shortFilename(scwf->oscillator[0].path, name, 7) : "Load");
   else if (row == 4) gfxPrint(sourceValueX, 9, scwf->oscillator[1].path[0] ? shortFilename(scwf->oscillator[1].path, name, 7) : "Load");
-  else if (row == 5) fieldDrawNumber(sourceValueX, 10, scwf->detune, state, scwf->detune / float(SCWF_DETUNE_MAX));
-  else fieldDrawNumber(sourceValueX, 11, scwf->mix, state);
+  else if (row == 5) fieldDrawNumber(sourceValueX, 10, scwf->detune, state, scwf->detune / float(SCWF_DETUNE_MAX), false,
+                                     instrumentLivePosition(liveSource1));
+  else fieldDrawNumber(sourceValueX, 11, scwf->mix, state, -1.0f, false, instrumentLivePosition(liveSource2));
+}
+
+bool instrumentSCWFLiveCell(int control, int* col, int* row) {
+  if (control != liveSource1 && control != liveSource2) return false;  // Detune, Mix
+  *col = 0;
+  *row = control == liveSource1 ? 5 : 6;
+  return true;
 }
 
 static int edit(int col, int row, CellEditAction action) {

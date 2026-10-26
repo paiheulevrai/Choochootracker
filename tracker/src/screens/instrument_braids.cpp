@@ -82,17 +82,26 @@ static void drawField(int col, int row, CellState state) {
       gfxSetFgColor(fieldNameColor(state));
       gfxPrint(x + 3, 6, modelCatalogName(InstrumentType::Braids, b->model));
       break;
-    case 4: if (!col) fieldDrawNumber(x, 8, controlFromRange(b->timbre, 32767), state); break;
+    case 4: if (!col) fieldDrawNumber(x, 8, controlFromRange(b->timbre, 32767), state, -1.0f, false, instrumentLivePosition(liveSource1)); break;
     case 5: if (!col) {
       if (b->model == 40) {
         gfxSetFgColor(fieldNameColor(state));
         gfxPrint(x, 9, paraphonicChordName(b->color));
       } else {
-        fieldDrawNumber(x, 9, controlFromRange(b->color, 32767), state);
+        fieldDrawNumber(x, 9, controlFromRange(b->color, 32767), state, -1.0f, false, instrumentLivePosition(liveSource2));
       }
       break;
     }
   }
+}
+
+bool instrumentBraidsLiveCell(int control, int* col, int* row) {
+  // Timbre, and Color unless it names a chord.
+  if (control == liveSource2 && chipnomadState->project.instruments[cInstrument].chip.braids.model == 40) return false;
+  if (control != liveSource1 && control != liveSource2) return false;
+  *col = 0;
+  *row = control == liveSource1 ? 4 : 5;
+  return true;
 }
 
 static int onEdit(int col, int row, CellEditAction action) {

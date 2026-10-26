@@ -80,10 +80,12 @@ struct PlaybackTrackQueue {
 };
 
 // Sound controls an engine reports back after applying commands and
-// modulation, as 00-FF, so the instrument page's bars can follow playback.
-// The sources are the engine's own controls in page order.
+// modulation, as positions along their bars (00-FF), so the instrument
+// page's bars can follow playback. The sources are the engine's own
+// controls in page order.
 enum LiveControl : uint8_t {
-  liveSource1, liveSource2, liveSource3, liveSource4, liveSource5, liveSource6,
+  liveSource1, liveSource2, liveSource3, liveSource4, liveSource5,
+  liveSource6, liveSource7, liveSource8, liveSource9, liveSource10,
   liveCutoff, liveResonance, liveControlCount
 };
 

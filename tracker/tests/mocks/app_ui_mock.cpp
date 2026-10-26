@@ -87,6 +87,8 @@ void fileBrowserSetup(const char* title, const char* extension, const char*,
 }
 
 int instrumentCommonColumnCount(int) { return 1; }
+int instrumentLiveValue(int) { return -1; }
+float instrumentLivePosition(int) { return -1.0f; }
 void instrumentCommonDrawStatic() {}
 void instrumentCommonDrawCursor(int, int) {}
 void instrumentCommonDrawField(int, int, CellState) {}
