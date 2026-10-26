@@ -316,7 +316,7 @@ int settingsSave(void) {
   fprintf(file, "colorTextInfo: 0x%06x\n", appSettings.colorScheme.textInfo);
   fprintf(file, "colorTextDefault: 0x%06x\n", appSettings.colorScheme.textDefault);
   fprintf(file, "colorTextLabels: 0x%06x\n", appSettings.colorScheme.textLabel);
-  fprintf(file, "colorNamedValues: 0x%06x\n", appSettings.colorScheme.textNames);
+  fprintf(file, "colorTextNames: 0x%06x\n", appSettings.colorScheme.textNames);
   fprintf(file, "colorValueBars: 0x%06x\n", appSettings.colorScheme.valueBar);
   fprintf(file, "colorTextValue: 0x%06x\n", appSettings.colorScheme.textValue);
   fprintf(file, "colorTextTitles: 0x%06x\n", appSettings.colorScheme.textTitles);
@@ -592,8 +592,8 @@ int settingsLoad(void) {
       sscanf(line + 18, "0x%x", &appSettings.colorScheme.textDefault);
     } else if (strncmp(line, "colorTextLabels: ", 17) == 0) {
       sscanf(line + 17, "0x%x", &appSettings.colorScheme.textLabel);
-    } else if (strncmp(line, "colorNamedValues: ", 18) == 0) {
-      sscanf(line + 18, "0x%x", &appSettings.colorScheme.textNames);
+    } else if (strncmp(line, "colorTextNames: ", 16) == 0) {
+      sscanf(line + 16, "0x%x", &appSettings.colorScheme.textNames);
     } else if (strncmp(line, "colorValueBars: ", 16) == 0) {
       sscanf(line + 16, "0x%x", &appSettings.colorScheme.valueBar);
     } else if (strncmp(line, "colorTextValue: ", 16) == 0) {
@@ -687,10 +687,11 @@ int settingsLoad(void) {
 }
 
 void colorSchemeFillMissing(ColorScheme* scheme) {
-  // The built-in Choo palette has its own choices; other themes get labels
-  // as Text Default dimmed a quarter of the way to the background, names
-  // as Text Default and bars in the cursor colour.
-  const bool choo = scheme->textDefault == 0xc9bfa5 && scheme->background == 0x050c1f;
+  // The built-in Choo text colours, on any background, have their own
+  // choices; other themes get labels as Text Default dimmed a quarter of the
+  // way to the background, names as Text Default and bars in the cursor
+  // colour.
+  const bool choo = scheme->textDefault == 0xc9bfa5 && scheme->textValue == 0xffd665;
   if (scheme->textLabel < 0) {
     int color = 0;
     for (int shift = 0; shift <= 16; shift += 8) {
@@ -727,7 +728,7 @@ int saveTheme(const char* path) {
   fprintf(file, "colorTextInfo: 0x%06x\n", appSettings.colorScheme.textInfo);
   fprintf(file, "colorTextDefault: 0x%06x\n", appSettings.colorScheme.textDefault);
   fprintf(file, "colorTextLabels: 0x%06x\n", appSettings.colorScheme.textLabel);
-  fprintf(file, "colorNamedValues: 0x%06x\n", appSettings.colorScheme.textNames);
+  fprintf(file, "colorTextNames: 0x%06x\n", appSettings.colorScheme.textNames);
   fprintf(file, "colorValueBars: 0x%06x\n", appSettings.colorScheme.valueBar);
   fprintf(file, "colorTextValue: 0x%06x\n", appSettings.colorScheme.textValue);
   fprintf(file, "colorTextTitles: 0x%06x\n", appSettings.colorScheme.textTitles);
@@ -761,8 +762,8 @@ int loadTheme(const char* path) {
       sscanf(line + 18, "0x%x", &appSettings.colorScheme.textDefault);
     } else if (strncmp(line, "colorTextLabels: ", 17) == 0) {
       sscanf(line + 17, "0x%x", &appSettings.colorScheme.textLabel);
-    } else if (strncmp(line, "colorNamedValues: ", 18) == 0) {
-      sscanf(line + 18, "0x%x", &appSettings.colorScheme.textNames);
+    } else if (strncmp(line, "colorTextNames: ", 16) == 0) {
+      sscanf(line + 16, "0x%x", &appSettings.colorScheme.textNames);
     } else if (strncmp(line, "colorValueBars: ", 16) == 0) {
       sscanf(line + 16, "0x%x", &appSettings.colorScheme.valueBar);
     } else if (strncmp(line, "colorTextValue: ", 16) == 0) {
