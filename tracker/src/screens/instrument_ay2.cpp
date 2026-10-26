@@ -9,17 +9,17 @@
 static Bitmap* wavetablePreviewBitmap = NULL;
 
 // Screen layout:
-// y 6:  Tone   [On ]       Envelope [Off   ]
-// y 7:  Pitch  [+0  ]      Mode     [Osc   ]
-// y 8:  Fine   [+0  ]      Pitch/N  [+0  ]  (depends on mode)
-// y 9:                     Fine/D   [+0  ]  (depends on mode)
+// y 6:  Tone    [On ]    Env     [Off   ]
+// y 7:  Pitch   [+0  ]   Mode    [Osc   ]
+// y 8:  Fine    [+0  ]   Pitch/N [+0  ]  (depends on mode)
+// y 9:                   Fine/D  [+0  ]  (depends on mode)
 // y 10: (spacing)
-// y 11: Noise  [Off]       Soft osc [Off  ]
-// y 12: Period [00 ]       Pitch    [+0  ]
-// y 13:                    Fine     [+0  ]
-// y 14:                    FM depth [00  ]
-// y 15:                    P1       [00  ]  (depends on type)
-// y 16:                    P2       [00  ]  (depends on type)
+// y 11: Noise   [Off]    SoftOsc [Off  ]
+// y 12: Period  [00 ]    Pitch   [+0  ]
+// y 13:                  Fine    [+0  ]
+// y 14:                  FM amt  [00  ]
+// y 15:                  P1      [00  ]  (depends on type)
+// y 16:                  P2      [00  ]  (depends on type)
 //
 // Logical rows:
 // 0-2: common (type, name, transpose/tic)
@@ -155,13 +155,13 @@ static void drawOscillatorHeaders(void) {
   gfxSetFgColor(toneOn ? cs.textTitles : cs.textInfo);
   gfxPrint(COL_LEFT_X, 6, "Tone");
   gfxSetFgColor(envelopeOn ? cs.textTitles : cs.textInfo);
-  gfxPrint(COL_RIGHT_X, 6, "Envelope");
+  gfxPrint(COL_RIGHT_X, 6, "Env");
 
   // Bottom block headers (y 11)
   gfxSetFgColor(noiseOn ? cs.textTitles : cs.textInfo);
   gfxPrint(COL_LEFT_X, 11, "Noise");
   gfxSetFgColor(softwareOscOn ? cs.textTitles : cs.textInfo);
-  gfxPrint(COL_RIGHT_X, 11, "Soft osc");
+  gfxPrint(COL_RIGHT_X, 11, "SoftOsc");
 }
 
 static void drawStatic(void) {
