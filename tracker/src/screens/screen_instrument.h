@@ -12,6 +12,11 @@ void instrumentCommonDrawField(int col, int row, CellState state);
 void instrumentCommonDrawEnvelopePreview(uint8_t attack, uint8_t decay, uint8_t sustain, uint8_t release, uint8_t shape);
 void instrumentCommonDrawLivePreview(void);
 int instrumentCommonOnEdit(int col, int row, CellEditAction action);
+// While a track plays the current instrument: what it plays for a
+// LiveControl, as 00-FF, or -1 to show the set value.
+int instrumentLiveValue(int control);
+// The cell where the Plaits page shows a live control, if it has one.
+bool instrumentPlaitsLiveCell(int control, int* col, int* row);
 void instrumentCommonDrawVoicePostStatic(int drawEnvelope);
 int instrumentCommonDrawVoicePostCursor(int col, int row);
 int instrumentCommonDrawVoicePostField(int col, int row, CellState state, const InstrumentVoicePostSettings* post);

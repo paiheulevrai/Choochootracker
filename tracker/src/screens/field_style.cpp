@@ -55,13 +55,16 @@ int fieldNameColor(CellState state) {
   return state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textNames;
 }
 
-void fieldDrawNumber(int x, int y, uint8_t value, CellState state, float position, bool bipolar) {
+void fieldDrawNumber(int x, int y, uint8_t value, CellState state, float position, bool bipolar,
+                     float livePosition) {
   gfxSetFgColor(fieldValueColor(state));
   gfxPrint(x, y, byteToHex(value));
-  fieldDrawBar(x + 2, y, kFieldBarWidth, position < 0.0f ? value / 255.0f : position, state, bipolar);
+  if (position < 0.0f) position = value / 255.0f;
+  if (livePosition < 0.0f) fieldDrawBar(x + 2, y, kFieldBarWidth, position, state, bipolar);
+  else fieldDrawBar(x + 2, y, kFieldBarWidth, livePosition, state, bipolar, position);
 }
 
-void fieldDrawBar(int x, int y, int width, float position, CellState state, bool bipolar) {
+void fieldDrawBar(int x, int y, int width, float position, CellState state, bool bipolar, float mark) {
   gfxClearRect(x, y, width, 1);
   Bitmap* b = barBitmap(width);
   if (!b) return;
@@ -84,6 +87,17 @@ void fieldDrawBar(int x, int y, int width, float position, CellState state, bool
   } else {
     // At zero, a sliver still shows where the bar starts.
     fill(b, left, at > left + 2 ? at : left + 2, top, bottom, 255);
+  }
+  if (mark >= 0.0f) {
+    // A notch in the filled part, or a tick beyond it, a little taller than
+    // the bar.
+    const int m = left + (int)lroundf((mark > 1.0f ? 1.0f : mark) * span);
+    for (int y = top - 2; y < bottom + 2; ++y)
+      for (int x = m - 1; x < m + 1; ++x) {
+        if (x < 0 || x >= b->widthPixels || y < 0 || y >= b->heightPixels) continue;
+        uint8_t& pixel = b->data[y * b->widthPixels + x];
+        pixel = pixel == 255 ? 60 : 200;
+      }
   }
   gfxSetFgColor(appSettings.colorScheme.valueBar);
   gfxDrawBitmap(b, x, y);

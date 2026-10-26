@@ -20,9 +20,13 @@ void fieldDrawText(int x, int y, const char* text, int width, CellState state);
 int fieldValueColor(CellState state);
 int fieldNameColor(CellState state);
 // A two-digit value and its bar at x, y. position defaults to value / 255.
-void fieldDrawNumber(int x, int y, uint8_t value, CellState state, float position = -1.0f, bool bipolar = false);
+// While a track plays the instrument, livePosition (0 to 1) is where the
+// value is now: the bar shows it, with a mark where the set value is.
+void fieldDrawNumber(int x, int y, uint8_t value, CellState state, float position = -1.0f, bool bipolar = false,
+                     float livePosition = -1.0f);
 // A bar of width characters at x, y. position runs from 0 to 1; a bipolar
-// bar fills from its middle, for values such as amounts and pan.
-void fieldDrawBar(int x, int y, int width, float position, CellState state, bool bipolar = false);
+// bar fills from its middle, for values such as amounts and pan. mark, when
+// given, is a position to point out on the bar.
+void fieldDrawBar(int x, int y, int width, float position, CellState state, bool bipolar = false, float mark = -1.0f);
 
 #endif

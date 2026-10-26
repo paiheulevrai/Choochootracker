@@ -132,6 +132,12 @@ static void drawField(int col, int row, CellState state) {
   }
   gfxSetFgColor(fieldValueColor(state));
   const int x = kColumnValueX[0];
+  // A number and its bar; while a track plays the instrument, the bar
+  // follows what it plays.
+  auto number = [&](uint8_t value, int control) {
+    const int live = instrumentLiveValue(control);
+    fieldDrawNumber(x, row + 4, value, state, -1.0f, false, live < 0 ? -1.0f : live / 255.0f);
+  };
   if (row == 3) gfxClearRect(x, 6, 34 - x, 1);
   else if (!col) gfxClearRect(x, row + 4, kFieldNumberWidth, 1);
   switch (row) {
@@ -145,15 +151,23 @@ static void drawField(int col, int row, CellState state) {
         gfxSetFgColor(fieldNameColor(state));
         gfxPrint(x, 8, plaitsChordName(p->harmonics));
       } else {
-        fieldDrawNumber(x, 8, controlFromRange(p->harmonics, 32767), state);
+        number(controlFromRange(p->harmonics, 32767), liveSource1);
       }
       break;
     }
-    case 5: if (!col) fieldDrawNumber(x, 9, controlFromRange(p->timbre, 32767), state); break;
-    case 6: if (!col) fieldDrawNumber(x, 10, controlFromRange(p->morph, 32767), state); break;
-    case 7: if (!col) fieldDrawNumber(x, 11, p->auxMix, state); break;
+    case 5: if (!col) number(controlFromRange(p->timbre, 32767), liveSource2); break;
+    case 6: if (!col) number(controlFromRange(p->morph, 32767), liveSource3); break;
+    case 7: if (!col) number(p->auxMix, liveSource4); break;
     case 8: if (!col) { gfxSetFgColor(fieldNameColor(state)); gfxPrint(x, 12, p->envelopeMode == 0 ? "TRIG" : "VCA"); } break;
   }
+}
+
+bool instrumentPlaitsLiveCell(int control, int* col, int* row) {
+  if (control < liveSource1 || control > liveSource4) return false;
+  if (control == liveSource1 && usesChordNames(&chipnomadState->project.instruments[cInstrument].chip.plaits)) return false;
+  *col = 0;
+  *row = 4 + control - liveSource1;
+  return true;
 }
 
 static int onEdit(int col, int row, CellEditAction action) {

@@ -2757,6 +2757,18 @@ static void updateBraidsVoices(ChipNomadState* state) {
   }
 }
 
+// Records what a Plaits track plays, as the 00-FF values its page shows.
+static void recordPlaitsControls(PlaybackTrackState* track, int harmonics, int timbre, int morph,
+                                 int auxMix, int cutoff, int resonance) {
+  track->liveInstrument = track->note.instrument;
+  track->liveControls[liveSource1] = controlFromRange(harmonics, 32767);
+  track->liveControls[liveSource2] = controlFromRange(timbre, 32767);
+  track->liveControls[liveSource3] = controlFromRange(morph, 32767);
+  track->liveControls[liveSource4] = (uint8_t)auxMix;
+  track->liveControls[liveCutoff] = filterControlFromCutoff((float)cutoff);
+  track->liveControls[liveResonance] = (uint8_t)resonance;
+}
+
 static void updatePlaitsVoices(ChipNomadState* state) {
   if (!state->plaitsVoices[0][0]) return;
   Project* project = &state->audioProject;
@@ -2815,6 +2827,7 @@ static void updatePlaitsVoices(ChipNomadState* state) {
     auxMix = clampInt(auxMix, 0, 255);
     cutoff = clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
     resonance = clampInt(resonance, 0, 255);
+    recordPlaitsControls(track, harmonics, timbre, morph, auxMix, cutoff, resonance);
     if (track->note.fx[fxEAT].isOn) attack = track->note.fx[fxEAT].fxValue;
     if (track->note.fx[fxEDC].isOn) decay = track->note.fx[fxEDC].fxValue;
     if (track->note.fx[fxESU].isOn) sustain = track->note.fx[fxESU].fxValue;
@@ -2890,6 +2903,7 @@ static void updatePlaitsAltVoices(ChipNomadState* state) {
     timbre = clampInt(timbre, 0, 32767); morph = clampInt(morph, 0, 32767);
     auxMix = clampInt(auxMix, 0, 255); cutoff = clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
     resonance = clampInt(resonance, 0, 255);
+    recordPlaitsControls(track, harmonics, timbre, morph, auxMix, cutoff, resonance);
     if (track->note.fx[fxEAT].isOn) attack = track->note.fx[fxEAT].fxValue;
     if (track->note.fx[fxEDC].isOn) decay = track->note.fx[fxEDC].fxValue;
     if (track->note.fx[fxESU].isOn) sustain = track->note.fx[fxESU].fxValue;

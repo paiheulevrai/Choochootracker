@@ -1442,6 +1442,7 @@ void playbackInit(PlaybackState* state, Project* project) {
   for (int c = 0; c < PROJECT_MAX_TRACKS; c++) {
     memset(&state->tracks[c].inserts, 0, sizeof(InsertAutomation));
     state->tracks[c].insertReset = 0;
+    state->tracks[c].liveInstrument = EMPTY_VALUE_8;
     resetTrack(state, c);
     state->tracks[c].queue.mode = PlaybackMode::none;
     state->tracks[c].queue.loop = 0;
