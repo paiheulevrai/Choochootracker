@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "corelib_gfx.h"
+#include "utils.h"
 
 #include <math.h>
 
@@ -52,6 +53,12 @@ int fieldValueColor(CellState state) {
 
 int fieldNameColor(CellState state) {
   return state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textNames;
+}
+
+void fieldDrawNumber(int x, int y, uint8_t value, CellState state, float position, bool bipolar) {
+  gfxSetFgColor(fieldValueColor(state));
+  gfxPrint(x, y, byteToHex(value));
+  fieldDrawBar(x + 2, y, kFieldBarWidth, position < 0.0f ? value / 255.0f : position, state, bipolar);
 }
 
 void fieldDrawBar(int x, int y, int width, float position, CellState state, bool bipolar) {

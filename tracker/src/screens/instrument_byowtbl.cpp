@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "corelib_gfx.h"
 #include "corelib/corelib_file.h"
 #include "file_browser.h"
@@ -11,8 +12,8 @@
 #include <string.h>
 
 static int loadSlot, buttonDown;
-static constexpr int sourceValueX = 9;
-static constexpr int sourceValueWidth = 7;
+static constexpr int sourceValueX = kColumnValueX[0];
+static constexpr int sourceValueWidth = kFieldNumberWidth;
 static Bitmap* previewBitmap;
 
 static void drawPreview(const InstrumentBYOWTBL* table) {
@@ -83,22 +84,25 @@ static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   if (instrumentCommonDrawVoicePostCursor(col, row)) return;
   if (!col && row >= 3 && row <= 8) gfxCursor(sourceValueX, row + 5, sourceValueWidth);
-  else gfxCursor(26, row + 4, 8);
 }
 
 static void drawField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
   InstrumentBYOWTBL* table = &chipnomadState->project.instruments[cInstrument].chip.byowtbl;
   if (instrumentCommonDrawVoicePostField(col, row, state, table)) return;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  if (!col && row >= 3 && row <= 8) gfxClearRect(sourceValueX, row + 5, sourceValueWidth, 1);
+  if (col || row < 3 || row > 8) return;
+  // The selected field's label lights up with its value.
+  static const char* const labels[] = {"Table A", "Table B", "Pos A", "Pos B", "Detune", "Mix"};
+  fieldDrawLabel(0, row + 5, labels[row - 3], state);
+  gfxSetFgColor(fieldValueColor(state));
+  gfxClearRect(sourceValueX, row + 5, sourceValueWidth, 1);
   char name[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
-  if (row == 3 && !col) gfxPrint(sourceValueX, 8, table->oscillator[0].path[0] ? shortFilename(table->oscillator[0].path, name) : "Load");
-  else if (row == 4 && !col) gfxPrint(sourceValueX, 9, table->oscillator[1].path[0] ? shortFilename(table->oscillator[1].path, name) : "Load");
-  else if (row == 5 && !col) gfxPrint(sourceValueX, 10, byteToHex(table->frameIndex[0]));
-  else if (row == 6 && !col) gfxPrint(sourceValueX, 11, byteToHex(table->frameIndex[1]));
-  else if (row == 7 && !col) gfxPrint(sourceValueX, 12, byteToHex(table->detune));
-  else if (row == 8 && !col) gfxPrint(sourceValueX, 13, byteToHex(table->mix));
+  if (row == 3) gfxPrint(sourceValueX, 8, table->oscillator[0].path[0] ? shortFilename(table->oscillator[0].path, name) : "Load");
+  else if (row == 4) gfxPrint(sourceValueX, 9, table->oscillator[1].path[0] ? shortFilename(table->oscillator[1].path, name) : "Load");
+  else if (row == 5) fieldDrawNumber(sourceValueX, 10, table->frameIndex[0], state);
+  else if (row == 6) fieldDrawNumber(sourceValueX, 11, table->frameIndex[1], state);
+  else if (row == 7) fieldDrawNumber(sourceValueX, 12, table->detune, state, table->detune / float(SCWF_DETUNE_MAX));
+  else fieldDrawNumber(sourceValueX, 13, table->mix, state);
 }
 
 static int edit(int col, int row, CellEditAction action) {

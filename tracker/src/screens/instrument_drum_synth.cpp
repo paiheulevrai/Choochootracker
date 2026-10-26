@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "model_catalog.h"
@@ -27,16 +28,16 @@ static const char* macroName(DrumSynthEngine e, int macro) {
   static const char* generic[] = {"Decay", "Tone", "Sweep", "Noise", "FM", "Drive"};
   static const char* kick[] = {"Decay", "Tone", "Sweep", "Click", "Harm", "Drive"};
   static const char* snare[] = {"Decay", "Tone", "Snap", "Wire", "Body", "Drive"};
-  static const char* hat[] = {"Decay", "Tone", "PitchEnv", "Noise", "Metal", "Drive"};
+  static const char* hat[] = {"Decay", "Tone", "PtchEnv", "Noise", "Metal", "Drive"};
   static const char* clap[] = {"Decay", "Tone", "Spacing", "Noise", "ToneMix", "Drive"};
   static const char* tom[] = {"Decay", "Tone", "Sweep", "Noise", "Harm", "Drive"};
   static const char* rim[] = {"Decay", "Tone", "Sweep", "Noise", "Ratio", "Drive"};
-  static const char* fm[] = {"Decay", "Ratio", "PitchEnv", "Noise", "Index", "Drive"};
-  static const char* noise[] = {"Decay", "OscPitch", "Color", "Level", "ToneMix", "Drive"};
-  static const char* cowbell[] = {"Decay", "Detune", "PitchEnv", "Noise", "CrossMod", "Drive"};
-  static const char* cymbal[] = {"Decay", "Tone", "PitchEnv", "Noise", "Metal", "Drive"};
+  static const char* fm[] = {"Decay", "Ratio", "PtchEnv", "Noise", "Index", "Drive"};
+  static const char* noise[] = {"Decay", "OscPtch", "Color", "Level", "ToneMix", "Drive"};
+  static const char* cowbell[] = {"Decay", "Detune", "PtchEnv", "Noise", "X-Mod", "Drive"};
+  static const char* cymbal[] = {"Decay", "Tone", "PtchEnv", "Noise", "Metal", "Drive"};
   static const char* shaker[] = {"Decay", "Rate", "Motion", "Noise", "ToneMix", "Drive"};
-  static const char* clave[] = {"Decay", "Tone", "PitchEnv", "Noise", "Ratio", "Drive"};
+  static const char* clave[] = {"Decay", "Tone", "PtchEnv", "Noise", "Ratio", "Drive"};
   const char* const* names = e == DrumSynthEngine::kick ? kick : e == DrumSynthEngine::snare ? snare :
     e == DrumSynthEngine::hat ? hat : e == DrumSynthEngine::clap ? clap : e == DrumSynthEngine::tom ? tom :
     e == DrumSynthEngine::rim ? rim : e == DrumSynthEngine::fm ? fm : e == DrumSynthEngine::noise ? noise :
@@ -59,20 +60,31 @@ static void drawStatic(void) {
 static void drawCursor(int col, int row) {
   if (row < 3) { instrumentCommonDrawCursor(col, row); return; }
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostCursor(col, row); return; }
-  if (row == 3) gfxCursor(11, 6, 3 + strlen(engineName(chipnomadState->project.instruments[cInstrument].chip.drumSynth.engine))); else if (!col) gfxCursor(11, row + 4, 2);
+  if (row == 3) gfxCursor(kColumnValueX[0], 6, 3 + strlen(engineName(chipnomadState->project.instruments[cInstrument].chip.drumSynth.engine))); else if (!col) gfxCursor(kColumnValueX[0], row + 4, kFieldNumberWidth);
 }
 static void drawField(int col, int row, CellState state) {
   if (row < 3) { instrumentCommonDrawField(col, row, state); return; }
   InstrumentDrumSynth* d = &chipnomadState->project.instruments[cInstrument].chip.drumSynth;
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostField(col, row, state, d); return; }
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  // Macro fields share their rows with the post-filter labels at x=18.
-  // Do not erase the right-hand column while redrawing a left macro.
-  gfxClearRect(11, row == 3 ? 6 : row + 4, row == 3 ? 20 : 7, 1);
-  if (row == 3) gfxPrintf(11, 6, "%02d %s", (int)d->engine, engineName(d->engine));
-  else if (drumSynthMacroUsed(d->engine, row - 4)) {
-    if (uint8_t* value = macro(d, row - 4)) gfxPrint(11, row + 4, byteToHex(*value));
-  } else gfxPrint(11, row + 4, "--");
+  // The selected field's label lights up with its value; Model is a title.
+  const bool used = row > 3 && drumSynthMacroUsed(d->engine, row - 4);
+  if (row == 3) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxPrint(0, 6, "Model");
+  } else {
+    fieldDrawLabel(0, row + 4, used ? macroName(d->engine, row - 4) : "---", state);
+  }
+  gfxSetFgColor(fieldValueColor(state));
+  // Macro fields share their rows with the filter column: only clear up to it.
+  const int x = kColumnValueX[0];
+  gfxClearRect(x, row == 3 ? 6 : row + 4, row == 3 ? 34 - x : kFieldNumberWidth, 1);
+  if (row == 3) {
+    gfxPrintf(x, 6, "%02d", (int)d->engine);
+    gfxSetFgColor(fieldNameColor(state));
+    gfxPrint(x + 3, 6, engineName(d->engine));
+  } else if (used) {
+    if (uint8_t* value = macro(d, row - 4)) fieldDrawNumber(x, row + 4, *value, state);
+  } else gfxPrint(x, row + 4, "--");
 }
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);

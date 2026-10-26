@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include "screens.h"
+#include "field_style.h"
 #include "screen_settings.h"
 #include "screen_audio_input.h"
 #include "../audio_input_manager.h"
@@ -561,8 +562,8 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
     if (mappedCol < 0) mappedCol = 0;
   } else if (instrumentCommonRow == 2) {
     mappedCol = col < 18 ? 0 : col < 29 ? 1 : 2; // Transpose, tick, volume
-  } else if (touchScreenData == &screenInstrumentSample && row == 3) {
-    mappedCol = col < 17 ? 0 : 1; // Filename, EDIT/REC
+  } else if (currentScreen == &screenInstrument && columns == 2) {
+    mappedCol = col >= kColumnNameX[1]; // the two columns of a sound page
   }
   if (mappedCol >= columns) mappedCol = columns - 1;
   if (touchScreenData->isCellValid && !touchScreenData->isCellValid(mappedCol, row)) return 0;

@@ -1,3 +1,4 @@
+#include "field_style.h"
 #include "screen_instrument.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -44,47 +45,81 @@ static int isCellValid(int col,int row) {
 }
 static void drawStatic() {
   instrumentCommonDrawStatic();
-  gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrint(0,6,"OSCILLATOR"); gfxPrint(20,6,"303 FILTER");
+  gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrint(0,6,"OSCILLATOR"); gfxPrint(kColumnNameX[1],6,"303 FILTER");
   gfxSetFgColor(appSettings.colorScheme.textLabel); gfxPrint(0,7,"Wave");
   if (isBraids()) { gfxPrint(0,8,"Model"); gfxPrint(0,9,"Timbre"); gfxPrint(0,10,"Color"); gfxPrint(0,11,"Shaper"); }
   else if (isSID()) { gfxPrint(0,8,"Shape"); gfxPrint(0,9,"Width"); gfxPrint(0,10,"Shaper"); }
   else gfxPrint(0,8,"Fine");
-  gfxPrint(20,7,"Cutoff"); gfxPrint(20,8,"Reso"); gfxPrint(20,9,"Env Mod"); gfxPrint(20,10,"Decay"); gfxPrint(20,11,"Accent");
+  static const char* const right[]={"Cutoff","Reso","Env Mod","Decay","Accent"};
+  for (int i=0;i<5;++i) gfxPrint(kColumnNameX[1],7+i,right[i]);
   drawPreview(instrument());
 }
-// The track status panel starts at column 34; keep values and cursors before it.
+// Cutoff and decay are shown as 00-FF along their logarithmic ranges; the
+// line below gives them in Hz and ms while they are selected.
+static uint8_t logarithmicControl(uint16_t value, uint16_t minimum, uint16_t maximum) {
+  if (value <= minimum) return 0;
+  if (value >= maximum) return 255;
+  return (uint8_t)lroundf(255.0f * logf((float)value / minimum) / logf((float)maximum / minimum));
+}
+static uint8_t cutoffControl(const InstrumentAChChid* a) { return logarithmicControl(a->cutoff, 200, FILTER_CUTOFF_MAX_HZ); }
+static uint8_t decayControl(const InstrumentAChChid* a) { return logarithmicControl(a->decay, 200, 2000); }
 static void drawCursor(int col,int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   InstrumentAChChid* a = instrument();
+  const int x = kColumnValueX[col ? 1 : 0];
   if (!col) {
-    if (row == 3) gfxCursor(11, 7, strlen(waveName(a->wave)));
-    else if (row == 4) gfxCursor(11, 8, isBraids() ? 3 + min((int)strlen(modelCatalogName(InstrumentType::Braids, a->model)), 6) : isSID() ? 3 + strlen(sidShapes[a->sidShape >= 1 && a->sidShape <= 8 ? a->sidShape : 4]) : 3);
-    else if (row >= 5 && row <= 7) gfxCursor(11, row + 4, 2);
-  } else {
-    char value[12];
-    snprintf(value, sizeof(value), "%u Hz", a->cutoff);
-    int width = row == 3 ? (int)strlen(value) : row == 6 ? 6 : 2;
-    gfxCursor(28, row + 4, width);
+    if (row == 3) gfxCursor(x, 7, strlen(waveName(a->wave)));
+    else if (row == 4) gfxCursor(x, 8, isBraids() ? 3 + min((int)strlen(modelCatalogName(InstrumentType::Braids, a->model)), 6)
+                                       : isSID() ? 3 + (int)strlen(sidShapes[a->sidShape >= 1 && a->sidShape <= 8 ? a->sidShape : 4])
+                                       : kFieldNumberWidth);
+    else if (row >= 5 && row <= 7) gfxCursor(x, row + 4, kFieldNumberWidth);
+    return;
   }
+  gfxCursor(x, row + 4, kFieldNumberWidth);
+  if (row == 3) screenMessage(0, "Cutoff %u Hz", a->cutoff);
+  else if (row == 6) screenMessage(0, "Decay %u ms", a->decay);
 }
 static void drawField(int col,int row,CellState state) {
   if(row<3) return instrumentCommonDrawField(col,row,state);
   InstrumentAChChid* a=instrument();
-  gfxSetFgColor(state==CellState::focus?appSettings.colorScheme.textValue:appSettings.colorScheme.textDefault);
-  if(!col && row==3) gfxPrint(11,7,waveName(a->wave));
-  else if(!isBraids() && !isSID() && row==4 && !col) gfxPrintf(11,8,"%+03d",a->fineTune);
-  else if(isBraids() && row==4 && !col) gfxPrintf(11,8,"%02u %.6s",a->model,modelCatalogName(InstrumentType::Braids,a->model));
-  else if(isBraids() && row==5 && !col) gfxPrint(11,9,byteToHex(controlFromRange(a->timbre,32767)));
-  else if(isBraids() && row==6 && !col) gfxPrint(11,10,byteToHex(controlFromRange(a->color,32767)));
-  else if(isBraids() && row==7 && !col) gfxPrint(11,11,byteToHex(a->saturation));
-  else if(isSID() && row==4 && !col) gfxPrintf(11,8,"%02u %s",a->sidShape,sidShapes[a->sidShape >= 1 && a->sidShape <= 8 ? a->sidShape : 4]);
-  else if(isSID() && row==5 && !col) gfxPrint(11,9,byteToHex(controlFromRange(a->sidPulseWidth,4095)));
-  else if(isSID() && row==6 && !col) gfxPrint(11,10,byteToHex(a->saturation));
-  else if(col && row==3) gfxPrintf(28,7,"%u Hz",a->cutoff);
-  else if(col && row==4) gfxPrint(28,8,byteToHex(controlFromRange(a->resonance,100)));
-  else if(col && row==5) gfxPrint(28,9,byteToHex(controlFromRange(a->envMod,100)));
-  else if(col && row==6) gfxPrintf(28,10,"%4ums",a->decay);
-  else if(col && row==7) gfxPrint(28,11,byteToHex(controlFromRange(a->accent,100)));
+  // The selected field's label lights up with its value.
+  static const char* const braids[]={"Wave","Model","Timbre","Color","Shaper"};
+  static const char* const sid[]={"Wave","Shape","Width","Shaper"};
+  static const char* const right[]={"Cutoff","Reso","Env Mod","Decay","Accent"};
+  if(col) fieldDrawLabel(kColumnNameX[1],row+4,right[row-3],state);
+  else if(isBraids()) fieldDrawLabel(0,row+4,braids[row-3],state);
+  else if(isSID() && row<=6) fieldDrawLabel(0,row+4,sid[row-3],state);
+  else if(row<=4) fieldDrawLabel(0,row+4,row==4?"Fine":"Wave",state);
+  else return;
+  const int x=kColumnValueX[col?1:0], y=row+4;
+  gfxClearRect(x,y,kFieldNumberWidth,1);
+  gfxSetFgColor(fieldValueColor(state));
+  if(!col && row==3) { gfxSetFgColor(fieldNameColor(state)); gfxPrint(x,y,waveName(a->wave)); }
+  else if(!isBraids() && !isSID() && row==4 && !col) {
+    // Fine runs from -99 to +99: three characters, and a bar from the middle.
+    gfxPrintf(x,y,"%+03d",a->fineTune);
+    fieldDrawBar(x+3,y,kFieldBarWidth-1,(a->fineTune+99)/198.0f,state,true);
+  }
+  else if(isBraids() && row==4 && !col) {
+    gfxPrintf(x,y,"%02u",a->model);
+    gfxSetFgColor(fieldNameColor(state));
+    gfxPrintf(x+3,y,"%.6s",modelCatalogName(InstrumentType::Braids,a->model));
+  }
+  else if(isSID() && row==4 && !col) {
+    gfxPrintf(x,y,"%02u",a->sidShape);
+    gfxSetFgColor(fieldNameColor(state));
+    gfxPrint(x+3,y,sidShapes[a->sidShape >= 1 && a->sidShape <= 8 ? a->sidShape : 4]);
+  }
+  else if(isBraids() && row==5 && !col) fieldDrawNumber(x,y,controlFromRange(a->timbre,32767),state);
+  else if(isBraids() && row==6 && !col) fieldDrawNumber(x,y,controlFromRange(a->color,32767),state);
+  else if(isBraids() && row==7 && !col) fieldDrawNumber(x,y,a->saturation,state);
+  else if(isSID() && row==5 && !col) fieldDrawNumber(x,y,controlFromRange(a->sidPulseWidth,4095),state);
+  else if(isSID() && row==6 && !col) fieldDrawNumber(x,y,a->saturation,state);
+  else if(col && row==3) fieldDrawNumber(x,y,cutoffControl(a),state);
+  else if(col && row==4) fieldDrawNumber(x,y,controlFromRange(a->resonance,100),state);
+  else if(col && row==5) fieldDrawNumber(x,y,controlFromRange(a->envMod,100),state);
+  else if(col && row==6) fieldDrawNumber(x,y,decayControl(a),state);
+  else if(col && row==7) fieldDrawNumber(x,y,controlFromRange(a->accent,100),state);
 }
 static int onEdit(int col,int row,CellEditAction action) {
   if(row<3) return instrumentCommonOnEdit(col,row,action);

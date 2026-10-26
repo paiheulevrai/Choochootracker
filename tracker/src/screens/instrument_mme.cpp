@@ -32,11 +32,11 @@ static const char* modelName(MMEModel model) {
   int i = (int)model; return i >= 0 && i < 7 ? names[i] : "RING";
 }
 static const char* macroName(MMEModel model, int macro) {
-  static const char* generic[] = {"Waves", "Interval", "Amount", "Flow", "Feedback", "Shaper"};
-  static const char* ring[] = {"Waves", "Interval", "Amount", "RingType", "Feedback", "Shaper"};
-  static const char* sync[] = {"Waves", "Interval", "SyncAmt", "Reset", "Feedback", "Shaper"};
-  static const char* logic[] = {"Waves", "Interval", "Amount", "Logic", "Feedback", "Shaper"};
-  static const char* vocode[] = {"Waves", "Interval", "Analyze", "Formant", "Feedback", "Shaper"};
+  static const char* generic[] = {"Waves", "Intervl", "Amount", "Flow", "Feedbk.", "Shaper"};
+  static const char* ring[] = {"Waves", "Intervl", "Amount", "RingTyp", "Feedbk.", "Shaper"};
+  static const char* sync[] = {"Waves", "Intervl", "SyncAmt", "Reset", "Feedbk.", "Shaper"};
+  static const char* logic[] = {"Waves", "Intervl", "Amount", "Logic", "Feedbk.", "Shaper"};
+  static const char* vocode[] = {"Waves", "Intervl", "Analyze", "Formant", "Feedbk.", "Shaper"};
   const char* const* names = model == MMEModel::ring ? ring : model == MMEModel::sync ? sync :
     model == MMEModel::logic ? logic : model == MMEModel::vocode ? vocode : generic;
   return names[macro];
@@ -59,7 +59,7 @@ static void drawCursor(int col, int row) {
   if (row < 3) { instrumentCommonDrawCursor(col, row); return; }
   if (row == 10) { instrumentCommonDrawVoicePostCursor(col, 9); return; }
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostCursor(col, row); return; }
-  gfxCursor(11, row == 3 ? 6 : row + 4, row == 3 ? 3 + strlen(modelName(m->model)) : 2 + kFieldShortBarWidth);
+  gfxCursor(kColumnValueX[0], row == 3 ? 6 : row + 4, row == 3 ? 3 + strlen(modelName(m->model)) : kFieldNumberWidth);
 }
 static void drawField(int col, int row, CellState state) {
   if (row < 3) { instrumentCommonDrawField(col, row, state); return; }
@@ -74,14 +74,14 @@ static void drawField(int col, int row, CellState state) {
     fieldDrawLabel(0, row + 4, macroName(m->model, row - 4), state);
   }
   gfxSetFgColor(fieldValueColor(state));
-  gfxClearRect(11, row == 3 ? 6 : row + 4, row == 3 ? 20 : 7, 1);
+  const int x = kColumnValueX[0];
+  gfxClearRect(x, row == 3 ? 6 : row + 4, row == 3 ? 34 - x : kFieldNumberWidth, 1);
   if (row == 3) {
-    gfxPrintf(11, 6, "%02d", (int)m->model);
+    gfxPrintf(x, 6, "%02d", (int)m->model);
     gfxSetFgColor(fieldNameColor(state));
-    gfxPrint(14, 6, modelName(m->model));
+    gfxPrint(x + 3, 6, modelName(m->model));
   } else if (uint8_t* value = macro(m, row - 4)) {
-    gfxPrint(11, row + 4, byteToHex(*value));
-    fieldDrawBar(13, row + 4, kFieldShortBarWidth, *value / 255.0f, state);
+    fieldDrawNumber(x, row + 4, *value, state);
   }
 }
 static int onEdit(int col, int row, CellEditAction action) {

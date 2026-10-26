@@ -70,11 +70,11 @@ static void drawStatic(void) {
   gfxPrint(0, 6, "Model");
   gfxPrint(0, 7, "SOURCE");
   gfxSetFgColor(appSettings.colorScheme.textLabel);
-  gfxPrint(0, 8, "Harmonic");
+  gfxPrint(0, 8, "Harmon.");
   gfxPrint(0, 9, "Timbre");
   gfxPrint(0, 10, "Morph");
-  gfxPrint(0, 11, "Main/Aux");
-  gfxPrint(0, 12, "Env Mode");
+  gfxPrint(0, 11, "Aux mix");
+  gfxPrint(0, 12, "EnvMode");
   InstrumentPlaits* p = &chipnomadState->project.instruments[cInstrument].chip.plaits;
   instrumentCommonDrawVoicePostStatic(p->envelopeMode != 0);
   drawPreview(p);
@@ -96,8 +96,8 @@ static void drawCursor(int col, int row) {
     gfxCursor(7 + col * 5, 14, 2);
     return;
   }
-  else if (row == 3) gfxCursor(12, 6, 3 + strlen(modelCatalogName(isAlt() ? InstrumentType::PlaitsAlt : InstrumentType::Plaits, p->engine)));
-  else if (!col) gfxCursor(11, row + 4, row == 4 && usesChordNames(p) ? strlen(plaitsChordName(p->harmonics)) : row == 8 ? (p->envelopeMode == 0 ? 4 : 3) : 2 + kFieldShortBarWidth);
+  else if (row == 3) gfxCursor(kColumnValueX[0], 6, 3 + strlen(modelCatalogName(isAlt() ? InstrumentType::PlaitsAlt : InstrumentType::Plaits, p->engine)));
+  else if (!col) gfxCursor(kColumnValueX[0], row + 4, row == 4 && usesChordNames(p) ? strlen(plaitsChordName(p->harmonics)) : row == 8 ? (p->envelopeMode == 0 ? 4 : 3) : kFieldNumberWidth);
 }
 
 static void drawField(int col, int row, CellState state) {
@@ -123,7 +123,7 @@ static void drawField(int col, int row, CellState state) {
     return;
   }
   // The selected field's label lights up with its value; Model is a title.
-  static const char* const labels[] = {"Harmonic", "Timbre", "Morph", "Main/Aux", "Env Mode"};
+  static const char* const labels[] = {"Harmon.", "Timbre", "Morph", "Aux mix", "EnvMode"};
   if (row == 3) {
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
     gfxPrint(0, 6, "Model");
@@ -131,32 +131,28 @@ static void drawField(int col, int row, CellState state) {
     fieldDrawLabel(0, row + 4, labels[row - 4], state);
   }
   gfxSetFgColor(fieldValueColor(state));
-  if (row == 3) gfxClearRect(11, 6, 29, 1);
-  else gfxClearRect(col ? 26 : 11, row + 4, col ? 8 : 7, 1);
-  // A number with its bar, for the source controls.
-  auto number = [&](uint8_t value) {
-    gfxPrint(11, row + 4, byteToHex(value));
-    fieldDrawBar(13, row + 4, kFieldShortBarWidth, value / 255.0f, state);
-  };
+  const int x = kColumnValueX[0];
+  if (row == 3) gfxClearRect(x, 6, 34 - x, 1);
+  else if (!col) gfxClearRect(x, row + 4, kFieldNumberWidth, 1);
   switch (row) {
     case 3:
-      gfxPrintf(12, 6, "%02d", p->engine);
+      gfxPrintf(x, 6, "%02d", p->engine);
       gfxSetFgColor(fieldNameColor(state));
-      gfxPrint(15, 6, modelCatalogName(isAlt() ? InstrumentType::PlaitsAlt : InstrumentType::Plaits, p->engine));
+      gfxPrint(x + 3, 6, modelCatalogName(isAlt() ? InstrumentType::PlaitsAlt : InstrumentType::Plaits, p->engine));
       break;
     case 4: if (!col) {
       if (usesChordNames(p)) {
         gfxSetFgColor(fieldNameColor(state));
-        gfxPrint(11, 8, plaitsChordName(p->harmonics));
+        gfxPrint(x, 8, plaitsChordName(p->harmonics));
       } else {
-        number(controlFromRange(p->harmonics, 32767));
+        fieldDrawNumber(x, 8, controlFromRange(p->harmonics, 32767), state);
       }
       break;
     }
-    case 5: if (!col) number(controlFromRange(p->timbre, 32767)); break;
-    case 6: if (!col) number(controlFromRange(p->morph, 32767)); break;
-    case 7: if (!col) number(p->auxMix); break;
-    case 8: if (!col) { gfxSetFgColor(fieldNameColor(state)); gfxPrint(11, 12, p->envelopeMode == 0 ? "TRIG" : "VCA"); } break;
+    case 5: if (!col) fieldDrawNumber(x, 9, controlFromRange(p->timbre, 32767), state); break;
+    case 6: if (!col) fieldDrawNumber(x, 10, controlFromRange(p->morph, 32767), state); break;
+    case 7: if (!col) fieldDrawNumber(x, 11, p->auxMix, state); break;
+    case 8: if (!col) { gfxSetFgColor(fieldNameColor(state)); gfxPrint(x, 12, p->envelopeMode == 0 ? "TRIG" : "VCA"); } break;
   }
 }
 

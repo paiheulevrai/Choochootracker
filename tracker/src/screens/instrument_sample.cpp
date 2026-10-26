@@ -11,9 +11,9 @@
 #include <string.h>
 
 static int sampleButtonDown;
-static constexpr int sourceValueX = 9;
-static constexpr int sourceValueWidth = 7;
-static constexpr int editLabelX = 17;
+static constexpr int sourceValueX = kColumnValueX[0];
+static constexpr int sourceValueWidth = kFieldNumberWidth;
+static constexpr int editLabelX = kColumnNameX[1];
 static constexpr int editLabelWidth = 8;
 static Bitmap* samplePreviewBitmap;
 static int samplePreviewWidth, samplePreviewHeight;
@@ -151,8 +151,7 @@ static void drawCursor(int col, int row) {
     const int w = col == 0 ? sourceValueWidth : editLabelWidth;
     gfxCursor(x, 6, w);
   }
-  else if (!col && row == 7) gfxCursor(sourceValueX, 11, 2 + kFieldBarWidth);  // Speed and its bar
-  else gfxCursor(col ? 26 : sourceValueX,row+4,col?8:sourceValueWidth);
+  else gfxCursor(sourceValueX, row + 4, sourceValueWidth);
 }
 
 static const char* sampleFilename(const char* path) {
@@ -184,7 +183,7 @@ static void drawField(int col, int row, CellState state) {
     if (col == 0) gfxClearRect(sourceValueX, 6, sourceValueWidth, 1);
     else gfxClearRect(editLabelX, 6, editLabelWidth, 1);
   } else {
-    gfxClearRect(col?26:sourceValueX,row+4,col?8:sourceValueWidth,1);
+    gfxClearRect(sourceValueX, row + 4, sourceValueWidth, 1);
   }
   switch (row) {
     case 3: {
@@ -208,9 +207,8 @@ static void drawField(int col, int row, CellState state) {
         // Speed is inert while Stretch drives the duration: dim it.
         if (stretchOn) gfxSetFgColor(appSettings.colorScheme.textEmpty);
         const uint8_t speed = controlFromRange(sample->speedPercent, 500);
-        gfxPrint(sourceValueX, 11, byteToHex(speed));
-        if (stretchOn) gfxClearRect(sourceValueX + 2, 11, kFieldBarWidth, 1);
-        else fieldDrawBar(sourceValueX + 2, 11, kFieldBarWidth, speed / 255.0f, state);
+        if (stretchOn) gfxPrint(sourceValueX, 11, byteToHex(speed));
+        else fieldDrawNumber(sourceValueX, 11, speed, state);
       }
       break;
   }

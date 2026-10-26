@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "corelib_gfx.h"
 #include "corelib/corelib_file.h"
 #include "file_browser.h"
@@ -12,8 +13,8 @@
 
 static int loadSlot;
 static int buttonDown;
-static constexpr int sourceValueX = 9;
-static constexpr int sourceValueWidth = 7;
+static constexpr int sourceValueX = kColumnValueX[0];
+static constexpr int sourceValueWidth = kFieldNumberWidth;
 static Bitmap* previewBitmap;
 
 static void drawPreview(const InstrumentSCWF* scwf) {
@@ -89,21 +90,24 @@ static void drawStatic(void) {
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   if (instrumentCommonDrawVoicePostCursor(col, row)) return;
-  if (!col && row >= 3 && row <= 6) gfxCursor(sourceValueX,row + 5,sourceValueWidth);
-  else gfxCursor(col ? 26 : sourceValueX,row + 4,col ? 8 : sourceValueWidth);
+  if (!col && row >= 3 && row <= 6) gfxCursor(sourceValueX, row + 5, sourceValueWidth);
 }
 
 static void drawField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
   InstrumentSCWF* scwf = &chipnomadState->project.instruments[cInstrument].chip.scwf;
   if (instrumentCommonDrawVoicePostField(col, row, state, scwf)) return;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  if (!col && row >= 3 && row <= 6) gfxClearRect(sourceValueX,row + 5,sourceValueWidth,1);
+  if (col || row < 3 || row > 6) return;
+  // The selected field's label lights up with its value.
+  static const char* const labels[] = {"Osc A", "Osc B", "Detune", "Mix"};
+  fieldDrawLabel(0, row + 5, labels[row - 3], state);
+  gfxSetFgColor(fieldValueColor(state));
+  gfxClearRect(sourceValueX, row + 5, sourceValueWidth, 1);
   char name[PROJECT_INSTRUMENT_NAME_LENGTH + 1];
-  if (row == 3 && !col) gfxPrint(sourceValueX,8,scwf->oscillator[0].path[0] ? shortFilename(scwf->oscillator[0].path, name, 7) : "Load");
-  else if (row == 4 && !col) gfxPrint(sourceValueX,9,scwf->oscillator[1].path[0] ? shortFilename(scwf->oscillator[1].path, name, 7) : "Load");
-  else if (row == 5 && !col) gfxPrint(sourceValueX,10,byteToHex(scwf->detune));
-  else if (row == 6 && !col) gfxPrint(sourceValueX,11,byteToHex(scwf->mix));
+  if (row == 3) gfxPrint(sourceValueX, 8, scwf->oscillator[0].path[0] ? shortFilename(scwf->oscillator[0].path, name, 7) : "Load");
+  else if (row == 4) gfxPrint(sourceValueX, 9, scwf->oscillator[1].path[0] ? shortFilename(scwf->oscillator[1].path, name, 7) : "Load");
+  else if (row == 5) fieldDrawNumber(sourceValueX, 10, scwf->detune, state, scwf->detune / float(SCWF_DETUNE_MAX));
+  else fieldDrawNumber(sourceValueX, 11, scwf->mix, state);
 }
 
 static int edit(int col, int row, CellEditAction action) {

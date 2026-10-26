@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "model_catalog.h"
@@ -15,8 +16,8 @@ static void openModelSelection() {
 static const char* modelName(SinteredModel m) { static const char* names[] = {"KNOT", "SHARD", "BURST", "COMB", "LOGIC", "MELT", "SQUALL"}; int i = (int)m; return i >= 0 && i < 7 ? names[i] : "KNOT"; }
 static const char* macroName(SinteredModel m, int i) {
   static const char* names[][6] = {
-    {"Decay","Mod","Ratio","Spread","Motion","Fold"}, {"Decay","Mod","Ratio","Feedback","Motion","Bite"},
-    {"Decay","Mod","Noise","Color","Motion","Feedback"}, {"Decay","Mod","Time","Damping","Motion","Regen"},
+    {"Decay","Mod","Ratio","Spread","Motion","Fold"}, {"Decay","Mod","Ratio","Feedbk.","Motion","Bite"},
+    {"Decay","Mod","Noise","Color","Motion","Feedbk."}, {"Decay","Mod","Time","Damping","Motion","Regen"},
     {"Decay","Mod","Rate","Pattern","Motion","Crush"}, {"Decay","Mod","Ratio","Chaos","Motion","Drive"},
     {"Decay","FM","Detune","Voices","Motion","Clip"}
   }; return names[(int)m < 7 ? (int)m : 0][i];
@@ -28,12 +29,27 @@ static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles); gfxPrint(0, 6, "Model"); gfxPrint(0, 7, "SINTERED"); gfxSetFgColor(appSettings.colorScheme.textLabel);
   for (int i = 0; i < 6; ++i) gfxPrint(0, 8 + i, macroName(s->model, i)); instrumentCommonDrawVoicePostStatic(0);
 }
-static void drawCursor(int col, int row) { if (row < 3) { instrumentCommonDrawCursor(col, row); return; } if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostCursor(col, row); return; } InstrumentSintered* s = &chipnomadState->project.instruments[cInstrument].chip.sintered; gfxCursor(11, row == 3 ? 6 : row + 4, row == 3 ? 3 + strlen(modelName(s->model)) : 2); }
+static void drawCursor(int col, int row) { if (row < 3) { instrumentCommonDrawCursor(col, row); return; } if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostCursor(col, row); return; } InstrumentSintered* s = &chipnomadState->project.instruments[cInstrument].chip.sintered; gfxCursor(kColumnValueX[0], row == 3 ? 6 : row + 4, row == 3 ? 3 + strlen(modelName(s->model)) : kFieldNumberWidth); }
 static void drawField(int col, int row, CellState state) {
   if (row < 3) { instrumentCommonDrawField(col, row, state); return; } InstrumentSintered* s = &chipnomadState->project.instruments[cInstrument].chip.sintered;
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostField(col, row, state, s); return; }
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault); gfxClearRect(11, row == 3 ? 6 : row + 4, row == 3 ? 20 : 7, 1);
-  if (row == 3) gfxPrintf(11, 6, "%02d %s", (int)s->model, modelName(s->model)); else gfxPrint(11, row + 4, byteToHex(*macro(s, row - 4)));
+  // The selected field's label lights up with its value; Model is a title.
+  if (row == 3) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxPrint(0, 6, "Model");
+  } else {
+    fieldDrawLabel(0, row + 4, macroName(s->model, row - 4), state);
+  }
+  gfxSetFgColor(fieldValueColor(state));
+  const int x = kColumnValueX[0];
+  gfxClearRect(x, row == 3 ? 6 : row + 4, row == 3 ? 34 - x : kFieldNumberWidth, 1);
+  if (row == 3) {
+    gfxPrintf(x, 6, "%02d", (int)s->model);
+    gfxSetFgColor(fieldNameColor(state));
+    gfxPrint(x + 3, 6, modelName(s->model));
+  } else {
+    fieldDrawNumber(x, row + 4, *macro(s, row - 4), state);
+  }
 }
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action); InstrumentSintered* s = &chipnomadState->project.instruments[cInstrument].chip.sintered;

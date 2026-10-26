@@ -58,8 +58,8 @@ static void drawStatic(void) {
 static void drawCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
   if (instrumentCommonDrawVoicePostCursor(col, row)) return;
-  else if (row == 3) gfxCursor(12, 6, 3 + strlen(modelCatalogName(InstrumentType::Braids, chipnomadState->project.instruments[cInstrument].chip.braids.model)));
-  else if (!col) gfxCursor(11, row + 4, row == 5 && chipnomadState->project.instruments[cInstrument].chip.braids.model == 40 ? strlen(paraphonicChordName(chipnomadState->project.instruments[cInstrument].chip.braids.color)) : 2 + kFieldShortBarWidth);
+  else if (row == 3) gfxCursor(kColumnValueX[0], 6, 3 + strlen(modelCatalogName(InstrumentType::Braids, chipnomadState->project.instruments[cInstrument].chip.braids.model)));
+  else if (!col) gfxCursor(kColumnValueX[0], row + 4, row == 5 && chipnomadState->project.instruments[cInstrument].chip.braids.model == 40 ? strlen(paraphonicChordName(chipnomadState->project.instruments[cInstrument].chip.braids.color)) : kFieldNumberWidth);
 }
 
 static void drawField(int col, int row, CellState state) {
@@ -74,27 +74,21 @@ static void drawField(int col, int row, CellState state) {
     fieldDrawLabel(0, row + 4, row == 4 ? "Timbre" : "Color", state);
   }
   gfxSetFgColor(fieldValueColor(state));
-  if (row == 3) gfxClearRect(11, 6, 29, 1); else gfxClearRect(col ? 26 : 11, row + 4, col ? 8 : 7, 1);
+  const int x = kColumnValueX[0];
+  if (row == 3) gfxClearRect(x, 6, 34 - x, 1); else if (!col) gfxClearRect(x, row + 4, kFieldNumberWidth, 1);
   switch (row) {
     case 3:
-      gfxPrintf(12, 6, "%02d", b->model);
+      gfxPrintf(x, 6, "%02d", b->model);
       gfxSetFgColor(fieldNameColor(state));
-      gfxPrint(15, 6, modelCatalogName(InstrumentType::Braids, b->model));
+      gfxPrint(x + 3, 6, modelCatalogName(InstrumentType::Braids, b->model));
       break;
-    case 4: if (!col) {
-      const uint8_t value = controlFromRange(b->timbre, 32767);
-      gfxPrint(11, 8, byteToHex(value));
-      fieldDrawBar(13, 8, kFieldShortBarWidth, value / 255.0f, state);
-      break;
-    }
+    case 4: if (!col) fieldDrawNumber(x, 8, controlFromRange(b->timbre, 32767), state); break;
     case 5: if (!col) {
       if (b->model == 40) {
         gfxSetFgColor(fieldNameColor(state));
-        gfxPrint(11, 9, paraphonicChordName(b->color));
+        gfxPrint(x, 9, paraphonicChordName(b->color));
       } else {
-        const uint8_t value = controlFromRange(b->color, 32767);
-        gfxPrint(11, 9, byteToHex(value));
-        fieldDrawBar(13, 9, kFieldShortBarWidth, value / 255.0f, state);
+        fieldDrawNumber(x, 9, controlFromRange(b->color, 32767), state);
       }
       break;
     }
