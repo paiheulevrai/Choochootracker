@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "misc.h"
@@ -37,15 +38,16 @@ static void drawStatic(void) {
   gfxPrint(0, 7, "Noise");
   gfxPrint(0, 8, "Env");
 
-  gfxPrint(17, 6, "Auto env period");
-  gfxPrint(17, 7, "Enabled");
-  gfxPrint(17, 8, "Rate");
-
-  gfxPrint(0, 10, "Volume envelope");
+  gfxPrint(kColumnNameX[1], 7, "Enabled");
+  gfxPrint(kColumnNameX[1], 8, "Rate");
   gfxPrint(0, 11, "Atk");
   gfxPrint(0, 12, "Dec");
   gfxPrint(0, 13, "Sus");
   gfxPrint(0, 14, "Rel");
+
+  gfxSetFgColor(appSettings.colorScheme.textTitles);
+  gfxPrint(kColumnNameX[1], 6, "AUTO ENV");
+  gfxPrint(0, 10, "VOLUME");
 }
 
 static void drawCursor(int col, int row) {
@@ -58,24 +60,18 @@ static void drawCursor(int col, int row) {
       gfxCursor(8, 7, 3);
     } else if (row == 5) {
       gfxCursor(8, 8, 1);
-    } else if (row == 6) {
-      gfxCursor(8, 11, 2);
-    } else if (row == 7) {
-      gfxCursor(8, 12, 2);
-    } else if (row == 8) {
-      gfxCursor(8, 13, 2);
-    } else if (row == 9) {
-      gfxCursor(8, 14, 2);
+    } else if (row >= 6 && row <= 9) {
+      gfxCursor(8, row + 5, kFieldNumberWidth);  // the volume envelope and its bars
     }
   } else if (col == 1) {
     if (row == 4) {
-      gfxCursor(26, 7, 3);
+      gfxCursor(kColumnValueX[1], 7, 3);
     } else if (row == 5) {
-      gfxCursor(26, 8, 1);
+      gfxCursor(kColumnValueX[1], 8, 1);
     }
   } else if (col == 2) {
     if (row == 4 || row == 5) {
-      gfxCursor(28, 8, 1);
+      gfxCursor(kColumnValueX[1] + 2, 8, 1);
     }
   }
 }
@@ -83,13 +79,19 @@ static void drawCursor(int col, int row) {
 static void drawField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
 
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-
-  uint8_t defaultMixer = chipnomadState->project.instruments[cInstrument].chip.ay.defaultMixer;
+  const InstrumentAY1& ay = chipnomadState->project.instruments[cInstrument].chip.ay;
+  uint8_t defaultMixer = ay.defaultMixer;
   int hasTone = (defaultMixer & 0x01) != 0;
   int hasNoise = (defaultMixer & 0x02) != 0;
   int envShape = (defaultMixer >> 4) & 0x0F;
-  int isAutoEnvEnabled = chipnomadState->project.instruments[cInstrument].chip.ay.autoEnvN != 0;
+  int isAutoEnvEnabled = ay.autoEnvN != 0;
+
+  // The selected field's label lights up with its value; switches are names.
+  static const char* const left[] = {"Tone", "Noise", "Env", "Atk", "Dec", "Sus", "Rel"};
+  if (col == 0 && row <= 9) fieldDrawLabel(0, row <= 5 ? row + 3 : row + 5, left[row - 3], state);
+  else if (row == 4 && col == 1) fieldDrawLabel(kColumnNameX[1], 7, "Enabled", state);
+  else if (row == 5 || (row == 4 && col == 2)) fieldDrawLabel(kColumnNameX[1], 8, "Rate", state);
+  gfxSetFgColor((row <= 4 && col <= 1) ? fieldNameColor(state) : fieldValueColor(state));
 
   if (row == 3 && col == 0) {
     gfxPrintf(8, 6, hasTone ? "On " : "Off");
@@ -97,24 +99,21 @@ static void drawField(int col, int row, CellState state) {
     gfxPrintf(8, 7, hasNoise ? "On " : "Off");
   } else if (row == 5 && col == 0) {
     gfxPrintf(8, 8, "%X %s", envShape, getEnvelopeShapeASCII(envShape));
-  } else if (row == 6 && col == 0) {
-    gfxPrint(8, 11, byteToHex(chipnomadState->project.instruments[cInstrument].chip.ay.volumeEnvelope.p1));  // A
-  } else if (row == 7 && col == 0) {
-    gfxPrint(8, 12, byteToHex(chipnomadState->project.instruments[cInstrument].chip.ay.volumeEnvelope.p2));  // D
-  } else if (row == 8 && col == 0) {
-    gfxPrint(8, 13, byteToHex(chipnomadState->project.instruments[cInstrument].chip.ay.volumeEnvelope.p3));  // S
-  } else if (row == 9 && col == 0) {
-    gfxPrint(8, 14, byteToHex(chipnomadState->project.instruments[cInstrument].chip.ay.volumeEnvelope.p4));  // R
+  } else if (row >= 6 && row <= 9 && col == 0) {
+    // Attack, decay and release run to FF, sustain to F.
+    const uint8_t values[] = {ay.volumeEnvelope.p1, ay.volumeEnvelope.p2, ay.volumeEnvelope.p3, ay.volumeEnvelope.p4};
+    const uint8_t value = values[row - 6];
+    fieldDrawNumber(8, row + 5, value, state, value / (row == 8 ? 15.0f : 255.0f));
   } else if (row == 4 && col == 1) {
-    gfxPrintf(26, 7, isAutoEnvEnabled ? "On " : "Off");
-    if (!isAutoEnvEnabled) gfxPrint(26, 8, "   ");
+    gfxPrintf(kColumnValueX[1], 7, isAutoEnvEnabled ? "On " : "Off");
+    if (!isAutoEnvEnabled) gfxPrint(kColumnValueX[1], 8, "   ");
   } else if (row == 5 && col == 1) {
     if (isAutoEnvEnabled) {
-      gfxPrintf(26, 8, "%hhX:", chipnomadState->project.instruments[cInstrument].chip.ay.autoEnvN);
+      gfxPrintf(kColumnValueX[1], 8, "%hhX:", ay.autoEnvN);
     }
   } else if ((row == 4 || row == 5) && col == 2) {
     if (isAutoEnvEnabled) {
-      gfxPrintf(28, 8, "%hhX", chipnomadState->project.instruments[cInstrument].chip.ay.autoEnvD);
+      gfxPrintf(kColumnValueX[1] + 2, 8, "%hhX", ay.autoEnvD);
     }
   }
 }

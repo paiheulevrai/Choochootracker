@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "waveform_display.h"
 #include "sample_utils.h"
 #include "corelib_gfx.h"
@@ -46,7 +47,7 @@
 #define COL_LEFT_X    0
 #define COL_LEFT_VAL  8
 #define COL_RIGHT_X   17
-#define COL_RIGHT_VAL 26
+#define COL_RIGHT_VAL 25
 
 #define ROW_TOTAL 10
 
@@ -250,21 +251,32 @@ static void drawCursor(int col, int row) {
   if (col == 0) {
     switch (row) {
       case 4: gfxCursor(COL_LEFT_VAL, y, 5); break;  // Rate (decimal, up to 5 digits)
-      case 5: gfxCursor(COL_LEFT_VAL, y, 4); break;  // Start
-      case 6: gfxCursor(COL_LEFT_VAL, y, 4); break;  // Length
-      case 7: gfxCursor(COL_LEFT_VAL, y, 4); break;  // Loop Start
-      case 8: gfxCursor(COL_LEFT_VAL, y, 2); break;  // Pitch (hex)
-      case 9: gfxCursor(COL_LEFT_VAL, y, 2); break;  // Fine (hex)
+      case 5: gfxCursor(COL_LEFT_VAL, y, kFieldNumberWidth); break;  // Start and its bar
+      case 6: gfxCursor(COL_LEFT_VAL, y, kFieldNumberWidth); break;  // Length and its bar
+      case 7: gfxCursor(COL_LEFT_VAL, y, kFieldNumberWidth); break;  // Loop Start and its bar
+      case 8: gfxCursor(COL_LEFT_VAL, y, kFieldNumberWidth); break;  // Pitch and its bar
+      case 9: gfxCursor(COL_LEFT_VAL, y, kFieldNumberWidth); break;  // Fine and its bar
     }
   } else if (col == 1) {
     switch (row) {
       case 4: gfxCursor(COL_RIGHT_VAL, y, 3); break; // Tone on/off
-      case 5: gfxCursor(COL_RIGHT_VAL, y, 2); break; // Tone pitch (hex)
-      case 6: gfxCursor(COL_RIGHT_VAL, y, 2); break; // Tone fine (hex)
+      case 5: gfxCursor(COL_RIGHT_VAL, y, kFieldNumberWidth); break; // Tone pitch and its bar
+      case 6: gfxCursor(COL_RIGHT_VAL, y, kFieldNumberWidth); break; // Tone fine and its bar
       case 8: gfxCursor(COL_RIGHT_VAL, y, 3); break; // Noise on/off
-      case 9: gfxCursor(COL_RIGHT_VAL, y, 2); break; // Noise period
+      case 9: gfxCursor(COL_RIGHT_VAL, y, kFieldNumberWidth); break; // Noise period and its bar
     }
   }
+}
+
+// Signed values (pitch and fine offsets, shown as hex where FF is -1) have
+// bars from the middle. Start, Length and Loop start are four-digit
+// positions in the file, with shorter bars after them.
+static float signedPosition(int8_t value) { return (value + 128) / 255.0f; }
+
+static void drawPosition(int y, uint16_t value, const InstrumentAYSample* smp, CellState state) {
+  gfxSetFgColor(fieldValueColor(state));
+  gfxPrintf(COL_LEFT_VAL, y, "%04X", value);
+  fieldDrawBar(COL_LEFT_VAL + 4, y, kFieldBarWidth - 2, smp->fileLength ? value / (float)smp->fileLength : 0.0f, state);
 }
 
 static void drawField(int col, int row, CellState state) {
@@ -273,9 +285,8 @@ static void drawField(int col, int row, CellState state) {
   InstrumentAYSample* smp = &chipnomadState->project.instruments[cInstrument].chip.aySample;
   int y = rowToY(row);
 
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-
   if (row == 3) {
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
     if (col == 0) {
       // Load button
       gfxPrint(COL_LEFT_VAL, y, "Load");
@@ -286,52 +297,48 @@ static void drawField(int col, int row, CellState state) {
     return;
   }
 
+  // The selected field's label lights up with its value. Tone and Noise are
+  // headers that keep their own colours.
+  static const char* const left[] = {"Rate", "Start", "Length", "LoopSt", "Pitch", "Fine"};
+  if (col == 0 && row <= 9) fieldDrawLabel(COL_LEFT_X, y, left[row - 4], state);
+  else if (col == 1 && (row == 5 || row == 6 || row == 9))
+    fieldDrawLabel(COL_RIGHT_X, y, row == 5 ? "Pitch" : row == 6 ? "Fine" : "Period", state);
+
+  gfxSetFgColor(fieldValueColor(state));
   if (col == 0) {
     switch (row) {
       case 4: // Rate
         gfxClearRect(COL_LEFT_VAL, y, 5, 1);
         gfxPrintf(COL_LEFT_VAL, y, "%d", smp->sampleRate);
         break;
-      case 5: // Start
-        gfxClearRect(COL_LEFT_VAL, y, 4, 1);
-        gfxPrintf(COL_LEFT_VAL, y, "%04X", smp->sampleStart);
-        break;
-      case 6: // Length
-        gfxClearRect(COL_LEFT_VAL, y, 4, 1);
-        gfxPrintf(COL_LEFT_VAL, y, "%04X", smp->sampleLength);
-        break;
-      case 7: // Loop Start
-        gfxClearRect(COL_LEFT_VAL, y, 4, 1);
-        gfxPrintf(COL_LEFT_VAL, y, "%04X", smp->sampleLoopStart);
-        break;
+      case 5: drawPosition(y, smp->sampleStart, smp, state); break;
+      case 6: drawPosition(y, smp->sampleLength, smp, state); break;
+      case 7: drawPosition(y, smp->sampleLoopStart, smp, state); break;
       case 8: // Pitch
-        gfxClearRect(COL_LEFT_VAL, y, 2, 1);
-        gfxPrint(COL_LEFT_VAL, y, byteToHex((uint8_t)smp->pitchOffset));
+        fieldDrawNumber(COL_LEFT_VAL, y, (uint8_t)smp->pitchOffset, state, signedPosition(smp->pitchOffset), true);
         break;
       case 9: // Fine
-        gfxClearRect(COL_LEFT_VAL, y, 2, 1);
-        gfxPrint(COL_LEFT_VAL, y, byteToHex((uint8_t)smp->fineTune));
+        fieldDrawNumber(COL_LEFT_VAL, y, (uint8_t)smp->fineTune, state, signedPosition(smp->fineTune), true);
         break;
     }
   } else if (col == 1) {
     switch (row) {
       case 4: // Tone on/off
+        gfxSetFgColor(fieldNameColor(state));
         gfxPrintf(COL_RIGHT_VAL, y, smp->oscTone.isOn ? "On " : "Off");
         break;
       case 5: // Tone pitch
-        gfxClearRect(COL_RIGHT_VAL, y, 2, 1);
-        gfxPrint(COL_RIGHT_VAL, y, byteToHex((uint8_t)smp->oscTone.pitchOffset));
+        fieldDrawNumber(COL_RIGHT_VAL, y, (uint8_t)smp->oscTone.pitchOffset, state, signedPosition(smp->oscTone.pitchOffset), true);
         break;
       case 6: // Tone fine
-        gfxClearRect(COL_RIGHT_VAL, y, 2, 1);
-        gfxPrint(COL_RIGHT_VAL, y, byteToHex((uint8_t)smp->oscTone.fineTune));
+        fieldDrawNumber(COL_RIGHT_VAL, y, (uint8_t)smp->oscTone.fineTune, state, signedPosition(smp->oscTone.fineTune), true);
         break;
       case 8: // Noise on/off
+        gfxSetFgColor(fieldNameColor(state));
         gfxPrintf(COL_RIGHT_VAL, y, smp->oscNoise.isOn ? "On " : "Off");
         break;
       case 9: // Noise period
-        gfxClearRect(COL_RIGHT_VAL, y, 2, 1);
-        gfxPrint(COL_RIGHT_VAL, y, byteToHex(smp->oscNoise.noisePeriod));
+        fieldDrawNumber(COL_RIGHT_VAL, y, smp->oscNoise.noisePeriod, state, smp->oscNoise.noisePeriod / 31.0f);
         break;
     }
   }

@@ -271,7 +271,7 @@ TEST_CASE("SID home marks and protects imported controls") {
   auto before = e.patch();
   screenInstrumentOPL.drawStatic();
   screenInstrumentOPL.drawField(1, 5, CellState::focus);
-  CHECK(mockGfxCells[9][27] == '*');
+  CHECK(mockGfxCells[9][28] == '*');  // after PW's three digits at column 25
   CHECK(std::string(mockGfxCells[10], 32).find("Program:") == std::string::npos);
   CHECK(std::string(mockGfxCells[15], 32).find("* = program controlled") == 0);
   screenInstrumentOPL.onEdit(1, 5, CellEditAction::increase);
@@ -282,7 +282,7 @@ TEST_CASE("SID home marks and protects imported controls") {
   CHECK(e.patch().value[sidAttack] == before.value[sidAttack] + 1);
   e.patch().program = {};
   screenInstrumentOPL.drawField(1, 5, CellState::normal);
-  CHECK(mockGfxCells[9][27] == ' ');
+  CHECK(mockGfxCells[9][28] == ' ');
   screenInstrumentOPL.drawStatic();
   CHECK(std::string(mockGfxCells[15], 32).find("* = program controlled") == std::string::npos);
   e.macro(1, 12); // Pitch is owned only in EDIT, not among the home controls.

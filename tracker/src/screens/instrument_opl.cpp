@@ -1,3 +1,4 @@
+#include "field_style.h"
 #include "screen_instrument.h"
 #include "selection_popup.h"
 #include "corelib_gfx.h"
@@ -199,53 +200,88 @@ int sidField(int col,int row){
  if(row==7)return col?sidResonance:sidCutoff;
  return sidAttack+col;
 }
+// SID rows on the shared grid: Wave and PW, then the filter's Mode, Cutoff
+// and Reso, then the ADSR row.
 int sidY(int row){return row==5?9:row==6?12:row==7?13:14;}
-int sidX(int col,int row){return row==8?7+col*5:col?(row==5?24:26):9;}
+int sidX(int col,int row){return row==8?7+col*5:kColumnValueX[col?1:0];}
 int sidWidth(int col,int row){return row==5&&!col?5:row==6?3:row==5|| (row==7&&!col)?3:2;}
+int sidMaximum(int field){return field==sidWave?8:field==sidPulse?4095:field==sidCutoff?2047:field==sidFilterMode?7:15;}
+bool sidBar(int col,int row){return (row==5&&col)||row==7;}
+const char* sidLabel(int col,int row){return row==5?(col?"PW":"Wave"):row==6?"Mode":row==7?(col?"Reso":"Cutoff"):nullptr;}
 int columns(int row){if(sid()&&row>=4)return row==4||row==5||row==7?2:row==6?1:4;return row<3?instrumentCommonColumnCount(row):row==5&&fmEditSupported(current()->type)?2:row==6?2:row==8?5:1;}
-void drawStatic(){instrumentCommonDrawStatic();gfxSetFgColor(appSettings.colorScheme.textLabel);gfxPrint(0,6,"Bank:");gfxPrint(0,7,sid()?"Preset:":"Preset");if(sid()){
- gfxPrint(0,9,"Wave:");gfxPrint(20,9,"PW:");
- gfxPrint(0,11,"Filter:");gfxPrint(0,12,"Mode:");
- gfxPrint(0,13,"Cutoff:");gfxPrint(20,13,"Reso:");
- gfxPrint(0,14,"ADSR:");
- gfxPrint(6,14,"A");gfxPrint(11,14,"D");gfxPrint(16,14,"S");gfxPrint(21,14,"R");
- gfxSetFgColor(appSettings.colorScheme.textInfo);
- bool programControlled=false;
- for(int row=5;row<=8;++row)for(int col=0;col<columns(row);++col)
-  programControlled|=sidImportedControlReason(current()->chip.sid,sidField(col,row))!=nullptr;
- gfxPrint(0,15,programControlled?"* = program controlled":"Max 4 notes (ring/sync uses 2)");
- if(!sidWaveformBitmap)sidWaveformBitmap=gfxBitmapCreate(32,3);gfxClearRect(0,16,32,3);renderFMPreview(sidWaveformBitmap,current());gfxDrawBitmap(sidWaveformBitmap,0,16);return;
- }gfxPrint(0,9,"Fine ct");gfxPrint(0,11,"Mode");const char* mode=isOPLL(current()->type)?"2 operator":fourOp()?"4 operator":dx7()?"6 operator":current()->chip.opl.topology==OPLTopology::fourOperator?"4 operator":current()->chip.opl.topology==OPLTopology::dualVoice?"Dual voice":"2 operator";gfxPrint(9,11,mode);instrumentFMAmpDrawStatic();}
-void drawCursor(int col,int row){if(sid()&&row==4){gfxCursor(col?28:9,7,col?4:18);return;}if(sid()&&row>=5){gfxCursor(sidX(col,row),sidY(row),sidWidth(col,row));return;}if(row==6){instrumentFMToneDrawCursor(col);return;}if(row>=7){instrumentFMAmpDrawCursor(col,row-7);return;}if(row<3)instrumentCommonDrawCursor(col,row);else if(row==5&&col==1)gfxCursor(16,9,4);else gfxCursor(9,row==3?6:row==4?7:9,row==5?4:28);}
+const char* modeName(){return isOPLL(current()->type)?"2 operator":fourOp()?"4 operator":dx7()?"6 operator":current()->chip.opl.topology==OPLTopology::fourOperator?"4 operator":current()->chip.opl.topology==OPLTopology::dualVoice?"Dual voice":"2 operator";}
+void drawStatic(){
+ instrumentCommonDrawStatic();
+ gfxSetFgColor(appSettings.colorScheme.textLabel);gfxPrint(0,6,"Bank");gfxPrint(0,7,"Preset");
+ if(sid()){
+  gfxPrint(0,9,"Wave");gfxPrint(kColumnNameX[1],9,"PW");
+  gfxPrint(0,12,"Mode");gfxPrint(0,13,"Cutoff");gfxPrint(kColumnNameX[1],13,"Reso");
+  gfxPrint(0,14,"ADSR");
+  gfxPrint(6,14,"A");gfxPrint(11,14,"D");gfxPrint(16,14,"S");gfxPrint(21,14,"R");
+  gfxSetFgColor(appSettings.colorScheme.textTitles);gfxPrint(0,11,"FILTER");
+  gfxSetFgColor(appSettings.colorScheme.textInfo);
+  bool programControlled=false;
+  for(int row=5;row<=8;++row)for(int col=0;col<columns(row);++col)
+   programControlled|=sidImportedControlReason(current()->chip.sid,sidField(col,row))!=nullptr;
+  gfxPrint(0,15,programControlled?"* = program controlled":"Max 4 notes (ring/sync uses 2)");
+  if(!sidWaveformBitmap)sidWaveformBitmap=gfxBitmapCreate(32,3);gfxClearRect(0,16,32,3);renderFMPreview(sidWaveformBitmap,current());gfxDrawBitmap(sidWaveformBitmap,0,16);return;
+ }
+ gfxPrint(0,9,"Fine");gfxPrint(0,11,"Mode");
+ gfxSetFgColor(appSettings.colorScheme.textDefault);gfxPrint(kColumnValueX[0],11,modeName());
+ instrumentFMAmpDrawStatic();
+}
+// Fine runs from -100 to +100 cents and shows as 80 plus the cents, with a
+// bar from the middle; the line below gives it in cents.
+void drawCursor(int col,int row){
+ if(sid()&&row==4){gfxCursor(col?28:kColumnValueX[0],7,col?4:18);return;}
+ if(sid()&&row>=5){gfxCursor(sidX(col,row),sidY(row),sidWidth(col,row)+(sidBar(col,row)?kFieldBarWidth-(sidWidth(col,row)-2):0));return;}
+ if(row==6){instrumentFMToneDrawCursor(col);return;}
+ if(row>=7){instrumentFMAmpDrawCursor(col,row-7);return;}
+ if(row<3){instrumentCommonDrawCursor(col,row);return;}
+ if(row==5&&col==1){gfxCursor(kColumnNameX[1],9,4);return;}
+ if(row==5){gfxCursor(kColumnValueX[0],9,kFieldNumberWidth);screenMessage(0,"Fine %+d cents",fineTune());return;}
+ gfxCursor(kColumnValueX[0],row==3?6:7,25);
+}
 void drawField(int col,int row,CellState state){
  if(sid()&&row==4&&col==1){
   gfxSetFgColor(state==CellState::focus?appSettings.colorScheme.textValue:appSettings.colorScheme.textInfo);
   gfxClearRect(28,7,4,1);gfxPrint(28,7,"EDIT");return;
  }
  if(sid()&&row>=5){
-  int x=sidX(col,row),y=sidY(row);auto v=current()->chip.sid.value[sidField(col,row)];
-  const char* owned=sidImportedControlReason(current()->chip.sid,sidField(col,row));
-  gfxSetFgColor(appSettings.colorScheme.textInfo);gfxClearRect(x+sidWidth(col,row),y,1,1);if(owned)gfxPrint(x+sidWidth(col,row),y,"*");
-  gfxSetFgColor(owned?appSettings.colorScheme.textInfo:state==CellState::focus?appSettings.colorScheme.textValue:appSettings.colorScheme.textDefault);gfxClearRect(x,y,sidWidth(col,row),1);
+  const int field=sidField(col,row),x=sidX(col,row),y=sidY(row),width=sidWidth(col,row);auto v=current()->chip.sid.value[field];
+  const char* owned=sidImportedControlReason(current()->chip.sid,field);
+  if(const char* label=sidLabel(col,row))fieldDrawLabel(kColumnNameX[col?1:0],y,label,state);
+  else{static const char* const letters[]={"A","D","S","R"};fieldDrawLabel(6+col*5,y,letters[col],state);}
+  gfxClearRect(x,y,sidBar(col,row)?width+kFieldBarWidth-(width-2):width+1,1);
+  gfxSetFgColor(owned?appSettings.colorScheme.textInfo:row==6||(row==5&&!col)?fieldNameColor(state):fieldValueColor(state));
   if(row==5&&!col){const char* waves[]={"Off","Tri","Saw","TS","Pulse","TP","SP","TSP","Noise"};gfxPrint(x,y,waves[v]);}
   else if(row==6){const char* modes[]={"Off","LP","BP","LB","HP","LH","BH","LBH"};gfxPrint(x,y,modes[v&7]);}
-  else gfxPrintf(x,y,"%0*X",sidWidth(col,row),v);
+  else gfxPrintf(x,y,"%0*X",width,v);
+  // A program-controlled value is marked with * instead of a bar.
+  if(owned){gfxSetFgColor(appSettings.colorScheme.textInfo);gfxPrint(x+width,y,"*");}
+  else if(sidBar(col,row))fieldDrawBar(x+width,y,kFieldBarWidth-(width-2),v/float(sidMaximum(field)),state);
   if(sidWaveformBitmap){gfxClearRect(0,16,32,3);renderFMPreview(sidWaveformBitmap,current());gfxSetFgColor(appSettings.colorScheme.textInfo);gfxDrawBitmap(sidWaveformBitmap,0,16);}
   return;
  }
-
-  if(row==6){instrumentFMToneDrawField(col,state);return;}if(row>=7){instrumentFMAmpDrawField(col,row-7,state);return;}
-  if(row<3){instrumentCommonDrawField(col,row,state);return;}
-  if(row==5&&col==1){gfxSetFgColor(state==CellState::focus?appSettings.colorScheme.textValue:appSettings.colorScheme.textInfo);gfxClearRect(16,9,4,1);gfxPrint(16,9,"EDIT");return;}
-  gfxSetFgColor(state==CellState::focus?appSettings.colorScheme.textValue:appSettings.colorScheme.textDefault);int y=row==3?6:row==4?7:9;gfxClearRect(9,y,row==3?(sid()?23:28):row==5?6:sid()?18:30,1);
-  if(row==3)gfxPrintf(9,y,"%.*s",sid()?23:28,instrumentPresetCollectionName());
-  else if(row==4)gfxPrintf(9,y,"%.*s",sid()?18:30,presetName());else gfxPrintf(9,y,"%+04d",fineTune());
-  instrumentFMRefreshStaticWaveform();
+ if(row==6){instrumentFMToneDrawField(col,state);return;}if(row>=7){instrumentFMAmpDrawField(col,row-7,state);return;}
+ if(row<3){instrumentCommonDrawField(col,row,state);return;}
+ if(row==5&&col==1){gfxSetFgColor(state==CellState::focus?appSettings.colorScheme.textValue:appSettings.colorScheme.textInfo);gfxClearRect(kColumnNameX[1],9,4,1);gfxPrint(kColumnNameX[1],9,"EDIT");return;}
+ // The selected field's label lights up with its value.
+ const int x=kColumnValueX[0],y=row==3?6:row==4?7:9;
+ fieldDrawLabel(0,y,row==3?"Bank":row==4?"Preset":"Fine",state);
+ gfxSetFgColor(fieldValueColor(state));
+ if(row==5){gfxClearRect(x,y,kFieldNumberWidth,1);fieldDrawNumber(x,y,(uint8_t)(0x80+fineTune()),state,(fineTune()+100)/200.0f,true);}
+ else{
+  const int width=row==3?(sid()?20:26):sid()?18:26;
+  gfxClearRect(x,y,width,1);
+  gfxPrintf(x,y,"%.*s",width,row==3?instrumentPresetCollectionName():presetName());
+ }
+ instrumentFMRefreshStaticWaveform();
 }
 int onEdit(int col,int row,CellEditAction action){
  if(sid()&&row==4&&col==1){screenSetup(&screenSIDEdit,cInstrument);return 1;}
  if(sid()&&row>=5){
-  int field=sidField(col,row),max=field==sidWave?8:field==sidPulse?4095:field==sidCutoff?2047:field==sidFilterMode?7:15;
+  int field=sidField(col,row),max=sidMaximum(field);
   int min=field==sidWave?1:0,step=max>255?128:max>15?16:1;
   if(const char* reason=sidImportedControlReason(current()->chip.sid,field)){screenMessage(MESSAGE_TIME_ERROR,"%s",reason);return 1;}
   action=convertMultiAction(action);int v=current()->chip.sid.value[field];

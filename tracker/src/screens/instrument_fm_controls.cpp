@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "field_style.h"
 #include "corelib_gfx.h"
 #include "chipnomad_lib.h"
 #include "waveform_display.h"
@@ -28,7 +29,7 @@ void instrumentFMRefreshStaticWaveform() {
 void instrumentFMAmpDrawStatic() {
   gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 12, "Amp env");
-  gfxPrint(0, 10, "Bright"); gfxPrint(19, 10, "Feedback");
+  gfxPrint(0, 10, "Bright"); gfxPrint(kColumnNameX[1], 10, "Feedbk.");
   gfxPrint(0, 14, "ADSR");
   gfxPrint(6, 14, "A"); gfxPrint(11, 14, "D");
   gfxPrint(16, 14, "S"); gfxPrint(21, 14, "R");
@@ -36,14 +37,26 @@ void instrumentFMAmpDrawStatic() {
   instrumentFMRefreshStaticWaveform();
 }
 
-void instrumentFMToneDrawCursor(int col) { gfxCursor(col ? 28 : 9, 10, col ? 6 : 4); }
+// Bright runs from -63 to +63 and shows as 80 plus the brightness, with a
+// bar from the middle; Feedback is the preset's own, or 00-07.
+void instrumentFMToneDrawCursor(int col) {
+  const auto* tone = instrumentFMToneSettings(&chipnomadState->project.instruments[cInstrument]);
+  gfxCursor(kColumnValueX[col], 10, col && !tone->feedback ? 6 : kFieldNumberWidth);
+  if (!col) screenMessage(0, "Bright %+d", tone->brightness);
+}
 void instrumentFMToneDrawField(int col, CellState state) {
-  const auto* tone=instrumentFMToneSettings(&chipnomadState->project.instruments[cInstrument]);
-  gfxSetFgColor(state==CellState::focus?appSettings.colorScheme.textValue:appSettings.colorScheme.textDefault);
-  gfxClearRect(col?28:9,10,7,1);
-  if(!col)gfxPrintf(9,10,"%+03d",tone->brightness);
-  else if(!tone->feedback)gfxPrint(28,10,"Preset");
-  else gfxPrintf(28,10,"%u",tone->feedback-1);
+  const auto* tone = instrumentFMToneSettings(&chipnomadState->project.instruments[cInstrument]);
+  const int x = kColumnValueX[col];
+  fieldDrawLabel(kColumnNameX[col], 10, col ? "Feedbk." : "Bright", state);
+  gfxClearRect(x, 10, kFieldNumberWidth, 1);
+  if (!col) {
+    fieldDrawNumber(x, 10, (uint8_t)(0x80 + tone->brightness), state, (tone->brightness + 63) / 126.0f, true);
+  } else if (!tone->feedback) {
+    gfxSetFgColor(fieldNameColor(state));
+    gfxPrint(x, 10, "Preset");
+  } else {
+    fieldDrawNumber(x, 10, (uint8_t)(tone->feedback - 1), state, (tone->feedback - 1) / 7.0f);
+  }
   instrumentFMRefreshStaticWaveform();
 }
 int instrumentFMToneEdit(int col, CellEditAction action) {
@@ -56,16 +69,17 @@ int instrumentFMToneEdit(int col, CellEditAction action) {
 }
 
 void instrumentFMAmpDrawCursor(int col, int row) {
-  if (!row) gfxCursor(9, 12, amp()->enabled ? 4 : 6);
+  if (!row) gfxCursor(kColumnValueX[0], 12, amp()->enabled ? 4 : 6);
   else instrumentCommonDrawVoicePostCursor(col, 9);
 }
 
 void instrumentFMAmpDrawField(int col, int row, CellState state) {
   instrumentFMRefreshStaticWaveform();
   if (!row) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxClearRect(9, 12, 8, 1);
-    gfxPrint(9, 12, amp()->enabled ? "ADSR" : "Bypass");
+    fieldDrawLabel(0, 12, "Amp env", state);
+    gfxSetFgColor(fieldNameColor(state));
+    gfxClearRect(kColumnValueX[0], 12, kFieldNumberWidth, 1);
+    gfxPrint(kColumnValueX[0], 12, amp()->enabled ? "ADSR" : "Bypass");
   } else instrumentCommonDrawVoicePostField(col, 9, state, amp());
 }
 
