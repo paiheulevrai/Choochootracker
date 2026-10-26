@@ -60,7 +60,10 @@ void fieldDrawNumber(int x, int y, uint8_t value, CellState state, float positio
   gfxSetFgColor(fieldValueColor(state));
   gfxPrint(x, y, byteToHex(value));
   if (position < 0.0f) position = value / 255.0f;
-  if (livePosition < 0.0f) fieldDrawBar(x + 2, y, kFieldBarWidth, position, state, bipolar);
+  // The engine's rounding can land a step away from the set value; only a
+  // value that has really moved gets a mark.
+  if (livePosition < 0.0f || fabsf(livePosition - position) < 1.5f / 255.0f)
+    fieldDrawBar(x + 2, y, kFieldBarWidth, position, state, bipolar);
   else fieldDrawBar(x + 2, y, kFieldBarWidth, livePosition, state, bipolar, position);
 }
 
