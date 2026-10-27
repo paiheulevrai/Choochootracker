@@ -55,3 +55,25 @@ TEST_CASE("Engines report what a track plays for the instrument page's bars") {
   const std::set<int> moving = reportedTimbre(true, &instrument);
   CHECK(moving.size() > 5);
 }
+
+TEST_CASE("Live bars clear when a playing instrument changes to an unreported engine") {
+  auto* s = chipnomadCreate();
+  auto& p = s->project;
+  p.chipsCount = 1; p.tracksCount = 1; p.tickRate = 50; p.linearPitch = 1;
+  calculateLinearPitchTable12TET(&p);
+  Instrument& instrument = p.instruments[2];
+  getInstrumentFunctions(InstrumentType::Braids).init(&instrument);
+  chipnomadInitChips(s, 48000, nullptr);
+  REQUIRE(chipnomadQueueProjectRefresh(s));
+  chipnomadQueuePlaybackPreviewNote(s, 0, 48, 2);
+  float audio[1920];
+  chipnomadRender(s, audio, 960);
+  CHECK(chipnomadGetPlaybackStatus(s)->tracks[0].liveInstrument == 2);
+
+  getInstrumentFunctions(InstrumentType::Braids).free(&instrument);
+  getInstrumentFunctions(InstrumentType::OPLL).init(&instrument);
+  REQUIRE(chipnomadQueueProjectRefresh(s));
+  chipnomadRender(s, audio, 960);
+  CHECK(chipnomadGetPlaybackStatus(s)->tracks[0].liveInstrument == EMPTY_VALUE_8);
+  chipnomadDestroy(s);
+}

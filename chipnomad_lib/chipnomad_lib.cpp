@@ -1498,6 +1498,10 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   else if (wasPlaying) state->linkPhaseTicks++;
   motionRecordFrame(state);
   if (allTracksStopped) playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
+  // Only engines that report live controls may keep a bar moving. A track
+  // can retain its instrument number when that instrument changes type.
+  for (int t = 0; t < state->audioProject.tracksCount; ++t)
+    state->playbackState.tracks[t].liveInstrument = EMPTY_VALUE_8;
   updateSoundbankVoices(state);
   updateSampleVoices(state); updateAudioInputVoices(state); updateSCWFVoices(state); updateBraidsVoices(state);
   updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); updateDrumSynthVoices(state); updateMMEVoices(state); updateMonkVoices(state); updateSinteredVoices(state); updateOPLLVoices(state); updateOPLVoices(state); updateFourOpVoices(state); updateSimpleChipVoices(state); updateSIDVoices(state); updateDX7Voices(state); applyVoiceEvents(state, dueMicros);
