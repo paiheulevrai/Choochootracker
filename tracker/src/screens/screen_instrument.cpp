@@ -353,7 +353,7 @@ static void audioInStatic() {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0, 6, "Input");
   gfxPrint(0, 7, "SOURCE");
-  gfxSetFgColor(appSettings.colorScheme.textDefault);
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 8, "Device");
   gfxPrint(0, 10, "Input level");
   instrumentCommonDrawVoicePostStatic(1);
@@ -361,23 +361,26 @@ static void audioInStatic() {
 }
 static void audioInCursor(int col, int row) {
   if (row < 3) return instrumentCommonDrawCursor(col, row);
-  if (row == 3 && !col) return gfxCursor(10, 7, 8);
+  if (row == 3 && !col) return gfxCursor(kColumnValueX[0], 7, 8);
   if (instrumentCommonDrawVoicePostCursor(col, row)) return;
-  if (row == 4 && !col) gfxCursor(11, 8, 6);
+  if (row == 4 && !col) gfxCursor(kColumnValueX[0], 8, 6);
 }
 static void audioInField(int col, int row, CellState state) {
   if (row < 3) return instrumentCommonDrawField(col, row, state);
   if (row == 3 && !col) {
     const Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    if (instrument->audioInputSource == InstrumentAudioInputSource::external) gfxPrint(10, 7, "External");
-    else gfxPrintf(10, 7, "Track %u", (unsigned)instrument->audioInputSource);
+    gfxSetFgColor(fieldNameColor(state));
+    gfxClearRect(kColumnValueX[0], 7, 8, 1);
+    if (instrument->audioInputSource == InstrumentAudioInputSource::external) gfxPrint(kColumnValueX[0], 7, "External");
+    else gfxPrintf(kColumnValueX[0], 7, "Track %u", (unsigned)instrument->audioInputSource);
     return;
   }
   if (instrumentCommonDrawVoicePostField(col, row, state,
       &chipnomadState->project.instruments[cInstrument].chip.audioIn)) return;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-  if (row == 4 && !col) gfxPrint(11, 8, "[Open]");
+  if (row != 4 || col) return;
+  fieldDrawLabel(0, 8, "Device", state);
+  gfxSetFgColor(fieldValueColor(state));
+  gfxPrint(kColumnValueX[0], 8, "[Open]");
 }
 static int audioInEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);
