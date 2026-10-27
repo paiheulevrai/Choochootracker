@@ -837,10 +837,6 @@ int instrumentModDestinationMax(InstrumentType type) {
 
 const char* instrumentModDestinationName(InstrumentType type, int destination) {
   if (destination == midiCCDestinationNone) return "-";
-  if (destination == midiCCDestinationAttack) return "Attack";
-  if (destination == midiCCDestinationDecay) return "Decay";
-  if (destination == midiCCDestinationSustain) return "Sustain";
-  if (destination == midiCCDestinationRelease) return "Release";
   const InstrumentModDestination* definition = instrumentModDestination(type, destination);
   if (definition) return definition->name;
   return genericModName(instrumentGenericModDestination(type, destination));
@@ -873,4 +869,13 @@ const char* instrumentModDestinationNameForInstrument(const Instrument* instrume
     }
   }
   return instrumentModDestinationName(instrument ? instrument->type : InstrumentType::none, destination);
+}
+
+// MIDI CC mappings reserve 11-14 for the envelope; modulation uses those
+// numbers for the instrument's own destinations and the generic ones.
+const char* instrumentCCDestinationName(const Instrument* instrument, int destination) {
+  static const char* envelope[] = {"Attack", "Decay", "Sustain", "Release"};
+  if (destination >= midiCCDestinationAttack && destination <= midiCCDestinationRelease)
+    return envelope[destination - midiCCDestinationAttack];
+  return instrumentModDestinationNameForInstrument(instrument, destination);
 }

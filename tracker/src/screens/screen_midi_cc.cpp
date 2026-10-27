@@ -86,7 +86,7 @@ static void drawField(int col, int row, CellState state) {
   else if (m.instrument >= PROJECT_MAX_INSTRUMENTS ||
            !instrumentCCDestinationAvailable(&chipnomadState->project.instruments[m.instrument], m.destination))
     gfxPrint(x, y, "Unsupported");
-  else gfxPrint(x, y, instrumentModDestinationNameForInstrument(&chipnomadState->project.instruments[m.instrument], m.destination));
+  else gfxPrint(x, y, instrumentCCDestinationName(&chipnomadState->project.instruments[m.instrument], m.destination));
 }
 
 static int nextDestination(const MidiCCMapping& m, int direction) {

@@ -465,6 +465,23 @@ TEST_CASE("voice-post modulation destinations keep their labels") {
       firstGeneric + genericModEnvelopeAttack + i), labels[i]) == 0);
 }
 
+TEST_CASE("modulation destinations 11-14 and pan keep their own names") {
+  // MIDI CC mappings reserve 11-14 for the envelope; modulation does not.
+  Instrument instrument;
+  getInstrumentFunctions(InstrumentType::OPL2).init(&instrument);
+  static const char* modulators[] = {"M2 P3", "M2 P4", "M3 P1", "M3 P2"};
+  for (int i = 0; i < 4; ++i) {
+    CHECK(std::strcmp(instrumentModDestinationName(InstrumentType::OPL2, 11 + i), modulators[i]) == 0);
+    CHECK(std::strcmp(instrumentCCDestinationName(&instrument, 11 + i),
+                      i == 0 ? "Attack" : i == 1 ? "Decay" : i == 2 ? "Sustain" : "Release") == 0);
+  }
+  for (InstrumentType type : {InstrumentType::OPL2, InstrumentType::GenesisFM, InstrumentType::DX7}) {
+    int firstGeneric = getInstrumentFunctions(type).modDestinationsCount + 1;
+    CHECK(std::strcmp(instrumentModDestinationName(type, firstGeneric + genericModInstrumentPan), "PAN") == 0);
+    CHECK(std::strcmp(instrumentModDestinationName(type, firstGeneric + genericModTrackPan), "Track Pan") == 0);
+  }
+}
+
 TEST_CASE("instrument catalogue covers every family and its routable motion FX") {
   for (int rawType = 0; rawType < (int)InstrumentType::totalCount; ++rawType) {
     InstrumentType type = (InstrumentType)rawType;

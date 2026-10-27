@@ -655,6 +655,7 @@ inline int fmBrightnessToByte(int v) { return v<=0 ? ((v+63)*128+31)/63 : 128+(v
 int instrumentNativeControlValue(const Instrument* instrument, int generic);
 const char* instrumentModDestinationName(InstrumentType type, int destination);
 const char* instrumentModDestinationNameForInstrument(const Instrument* instrument, int destination);
+const char* instrumentCCDestinationName(const Instrument* instrument, int destination);
 int instrumentModDestinationMax(InstrumentType type);
 int instrumentGenericModDestination(InstrumentType type, int destination);
 int modulationIsLiveStick(ModulationType type);

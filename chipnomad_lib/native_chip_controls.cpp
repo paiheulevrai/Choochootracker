@@ -133,6 +133,8 @@ const InstrumentModDestination* instrumentNativeModDestination(InstrumentType t,
     {"SID release",fxSRL,15,InstrumentMotionValue::raw},
     {"SID partner ratio",fxSPR,16,InstrumentMotionValue::raw},
   };
+  // PAN and Track Pan follow the 78 direct FM targets; they are not FM controls.
+  if(g>=genericModInstrumentPan)return nullptr;
   if(g>=genericModFirstDirectFM)return directModDestination(t,g-genericModFirstDirectFM);
   if(g>=genericModSIDAttack)return t==InstrumentType::SID?&sidEnvelope[g-genericModSIDAttack]:nullptr;
   if(g>=genericModFMOperator1) {
