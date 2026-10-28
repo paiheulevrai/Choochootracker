@@ -4,10 +4,26 @@
 #include "project_io_common.h"
 #include "synth/achchid_voice.h"
 #include "synth/sid_voice.h"
+#include "rosic_MipMappedWaveTable.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <vector>
+
+TEST_CASE("Open303 prototype initialization preserves the mip tables") {
+  struct Probe : rosic::MipMappedWaveTable {
+    bool preservesTables() {
+      for (int i = 0; i < 4; ++i) tableSet[0][i] = 42.0;
+      initPrototypeTable();
+      for (int i = 0; i < tableLength; ++i) if (prototypeTable[i] != 0) return false;
+      for (int i = 0; i < 4; ++i) if (tableSet[0][i] != 42.0) return false;
+      return true;
+    }
+  };
+  auto* probe = new Probe;
+  CHECK(probe->preservesTables());
+  delete probe;
+}
 
 TEST_CASE("aChChid has native controls and dedicated FX") {
   Instrument instrument = {};

@@ -18,7 +18,8 @@ ifeq ($(strip $(MIYOO_SDL2_ROOT)),)
 $(error MIYOO_SDL2_ROOT must point to the MMIYOO SDL2 SDK)
 endif
 
-CFLAGS = $(filter-out -flto,$(COMMON_CFLAGS)) $(INCLUDES) \
+# Prefer audio/rendering throughput on the handheld; retain IEEE arithmetic.
+CFLAGS = $(filter-out -Os -flto,$(COMMON_CFLAGS)) -O3 $(INCLUDES) \
   --sysroot=$(MIYOO_SYSROOT) -I$(MIYOO_SDL2_ROOT)/include \
   -DMIYOOPORTS_BUILD -DGAMEPAD_SUPPORT -mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard
 XTRA_LIBS = -L$(MIYOO_SDL2_ROOT)/lib -lSDL2 -Wl,--allow-shlib-undefined \
