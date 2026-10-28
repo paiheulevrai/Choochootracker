@@ -69,6 +69,13 @@ struct StickLiveFixture {
     mockAudioCpuLoad = 0;
     mockAudioOutputDeviceCount = 0;
     mockAudioRestartResult = 0;
+    mockAudioRestartCalls = 0;
+    mockAudioOutputNames.clear();
+    mockAudioOutputAttempts.clear();
+    mockAudioRestartResults.clear();
+    mockOpenedAudioOutput.clear();
+    mockAudioOutputOpen = true;
+    screenClearMessage();
     mockAudioRefreshResult = 0;
     mockAudioRefreshCalls = 0;
     mockSelectedAudioOutput[0] = 0;
@@ -81,6 +88,11 @@ struct StickLiveFixture {
   ~StickLiveFixture() {
     inputRawCallback = nullptr;
     appCleanup();
+    mockAudioOutputNames.clear();
+    mockAudioOutputAttempts.clear();
+    mockAudioRestartResults.clear();
+    mockAudioOutputDeviceCount = 0;
+    mockAudioRestartResult = 0;
     chipnomadState = savedState;
     appSettings = savedSettings;
     chipnomadSetLiveStickEnabled(0);
@@ -508,6 +520,145 @@ TEST_CASE_FIXTURE(StickLiveFixture, "audio output selection saves and restores t
   CHECK(appSettings.audioOutputDeviceName[0] == 0);
   CHECK(mockSelectedAudioOutput[0] == 0);
   mockAudioOutputDeviceCount = 0;
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "audio output skips unavailable devices in either direction") {
+  mockAudioOutputNames = {"audiocodec, ", "USB Audio", "HDMI"};
+  screenAudioSettings.fullRedraw();
+  auto* screen = mockScreenData;
+  CellEditAction action = CellEditAction::increase;
+  std::vector<std::string> expected;
+  std::string selected;
+  SUBCASE("Default passes a busy codec and opens USB Audio") {
+    mockAudioRestartResults = {1, 0};
+    expected = {"audiocodec, ", "USB Audio"};
+    selected = "USB Audio";
+  }
+  SUBCASE("reverse from USB Audio passes the codec and opens Default") {
+    strcpy(appSettings.audioOutputDeviceName, "USB Audio");
+    action = CellEditAction::decrease;
+    mockAudioRestartResults = {1, 0};
+    expected = {"audiocodec, ", ""};
+  }
+  SUBCASE("reverse wraps from Default to HDMI") {
+    action = CellEditAction::decrease;
+    expected = {"HDMI"};
+    selected = "HDMI";
+  }
+  SUBCASE("multiple unavailable devices do not prevent HDMI selection") {
+    mockAudioRestartResults = {1, 1, 0};
+    expected = {"audiocodec, ", "USB Audio", "HDMI"};
+    selected = "HDMI";
+  }
+  SUBCASE("a disappearing device is skipped") {
+    mockAudioOutputNames[0].clear();
+    expected = {"USB Audio"};
+    selected = "USB Audio";
+  }
+  SUBCASE("a missing saved output still allows Default") {
+    strcpy(appSettings.audioOutputDeviceName, "Unplugged USB");
+    mockAudioRestartResults = {1, 1, 1, 0};
+    expected = {"audiocodec, ", "USB Audio", "HDMI", ""};
+  }
+  REQUIRE(screen->onEdit(0, 2, action) == 1);
+  CHECK(mockAudioOutputAttempts == expected);
+  CHECK(mockAudioRestartCalls == (int)expected.size());
+  CHECK(mockAudioOutputOpen);
+  CHECK(mockOpenedAudioOutput == selected);
+  CHECK(std::string(appSettings.audioOutputDeviceName) == selected);
+  CHECK(std::string(screenGetActiveMessage()).empty());
+  strcpy(appSettings.audioOutputDeviceName, "not saved");
+  REQUIRE(settingsLoad() == 0);
+  CHECK(std::string(appSettings.audioOutputDeviceName) == selected);
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "audio output recovers after a bounded unsuccessful search") {
+  mockAudioOutputNames = {"audiocodec, ", "USB Audio"};
+  screenAudioSettings.fullRedraw();
+  auto* screen = mockScreenData;
+  CellEditAction action = CellEditAction::increase;
+  std::vector<std::string> expected;
+  std::string selected, message;
+  bool open = true;
+  int messageFrames = MESSAGE_TIME;
+  SUBCASE("only Default works") {
+    mockAudioRestartResults = {1, 1, 0};
+    expected = {"audiocodec, ", "USB Audio", ""};
+    message = "No other output";
+  }
+  SUBCASE("previous USB output is restored") {
+    strcpy(appSettings.audioOutputDeviceName, "USB Audio");
+    mockAudioRestartResults = {1, 1, 0};
+    expected = {"", "audiocodec, ", "USB Audio"};
+    selected = "USB Audio";
+    message = "No other output";
+  }
+  SUBCASE("Default recovers after the previous USB output also fails") {
+    strcpy(appSettings.audioOutputDeviceName, "USB Audio");
+    mockAudioRestartResults = {1, 1, 1, 0};
+    expected = {"", "audiocodec, ", "USB Audio", ""};
+    message = "Using Default";
+  }
+  SUBCASE("reset does not select an unrelated USB output") {
+    strcpy(appSettings.audioOutputDeviceName, "USB Audio");
+    action = CellEditAction::clear;
+    mockAudioRestartResults = {1, 0};
+    expected = {"", "USB Audio"};
+    selected = "USB Audio";
+    message = "Default unavailable";
+  }
+  SUBCASE("total failure preserves the last valid saved selection") {
+    strcpy(appSettings.audioOutputDeviceName, "USB Audio");
+    mockAudioRestartResult = 1;
+    expected = {"", "audiocodec, ", "USB Audio", ""};
+    selected = "USB Audio";
+    message = "Audio output failed";
+    messageFrames = MESSAGE_TIME_ERROR;
+    open = false;
+  }
+  SUBCASE("no enumerated devices leave the active Default stream alone") {
+    mockAudioOutputNames.clear();
+    message = "No other output";
+  }
+  REQUIRE(settingsSave() == 0);
+  REQUIRE(screen->onEdit(0, 2, action) == 1);
+  CHECK(mockAudioOutputAttempts == expected);
+  CHECK(mockAudioRestartCalls == (int)expected.size());
+  CHECK(mockAudioOutputOpen == open);
+  if (open) CHECK(mockOpenedAudioOutput == selected);
+  CHECK(std::string(mockSelectedAudioOutput) == selected);
+  CHECK(std::string(appSettings.audioOutputDeviceName) == selected);
+  CHECK(std::string(screenGetActiveMessage()) == message);
+  CHECK(mockMessageFrames == messageFrames);
+  strcpy(appSettings.audioOutputDeviceName, "not saved");
+  REQUIRE(settingsLoad() == 0);
+  CHECK(std::string(appSettings.audioOutputDeviceName) == selected);
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "audio output retries previously unavailable interfaces") {
+  mockAudioOutputNames = {"audiocodec, ", "USB Audio"};
+  mockAudioRestartResults = {1, 1, 0, 1, 0};
+  screenAudioSettings.fullRedraw();
+  auto* screen = mockScreenData;
+  REQUIRE(screen->onEdit(0, 2, CellEditAction::increase) == 1);
+  CHECK(std::string(screenGetActiveMessage()) == "No other output");
+  REQUIRE(screen->onEdit(0, 2, CellEditAction::increase) == 1);
+  CHECK(mockAudioOutputAttempts == std::vector<std::string>{"audiocodec, ", "USB Audio", "", "audiocodec, ", "USB Audio"});
+  CHECK(mockOpenedAudioOutput == "USB Audio");
+  CHECK(std::string(appSettings.audioOutputDeviceName) == "USB Audio");
+  CHECK(std::string(screenGetActiveMessage()).empty());
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "audio output tap and reset on Default do not reopen audio") {
+  mockAudioOutputNames = {"audiocodec, ", "USB Audio"};
+  screenAudioSettings.fullRedraw();
+  auto* screen = mockScreenData;
+  for (auto action : {CellEditAction::tap, CellEditAction::clear})
+    CHECK(screen->onEdit(0, 2, action) == 1);
+  CHECK(mockAudioRestartCalls == 0);
+  CHECK(mockAudioOutputAttempts.empty());
+  CHECK(mockAudioOutputOpen);
+  CHECK(std::string(screenGetActiveMessage()).empty());
 }
 
 TEST_CASE_FIXTURE(StickLiveFixture, "audio sample rate settings accept only 32 or 48 kHz") {

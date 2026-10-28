@@ -12,9 +12,22 @@ static void noOp(void) {}
 static int startAudio(int, int) { return 0; }
 int mockAudioReconfigureResult, mockAudioReconfigureCalls, mockAudioReconfigureRate, mockAudioReconfigureSize, mockAudioCpuLoad;
 int mockAudioRestartResult, mockAudioRestartCalls;
+std::vector<std::string> mockAudioOutputAttempts;
+std::vector<int> mockAudioRestartResults;
+std::string mockOpenedAudioOutput;
+bool mockAudioOutputOpen = true;
+extern char mockSelectedAudioOutput[128];
 int mockAudioRefreshResult, mockAudioRefreshCalls;
 static int reconfigureAudio(int rate, int size) { ++mockAudioReconfigureCalls; mockAudioReconfigureRate = rate; mockAudioReconfigureSize = size; return mockAudioReconfigureResult; }
-static int restartAudio(void) { ++mockAudioRestartCalls; return mockAudioRestartResult; }
+static int restartAudio(void) {
+  const int call = mockAudioRestartCalls++;
+  mockAudioOutputAttempts.emplace_back(mockSelectedAudioOutput);
+  const int result = call < (int)mockAudioRestartResults.size() ? mockAudioRestartResults[call]
+                                                              : mockAudioRestartResult;
+  mockAudioOutputOpen = result == 0;
+  mockOpenedAudioOutput = mockAudioOutputOpen ? mockSelectedAudioOutput : "";
+  return result;
+}
 static int refreshAudio(void) { ++mockAudioRefreshCalls; return mockAudioRefreshResult; }
 static int cpuLoad() { return mockAudioCpuLoad; }
 static int mutateProject(ProjectMutation* mutation, void* userdata) { return mutation ? mutation(userdata) : 1; }
@@ -62,13 +75,15 @@ int mainLoopGetTargetFps(void) { return 60; }
 int mainLoopGetFrameTimeUs(void) { return 0; }
 void screenDraw(void) {}
 static char activeMessage[42]{};
-void screenMessage(int, const char* format, ...) {
+int mockMessageFrames = 0;
+void screenMessage(int frames, const char* format, ...) {
+  mockMessageFrames = frames;
   va_list args; va_start(args, format);
   vsnprintf(activeMessage, sizeof(activeMessage), format, args);
   va_end(args);
 }
 const char* screenGetActiveMessage(void) { return activeMessage; }
-void screenClearMessage(void) { activeMessage[0] = '\0'; }
+void screenClearMessage(void) { activeMessage[0] = '\0'; mockMessageFrames = 0; }
 int mockAudioRestartNotificationFrames = 0;
 void screenNotifyAudioRestart(void) { mockAudioRestartNotificationFrames = 180; }
 int screenAudioRestartActive(void) { return mockAudioRestartNotificationFrames > 0; }

@@ -146,7 +146,8 @@ int audioSetup(AudioCallback* audioCallback, int sampleRate, int bufferSize) {
   }
 #endif
   if (opened < 0) {
-    fprintf(stderr, "Failed to open audio: %s\n", SDL_GetError());
+    fprintf(stderr, "Failed to open audio (%s): %s\n",
+            selectedOutputName[0] ? selectedOutputName : "Default", SDL_GetError());
     return 1;
   }
 #ifdef MIYOOPORTS_BUILD

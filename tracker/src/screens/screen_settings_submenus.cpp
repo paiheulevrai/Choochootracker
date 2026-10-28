@@ -82,6 +82,74 @@ static int audioBufferIndex(int value) {
     if (audioBufferSizes[i] == value) return i;
   return 0;
 }
+static int audioSelectOutput(CellEditAction action) {
+  if (action == CellEditAction::tap) return 1;
+  const bool reset = action == CellEditAction::clear;
+  int direction = 0;
+  if (action == CellEditAction::increase || action == CellEditAction::increaseBig ||
+      action == CellEditAction::multiIncrease || action == CellEditAction::multiIncreaseBig) direction = 1;
+  else if (action == CellEditAction::decrease || action == CellEditAction::decreaseBig ||
+           action == CellEditAction::multiDecrease || action == CellEditAction::multiDecreaseBig) direction = -1;
+  else if (!reset) return 0;
+
+  char previous[AUDIO_DEVICE_NAME_LENGTH + 1];
+  strcpy(previous, appSettings.audioOutputDeviceName);
+  if (reset && !previous[0]) return 1;
+  if (!audioManager.restart) {
+    screenMessage(MESSAGE_TIME_ERROR, "Audio output failed");
+    return 1;
+  }
+  int count = audioOutputDeviceCount();
+  if (count < 0) count = 0;
+  int current = 0;
+  char name[AUDIO_DEVICE_NAME_LENGTH + 1];
+  for (int i = 0; i < count; ++i)
+    if (!audioOutputDeviceName(i, name, sizeof(name)) && strcmp(name, previous) == 0) {
+      current = i + 1;
+      break;
+    }
+
+  // Enumerated devices can be busy (for example, the OS owns the internal
+  // codec). Try one bounded pass, including Default, without caching failures.
+  bool attempted = false;
+  int next = current;
+  for (int remaining = reset ? 1 : count + 1; remaining > 0; --remaining) {
+    next = reset ? 0 : direction > 0 ? (next < count ? next + 1 : 0)
+                                    : (next > 0 ? next - 1 : count);
+    name[0] = 0;
+    if (next > 0 && audioOutputDeviceName(next - 1, name, sizeof(name))) continue;
+    if (strcmp(name, previous) == 0) continue;
+    attempted = true;
+    audioOutputSelect(name);
+    if (audioManager.restart()) continue;
+    strcpy(appSettings.audioOutputDeviceName, name);
+    screenClearMessage();
+    if (settingsSave()) screenMessage(MESSAGE_TIME_ERROR, "Could not save audio setting");
+    return 1;
+  }
+
+  // restart() closes the old stream before opening a candidate. Restore it
+  // after an unsuccessful search, but leave it alone if nothing was tried.
+  audioOutputSelect(previous);
+  if (!attempted || !audioManager.restart()) {
+    screenMessage(MESSAGE_TIME, reset ? "Default unavailable" : "No other output");
+    return 1;
+  }
+  if (previous[0]) {
+    audioOutputSelect("");
+    if (!audioManager.restart()) {
+      appSettings.audioOutputDeviceName[0] = 0;
+      screenMessage(MESSAGE_TIME, "Using Default");
+      if (settingsSave()) screenMessage(MESSAGE_TIME_ERROR, "Could not save audio setting");
+      return 1;
+    }
+  }
+  // Keep the last valid preference for a later retry; no failed candidate
+  // should become the saved selection.
+  audioOutputSelect(previous);
+  screenMessage(MESSAGE_TIME_ERROR, "Audio output failed");
+  return 1;
+}
 static int audioEdit(int, int row, CellEditAction action) {
   if (row == 4) {
     if (action == CellEditAction::clear || action == CellEditAction::decrease ||
@@ -100,40 +168,7 @@ static int audioEdit(int, int row, CellEditAction action) {
     screenSetup(&screenAudioInput, 0);
     return 1;
   }
-  if (row == 2) {
-    if (action == CellEditAction::tap) return 1;
-    int count = audioOutputDeviceCount();
-    if (count < 0) count = 0;
-    int current = 0;
-    char name[AUDIO_DEVICE_NAME_LENGTH + 1];
-    for (int i = 0; i < count; ++i)
-      if (!audioOutputDeviceName(i, name, sizeof(name)) &&
-          strcmp(name, appSettings.audioOutputDeviceName) == 0) { current = i + 1; break; }
-    int next = current;
-    if (action == CellEditAction::clear) next = 0;
-    else if (action == CellEditAction::increase ||
-             action == CellEditAction::increaseBig || action == CellEditAction::multiIncrease ||
-             action == CellEditAction::multiIncreaseBig) next = current < count ? current + 1 : 0;
-    else if (action == CellEditAction::decrease || action == CellEditAction::decreaseBig ||
-             action == CellEditAction::multiDecrease || action == CellEditAction::multiDecreaseBig)
-      next = current > 0 ? current - 1 : count;
-    else return 0;
-    char previous[AUDIO_DEVICE_NAME_LENGTH + 1];
-    strcpy(previous, appSettings.audioOutputDeviceName);
-    name[0] = 0;
-    if (next > 0 && audioOutputDeviceName(next - 1, name, sizeof(name))) return 1;
-    if (strcmp(previous, name) == 0) return 1;
-    audioOutputSelect(name);
-    if (!audioManager.restart || audioManager.restart()) {
-      audioOutputSelect(previous);
-      if (audioManager.restart) audioManager.restart();
-      screenMessage(MESSAGE_TIME_ERROR, "Audio output failed");
-      return 1;
-    }
-    strcpy(appSettings.audioOutputDeviceName, name);
-    if (settingsSave()) screenMessage(MESSAGE_TIME_ERROR, "Could not save audio setting");
-    return 1;
-  }
+  if (row == 2) return audioSelectOutput(action);
   if (row != 0 && row != 1) return 0;
   int direction = 0;
   if (action == CellEditAction::clear) direction = -99;

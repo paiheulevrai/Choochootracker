@@ -1,12 +1,20 @@
 #include "corelib_audio.h"
 #include "chipnomad_lib.h"
 #include <cstring>
+#include <string>
+#include <vector>
 int mockAudioOutputDeviceCount = 0;
 char mockSelectedAudioOutput[128] = {};
-int audioOutputDeviceCount(void) { return mockAudioOutputDeviceCount; }
+std::vector<std::string> mockAudioOutputNames;
+int audioOutputDeviceCount(void) {
+  return mockAudioOutputNames.empty() ? mockAudioOutputDeviceCount : (int)mockAudioOutputNames.size();
+}
 int audioOutputDeviceName(int index, char* buffer, int size) {
-  if (index < 0 || index >= mockAudioOutputDeviceCount || !buffer || size < 13) return 1;
-  std::strcpy(buffer, "ROCCAT Juke");
+  if (index < 0 || index >= audioOutputDeviceCount() || !buffer || size <= 0) return 1;
+  const char* name = mockAudioOutputNames.empty() ? "ROCCAT Juke" : mockAudioOutputNames[index].c_str();
+  if (!*name) return 1; // Device disappeared during enumeration.
+  std::strncpy(buffer, name, size - 1);
+  buffer[size - 1] = 0;
   return 0;
 }
 void audioOutputSelect(const char* name) {
