@@ -211,12 +211,13 @@ static void drawStatic(void) {
   Project* p = &chipnomadState->project;
   if (p->viewMode == ViewMode::simplified && currentPatternIdx >= 0 &&
       currentPatternIdx < PROJECT_MAX_PATTERNS) {
-    // Pattern header: "Pattern 05*   Length 04   Loop BAR"
+    // Pattern header: "Pattern 05*       Length 04   Loop BAR"
     // Codebase style: lowercase labels, no brackets, value right after the
-    // label. Positions:
+    // label. A wide gap separates the Pattern group from the Length/Loop
+    // group so the header doesn't look cramped. Positions:
     //   Pattern: x=0..10 ("Pattern %02X" + reuse mark at x=10)
-    //   Length:  label x=15, value x=22..23
-    //   Loop:    label x=26, value x=31..33 ("BAR" / "PAT")
+    //   Length:  label x=20, value x=27..28
+    //   Loop:    label x=31, value x=36..38 ("BAR" / "PAT")
     Pattern* pat = &p->patterns[currentPatternIdx];
     int len = pat->length;
     if (len < 1) len = 1;
@@ -230,8 +231,8 @@ static void drawStatic(void) {
       }
     }
     gfxPrintf(0, 0, "Pattern %02X%c", currentPatternIdx, reused ? '*' : ' ');
-    gfxPrintf(15, 0, "Length %02d", len);
-    gfxPrintf(26, 0, "Loop %s",
+    gfxPrintf(20, 0, "Length %02d", len);
+    gfxPrintf(31, 0, "Loop %s",
       p->playheadMode == PlayheadMode::loopActiveBar ? "BAR" : "PAT");
   } else {
     gfxPrintf(0, 0, "PHRASE %03X%c", phraseIdx, isPhraseUsedElsewhere(&chipnomadState->project, phraseIdx, chipnomadState->project.song[*pSongRow][*pSongTrack], *pChainRow) ? '*' : ' ');
@@ -360,15 +361,15 @@ static void draw(void) {
   // ── Pattern header cursor (simplified view only) ─────────────────────────
   // When the cursor is on the pattern header (patternHeaderField != 0), draw
   // an underline cursor at the active header field's value. Header layout:
-  //   "Pattern 05*   Length 04   Loop BAR"
-  //    0      5  7-8    15     22-23  26     31-33
-  //   patternHeaderField == 1 (Length value): cursor at x=22, width=2
-  //   patternHeaderField == 2 (Loop value):   cursor at x=31, width=3
+  //   "Pattern 05*       Length 04   Loop BAR"
+  //    0      5  7-8      20     27-28  31     36-38
+  //   patternHeaderField == 1 (Length value): cursor at x=27, width=2
+  //   patternHeaderField == 2 (Loop value):   cursor at x=36, width=3
   if (patternHeaderField != 0 &&
       chipnomadState->project.viewMode == ViewMode::simplified &&
       currentPatternIdx >= 0 && currentPatternIdx < PROJECT_MAX_PATTERNS) {
-    int x = 22, width = 2;
-    if (patternHeaderField == 2) { x = 31; width = 3; }
+    int x = 27, width = 2;
+    if (patternHeaderField == 2) { x = 36; width = 3; }
     gfxSetFgColor(appSettings.colorScheme.textDefault);
     gfxCursor(x, 0, width);
   }
