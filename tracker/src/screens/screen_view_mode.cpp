@@ -123,20 +123,25 @@ static void draw(void) {
 }
 
 static void confirm(void) {
-  Project* project = &chipnomadState->project;
+  // Build the new project in a LOCAL struct — replaceProject() frees the
+  // current project and then zeroes its argument, so passing
+  // &chipnomadState->project here would zero the live project (the bug that
+  // wiped navigation: tracksCount 0, ARP in every FX lane). This mirrors the
+  // original doNewProject flow.
+  Project replacement;
+  projectInitAY(&replacement);
 
-  // Build the new project. projectInitAY always yields a classic project
-  // (projectInit resets viewMode), so the chosen mode is applied after it,
-  // followed by simplified seeding when needed.
-  projectInitAY(project);
-  project->viewMode = (selected == 1) ? ViewMode::simplified : ViewMode::classic;
-  if (project->viewMode == ViewMode::simplified) {
-    projectUtilsSeedSimplifiedPatterns(project);
+  // projectInitAY always yields a classic project (projectInit resets
+  // viewMode), so the chosen mode is applied after it, followed by simplified
+  // seeding when needed.
+  replacement.viewMode = (selected == 1) ? ViewMode::simplified : ViewMode::classic;
+  if (replacement.viewMode == ViewMode::simplified) {
+    projectUtilsSeedSimplifiedPatterns(&replacement);
   }
 
   // Same handover as the plain new-project flow: swap the audio engine to
   // the fresh project, reset export folder tracking, persist settings.
-  audioManager.replaceProject(project);
+  audioManager.replaceProject(&replacement);
   projectModified = 0;
   appSettings.projectFilename[0] = 0;
   exportResetFolderTracking();
