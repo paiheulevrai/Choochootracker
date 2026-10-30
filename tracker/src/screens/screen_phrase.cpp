@@ -274,6 +274,26 @@ static void drawField(int col, int row, CellState state) {
 static void drawRowHeader(int row, CellState state) {
   if (row < screen.topRow || row >= screen.topRow + screenVisibleRows()) return;
   const ColorScheme cs = appSettings.colorScheme;
+  if (chipnomadState->project.viewMode == ViewMode::simplified &&
+      currentPatternIdx >= 0 && currentPatternIdx < PROJECT_MAX_PATTERNS) {
+    // Pattern view: the row rail doubles as the bar indicator, using two
+    // yellow shades from the theme. The row equal to the viewed bar gets the
+    // intense titles color; rows within the pattern's length get the lighter
+    // value color; rows past the end stay dim (info). Example: an 8-bar
+    // pattern viewing bar 1 → rows 00..07 value-colored, row 01 titles.
+    // (Themable — no fixed colors here.)
+    if (state == CellState::focus) {
+      gfxSetFgColor(cs.textDefault);
+    } else if (row == *pChainRow) {
+      gfxSetFgColor(cs.textTitles);
+    } else if (row < chipnomadState->project.patterns[currentPatternIdx].length) {
+      gfxSetFgColor(cs.textValue);
+    } else {
+      gfxSetFgColor(cs.textInfo);
+    }
+    gfxPrintf(1, 3 + row - screen.topRow, "%X", row);
+    return;
+  }
   gfxSetFgColor((state == CellState::focus) ? cs.textDefault : ((row & 3) == 0 ? cs.textValue : cs.textInfo));
   gfxPrintf(1, 3 + row - screen.topRow, "%X", row);
 }
@@ -394,7 +414,6 @@ static void draw(void) {
   if (*pChainRow >= screen.topRow && *pChainRow < screen.topRow + screenVisibleRows())
     gfxPrint(0, 3 + *pChainRow - screen.topRow, "<");
 
-  gfxClearRect(1, 3, 1, screenVisibleRows());
   gfxClearRect(2, 3, 1, screenVisibleRows());
   const PlaybackTrackState* track = &chipnomadGetPlaybackStatus(chipnomadState)->tracks[*pSongTrack];
   if (track->mode != PlaybackMode::stopped && track->mode != PlaybackMode::phraseRow && track->songRow != EMPTY_VALUE_16) {
@@ -402,16 +421,7 @@ static void draw(void) {
     if (*pSongRow == track->songRow && track->chainRow >= screen.topRow &&
         track->chainRow < screen.topRow + screenVisibleRows()) {
       gfxSetFgColor(appSettings.colorScheme.playMarkers);
-      // In simplified view, prefix the playhead with "*" when the playing bar
-      // is the one being viewed (spec: "*" indicator of viewed bar on the left
-      // side of the > playhead marker).
-      if (chipnomadState->project.viewMode == ViewMode::simplified &&
-          *pChainRow == track->chainRow) {
-        gfxPrint(0, 3 + track->chainRow - screen.topRow, "*");
-        gfxPrint(1, 3 + track->chainRow - screen.topRow, "<");
-      } else {
-        gfxPrint(1, 3 + track->chainRow - screen.topRow, "<");
-      }
+      gfxPrint(0, 3 + track->chainRow - screen.topRow, "<");
     }
 
     // Phrase row — viewMode-aware lookup.
