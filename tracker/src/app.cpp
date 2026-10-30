@@ -535,8 +535,16 @@ static int inputPlayback(int keys, int tapCount) {
         chipnomadQueuePlaybackStartChain(chipnomadState, *pSongTrack, *pSongRow, startRow, 1);
       applyLoopRange();
     } else if (playbackLevel == ScreenPlaybackLevel::phrase) {
-      if (!queueLinkAlignedStart(*pSongRow, *pChainRow, 1, playbackLevel, *pSongTrack))
+      if (chipnomadState->project.viewMode == ViewMode::simplified) {
+        // Simplified pattern view: PLAY follows the project's playhead mode
+        // through the chain-mode walker — "Loop: PAT" walks the whole
+        // pattern, "Loop: BAR" loops the viewed bar. (Phrase-level playback
+        // would loop a single phrase and ignore the playhead mode.)
+        if (!queueLinkAlignedStart(*pSongRow, *pChainRow, 1, ScreenPlaybackLevel::chain, *pSongTrack))
+          chipnomadQueuePlaybackStartChain(chipnomadState, *pSongTrack, *pSongRow, *pChainRow, 1);
+      } else if (!queueLinkAlignedStart(*pSongRow, *pChainRow, 1, playbackLevel, *pSongTrack)) {
         chipnomadQueuePlaybackStartPhrase(chipnomadState, *pSongTrack, *pSongRow, *pChainRow, 1);
+      }
       applyLoopRange();
     }
     return 1;

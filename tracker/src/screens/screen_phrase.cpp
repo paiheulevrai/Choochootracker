@@ -1199,8 +1199,7 @@ static int onEdit(int col, int row, CellEditAction action) {
       } else if (action == CellEditAction::decreaseBig) {
         handled = patternHalveLengthByTwo(p, currentPatternIdx);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't halve");
-      } else if (action == CellEditAction::tap || action == CellEditAction::doubleTap ||
-                 action == CellEditAction::increase) {
+      } else if (action == CellEditAction::increase) {
         handled = patternAddEmptyBar(p, currentPatternIdx);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at max length");
       } else if (action == CellEditAction::decrease) {
@@ -1217,7 +1216,17 @@ static int onEdit(int col, int row, CellEditAction action) {
         if (*pChainRow < 0) *pChainRow = 0;
         projectModified = 1;
         chipnomadQueueProjectRefresh(chipnomadState);
-        setup(-1);
+        // Refresh the phrase pointer for the current bar WITHOUT resetting
+        // the header cursor — the pointer must stay on the Length box while
+        // the user keeps editing (setup() clears patternHeaderField).
+        phraseIdx = pat->bars[*pChainRow].phrase;
+        if (phraseIdx != EMPTY_VALUE_16 && phraseIdx < PROJECT_MAX_PHRASES) {
+          phraseRows = p->phrases[phraseIdx].rows;
+          hasPhrase = 1;
+        } else {
+          phraseRows = scratchPhraseRows;
+          hasPhrase = 0;
+        }
         fullRedraw();
         screenMessage(MESSAGE_TIME, "Pattern %02X length %02d", currentPatternIdx, pat->length);
       }
