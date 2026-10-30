@@ -93,6 +93,7 @@ extern const AppScreen screenConfirm;
 extern const AppScreen screenSaveChoice;
 extern const AppScreen screenPitchTable;
 extern const AppScreen screenScale;
+extern const AppScreen screenViewSettings;
 extern const AppScreen screenFileBrowser;
 extern const AppScreen screenCreateFolder;
 extern const AppScreen screenEnterName;

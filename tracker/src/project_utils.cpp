@@ -1,7 +1,100 @@
 #include "project_utils.h"
 #include "pitch_table_utils.h"
 #include "playback_internal.h"
+#include "common.h"
 #include <string.h>
+
+// ── Simplified view (patterns) helpers ───────────────────────────────────────
+
+static int projectUtilsPatternIsEmpty(Project* p, int idx) {
+  if (idx < 0 || idx >= PROJECT_MAX_PATTERNS) return 1;
+  Pattern* pat = &p->patterns[idx];
+  int len = pat->length;
+  if (len < 1) len = 1;
+  if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+  for (int b = 0; b < len; b++) {
+    if (pat->bars[b].phrase != EMPTY_VALUE_16) return 0;
+  }
+  return 1;
+}
+
+static int projectUtilsFindEmptyPattern(Project* p, int startIdx) {
+  if (startIdx < 0) startIdx = 0;
+  if (startIdx >= PROJECT_MAX_PATTERNS) startIdx = PROJECT_MAX_PATTERNS - 1;
+  for (int i = startIdx; i < PROJECT_MAX_PATTERNS; i++) {
+    if (projectUtilsPatternIsEmpty(p, i) && p->patternToChainMap[i] == EMPTY_VALUE_16) return i;
+  }
+  for (int i = startIdx - 1; i >= 0; i--) {
+    if (projectUtilsPatternIsEmpty(p, i) && p->patternToChainMap[i] == EMPTY_VALUE_16) return i;
+  }
+  return EMPTY_VALUE_16;
+}
+
+static int projectUtilsPhraseIsEmpty(Project* p, int idx) {
+  if (idx < 0 || idx >= PROJECT_MAX_PHRASES) return 1;
+  for (int r = 0; r < 16; r++) {
+    if (p->phrases[idx].rows[r].note != EMPTY_VALUE_8) return 0;
+    if (p->phrases[idx].rows[r].instrument != EMPTY_VALUE_8) return 0;
+  }
+  return 1;
+}
+
+static int projectUtilsPhraseIsUsed(Project* p, int idx) {
+  for (int c = 0; c < PROJECT_MAX_CHAINS; c++) {
+    if (chainIsEmpty(p, c)) continue;
+    for (int r = 0; r < 16; r++) {
+      if (p->chains[c].rows[r].phrase == idx) return 1;
+    }
+  }
+  for (int c = 0; c < PROJECT_MAX_PATTERNS; c++) {
+    if (projectUtilsPatternIsEmpty(p, c)) continue;
+    int len = p->patterns[c].length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+    for (int b = 0; b < len; b++) {
+      if (p->patterns[c].bars[b].phrase == idx) return 1;
+    }
+  }
+  return 0;
+}
+
+static int projectUtilsFindEmptyPhrase(Project* p, int startIdx) {
+  if (startIdx < 0) startIdx = 0;
+  if (startIdx >= PROJECT_MAX_PHRASES) startIdx = PROJECT_MAX_PHRASES - 1;
+  for (int i = startIdx; i < PROJECT_MAX_PHRASES; i++) {
+    if (projectUtilsPhraseIsEmpty(p, i) && !projectUtilsPhraseIsUsed(p, i)) return i;
+  }
+  for (int i = startIdx - 1; i >= 0; i--) {
+    if (projectUtilsPhraseIsEmpty(p, i) && !projectUtilsPhraseIsUsed(p, i)) return i;
+  }
+  return EMPTY_VALUE_16;
+}
+
+void projectUtilsSeedSimplifiedPatterns(Project* project) {
+  // Seed a simplified-mode project with one default-length pattern +
+  // phrase per track at song row 0. Called by the mode-chooser screen
+  // after it sets project->viewMode (projectInit resets viewMode to
+  // classic, so seeding cannot live inside projectInitAY's viewMode
+  // check when the mode is chosen externally).
+  if (project->viewMode != ViewMode::simplified) return;
+  int len = appSettings.defaultPatternLength;
+  if (len < 1) len = 1;
+  if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+  for (int t = 0; t < project->tracksCount && t < PROJECT_MAX_TRACKS; t++) {
+    int patternIdx = projectUtilsFindEmptyPattern(project, 0);
+    if (patternIdx == EMPTY_VALUE_16) break;
+    Pattern* pat = &project->patterns[patternIdx];
+    patternClear(pat);
+    pat->length = (uint8_t)len;
+    for (int b = 0; b < len; b++) {
+      int phraseIdx = projectUtilsFindEmptyPhrase(project, patternIdx);
+      if (phraseIdx == EMPTY_VALUE_16) { pat->length = (uint8_t)b; break; }
+      pat->bars[b].phrase = (uint16_t)phraseIdx;
+      pat->bars[b].transpose = 0;
+    }
+    project->song[0][t] = (uint16_t)patternIdx;
+  }
+}
 
 void projectInitAY(Project* project) {
   projectInit(project);

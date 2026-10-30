@@ -1,5 +1,6 @@
 #include "field_style.h"
 #include "screen_project.h"
+#include "screen_view_mode.h"
 #include "common.h"
 #include "corelib/corelib_file.h"
 #include "corelib_gfx.h"
@@ -237,19 +238,6 @@ static void doLoadProject(void) {
   screenSetup(&screenFileBrowser, 0);
 }
 
-static void doNewProject(void) {
-  Project replacement;
-  projectInitAY(&replacement);
-  instrumentEQInitPresets(&replacement);
-  audioManager.replaceProject(&replacement);
-  projectModified = 0;
-  appSettings.projectFilename[0] = 0;
-  exportResetFolderTracking();
-  settingsSave();
-  screensInitAll();
-  screenSetup(projectReturnScreen, 0);
-}
-
 void projectOpenFromScreen(const AppScreen* returnScreen) {
   projectReturnScreen = returnScreen ? returnScreen : &screenProject;
   doLoadProject();
@@ -262,9 +250,16 @@ void projectOpenFromScreenAtPath(const AppScreen* returnScreen, const char* path
   screenSetup(&screenFileBrowser, 0);
 }
 
+// New-project entry through the view mode chooser: the chooser builds the
+// project itself in confirm() (mode + simplified seeding), then returns to
+// the Song screen.
+static void newProjectFromChooser(void) {
+  viewModeChooserSetup(&screenProject);
+}
+
 void projectCreateNewFromScreen(const AppScreen* returnScreen) {
   projectReturnScreen = returnScreen ? returnScreen : &screenProject;
-  doNewProject();
+  newProjectFromChooser();
 }
 
 static void cancelConfirm(void) {
@@ -486,13 +481,13 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
         screenSetup(&screenFileBrowser, 0);
       }
     } else if (col == 2) {
-      // New project
-      projectReturnScreen = &screenProject;
+      // New project — opens the mode chooser (Classic/Simplified) which
+      // builds the new project on confirm.
       if (projectModified) {
-        confirmSetup("Lose unsaved changes?", doNewProject, cancelConfirm);
+        confirmSetup("Lose unsaved changes?", newProjectFromChooser, cancelConfirm);
         screenSetup(&screenConfirm, 0);
       } else {
-        doNewProject();
+        newProjectFromChooser();
       }
       handled = 1;
     } else if (col == 3) {
