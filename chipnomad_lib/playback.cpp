@@ -12,6 +12,77 @@
 
 static int moveToNextPhraseRow(PlaybackState* state, int trackIdx);
 
+// ── Pattern-aware song cell access ───────────────────────────────────────────
+// Resolves a song cell (chain or pattern) into its phrase / transpose /
+// length, based on p->viewMode. The walker and reader use these so the rest
+// of the engine stays view-agnostic.
+//
+//   classic     → cell is chain index; chain has 16 rows
+//   simplified  → cell is pattern index; pattern has variable length (1..16)
+//
+// `chainRow` in PlaybackTrackState is reused as the bar index in simplified
+// mode — both are 0..15 and use the same groove-advance logic.
+
+uint16_t playbackResolvePhraseAt(Project* p, int songRow, int trackIdx, int chainRow) {
+  if (songRow < 0 || songRow >= PROJECT_MAX_LENGTH) return EMPTY_VALUE_16;
+  if (trackIdx < 0 || trackIdx >= PROJECT_MAX_TRACKS) return EMPTY_VALUE_16;
+  uint16_t cell = p->song[songRow][trackIdx];
+  if (cell == EMPTY_VALUE_16) return EMPTY_VALUE_16;
+
+  if (p->viewMode == ViewMode::simplified) {
+    if (cell >= PROJECT_MAX_PATTERNS) return EMPTY_VALUE_16;
+    Pattern* pat = &p->patterns[cell];
+    int len = pat->length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+    if (chainRow < 0 || chainRow >= len) return EMPTY_VALUE_16;
+    return pat->bars[chainRow].phrase;
+  } else {
+    if (cell >= PROJECT_MAX_CHAINS) return EMPTY_VALUE_16;
+    if (chainRow < 0 || chainRow >= 16) return EMPTY_VALUE_16;
+    return p->chains[cell].rows[chainRow].phrase;
+  }
+}
+
+uint8_t playbackResolveTransposeAt(Project* p, int songRow, int trackIdx, int chainRow) {
+  if (songRow < 0 || songRow >= PROJECT_MAX_LENGTH) return 0;
+  if (trackIdx < 0 || trackIdx >= PROJECT_MAX_TRACKS) return 0;
+  uint16_t cell = p->song[songRow][trackIdx];
+  if (cell == EMPTY_VALUE_16) return 0;
+
+  if (p->viewMode == ViewMode::simplified) {
+    if (cell >= PROJECT_MAX_PATTERNS) return 0;
+    Pattern* pat = &p->patterns[cell];
+    int len = pat->length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+    if (chainRow < 0 || chainRow >= len) return 0;
+    // Transpose is preserved as a hidden field (decision #1) — still applied
+    // at playback, just not editable in the simplified UI.
+    return pat->bars[chainRow].transpose;
+  } else {
+    if (cell >= PROJECT_MAX_CHAINS) return 0;
+    if (chainRow < 0 || chainRow >= 16) return 0;
+    return p->chains[cell].rows[chainRow].transpose;
+  }
+}
+
+int playbackResolveLengthAt(Project* p, int songRow, int trackIdx) {
+  if (songRow < 0 || songRow >= PROJECT_MAX_LENGTH) return 16;
+  if (trackIdx < 0 || trackIdx >= PROJECT_MAX_TRACKS) return 16;
+  uint16_t cell = p->song[songRow][trackIdx];
+  if (cell == EMPTY_VALUE_16) return 16;
+
+  if (p->viewMode == ViewMode::simplified) {
+    if (cell >= PROJECT_MAX_PATTERNS) return 16;
+    int len = p->patterns[cell].length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+    return len;
+  }
+  return 16;  // classic chains are always 16 rows
+}
+
 static const uint8_t speedNumerator[17] = {
   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 4, 8, 3, 5, 6, 7
 };
