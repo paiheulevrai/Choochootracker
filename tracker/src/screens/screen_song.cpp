@@ -5,6 +5,8 @@
 #include "utils.h"
 #include "chipnomad_lib.h"
 #include "project_utils.h"
+#include "pattern_utils.h"
+#include "pattern_clone_utils.h"
 #include "audio_manager.h"
 #include "app.h"
 
@@ -186,7 +188,7 @@ static void drawField(int col, int row, CellState state) {
   if (isHighlighted) {
     gfxSetFgColor(appSettings.colorScheme.textTitles);
   } else {
-    setCellColor(state, chain == EMPTY_VALUE_16, chain != EMPTY_VALUE_16 && chainHasNotes(&chipnomadState->project, chain));
+    setCellColor(state, chain == EMPTY_VALUE_16, chain != EMPTY_VALUE_16 && viewModeHasNotes(&chipnomadState->project, chain));
   }
   gfxPrint(3 + col * 3, 3 + row - screen.topRow, chain == EMPTY_VALUE_16 ? "--" : byteToHex(chain));
 }
@@ -310,7 +312,7 @@ static int editCell(int col, int row, CellEditAction action) {
   if (action == CellEditAction::doubleTap) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
-      int nextEmpty = findEmptyChain(&chipnomadState->project, current + 1);
+      int nextEmpty = viewModeFindEmpty(&chipnomadState->project, current + 1);
       if (nextEmpty != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = nextEmpty;
         lastChainValue = nextEmpty;
@@ -333,7 +335,7 @@ static int editCell(int col, int row, CellEditAction action) {
   } else if (action == CellEditAction::shallowClone) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
-      int cloned = cloneChainToNext(current);
+      int cloned = viewModeCloneToNext(&chipnomadState->project, current);
       if (cloned != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = cloned;
         lastChainValue = cloned;
@@ -344,8 +346,8 @@ static int editCell(int col, int row, CellEditAction action) {
   } else if (action == CellEditAction::deepClone) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
-      // Deep clone the phrases in the existing chain (don't create a new chain)
-      if (deepCloneChain(current)) {
+      // Deep clone the phrases in the existing cell (don't create a new one)
+      if (viewModeDeepClone(&chipnomadState->project, current)) {
         return 1;
       }
     }

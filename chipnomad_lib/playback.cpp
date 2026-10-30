@@ -1621,29 +1621,38 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
       int chain = p->song[track->songRow][trackIdx];
       if (p->viewMode == ViewMode::simplified) {
         // Simplified: walk the pattern's bars. PlayheadMode decides the loop
-        // target once the pattern's end is reached:
-        //   loopActiveBar ("Loop: BAR") — loop on the bar the cursor/queue
-        //     points at (mimics classic phrase-view playback).
-        //   followPattern ("Loop: PAT") — loop the whole pattern from bar 0
+        // target once the end of the play range is reached:
+        //   loopActiveBar ("Loop: BAR") — the play range is ONLY the queued
+        //     bar (mimics classic phrase-view playback on the viewed bar);
+        //     it never advances past queue.chainRow.
+        //   followPattern ("Loop: PAT") — the play range is the whole
+        //     pattern; when its end is reached it loops back to bar 0
         //     (like a chain screen playing from its first phrase).
         int len = playbackResolveLengthAt(p, track->songRow, trackIdx);
-        int chainRow = track->chainRow + 1;
-        if (chainRow >= len ||
-            playbackResolvePhraseAt(p, track->songRow, trackIdx, chainRow) == EMPTY_VALUE_16) {
+        if (p->playheadMode == PlayheadMode::loopActiveBar) {
+          int loopBar = track->queue.chainRow;
+          if (loopBar < 0 || loopBar >= len) loopBar = 0;
+          // One bar is queue.bar..queue.bar+15 phrase rows; at overflow the
+          // playhead returns to the queued bar (or stops without loop).
           if (!track->loop) {
-            chainRow = -1;
-          } else if (p->playheadMode == PlayheadMode::loopActiveBar) {
-            chainRow = track->queue.chainRow;
+            resetTrack(state, trackIdx);
+            stopped = 1;
           } else {
-            chainRow = 0;
+            track->chainRow = loopBar;
           }
-        }
-        if (chainRow < 0 || chainRow >= 16 ||
-            playbackResolvePhraseAt(p, track->songRow, trackIdx, chainRow) == EMPTY_VALUE_16) {
-          resetTrack(state, trackIdx);
-          stopped = 1;
         } else {
-          track->chainRow = chainRow;
+          int chainRow = track->chainRow + 1;
+          if (chainRow >= len ||
+              playbackResolvePhraseAt(p, track->songRow, trackIdx, chainRow) == EMPTY_VALUE_16) {
+            chainRow = track->loop ? 0 : -1;
+          }
+          if (chainRow < 0 || chainRow >= 16 ||
+              playbackResolvePhraseAt(p, track->songRow, trackIdx, chainRow) == EMPTY_VALUE_16) {
+            resetTrack(state, trackIdx);
+            stopped = 1;
+          } else {
+            track->chainRow = chainRow;
+          }
         }
       } else {
         // Classic: unchanged chain logic.

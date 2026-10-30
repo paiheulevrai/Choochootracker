@@ -15,6 +15,7 @@
 #include "playback_internal.h"
 #include "pattern_utils.h"
 #include "project_utils.h"
+#include "pitch_table_utils.h"
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -548,4 +549,123 @@ TEST_CASE_FIXTURE(PatternFixture, "lookupInstrument: empty song cell returns EMP
 
   // Walks back to previous song row, which is also empty.
   CHECK(lookupInstrument(project.get(), 5, 0, 0, 0) == EMPTY_VALUE_8);
+}
+
+// ── Playback behaviour (sandboxed playhead modes) ────────────────────────────
+// The playhead mode MUST only change behaviour in simplified view; classic
+// chain advance is covered by the main playback suite and must stay
+// byte-for-byte unchanged (v7 lesson).
+
+static SoundChip* patternTestChipFactory(int chipIndex, int sampleRate, ChipSetup setup) {
+  (void)chipIndex;
+  return new SoundChipAY(sampleRate, setup);
+}
+
+struct PatternPlaybackFixture {
+  ChipNomadState* state;
+
+  PatternPlaybackFixture() {
+    state = chipnomadCreate();
+    Project* p = &state->project;
+    p->tickRate = 50;
+    p->chipType = ChipType::AY;
+    p->chipsCount = 1;
+    p->chipSetup.ay = (ChipSetupAY){ .clock = 1773400, .isYM = 0, .stereoMode = StereoModeAY::ABC, .stereoSeparation = 50, .pwmFullRange = 0 };
+    p->tracksCount = projectGetTotalTracks(p);
+    p->linearPitch = 0;
+    calculatePitchTableAY(p);
+    chipnomadInitChips(state, 44100, patternTestChipFactory);
+    playbackInit(&state->playbackState, p);
+  }
+
+  ~PatternPlaybackFixture() {
+    chipnomadDestroy(state);
+  }
+
+  void advanceFrames(int n) {
+    for (int i = 0; i < n; i++) playbackNextFrame(state);
+  }
+
+  // A simplified project: pattern 0 with `bars` bars (phrases 0..bars-1,
+  // each with one note row), assigned to song[0][0]. Notes so the bars
+  // resolve non-empty.
+  void setupSimplified(int bars) {
+    Project* p = &state->project;
+    p->viewMode = ViewMode::simplified;
+    p->playheadMode = PlayheadMode::followPattern;
+    patternClear(&p->patterns[0]);
+    p->patterns[0].length = (uint8_t)bars;
+    for (int b = 0; b < bars; b++) {
+      p->patterns[0].bars[b].phrase = (uint16_t)b;
+      p->patterns[0].bars[b].transpose = 0;
+      p->phrases[b].rows[0].note = 48;
+      p->phrases[b].rows[0].instrument = EMPTY_VALUE_8;
+      p->phrases[b].rows[0].volume = EMPTY_VALUE_16;
+    }
+    p->song[0][0] = 0;
+  }
+};
+
+TEST_CASE_FIXTURE(PatternPlaybackFixture, "simplified chain mode walks pattern bars (followPattern)") {
+  setupSimplified(3);
+  state->playbackState.tracks[0].loop = 1;
+  // Queue pattern playback at bar 0 (like tapping a cell on the Song screen).
+  playbackStartChain(&state->playbackState, 0, 0, 0, 1);
+  advanceFrames(1);  // frame 1 consumes the queue
+
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::chain);
+  CHECK(state->playbackState.tracks[0].chainRow == 0);
+
+  // Each bar lasts 16 rows x 6 ticks = 96 frames. Advance through bar 0.
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].chainRow == 1);
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].chainRow == 2);
+  // End of pattern with followPattern: wraps to bar 0.
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].chainRow == 0);
+}
+
+TEST_CASE_FIXTURE(PatternPlaybackFixture, "simplified loopActiveBar loops the queued bar") {
+  setupSimplified(3);
+  state->playbackState.tracks[0].loop = 1;
+  state->project.playheadMode = PlayheadMode::loopActiveBar;
+  // Queue playback starting at bar 1 (the "active" bar).
+  playbackStartChain(&state->playbackState, 0, 0, 1, 1);
+  advanceFrames(1);
+
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::chain);
+  CHECK(state->playbackState.tracks[0].chainRow == 1);
+
+  // After one bar (96 frames) the playhead must return to the queued bar 1,
+  // not walk to bar 2 or wrap to bar 0.
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].chainRow == 1);
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].chainRow == 1);
+}
+
+TEST_CASE_FIXTURE(PatternPlaybackFixture, "classic chain advance is unchanged (16 rows, enteredChain at 0)") {
+  // Classic mode must behave exactly as before the patterns feature: the
+  // chain has 16 rows, playback walks them and loops at chainRow 0.
+  Project* p = &state->project;
+  p->viewMode = ViewMode::classic;
+  chainClear(&p->chains[0]);
+  p->chains[0].rows[0].phrase = 0;
+  p->chains[0].rows[1].phrase = 1;
+  p->phrases[0].rows[0].note = 48;
+  p->phrases[1].rows[0].note = 50;
+  p->song[0][0] = 0;
+
+  state->playbackState.tracks[0].loop = 1;
+  playbackStartChain(&state->playbackState, 0, 0, 0, 1);
+  advanceFrames(1);
+  CHECK(state->playbackState.tracks[0].chainRow == 0);
+
+  advanceFrames(96);  // one phrase
+  CHECK(state->playbackState.tracks[0].chainRow == 1);
+  advanceFrames(96);  // second phrase -> wraps to chain row 0 (classic loop)
+  CHECK(state->playbackState.tracks[0].chainRow == 0);
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].chainRow == 1);
 }
