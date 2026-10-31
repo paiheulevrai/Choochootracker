@@ -218,10 +218,33 @@ int patternMultiplyLengthByTwo(Project* p, int patternIdx) {
   int newLen = curLen * 2;
   if (newLen > PROJECT_MAX_PATTERN_LENGTH) return 0;  // would exceed 16
 
-  // Duplicate existing bars into the new space (decision #4).
-  // 1-bar A → 2-bar A,A; 2-bar A,B → 4-bar A,B,A,B; etc.
+  // Duplicate existing bars (decision #4), but each new bar gets its OWN
+  // freshly-allocated phrase — editing a copy must never touch the original
+  // bar's phrase. Empty bars stay empty. Each bar is wired and the length
+  // grown IMMEDIATELY so the next allocation's used[] bitmap sees the phrase
+  // just wired (two bars whose sources hold no notes could otherwise receive
+  // the SAME phrase — the "multiplied bars share" bug). If the phrase pool
+  // runs out mid-way the operation fails with the length restored to the
+  // original: bars beyond it are meaningless until length grows again.
+  // 1-bar A → 2-bar A,A' (isolated); 2-bar A,B → 4-bar A,B,A',B'.
+  const int origLen = pat->length;
   for (int b = curLen; b < newLen; b++) {
+    uint16_t srcPhrase = pat->bars[b - curLen].phrase;
+    if (srcPhrase == EMPTY_VALUE_16) {
+      pat->bars[b].phrase = EMPTY_VALUE_16;
+      pat->length = (uint8_t)(b + 1);
+      continue;
+    }
+    int emptyPhrase = patternFindClosestEmptyPhrase(p, patternIdx);
+    if (emptyPhrase == EMPTY_VALUE_16) {
+      pat->length = (uint8_t)origLen;  // pool exhausted: no net change
+      return 0;
+    }
+    // Copy content so the clone plays like the original until edited.
+    p->phrases[emptyPhrase] = p->phrases[srcPhrase];
     pat->bars[b] = pat->bars[b - curLen];
+    pat->bars[b].phrase = (uint16_t)emptyPhrase;
+    pat->length = (uint8_t)(b + 1);
   }
   pat->length = (uint8_t)newLen;
   return 1;

@@ -199,31 +199,52 @@ TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: regenerates chain fr
   CHECK(ch->rows[15].phrase == EMPTY_VALUE_16);
 }
 
-TEST_CASE_FIXTURE(PatternFixture, "patternMultiplyLengthByTwo: duplicates bars (decision #4)") {
-  // 1-bar pattern with phrase 5 → ×2 → 2-bar with phrase 5 in both bars.
+TEST_CASE_FIXTURE(PatternFixture, "patternMultiplyLengthByTwo: duplicates bars, isolated phrases") {
+  // 1-bar pattern with phrase 5 → ×2 → 2 bars where bar 1 gets its OWN
+  // freshly-allocated phrase (a copy of phrase 5's content). Editing the
+  // copy must never affect phrase 5.
   project->patterns[0].length = 1;
   project->patterns[0].bars[0].phrase = 5;
   project->patterns[0].bars[0].transpose = 3;
+  project->phrases[5].rows[0].note = 48;
 
   REQUIRE(patternMultiplyLengthByTwo(project.get(), 0));
   CHECK(project->patterns[0].length == 2);
   CHECK(project->patterns[0].bars[0].phrase == 5);
   CHECK(project->patterns[0].bars[0].transpose == 3);
-  CHECK(project->patterns[0].bars[1].phrase == 5);
+  // New bar: a DIFFERENT phrase, same content.
+  CHECK(project->patterns[0].bars[1].phrase != 5);
   CHECK(project->patterns[0].bars[1].transpose == 3);
+  CHECK(project->phrases[project->patterns[0].bars[1].phrase].rows[0].note == 48);
+  // Isolation: editing the copy leaves the original untouched.
+  project->phrases[project->patterns[0].bars[1].phrase].rows[0].note = 60;
+  CHECK(project->phrases[5].rows[0].note == 48);
 }
 
-TEST_CASE_FIXTURE(PatternFixture, "patternMultiplyLengthByTwo: 2-bar A,B → 4-bar A,B,A,B") {
+TEST_CASE_FIXTURE(PatternFixture, "patternMultiplyLengthByTwo: 2-bar A,B → 4-bar A,B,A',B' (isolated)") {
   project->patterns[0].length = 2;
   project->patterns[0].bars[0].phrase = 5;
   project->patterns[0].bars[1].phrase = 7;
+  project->phrases[5].rows[0].note = 48;
+  project->phrases[7].rows[0].note = 50;
 
   REQUIRE(patternMultiplyLengthByTwo(project.get(), 0));
   CHECK(project->patterns[0].length == 4);
   CHECK(project->patterns[0].bars[0].phrase == 5);
   CHECK(project->patterns[0].bars[1].phrase == 7);
-  CHECK(project->patterns[0].bars[2].phrase == 5);
-  CHECK(project->patterns[0].bars[3].phrase == 7);
+  uint16_t p2 = project->patterns[0].bars[2].phrase;
+  uint16_t p3 = project->patterns[0].bars[3].phrase;
+  // Fresh, distinct phrases holding copies of the source content.
+  CHECK(p2 != 5);
+  CHECK(p2 != 7);
+  CHECK(p3 != 5);
+  CHECK(p3 != 7);
+  CHECK(p2 != p3);
+  CHECK(project->phrases[p2].rows[0].note == 48);
+  CHECK(project->phrases[p3].rows[0].note == 50);
+  // Isolation: editing a copy never touches its source.
+  project->phrases[p2].rows[0].note = 60;
+  CHECK(project->phrases[5].rows[0].note == 48);
 }
 
 TEST_CASE_FIXTURE(PatternFixture, "patternMultiplyLengthByTwo: refuses if would exceed 16") {

@@ -601,8 +601,20 @@ static bool inputBranchNavigation(int keys) {
            (currentScreen == &screenInsertFX && !screenInsertFXIsMaster())) column = 4;
   else if (currentScreen == &screenAYWavetable) column = 5;
   if (column < 0) return false;
-  const AppScreen* spine[] = {&screenMixer, &screenSong, &screenChain,
-                             &screenPhrase, &screenInstrument, &screenTable};
+  // In the simplified view there is no Chain screen: the spine skips it so
+  // SHIFT+RIGHT/LEFT never lands on chain-screen artifacts (bug report: the
+  // "C" map node led to garbage values). Classic spine:
+  //   Mixer, Song, Chain, Phrase, Instrument, Table
+  // Simplified spine (Chain slot re-routes to Song):
+  //   Mixer, Song, Song*, Phrase, Instrument, Table — stepping from
+  //   Mixer→Song→Phrase works because the Song screen's own SHIFT+RIGHT goes
+  //   straight to Phrase in simplified view; stepping LEFT from Phrase lands
+  //   on Song (its own SHIFT+LEFT also returns to Song).
+  const bool simplified =
+      chipnomadState->project.viewMode == ViewMode::simplified;
+  const AppScreen* spine[] = {&screenMixer, &screenSong,
+                              simplified ? &screenSong : &screenChain,
+                              &screenPhrase, &screenInstrument, &screenTable};
   column += keys & keyRight ? 1 : -1;
   if (column > 5) column = 5;
   chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
