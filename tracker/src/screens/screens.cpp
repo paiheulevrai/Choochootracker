@@ -41,7 +41,7 @@ static int pendingScreenInput;
 void drawScreenMap() {
   ScreenOverlayCoordinates overlay;
   // Native preset lists use the popup area through the footer.
-  if (currentScreen == &screenSelectionPopup) return;
+  if (currentScreen == &screenSelectionPopup || currentScreen == &screenMidiCC) return;
   const static int smY = 15;
 
   const ColorScheme cs = appSettings.colorScheme;
@@ -335,6 +335,13 @@ static int screenTouchEnvelopeAt(int col, int row, int* targetCol) {
 
 static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
   if (!touchScreenData || touchScreenData->selectMode == 1) return 0;
+  if (currentScreen == &screenMidiCC) {
+    int mappingRow = touchScreenData->topRow + row - 2;
+    if (col < 0 || col >= 40 || row < 2 || row >= 18 || mappingRow >= touchScreenData->rows) return 0;
+    if (targetCol) *targetCol = col < 4 ? 0 : col < 8 ? 1 : col < 14 ? 2 : 3;
+    if (targetRow) *targetRow = mappingRow;
+    return 1;
+  }
   if (currentScreen == &screenMixer && screenMixerGetPage() == 0 && row == 12) {
     int column = col <= 8 ? 0 : col >= 12 && col <= 13 ? 1 : col >= 20 && col <= 29 ? 2 : -1;
     if (column < 0) return 0;
@@ -600,7 +607,8 @@ int screenTouchTap(int col, int row) {
       touchScreenData->isButtonCell(targetCol, targetRow)) {
     touchScreenData->onEdit(targetCol, targetRow, CellEditAction::tap);
   }
-  screenFullRedraw(touchScreenData);
+  // A button may open another screen, which clears touchScreenData.
+  if (touchScreenData) screenFullRedraw(touchScreenData);
   return 1;
 }
 

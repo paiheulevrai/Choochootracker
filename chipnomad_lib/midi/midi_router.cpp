@@ -32,6 +32,7 @@ struct MidiRouterState {
   int heldCount;
   uint8_t ccValues[16][128];
   uint32_t ccSerials[16][128];
+  uint32_t ccPressCounts[16][128];
   MidiCCIntent lastCC{};
   uint32_t ccSerial;
 
@@ -320,7 +321,11 @@ int midiRouterTick(MidiRouterState* router, int fallbackInstrument, MidiPreviewI
       continue;
     }
     if (messageType == 0xb0) {
-      router->ccValues[channel][event.data1 & 0x7f] = event.data2 & 0x7f;
+      const uint8_t cc = event.data1 & 0x7f;
+      const uint8_t value = event.data2 & 0x7f;
+      if (router->ccValues[channel][cc] < 64 && value >= 64)
+        router->ccPressCounts[channel][cc]++;
+      router->ccValues[channel][cc] = value;
       router->ccSerials[channel][event.data1 & 0x7f] = router->ccSerial + 1;
       router->lastCC = {channel, (uint8_t)(event.data1 & 0x7f), (uint8_t)(event.data2 & 0x7f)};
       router->ccSerial++;
@@ -375,6 +380,10 @@ int midiRouterTick(MidiRouterState* router, int fallbackInstrument, MidiPreviewI
     }
   }
   return count;
+}
+
+uint32_t midiRouterGetCCPressCount(const MidiRouterState* router, uint8_t channel, uint8_t cc) {
+  return router ? router->ccPressCounts[channel & 0x0f][cc & 0x7f] : 0;
 }
 
 int midiRouterGetCCValue(const MidiRouterState* router, uint8_t channel, uint8_t cc,

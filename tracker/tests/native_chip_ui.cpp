@@ -298,6 +298,58 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+  if(argc==3 && !strcmp(argv[2],"--midi-mapping-only")) {
+    projectFree(&chipnomadState->project);
+    projectInitAY(&chipnomadState->project);
+    auto& project=chipnomadState->project;
+    getInstrumentFunctions(InstrumentType::Braids).init(&project.instruments[3]);
+    strcpy(project.instruments[3].name,"Deep Bass");
+    getInstrumentFunctions(InstrumentType::Plaits).init(&project.instruments[5]);
+    strcpy(project.instruments[5].name,"Lead");
+    project.midiCCMappings[0]={1,0,41,0,midiCCDestinationSongPlayStop};
+    project.midiCCMappings[1]={1,0,32,0,midiCCDestinationTrackMute};
+    project.midiCCMappings[2]={1,0,33,1,midiCCDestinationTrackSolo};
+    project.midiCCMappings[3]={1,0,0,1,midiCCDestinationTrackVolume};
+    project.midiCCMappings[4]={1,0,16,3,1};
+    project.midiCCMappings[5]={0,0,17,5,midiCCDestinationAttack};
+    screensInitAll();waveformDisplayInit();monitorDisplayInit();backgroundInit();
+    screenSetup(&screenMidiCC,0);
+    auto tap=[](int keys){key(1,keys);key(0,0);};
+    for(int col=0;col<3;++col)tap(keyRight);
+    capture("midi-cc-mapping");
+    require(screenMidiCC.getPlaybackLevel()==ScreenPlaybackLevel::song,"MIDI mapping permits song playback");
+    tapEdit();
+    require(currentScreen==&screenSelectionPopup,"destination uses existing popup");
+    capture("midi-cc-song-popup");
+    tap(keyDown); // Track 1
+    tap(keyDown); // Track 2
+    tap(keyRight);
+    tap(keyDown); // Solo
+    capture("midi-cc-track-popup");
+    tapEdit();
+    require(currentScreen==&screenMidiCC,"selection returns to mapping table");
+    require(project.midiCCMappings[0].instrument==1&&project.midiCCMappings[0].destination==midiCCDestinationTrackSolo,
+            "popup applies target and parameter together");
+    int x,y,width;gfxGetCursor(&x,&y,&width);
+    require(x==14&&y==2&&width==26,"popup preserves the destination cursor");
+    tap(keyEdit|keyLeft);
+    require(project.midiCCMappings[0].destination==midiCCDestinationTrackMute,"EDIT+Left cycles destination");
+    require(currentScreen==&screenMidiCC,"cycling does not open popup");
+    for(int row=0;row<4;++row)tap(keyDown);
+    tapEdit();
+    require(currentScreen==&screenSelectionPopup,"instrument destination opens popup");
+    tap(keyRight);
+    capture("midi-cc-instrument-popup");
+    tap(keyOpt);
+    require(currentScreen==&screenMidiCC,"cancel returns to same mapping");
+    gfxGetCursor(&x,&y,&width);require(x==14&&y==6,"cancel preserves mapping row");
+    require(screenTouchTap(39,17),"destination accepts touch across the full width");
+    appDraw();require(currentScreen==&screenSelectionPopup,"touch opens destination popup");
+    tap(keyOpt);gfxGetCursor(&x,&y,&width);
+    require(x==14&&y==17,"touch returns to the selected mapping row");
+    printf("MIDI CC mapping: merged destination, categorized popup, target/parameter selection, cursor return and direct cycling passed\n");
+    chipnomadDestroy(chipnomadState);gfxCleanup();SDL_Quit();return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--background-only")) {
     screensInitAll(); waveformDisplayInit(); monitorDisplayInit(); backgroundInit();
     appSettings.backgroundIntensity=70; appSettings.backgroundReaction=0;

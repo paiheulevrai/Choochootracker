@@ -8,9 +8,13 @@
 #include "corelib_audio.h"
 #include "project_utils.h"
 #include "screen_audio_input.h"
+#include "midi/midi_router.h"
+#include "audio_manager.h"
+#include "selection_popup.h"
 
 #include <chrono>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -37,6 +41,24 @@ char indicator() {
   chipnomadState->project.tracksCount = tracks;
   return mockGfxCells[19][39];
 }
+
+struct MidiButtonInput {
+  std::deque<uint8_t> values;
+  MidiBackend backend{};
+  MidiButtonInput() {
+    backend.userdata = &values;
+    backend.pollInput = [](void* userdata, MidiEvent* event) {
+      auto& pending = *static_cast<std::deque<uint8_t>*>(userdata);
+      if (pending.empty()) return 0;
+      *event = {0, 0xb0, 0, 41, pending.front()};
+      pending.pop_front();
+      return 1;
+    };
+    backend.scheduleOutput = [](void*, const MidiEvent*, uint64_t) {};
+    midiRouterSetBackend(&backend);
+  }
+  ~MidiButtonInput() { midiRouterSetBackend(nullptr); }
+};
 
 struct StickLiveFixture {
   AppSettings savedSettings = appSettings;
@@ -686,6 +708,212 @@ TEST_CASE_FIXTURE(StickLiveFixture, "audio sample rate settings accept only 32 o
 }
 
 TEST_SUITE("MIDI settings") {
+
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC destination combines target and parameter with the standard popup") {
+  auto& project = chipnomadState->project;
+  project.tracksCount = 2;
+  getInstrumentFunctions(InstrumentType::Braids).init(&project.instruments[3]);
+  std::strcpy(project.instruments[3].name, "Long Bass Name");
+  screenMidiCC.setup(0);
+  screenMidiCC.fullRedraw();
+  auto* data = mockScreenData;
+  REQUIRE(data);
+  CHECK(data->getColumnCount(0) == 4);
+  CHECK(screenMidiCC.getPlaybackLevel() == ScreenPlaybackLevel::song);
+  CHECK(screenMidiCC.onInput(1, keyPlay, 0) == 0);
+  gfxClear();
+  data->drawStatic();
+  data->drawField(3, 0, CellState::normal);
+  CHECK(std::string(mockGfxCells[1] + 14, 11) == "DESTINATION");
+  CHECK(std::string(mockGfxCells[2] + 14, 10) == "Unassigned");
+  currentScreen = &screenMidiCC;
+  gfxPrint(34, 3, "VALUE!");
+  appDraw();
+  CHECK(std::string(mockGfxCells[3] + 34, 6) == "VALUE!"); // No playback sidebar over the table.
+  project.midiCCMappings[0].cc = 1;
+  CHECK(data->onEdit(2, 0, CellEditAction::decrease) == 1); // Blank rows do not reserve CC 0.
+  CHECK(project.midiCCMappings[0].cc == 0);
+  project.midiCCMappings[1].destination = midiCCDestinationTrackMute;
+  project.midiCCMappings[0].cc = 1;
+  CHECK(data->onEdit(2, 0, CellEditAction::decrease) == 0); // Real assignments still prevent duplicates.
+  CHECK(project.midiCCMappings[0].cc == 1);
+  project.midiCCMappings[1].destination = midiCCDestinationNone;
+
+  data->cursorRow = 20;
+  data->cursorCol = 3;
+  data->topRow = 12;
+  auto& mapping = project.midiCCMappings[20];
+  projectModified = 0;
+  currentScreen = &screenMidiCC;
+  auto open = [&] {
+    screenMidiCC.onInput(1, keyEdit, 1);
+    CHECK(currentScreen == &screenMidiCC); // Wait for release, allowing EDIT+L/R.
+    screenMidiCC.onInput(0, 0, 1);
+    REQUIRE(currentScreen == &screenSelectionPopup);
+    screenSelectionPopup.fullRedraw();
+  };
+  auto press = [](int key) { screenSelectionPopup.onInput(1, key, 1); };
+  open();
+  std::string menu;
+  for (const auto& row : mockGfxCells) menu.append(row, 40);
+  CHECK(menu.find("Unassigned") != std::string::npos);
+  CHECK(menu.find("Track 2") != std::string::npos);
+  CHECK(menu.find("03 Long Bass") != std::string::npos);
+  CHECK(menu.find("Track 3") == std::string::npos);
+  press(keyOpt);
+  CHECK(currentScreen == &screenMidiCC);
+  screenMidiCC.setup(-1);
+  CHECK(data->cursorRow == 20);
+  CHECK(data->cursorCol == 3);
+  CHECK(data->topRow == 12);
+  CHECK(projectModified == 0);
+
+  open();
+  press(keyDown); // Song
+  press(keyRight);
+  press(keyEdit);
+  CHECK(currentScreen == &screenMidiCC);
+  CHECK(mapping.destination == midiCCDestinationSongPlayStop);
+  CHECK(projectModified == 1);
+  screenMidiCC.setup(-1);
+  screenMidiCC.onInput(1, keyEdit | keyRight, 0);
+  screenMidiCC.onInput(0, 0, 0);
+  CHECK(currentScreen == &screenMidiCC); // Cycling does not also open the menu.
+  CHECK(mapping.destination == midiCCDestinationTrackMute);
+  CHECK(mapping.instrument == 0);
+  screenMidiCC.onInput(1, keyEdit | keyLeft, 0);
+  CHECK(mapping.destination == midiCCDestinationSongPlayStop);
+
+  open();
+  press(keyDown); // Track 1
+  press(keyDown); // Track 2
+  press(keyRight);
+  press(keyDown); // Solo
+  press(keyEdit);
+  CHECK(mapping.destination == midiCCDestinationTrackSolo);
+  CHECK(mapping.instrument == 1);
+  screenMidiCC.setup(-1);
+  mapping.enabled = 0;
+  data->drawField(3, 20, CellState::normal);
+  CHECK(std::string(mockGfxCells[10] + 14, 13) == "Track 2: Solo");
+
+  open();
+  press(keyDown); // Instrument 03
+  press(keyRight);
+  press(keyEdit); // Volume
+  CHECK(mapping.instrument == 3);
+  CHECK(mapping.destination == 1);
+  data->drawField(3, 20, CellState::normal);
+  CHECK(std::string(mockGfxCells[10] + 14, 26).find(": Volume") != std::string::npos);
+  CHECK(mockTextRight < 40);
+  data->drawCursor(3, 20);
+  CHECK(std::string(screenGetActiveMessage()).find("Long Bass Name: Volume") != std::string::npos);
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI song play/stop toggles on presses and ignores button release") {
+  MidiButtonInput button;
+  projectInitAY(&chipnomadState->project);
+  chipnomadInitChips(chipnomadState, 48000, nullptr);
+  auto tick = [&] {
+    appOnEvent({MainLoopEvent::tick});
+    float audio[2048];
+    chipnomadRender(chipnomadState, audio, 1024);
+  };
+  *pSongRow = *pSongTrack = 0;
+  chipnomadState->project.song[0][0] = 0;
+  chipnomadState->project.chains[0].rows[0].phrase = 0;
+  tick(); // Clear any mapping state left by a previous app instance.
+  chipnomadState->project.midiCCMappings[0] = {1, 0, 41, 0, midiCCDestinationSongPlayStop};
+  REQUIRE(chipnomadQueueProjectRefresh(chipnomadState));
+  tick(); // Configuring a mapping must not start playback.
+  REQUIRE_FALSE(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+
+  SUBCASE("held presses toggle once and release leaves playback unchanged") {
+    button.values = {127};
+    tick();
+    CHECK(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+    button.values = {127}; // A repeated high value is not another press.
+    tick();
+    CHECK(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+    button.values = {0};
+    tick();
+    CHECK(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+    button.values = {127};
+    tick();
+    CHECK_FALSE(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+    button.values = {0};
+    tick();
+    CHECK_FALSE(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+  }
+  SUBCASE("a quick press and release between UI ticks is not lost") {
+    button.values = {127, 0};
+    tick();
+    CHECK(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+    button.values = {127, 0};
+    tick();
+    CHECK_FALSE(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+  }
+  SUBCASE("two complete presses between UI ticks leave transport unchanged") {
+    button.values = {127, 0, 127, 0};
+    tick();
+    CHECK_FALSE(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+  }
+  SUBCASE("MIDI Learn does not trigger playback from the learning press") {
+    chipnomadState->project.midiCCMappings[0].enabled = 0;
+    button.values = {127};
+    tick();
+    chipnomadState->project.midiCCMappings[0].enabled = 1;
+    tick();
+    button.values = {0};
+    tick();
+    CHECK_FALSE(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+    button.values = {127};
+    tick();
+    CHECK(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+  }
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI mute and solo toggle on presses while track volume stays continuous") {
+  MidiButtonInput button;
+  struct RestoreAudioManager {
+    AudioManager saved = audioManager;
+    ~RestoreAudioManager() { audioManager = saved; }
+  } restore;
+  static int muteCalls, soloCalls;
+  muteCalls = soloCalls = 0;
+  audioManager.toggleTrackMute = [](int track) { CHECK(track == 2); ++muteCalls; };
+  audioManager.toggleTrackSolo = [](int track) { CHECK(track == 2); ++soloCalls; };
+  auto tick = [&] { appOnEvent({MainLoopEvent::tick}); };
+  tick();
+  auto& mapping = chipnomadState->project.midiCCMappings[0];
+  for (int destination : {midiCCDestinationTrackMute, midiCCDestinationTrackSolo}) {
+    CAPTURE(destination);
+    mapping = {1, 0, 41, 2, (uint8_t)destination};
+    tick();
+    int& calls = destination == midiCCDestinationTrackMute ? muteCalls : soloCalls;
+    for (int press = 1; press <= 2; ++press) {
+      button.values = {127};
+      tick();
+      CHECK(calls == press);
+      button.values = {127, 0}; // Repeated high value and release do not toggle.
+      tick();
+      CHECK(calls == press);
+    }
+    button.values = {127, 0}; // A whole tap between UI ticks still toggles.
+    tick();
+    CHECK(calls == 3);
+  }
+  mapping.destination = midiCCDestinationTrackVolume;
+  tick();
+  button.values = {127};
+  tick();
+  CHECK(chipnomadState->project.trackVolume[2] == 100);
+  button.values = {0};
+  tick();
+  CHECK(chipnomadState->project.trackVolume[2] == 0);
+  CHECK(muteCalls == 3);
+  CHECK(soloCalls == 3);
+}
 
 TEST_CASE_FIXTURE(StickLiveFixture, "screenMidi shows device rows and links to channel mapping") {
   screenMidi.fullRedraw();

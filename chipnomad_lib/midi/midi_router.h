@@ -210,6 +210,9 @@ int midiRouterTick(MidiRouterState* router, int fallbackInstrument, MidiPreviewI
 // must not confuse an unseen CC with a CC explicitly sent at zero.
 int midiRouterGetCCValue(const MidiRouterState* router, uint8_t channel, uint8_t cc,
                          uint8_t* value, uint32_t* serial);
+// Counts transitions from 0-63 to 64-127, preserving presses even when a
+// button's press and release are drained together in one UI tick.
+uint32_t midiRouterGetCCPressCount(const MidiRouterState* router, uint8_t channel, uint8_t cc);
 int midiRouterGetLastCC(const MidiRouterState* router, MidiCCIntent* out, uint32_t* serial);
 
 #endif // __CHIPNOMAD_LIB__MIDI_ROUTER_H__

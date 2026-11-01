@@ -68,7 +68,6 @@ static int quickHelpSelectHeld;
 static int quickHelpSelectAlone;
 static int audioProjectDirty;
 static MidiCCMapping midiCCApplied[PROJECT_MAX_MIDI_CC_MAPPINGS];
-static uint8_t midiCCAppliedValue[PROJECT_MAX_MIDI_CC_MAPPINGS];
 static uint8_t midiCCAppliedValid[PROJECT_MAX_MIDI_CC_MAPPINGS];
 static uint64_t playbackCounterTicks;
 static uint64_t playbackCounterMicros;
@@ -911,7 +910,7 @@ void appDraw(void) {
   if (charEditIsOpen()) return;
 
   if (currentScreen == &screenTitle ||
-      currentScreen == &screenSelectionPopup) return;
+      currentScreen == &screenSelectionPopup || currentScreen == &screenMidiCC) return;
 
   if (!chipnomadState) return;
 
@@ -1328,26 +1327,31 @@ void appOnEvent(MainLoopEventData eventData) {
         int changed = !midiCCAppliedValid[i] || memcmp(&mapping, &midiCCApplied[i], sizeof(mapping)) != 0;
         uint8_t value = 0; uint32_t serial = 0;
         int received = valid && midiRouterGetCCValue(chipnomadState->midiRouter, mapping.channel, mapping.cc, &value, &serial);
+        int toggle = mapping.destination == midiCCDestinationSongPlayStop ||
+          mapping.destination == midiCCDestinationTrackMute || mapping.destination == midiCCDestinationTrackSolo;
+        if (valid && toggle)
+          serial = midiRouterGetCCPressCount(chipnomadState->midiRouter, mapping.channel, mapping.cc);
         if (valid && changed) {
           midiCCApplied[i] = mapping;
-          midiCCAppliedValue[i] = 0;
           midiCCAppliedValid[i] = 1;
           // Soft takeover: a mapping must see a new physical CC movement
           // after it is assigned, so MIDI Learn cannot overwrite a patch
           // with the controller's stale (often zero) position.
           midiCCAppliedSerial[i] = serial;
         } else if (valid && received && serial != midiCCAppliedSerial[i]) {
+          const uint32_t presses = serial - midiCCAppliedSerial[i];
+          midiCCAppliedSerial[i] = serial;
+          // Button destinations toggle on presses; release only rearms them.
+          if (toggle && !(presses & 1u)) continue;
           if (mapping.destination == midiCCDestinationSongPlayStop) {
-            if (value >= 64 && midiCCAppliedValue[i] < 64 && !chipnomadGetPlaybackStatus(chipnomadState)->isPlaying)
-              chipnomadQueuePlaybackStartSong(chipnomadState, *pSongRow, 0, 1);
-            else if (value < 64 && midiCCAppliedValue[i] >= 64 && chipnomadGetPlaybackStatus(chipnomadState)->isPlaying)
+            if (chipnomadGetPlaybackStatus(chipnomadState)->isPlaying)
               chipnomadQueuePlaybackStop(chipnomadState);
+            else
+              chipnomadQueuePlaybackStartSong(chipnomadState, *pSongRow, 0, 1);
           } else if (globalTrack) {
             int track = mapping.instrument;
-            if (mapping.destination == midiCCDestinationTrackMute &&
-                ((value >= 64) != (audioManager.trackStates[track] == TRACK_MUTED))) audioManager.toggleTrackMute(track);
-            else if (mapping.destination == midiCCDestinationTrackSolo &&
-                     ((value >= 64) != (audioManager.trackStates[track] == TRACK_SOLO))) audioManager.toggleTrackSolo(track);
+            if (mapping.destination == midiCCDestinationTrackMute) audioManager.toggleTrackMute(track);
+            else if (mapping.destination == midiCCDestinationTrackSolo) audioManager.toggleTrackSolo(track);
             else if (mapping.destination == midiCCDestinationTrackVolume)
               chipnomadState->project.trackVolume[track] = (uint8_t)((value * 100 + 63) / 127);
             else if (mapping.destination == midiCCDestinationTrackReverbSend)
@@ -1357,8 +1361,6 @@ void appOnEvent(MainLoopEventData eventData) {
           } else {
             instrumentSetCCDestination(&chipnomadState->project.instruments[mapping.instrument], mapping.destination, value);
           }
-          midiCCAppliedValue[i] = value;
-          midiCCAppliedSerial[i] = serial;
           projectModified = 1;
           audioProjectDirty = 1;
           if (currentScreen) currentScreen->fullRedraw();
