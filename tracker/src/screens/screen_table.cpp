@@ -221,7 +221,8 @@ static void drawSelection(int col1, int row1, int col2, int row2) {
 }
 
 static void fullRedraw(void) {
-  screenFullRedraw(&screen);
+  if (isFxEdit) fxEditRedraw();
+  else screenFullRedraw(&screen);
 }
 
 static void draw(void) {

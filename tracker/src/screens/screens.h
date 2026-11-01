@@ -239,6 +239,7 @@ inline int fxEditInput(int keys, int taps, uint8_t* fx, uint8_t* last) {
 }
 #endif
 void fxEditFullDraw(FXId currentFX, uint8_t instrumentIdx, int isTable);
+void fxEditRedraw(void);
 
 // Key jazz (desktop): lets screen_phrase.cpp own its toggle/note-entry state
 // while app.cpp only needs to route raw keyboard events to it. Returns 1 if

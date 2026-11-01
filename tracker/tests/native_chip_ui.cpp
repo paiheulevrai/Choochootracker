@@ -843,6 +843,53 @@ int main(int argc,char** argv){
     printf("Factory ZIPs, all 11 USER roots, nested ZIP navigation, audition, selection and DX7 bank voices passed\n");
     chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
   }
+  if(argc==3 && !strcmp(argv[2],"--animated-fx-only")) {
+    appSettings.backgroundMode=BackgroundMode::plasma;
+    appSettings.backgroundIntensity=0; // Keep pixels stable while exercising animation ticks.
+    backgroundApplySettings();
+    *pSongTrack=0;*pSongRow=0;*pChainRow=0;
+    chipnomadState->project.song[0][0]=0;
+    chipnomadState->project.chains[0].rows[0].phrase=0;
+    chipnomadState->project.phrases[0].rows[0].fx[0].command=fxARP;
+    chipnomadState->project.tables[0].rows[0].fx[0].command=fxARP;
+    for (const AppScreen* page : {&screenPhrase,&screenTable}) {
+      for(int header : {0,1}) {
+        appSettings.persistentWaveform=header;
+        page->init();screenSetup(page,0);appDraw();
+        for(int column=0;column<3;++column)key(1,keyRight);
+        key(1,keyEdit|keyUp);
+        key(1,keyEdit|keyRight); // Preserve the browsed choice, not the stored command.
+        const auto before=framePixels();
+        SDL_Delay(100);appDraw();
+        const auto after=framePixels();
+        for(int y=(1+gfxGetContentRowOffset())*gfxGetCharHeight();
+            y<(18+gfxGetContentRowOffset())*gfxGetCharHeight();++y)
+          for(int x=0;x<34*gfxGetCharWidth();++x)
+            require(before[y*640+x]==after[y*640+x],"animated background preserves FX picker and selection");
+        appSettings.backgroundMode=BackgroundMode::solid;
+        const uint32_t refreshedBackground=0xff123456;
+        gfxBackgroundSetPixels(&refreshedBackground,1,1);
+        currentScreen->fullRedraw();appDraw();
+        const auto refreshed=framePixels();
+        require(refreshed.front()==refreshedBackground && refreshed.back()==refreshedBackground,
+          "FX picker refreshes the background outside its list, including the header");
+        appSettings.backgroundMode=BackgroundMode::plasma;backgroundApplySettings();
+        key(0,0);
+      }
+    }
+    screenSetup(&screenMixer,0);appDraw();
+    const auto cpuBefore=framePixels();
+    for(int frame=0;frame<3;++frame) {
+      SDL_Delay(100);appDraw();
+      const auto cpuAfter=framePixels();
+      for(int y=gfxGetContentRowOffset()*gfxGetCharHeight();
+          y<(1+gfxGetContentRowOffset())*gfxGetCharHeight();++y)
+        for(int x=31*gfxGetCharWidth();x<40*gfxGetCharWidth();++x)
+          require(cpuBefore[y*640+x]==cpuAfter[y*640+x],"animated background preserves Mixer CPU text");
+    }
+    printf("Animated FX picker and Mixer CPU redraw passed: Phrase/Table, waveform off/on\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--fx-only")) {
     for(auto type:{InstrumentType::OPLL,InstrumentType::VRC7,InstrumentType::OPL2,InstrumentType::OPL3,InstrumentType::GenesisFM,InstrumentType::ArcadeFM,InstrumentType::DX7}) {
       auto& inst=chipnomadState->project.instruments[0];getInstrumentFunctions(type).init(&inst);

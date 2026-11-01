@@ -783,6 +783,13 @@ void fxEditFullDraw(FXId currentFX, uint8_t instrumentIdx, int isTable) {
 }
 
 
+void fxEditRedraw(void) {
+  gfxClear();
+  FXGroup* group = getVisibleGroup(currentGroup, getCurrentInstrumentType());
+  const FXName* item = group ? visibleFXAt(group, currentIdx) : NULL;
+  if (item) fxEditFullDraw(item->fx, currentInstrumentIdx, currentIsTable);
+}
+
 int fxEditInput(int keys, int tapCount, FXCell* fx, FXCell* lastFX) {
   if (keys == 0) {
     // Selection complete - update the FX value

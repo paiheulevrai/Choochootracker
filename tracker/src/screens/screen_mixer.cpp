@@ -116,6 +116,7 @@ static const char* tapeHeadsName(uint8_t heads) {
 }
 
 static void drawStatic(void) {
+  displayedCpuLoad = -1; // A full redraw erased the cached CPU text.
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   if (mixerPage == 0) {
     gfxPrint(0, 0, "MIXER");

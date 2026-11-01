@@ -135,7 +135,8 @@ static void drawStatic(void) {
 }
 
 static void fullRedraw(void) {
-  screenFullRedraw(&screen);
+  if (isFxEdit) fxEditRedraw();
+  else screenFullRedraw(&screen);
 }
 
 static void drawField(int col, int row, CellState state) {

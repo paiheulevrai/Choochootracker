@@ -1432,6 +1432,8 @@ During Link playback, CCT gently corrects its local tick rate once per four-beat
 - **Support report** writes a small diagnostic text file with the app version, platform, audio settings and CPU load, playback/overflow state, and a compact project summary. It does not include sample data or project title/author text. On Android and Web it opens the normal export/download flow; desktop and handheld builds save `support-report.txt` in the app's writable folder.
 - **Quit ChooChooTracker** exits cleanly.
 
+Animated backgrounds keep moving across the whole screen while you browse lane FX in Phrase or Table. The Mixer CPU reading stays visible as the background moves.
+
 Battery information appears at the top right when the device reports a battery. **Battery info** selects **Percent**, estimated remaining **Time**, or **Off** (the default). Time starts with a rough estimate based on the charge percentage, then adjusts as soon as an observed one-minute reading shows a drop. Later readings smooth the estimate over the last ten minutes. It shows `CHARGE` or `FULL` while connected to power.
 
 The playback counter sits below it, above the track list. **Playback counter** selects **Bars** (`000:0` at the start, then bar count and quarters `1` to `4`), **Time** (`00:00`), or **Off** to hide it. **Rows per bar** defaults to `16` and **Ticks per row** to `6`, so a bar is 96 elapsed playback ticks regardless of the project's groove. Both values can be changed in Graphics. The count continues across song loops, keeps its last value after stopping, and resets when playback starts again. Time uses the audio clock, including changes in tempo.
