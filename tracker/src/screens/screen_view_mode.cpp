@@ -6,7 +6,6 @@
 #include "audio_manager.h"
 #include "export_path.h"
 #include <string.h>
-#include <chrono>
 
 // Mode chooser: shown after NEW (from the title screen or the project
 // screen). The chosen view mode is stored per project and cannot be
@@ -14,11 +13,14 @@
 // so this screen is the only place a new project's mode is decided.
 //
 // Layout:
-//   row 2: "NEW PROJECT" title
-//   row 4: "> Classic    Song > Chain > Phrase"
-//   row 5: "  Simplified Song > Adjustable length pattern"
-//   row 8: helper text (marquee when it does not fit)
-//   row 17: "EDIT: confirm   OPT: cancel"
+//   row 2:  "NEW PROJECT" title
+//   row 4:  "> Classic"      (selected: value color, else default)
+//   row 5:  "  Simplified"
+//   row 7+: description of the SELECTED mode, word-wrapped to fit
+//   below:  always the fixed notice, word-wrapped
+//
+// Both texts are word-wrapped (no marquee — wrapped, always-readable
+// text per spec). EDIT confirms, OPT cancels (no footer row).
 
 #define VIEW_MODE_OPTION_COUNT (2)
 
@@ -31,21 +33,46 @@ static const char* modeNames[VIEW_MODE_OPTION_COUNT] = {
 };
 
 static const char* modeDescriptions[VIEW_MODE_OPTION_COUNT] = {
-  "Song > Chain > Phrase",
-  "Song > Adjustable length pattern",
+  "Follows LSDJ style Song -> Chain -> Phrase navigation.",
+  "Song has no chains, but adjustable length patterns.",
 };
 
-static const char* helperText =
-  "View mode is stored in the project and cannot be changed later";
+static const char* fixedNotice =
+  "View is fixed to the project and it cannot be changed in the future (for now).";
 
-// Marquee timing (same feel as the fork's selection popup): hold 1s,
-// scroll at 180ms per character, hold 1s at the end, then restart.
-static std::chrono::steady_clock::time_point helperSince;
-static size_t helperOffset;
+#define CHOOSER_TEXT_WIDTH (40)
 
-static void resetMarquee(void) {
-  helperSince = std::chrono::steady_clock::now();
-  helperOffset = 0;
+// Word-wrap `text` into lines of at most `width` chars; breaks at spaces,
+// never mid-word. Returns the line count; lines[] hold up to 6 entries.
+static int wrapText(const char* text, int width, char lines[][CHOOSER_TEXT_WIDTH + 1]) {
+  int lineCount = 0;
+  const char* p = text;
+  while (*p && lineCount < 6) {
+    while (*p == ' ') p++;
+    if (!*p) break;
+    int take = 0;
+    int lastSpace = -1;
+    while (p[take] && take < width) {
+      if (p[take] == ' ') lastSpace = take;
+      take++;
+    }
+    if (p[take] && lastSpace > 0) take = lastSpace;  // break at the space
+    if (take == 0) take = 1;                        // defensive
+    memcpy(lines[lineCount], p, take);
+    lines[lineCount][take] = 0;
+    lineCount++;
+    p += take;
+  }
+  return lineCount;
+}
+
+static void drawDescription(int y, const char* text, int color) {
+  char lines[6][CHOOSER_TEXT_WIDTH + 1];
+  int count = wrapText(text, CHOOSER_TEXT_WIDTH, lines);
+  gfxSetFgColor(color);
+  for (int i = 0; i < count; i++) {
+    gfxPrint(0, y + i, lines[i]);
+  }
 }
 
 static void fullRedraw(void) {
@@ -59,67 +86,23 @@ static void fullRedraw(void) {
 
   for (int i = 0; i < VIEW_MODE_OPTION_COUNT; i++) {
     gfxSetFgColor(i == selected ? cs.textValue : cs.textDefault);
-    gfxPrintf(0, 4 + i, "%c %-11s", i == selected ? '>' : ' ', modeNames[i]);
-    gfxSetFgColor(cs.textInfo);
-    gfxPrint(14, 4 + i, modeDescriptions[i]);
+    gfxPrintf(0, 4 + i, "%c %s", i == selected ? '>' : ' ', modeNames[i]);
   }
 
-  // Helper text: scroll horizontally when it does not fit on one line.
-  gfxSetFgColor(cs.textInfo);
-  const size_t length = strlen(helperText);
-  const size_t width = 40;
-  size_t offset = 0;
-  if (length > width) {
-    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - helperSince).count();
-    const auto travel = (long long)(length - width) * 180;
-    const auto phase = elapsed % (1000 + travel + 1000);
-    if (phase >= 1000) {
-      long long pos = (phase - 1000) / 180 + 1;
-      if (pos > (long long)(length - width)) pos = length - width;
-      offset = (size_t)pos;
-    }
-  }
-  if (offset != helperOffset) {
-    helperOffset = offset;
-    fullRedraw();
-    return;
-  }
-  // gfxPrint wraps at the screen edge instead of clipping, so the visible
-  // slice must be precision-limited to at most 40 characters.
-  const size_t remaining = length - helperOffset;
-  const size_t visible = remaining < width ? remaining : width;
-  gfxPrintf(0, 8, "%.*s", (int)visible, helperText + helperOffset);
-
-  gfxSetFgColor(cs.textInfo);
-  gfxPrint(0, 17, "EDIT: confirm   OPT: cancel");
+  // Description of the selected mode (wrapped), then the fixed notice.
+  drawDescription(7, modeDescriptions[selected], cs.textInfo);
+  drawDescription(10, fixedNotice, cs.textInfo);
 }
 
 static void setup(int input) {
   (void)input;
   selected = 0;
-  resetMarquee();
   fullRedraw();
 }
 
 static void draw(void) {
-  // Advance the marquee: recompute the offset and redraw only when it
-  // changed (fullRedraw re-enters here through the offset check).
-  const size_t length = strlen(helperText);
-  const size_t width = 40;
-  if (length > width) {
-    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - helperSince).count();
-    const auto travel = (long long)(length - width) * 180;
-    const auto phase = elapsed % (1000 + travel + 1000);
-    size_t offset = 0;
-    if (phase >= 1000) {
-      long long pos = (phase - 1000) / 180 + 1;
-      if (pos > (long long)(length - width)) pos = length - width;
-      offset = (size_t)pos;
-    }
-    if (offset != helperOffset) fullRedraw();
-  }
+  // Static screen: nothing animates (descriptions are wrapped, not
+  // scrolled). No per-frame work.
 }
 
 static void confirm(void) {

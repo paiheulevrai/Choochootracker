@@ -147,6 +147,19 @@ static void setup(int input) {
       if (bar >= len) bar = len - 1;
       *pChainRow = bar;  // clamp
       phraseIdx = pat->bars[bar].phrase;
+      // Lazy allocation: new projects start with empty song rows, so a bar
+      // may have no phrase yet. Allocate one on the fly so notes entered
+      // here stick (and survive scrolling away and back).
+      if (phraseIdx == EMPTY_VALUE_16) {
+        int fresh = patternFindClosestEmptyPhrase(p, currentPatternIdx);
+        if (fresh != EMPTY_VALUE_16) {
+          phraseClear(&p->phrases[fresh]);
+          pat->bars[bar].phrase = (uint16_t)fresh;
+          phraseIdx = fresh;
+          projectModified = 1;
+          chipnomadQueueProjectRefresh(chipnomadState);
+        }
+      }
     } else {
       phraseIdx = EMPTY_VALUE_16;
     }
@@ -222,15 +235,7 @@ static void drawStatic(void) {
     int len = pat->length;
     if (len < 1) len = 1;
     if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
-    // Reuse mark: is the pattern referenced elsewhere in the song?
-    int reused = 0;
-    for (int r = 0; r < PROJECT_MAX_LENGTH && !reused; r++) {
-      for (int t = 0; t < PROJECT_MAX_TRACKS; t++) {
-        if (r == *pSongRow && t == *pSongTrack) continue;
-        if (p->song[r][t] == currentPatternIdx) { reused = 1; break; }
-      }
-    }
-    gfxPrintf(0, 0, "Pattern %02X%c", currentPatternIdx, reused ? '*' : ' ');
+    gfxPrintf(0, 0, "Pattern %02X", currentPatternIdx);
     gfxPrintf(20, 0, "Length %02d", len);
     gfxPrintf(31, 0, "Loop %s",
       p->playheadMode == PlayheadMode::loopActiveBar ? "BAR" : "PAT");
@@ -274,27 +279,11 @@ static void drawField(int col, int row, CellState state) {
 static void drawRowHeader(int row, CellState state) {
   if (row < screen.topRow || row >= screen.topRow + screenVisibleRows()) return;
   const ColorScheme cs = appSettings.colorScheme;
-  if (chipnomadState->project.viewMode == ViewMode::simplified &&
-      currentPatternIdx >= 0 && currentPatternIdx < PROJECT_MAX_PATTERNS) {
-    // Pattern view: the row rail doubles as the bar indicator, using two
-    // yellow shades from the theme. The row equal to the viewed bar gets the
-    // intense titles color; rows within the pattern's length get the lighter
-    // value color; rows past the end stay dim (info). Example: an 8-bar
-    // pattern viewing bar 1 → rows 00..07 value-colored, row 01 titles.
-    // (Themable — no fixed colors here.)
-    if (state == CellState::focus) {
-      gfxSetFgColor(cs.textDefault);
-    } else if (row == *pChainRow) {
-      gfxSetFgColor(cs.textTitles);
-    } else if (row < chipnomadState->project.patterns[currentPatternIdx].length) {
-      gfxSetFgColor(cs.textValue);
-    } else {
-      gfxSetFgColor(cs.textInfo);
-    }
-    gfxPrintf(1, 3 + row - screen.topRow, "%X", row);
-    return;
-  }
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : ((row & 3) == 0 ? cs.textValue : cs.textInfo));
+  // Classic codebase striping in BOTH views: rows 0/4/8/C use the titles
+  // color, the rest the info color (the pattern-view bar shading was
+  // removed — the classic look applies everywhere).
+  gfxSetFgColor((state == CellState::focus) ? cs.textDefault
+                : ((row & 3) == 0 ? cs.textTitles : cs.textInfo));
   gfxPrintf(1, 3 + row - screen.topRow, "%X", row);
 }
 
@@ -1239,7 +1228,6 @@ static int onEdit(int col, int row, CellEditAction action) {
           hasPhrase = 0;
         }
         fullRedraw();
-        screenMessage(MESSAGE_TIME, "Pattern %02X length %02d", currentPatternIdx, pat->length);
       }
       return handled;
     } else if (patternHeaderField == 2) {
