@@ -287,7 +287,8 @@ static int inputScreenNavigation(int keys, int tapCount) {
     int chain = chipnomadState->project.song[screen.cursorRow][screen.cursorCol];
 
     if (chain == EMPTY_VALUE_16) {
-      screenMessage(0, "Enter a chain");
+      screenMessage(0, chipnomadState->project.viewMode == ViewMode::simplified
+        ? "Enter a pattern" : "Enter a chain");
     } else if (chipnomadState->project.viewMode == ViewMode::simplified) {
       screenSetup(&screenPhrase, -1);
     } else {
