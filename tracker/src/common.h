@@ -69,6 +69,7 @@ struct AppSettings {
   int quickHelpReleaseSeen;
   int ayWavetableLfoView;
   int waveformRefreshHz;
+  int chainMinimap;
   // Port indices are runtime-only (not saved): enumeration order isn't
   // stable across reboots/replugging. -1 = off. What IS saved is each
   // device's name (below); appSetup() resolves it back to a live index on

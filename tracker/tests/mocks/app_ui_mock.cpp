@@ -1,6 +1,7 @@
 // UI/audio boundaries for exercising the real app and Settings event handlers.
 #include "app_ui_mock.h"
 #include "audio_manager.h"
+#include "corelib_gfx.h"
 #include "file_browser.h"
 #include "screen_quick_help.h"
 
@@ -17,7 +18,6 @@ int cInstrument = 0;
 const AppScreen screenKeyMapping = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenFileBrowser = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenColorTheme = {nullptr, nullptr, noOp, noOp, ignoreInput};
-const AppScreen screenChain = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenTable = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenInstrumentPool = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenModulation = {nullptr, nullptr, noOp, noOp, ignoreInput};
@@ -42,8 +42,14 @@ void screenMessage(int, const char*, ...) {}
 void drawScreenMap(void) {}
 ScreenPlaybackLevel screenGetPlaybackLevel(const AppScreen*) { return ScreenPlaybackLevel::none; }
 LoopRange screenGetLoopRange(const AppScreen*) { return {}; }
-void screenFullRedraw(ScreenData* screen) { mockScreenData = screen; }
+void screenFullRedraw(ScreenData* screen) { mockScreenData = screen; gfxClear(); }
 int screenInput(ScreenData* screen, int, int, int) { mockScreenData = screen; return 1; }
+void setCellColor(CellState, int, int) {}
+int isSingleColumnSelection(ScreenData* screen) {
+  int startCol, startRow, endCol, endRow;
+  getSelectionBounds(screen, &startCol, &startRow, &endCol, &endRow);
+  return startCol == endCol;
+}
 int screenTouchTap(int, int) { return 0; }
 TouchAdjustResult screenTouchAdjust(int, int) { return touchAdjustNone; }
 void screenQuickHelpOpen(const AppScreen*) {}
