@@ -217,7 +217,7 @@ TEST_CASE("Native phrase macros reach the real voice without modifying saved par
    if(g>=genericModFMTime&&g<=genericModFMLFODepth)value=160;
    auto fx=render(t,g,value,true),saved=render(t,g,value,false);
    REQUIRE(fx.size()==saved.size());CHECK(fx==saved);
-   double energy=0;for(float x:fx){REQUIRE(std::isfinite(x));energy+=x*x;}CHECK(energy>1e-8);
+   double energy=0;for(float x:fx){REQUIRE(std::isfinite(x));energy+=static_cast<double>(x)*x;}CHECK(energy>1e-8);
   }
   Instrument i{};getInstrumentFunctions(t).init(&i);
   if(instrumentFMAmpSettings(&i))CHECK(render(t,genericModEnvelopeAttack,80,true)==render(t,genericModEnvelopeAttack,80,false));

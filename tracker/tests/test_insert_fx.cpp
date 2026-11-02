@@ -1199,7 +1199,7 @@ TEST_CASE("Insert chains across live, voice and track contexts") {
         expected.process(x, 256, v);
         for (int i = 0; i < 512; ++i) {
           CHECK(y[i] == doctest::Approx(x[i]).epsilon(1e-5));
-          energy += y[i] * y[i];
+          energy += static_cast<double>(y[i]) * y[i];
         }
       }
       CHECK(energy > 0);
