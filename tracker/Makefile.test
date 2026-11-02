@@ -120,7 +120,7 @@ COMMON_SOURCES = $(CHIPNOMAD_LIB_SOURCES) $(TRACKER_SRC_SOURCES)
 
 # All sources
 ALL_SOURCES = $(TEST_SOURCES) $(COMMON_SOURCES) $(MOCK_SOURCES)
-MEASURE_SOURCES = tests/render_engine_measurements.cpp $(filter-out src/copy_paste.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES)
+MEASURE_SOURCES = tests/render_engine_measurements.cpp $(COMMON_SOURCES) $(MOCK_SOURCES)
 BENCHMARK_SOURCES = tests/benchmark_song.cpp $(COMMON_SOURCES) $(MOCK_SOURCES)
 ALL_COMPILE_SOURCES = $(sort $(ALL_SOURCES) $(MEASURE_SOURCES) $(BENCHMARK_SOURCES))
 ALL_COMPILE_SOURCES += tests/beads_lifetime.cpp
@@ -131,7 +131,7 @@ object_for = $(BUILD_DIR)/obj/$(subst ../,up/,$(basename $(1))).o
 OBJECTS := $(foreach source,$(ALL_SOURCES),$(call object_for,$(source)))
 MEASURE_OBJECTS := $(foreach source,$(MEASURE_SOURCES),$(call object_for,$(source)))
 BENCHMARK_OBJECTS := $(foreach source,$(BENCHMARK_SOURCES),$(call object_for,$(source)))
-BEADS_LIFETIME_OBJECTS := $(foreach source,tests/beads_lifetime.cpp $(filter-out src/copy_paste.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
+BEADS_LIFETIME_OBJECTS := $(foreach source,tests/beads_lifetime.cpp $(COMMON_SOURCES) $(MOCK_SOURCES),$(call object_for,$(source)))
 DEPS := $(sort $(OBJECTS:.o=.d) $(MEASURE_OBJECTS:.o=.d) $(BENCHMARK_OBJECTS:.o=.d) $(BEADS_LIFETIME_OBJECTS:.o=.d))
 
 define compile_source

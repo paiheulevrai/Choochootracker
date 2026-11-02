@@ -5,15 +5,6 @@
 
 #include <cstring>
 
-// copy_paste also owns selection-mode helpers; the clipboard tests do not link
-// the full screen implementation.
-void getSelectionBounds(ScreenData* screen, int* startCol, int* startRow, int* endCol, int* endRow) {
-  *startCol = screen->selectStartCol < screen->cursorCol ? screen->selectStartCol : screen->cursorCol;
-  *endCol = screen->selectStartCol > screen->cursorCol ? screen->selectStartCol : screen->cursorCol;
-  *startRow = screen->selectStartRow < screen->cursorRow ? screen->selectStartRow : screen->cursorRow;
-  *endRow = screen->selectStartRow > screen->cursorRow ? screen->selectStartRow : screen->cursorRow;
-}
-
 TEST_CASE("FX clipboard moves Phrase FX into Table lanes and truncates") {
   ChipNomadState state = {};
   chipnomadState = &state;

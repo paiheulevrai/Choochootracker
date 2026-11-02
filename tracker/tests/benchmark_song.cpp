@@ -15,8 +15,6 @@
 #include "output_safety_limiter.h"
 #include "audio_input_manager.h"
 
-void getSelectionBounds(ScreenData*, int*, int*, int*, int*) {}
-
 namespace {
 constexpr int kBlockFrames = 1024;
 constexpr int kWarmupSeconds = 3;

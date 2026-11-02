@@ -100,6 +100,12 @@ LoopRange screenGetLoopRange(const AppScreen*) { return {}; }
 void screenFullRedraw(ScreenData* screen) { mockScreenData = screen; gfxClear(); }
 int screenInput(ScreenData* screen, int, int, int) { mockScreenData = screen; return 1; }
 void setCellColor(CellState, int, int) {}
+void getSelectionBounds(ScreenData* screen, int* startCol, int* startRow, int* endCol, int* endRow) {
+  *startCol = screen->selectStartCol < screen->cursorCol ? screen->selectStartCol : screen->cursorCol;
+  *endCol = screen->selectStartCol > screen->cursorCol ? screen->selectStartCol : screen->cursorCol;
+  *startRow = screen->selectStartRow < screen->cursorRow ? screen->selectStartRow : screen->cursorRow;
+  *endRow = screen->selectStartRow > screen->cursorRow ? screen->selectStartRow : screen->cursorRow;
+}
 int isSingleColumnSelection(ScreenData* screen) {
   int startCol, startRow, endCol, endRow;
   getSelectionBounds(screen, &startCol, &startRow, &endCol, &endRow);
