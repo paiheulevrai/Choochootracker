@@ -84,6 +84,12 @@ static bool batteryHasPoll;
 static PowerInfo batteryInfo;
 static const int batteryFallbackSeconds = 6 * 60 * 60;
 
+static bool batteryHasDischargeInfo(const PowerInfo& info) {
+  if (info.state == PowerState::onBattery) return true;
+  return (info.state == PowerState::unknown || info.state == PowerState::noBattery) &&
+    (info.percent >= 0 || info.seconds >= 0);
+}
+
 void appResetBatteryInfo(void) {
   batterySampleCount = 0;
   batteryEstimatedSeconds = -1;
@@ -116,14 +122,14 @@ static void batteryPoll(void) {
   const bool interrupted = batteryHasPoll && (now < batteryLastPoll || now - batteryLastPoll > 150);
   const bool stateChanged = batteryHasPoll && next.state != batteryInfo.state;
   const bool percentRose = batterySampleCount && next.percent > batterySamples[batterySampleCount - 1].percent;
-  if (interrupted || stateChanged || percentRose || next.state != PowerState::onBattery || next.percent < 0) {
+  if (interrupted || stateChanged || percentRose || !batteryHasDischargeInfo(next) || next.percent < 0) {
     batterySampleCount = 0;
     batteryEstimatedSeconds = -1;
   }
   batteryInfo = next;
   batteryLastPoll = now;
   batteryHasPoll = true;
-  if (next.state == PowerState::onBattery && next.percent >= 0)
+  if (batteryHasDischargeInfo(next) && next.percent >= 0)
     batteryAddSample(now, next.percent);
 }
 
@@ -135,7 +141,7 @@ static void drawBatteryInfo(void) {
   char label[7] = "";
   if (batteryInfo.state == PowerState::charging) snprintf(label, sizeof(label), "CHARGE");
   else if (batteryInfo.state == PowerState::charged) snprintf(label, sizeof(label), "FULL");
-  else if (batteryInfo.state != PowerState::onBattery) return;
+  else if (!batteryHasDischargeInfo(batteryInfo)) return;
   else if (appSettings.batteryInfoMode == 2) {
     if (batteryInfo.percent < 0) return;
     snprintf(label, sizeof(label), "%d%%", batteryInfo.percent);

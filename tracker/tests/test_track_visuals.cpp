@@ -261,6 +261,18 @@ TEST_CASE_FIXTURE(VisualFixture, "Battery overlay formats power state and aligns
   mockPowerInfo = {PowerState::noBattery, -1, -1};
   appDraw();
   CHECK(std::string(mockGfxCells[1] + 34, 6) == "      ");
+
+  appResetBatteryInfo();
+  mockPowerNowSeconds = 240;
+  mockPowerInfo = {PowerState::unknown, 65, -1};
+  appDraw();
+  CHECK(std::string(mockGfxCells[1] + 34, 6) == "  3h54");
+  appSettings.batteryInfoMode = 2;
+  appResetBatteryInfo();
+  mockPowerInfo = {PowerState::noBattery, 65, -1};
+  mockPowerNowSeconds = 300;
+  appDraw();
+  CHECK(std::string(mockGfxCells[1] + 34, 6) == "   65%");
 }
 
 TEST_CASE_FIXTURE(VisualFixture, "Battery time learns actual discharge and resets stale estimates") {
