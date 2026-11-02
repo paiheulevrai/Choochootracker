@@ -34,13 +34,6 @@ static uint32_t mixColor(int base, int target, int amount) {
   return 0xff000000u | (uint32_t)(r << 16 | g << 8 | b);
 }
 
-static int shade(int base, float level) {
-  int r = clampByte((int)((base >> 16 & 255) * level));
-  int g = clampByte((int)((base >> 8 & 255) * level));
-  int b = clampByte((int)((base & 255) * level));
-  return r << 16 | g << 8 | b;
-}
-
 bool backgroundPixelsAreMonochrome(const uint32_t* source, size_t count) {
   if (!source || !count) return false;
   for (size_t i = 0; i < count; ++i) {
@@ -92,12 +85,11 @@ BackgroundAudioFeatures backgroundAnalyzeSamples(const float* samples, int count
 }
 
 void backgroundRenderFrame(BackgroundMode mode, uint32_t* destination, int width, int height,
-    int baseColor, int intensity, int speed, int reaction, float phase,
+    int baseColor, int accentColor, int intensity, int speed, int reaction, float phase,
     const BackgroundAudioFeatures& audio) {
   if (!destination || width <= 0 || height <= 0) return;
   float react = std::max(0, std::min(100, reaction)) / 100.0f;
   float motion = std::max(0, std::min(100, speed)) / 40.0f;
-  int effectColor = visibleTintColor(baseColor);
   float ballX[3], ballY[3];
   if (mode == BackgroundMode::metaballs) for (int ball = 0; ball < 3; ++ball) {
     ballX[ball] = .5f + std::sin(phase * motion * (.45f + ball * .13f) + ball * 2.1f) * .32f;
@@ -162,7 +154,9 @@ void backgroundRenderFrame(BackgroundMode mode, uint32_t* destination, int width
         std::sin((bx * bx + ny * ny) * 190 - phase * motion * 1.2f);
       value = .78f + rings * (.11f + audio.high * react * .06f);
     }
-    destination[y * width + x] = mixColor(baseColor, shade(effectColor, value), intensity);
+    // Map the effect's brightness range to the theme background/accent gradient.
+    int amount = (int)(clampUnit((value - .65f) / .95f) * std::max(0, std::min(100, intensity)));
+    destination[y * width + x] = mixColor(baseColor, accentColor, amount);
   }
 }
 
@@ -196,7 +190,7 @@ bool backgroundApplySettings(void) {
   }
   int width = renderWidth(), height = renderHeight();
   backgroundRenderFrame(appSettings.backgroundMode, pixels, width,
-    height, appSettings.colorScheme.background, appSettings.backgroundIntensity,
+    height, appSettings.colorScheme.background, appSettings.colorScheme.valueBar, appSettings.backgroundIntensity,
     appSettings.backgroundSpeed, appSettings.backgroundReaction, animationPhase, audioFeatures);
   gfxBackgroundSetPixels(pixels, width, height);
   return true;
@@ -227,12 +221,12 @@ bool backgroundTick(const float* samples, int sampleCount) {
   animationPhase += elapsed;
   int width = renderWidth(), height = renderHeight();
   backgroundRenderFrame(appSettings.backgroundMode, pixels, width,
-    height, appSettings.colorScheme.background, appSettings.backgroundIntensity,
+    height, appSettings.colorScheme.background, appSettings.colorScheme.valueBar, appSettings.backgroundIntensity,
     appSettings.backgroundSpeed, appSettings.backgroundReaction, animationPhase, audioFeatures);
   if (appSettings.backgroundMode == BackgroundMode::waves) {
     const float reaction = appSettings.backgroundReaction / 100.0f;
     const uint32_t line = mixColor(appSettings.colorScheme.background,
-      shade(visibleTintColor(appSettings.colorScheme.background), 1.65f),
+      appSettings.colorScheme.valueBar,
       appSettings.backgroundIntensity);
     int previousY = height / 2;
     for (int x = 0; x < width; ++x) {

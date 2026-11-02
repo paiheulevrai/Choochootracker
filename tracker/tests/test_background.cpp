@@ -31,10 +31,38 @@ TEST_CASE("background tint intensity blends from theme background") {
 TEST_CASE("animated backgrounds remain visible over pure black") {
   std::vector<uint32_t> pixels(64);
   backgroundRenderFrame(BackgroundMode::plasma, pixels.data(), 8, 8,
-    0x000000, 25, 50, 0, 1.0f, {});
+    0x000000, 0x64d6ff, 25, 50, 0, 1.0f, {});
   bool visible = false;
   for (uint32_t pixel : pixels) visible |= (pixel & 0xffffff) != 0;
   CHECK(visible);
+}
+
+TEST_CASE("all animated backgrounds blend only the theme background and accent") {
+  std::vector<uint32_t> solid(64), full(64), half(64), changedAccent(64);
+  for (int mode = (int)BackgroundMode::plasma; mode <= (int)BackgroundMode::moire; ++mode) {
+    backgroundRenderFrame((BackgroundMode)mode, solid.data(), 8, 8,
+      0x800000, 0x000080, 0, 50, 0, 1.25f, {});
+    backgroundRenderFrame((BackgroundMode)mode, full.data(), 8, 8,
+      0x800000, 0x000080, 100, 50, 0, 1.25f, {});
+    backgroundRenderFrame((BackgroundMode)mode, half.data(), 8, 8,
+      0x800000, 0x000080, 50, 50, 0, 1.25f, {});
+    backgroundRenderFrame((BackgroundMode)mode, changedAccent.data(), 8, 8,
+      0x800000, 0x008000, 100, 50, 0, 1.25f, {});
+    CHECK(full != solid);
+    CHECK(full != changedAccent);
+    for (size_t i = 0; i < full.size(); ++i) {
+      CHECK(solid[i] == 0xff800000);
+      int red = full[i] >> 16 & 255, blue = full[i] & 255;
+      CHECK((full[i] & 0xff00) == 0);
+      CHECK(red <= 128);
+      CHECK(blue <= 128);
+      CHECK(red + blue >= 127);
+      CHECK(red + blue <= 128);
+      // The blend rounds both its percentage and its output channels down.
+      CHECK(std::abs((int)(half[i] & 255) * 2 - blue) <= 3);
+      CHECK(changedAccent[i] == (0xff000000u | (red << 16) | (blue << 8)));
+    }
+  }
 }
 
 TEST_CASE("background audio analysis separates low and high activity") {
@@ -53,9 +81,9 @@ TEST_CASE("native background frames are deterministic and distinct") {
   std::vector<uint32_t> a(64), b(64), stars(64);
   BackgroundAudioFeatures audio;
   audio.rms = .2f; audio.low = .3f; audio.mid = .1f; audio.high = .05f; audio.transient = .4f;
-  backgroundRenderFrame(BackgroundMode::plasma, a.data(), 8, 8, 0x304050, 25, 50, 50, 1.25f, audio);
-  backgroundRenderFrame(BackgroundMode::plasma, b.data(), 8, 8, 0x304050, 25, 50, 50, 1.25f, audio);
-  backgroundRenderFrame(BackgroundMode::stars, stars.data(), 8, 8, 0x304050, 25, 50, 50, 1.25f, audio);
+  backgroundRenderFrame(BackgroundMode::plasma, a.data(), 8, 8, 0x304050, 0x64d6ff, 25, 50, 50, 1.25f, audio);
+  backgroundRenderFrame(BackgroundMode::plasma, b.data(), 8, 8, 0x304050, 0x64d6ff, 25, 50, 50, 1.25f, audio);
+  backgroundRenderFrame(BackgroundMode::stars, stars.data(), 8, 8, 0x304050, 0x64d6ff, 25, 50, 50, 1.25f, audio);
   CHECK(a == b);
   CHECK(a != stars);
 }
@@ -64,11 +92,11 @@ TEST_CASE("all native background effects render distinct deterministic frames") 
   std::vector<uint32_t> reference(64), first(64), second(64);
   BackgroundAudioFeatures audio{.2f, .3f, .1f, .05f, .4f};
   backgroundRenderFrame(BackgroundMode::plasma, reference.data(), 8, 8,
-    0x304050, 50, 50, 50, 1.25f, audio);
+    0x304050, 0x64d6ff, 50, 50, 50, 1.25f, audio);
   for (int value = (int)BackgroundMode::stars; value <= (int)BackgroundMode::moire; ++value) {
     BackgroundMode mode = (BackgroundMode)value;
-    backgroundRenderFrame(mode, first.data(), 8, 8, 0x304050, 50, 50, 50, 1.25f, audio);
-    backgroundRenderFrame(mode, second.data(), 8, 8, 0x304050, 50, 50, 50, 1.25f, audio);
+    backgroundRenderFrame(mode, first.data(), 8, 8, 0x304050, 0x64d6ff, 50, 50, 50, 1.25f, audio);
+    backgroundRenderFrame(mode, second.data(), 8, 8, 0x304050, 0x64d6ff, 50, 50, 50, 1.25f, audio);
     CHECK(first == second);
     CHECK(first != reference);
   }

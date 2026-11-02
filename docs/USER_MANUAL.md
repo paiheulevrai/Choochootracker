@@ -1432,7 +1432,7 @@ During Link playback, CCT gently corrects its local tick rate once per four-beat
 - **Support report** writes a small diagnostic text file with the app version, platform, audio settings and CPU load, playback/overflow state, and a compact project summary. It does not include sample data or project title/author text. On Android and Web it opens the normal export/download flow; desktop and handheld builds save `support-report.txt` in the app's writable folder.
 - **Quit ChooChooTracker** exits cleanly.
 
-Animated backgrounds keep moving across the whole screen while you browse lane FX in Phrase or Table. The Mixer CPU reading stays visible as the background moves.
+Animated backgrounds blend the theme's **Background** and **Value Bars** colors. **Intensity** controls how strongly the accent appears; at zero, the background stays solid. Change **Value Bars** in **Edit color theme** to choose the accent. Animated backgrounds keep moving across the whole screen while you browse lane FX in Phrase or Table. The Mixer CPU reading stays visible as the background moves.
 
 Battery information appears at the top right when the device reports a battery. **Battery info** selects **Percent**, estimated remaining **Time**, or **Off** (the default). Time starts with a rough estimate based on the charge percentage, then adjusts as soon as an observed one-minute reading shows a drop. Later readings smooth the estimate over the last ten minutes. It shows `CHARGE` or `FULL` while connected to power.
 

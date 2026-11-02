@@ -30,5 +30,5 @@ uint32_t backgroundTintPixel(uint32_t pixel, int baseColor, int intensity);
 BackgroundAudioFeatures backgroundAnalyzeSamples(const float* samples, int count,
   const BackgroundAudioFeatures& previous);
 void backgroundRenderFrame(BackgroundMode mode, uint32_t* pixels, int width, int height,
-  int baseColor, int intensity, int speed, int reaction, float phase,
+  int baseColor, int accentColor, int intensity, int speed, int reaction, float phase,
   const BackgroundAudioFeatures& audio);
