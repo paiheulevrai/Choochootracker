@@ -66,6 +66,36 @@ static KeyboardLayout detectKeyboardLayout(void) {
   return LAYOUT_QWERTY;
 }
 
+// PortMaster uses gptokeyb; NextUI launches the same binary without it.
+#ifdef PORTMASTER_BUILD
+void inputInitNativeGamepadMapping(void) {
+  const char* nextui = getenv("CCT_NEXTUI");
+  if (!nextui || strcmp(nextui, "1") != 0) return;
+  struct Binding { InputCode* slots; int code; };
+  Binding bindings[] = {
+    {appSettings.keyMapping.keyUp, SDL_CONTROLLER_BUTTON_DPAD_UP},
+    {appSettings.keyMapping.keyDown, SDL_CONTROLLER_BUTTON_DPAD_DOWN},
+    {appSettings.keyMapping.keyLeft, SDL_CONTROLLER_BUTTON_DPAD_LEFT},
+    {appSettings.keyMapping.keyRight, SDL_CONTROLLER_BUTTON_DPAD_RIGHT},
+    {appSettings.keyMapping.keyEdit, SDL_CONTROLLER_BUTTON_A},
+    {appSettings.keyMapping.keyOpt, SDL_CONTROLLER_BUTTON_B},
+    {appSettings.keyMapping.keyPlay, SDL_CONTROLLER_BUTTON_START},
+    {appSettings.keyMapping.keyShift, SDL_CONTROLLER_BUTTON_BACK},
+    {appSettings.keyMapping.keyMotionLive, SDL_CONTROLLER_BUTTON_LEFTSHOULDER},
+    {appSettings.keyMapping.keyMotionRecord, gamepadTriggerLeft},
+    {appSettings.keyMapping.keyMotionErase, gamepadTriggerRight},
+  };
+  // Repair the keyboard-only defaults saved by the first NextUI package.
+  // Preserve existing controller customizations, including cleared bindings.
+  for (const Binding& binding : bindings)
+    for (int i = 0; i < 3; ++i)
+      if (binding.slots[i].deviceType == InputDeviceType::gamepad) return;
+  for (const Binding& binding : bindings)
+    if (binding.slots[1].deviceType == InputDeviceType::none)
+      binding.slots[1] = {InputDeviceType::gamepad, binding.code};
+}
+#endif
+
 void inputInitDefaultKeyMapping(void) {
   KeyboardLayout layout = detectKeyboardLayout();
 
@@ -122,6 +152,9 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyMotionLive[2] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyMotionRecord[2] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyMotionErase[2] = (InputCode){InputDeviceType::none, 0};
+#ifdef PORTMASTER_BUILD
+  inputInitNativeGamepadMapping();
+#endif
 }
 
 const char* inputGetKeyName(InputCode input) {

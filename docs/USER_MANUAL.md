@@ -27,6 +27,11 @@ from NextUI's Tools menu. For a manual installation, extract
 `ChooChooTracker.pak.zip` into `Tools/tg5040/ChooChooTracker.pak` on the SD
 card. Back up the Pak's `projects` folder before uninstalling it.
 
+Use the console's D-pad to navigate, **A** to edit or confirm, **B** for
+options or back, **START** to play, and **SELECT** for selection. Controls
+can be reassigned in **Settings > Controls > Key mapping**; a USB keyboard
+also works.
+
 ### Miyoo Mini / Mini Plus (Onion OS)
 
 Extract the MiyooPorts archive at the root of the SD card so that its `Roms/PORTS/` folders merge with Onion's existing folders. Start **ChooChooTracker** from the Ports menu after refreshing the collection. Back up the app's `projects/` folder before replacing an existing installation.

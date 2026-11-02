@@ -715,6 +715,9 @@ void appSetup(void) {
   if (appSettings.keyMapping.keyUp[0].deviceType == InputDeviceType::none) {
     inputInitDefaultKeyMapping();
   }
+#ifdef PORTMASTER_BUILD
+  inputInitNativeGamepadMapping();
+#endif
   if (appSettings.keyMapping.keyMotionLive[0].deviceType == InputDeviceType::none) {
     appSettings.keyMapping.keyMotionLive[0] = (InputCode){InputDeviceType::keyboard, BTN_L1};
     if (appSettings.keyMapping.keyMotionRecord[0].deviceType == InputDeviceType::none ||

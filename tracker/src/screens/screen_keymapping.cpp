@@ -51,6 +51,8 @@ static InputCode* getKeySlot(int row, int col) {
 // saved mappings keyboard-based, but use the controller event as a reliable
 // fallback when Knulli does not deliver the keyboard event to the capture UI.
 static int portMasterGamepadToKeyboard(InputCode input, InputCode* output) {
+  const char* nextui = getenv("CCT_NEXTUI");
+  if (nextui && strcmp(nextui, "1") == 0) return 0;
   if (input.deviceType != InputDeviceType::gamepad) return 0;
 
   int key = 0;

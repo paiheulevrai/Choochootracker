@@ -42,6 +42,11 @@ enum GamepadInputCode {
 // Initialize default key mappings based on platform/keyboard layout
 void inputInitDefaultKeyMapping(void);
 
+#ifdef PORTMASTER_BUILD
+// Enable native controller defaults for NextUI, including existing installs.
+void inputInitNativeGamepadMapping(void);
+#endif
+
 // Convert input code to human-readable name
 const char* inputGetKeyName(InputCode input);
 
