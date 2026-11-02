@@ -16,19 +16,13 @@
 #include <cstdlib>
 #include <vector>
 
+#include "test_helpers.h"
+using namespace testhelp;
+
 TEST_SUITE("wav_cue_io") {
 
 static const char* kTestPath = "build/tests/test_cue_roundtrip.wav";
 
-static void writeU16(FILE* file, uint16_t value) {
-  fputc(value & 0xff, file);
-  fputc(value >> 8, file);
-}
-
-static void writeU32(FILE* file, uint32_t value) {
-  writeU16(file, value & 0xffff);
-  writeU16(file, value >> 16);
-}
 
 static void fillSample(InstrumentSample* sample, std::vector<int16_t>& storage,
                        uint32_t frames, uint8_t channels) {

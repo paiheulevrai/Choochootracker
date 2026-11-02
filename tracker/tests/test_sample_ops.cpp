@@ -56,7 +56,8 @@ struct OpSample {
   }
 };
 
-TEST_CASE("Crop mono keeps the selection and remaps markers") {
+TEST_CASE("Crop, delete and silence") {
+SUBCASE("Crop mono keeps the selection and remaps markers") {
   OpSample t;
   t.init(1000, 1);
   // Set markers via the inverse helpers, then crop exactly at the frames
@@ -78,7 +79,7 @@ TEST_CASE("Crop mono keeps the selection and remaps markers") {
   CHECK(t.s.end == 255);
 }
 
-TEST_CASE("Crop stereo preserves channel interleave") {
+SUBCASE("Crop stereo preserves channel interleave") {
   OpSample t;
   t.init(100, 2);
   int res = sampleOpCrop(&t.s, 10, 40);
@@ -90,7 +91,7 @@ TEST_CASE("Crop stereo preserves channel interleave") {
   }
 }
 
-TEST_CASE("Delete removes the span and joins the tails") {
+SUBCASE("Delete removes the span and joins the tails") {
   OpSample t;
   // frameCount=256 makes the 0-255 marker scale map exactly: start marker
   // m -> frame m, end marker m -> frame m+1 (no quantization drift).
@@ -111,7 +112,7 @@ TEST_CASE("Delete removes the span and joins the tails") {
   CHECK(sampleMarkerToEndFrame(246, t.s.end) == 80);
 }
 
-TEST_CASE("Delete of the whole sample is rejected") {
+SUBCASE("Delete of the whole sample is rejected") {
   OpSample t;
   t.init(50, 1);
   int res = sampleOpDelete(&t.s, 0, 50);
@@ -119,7 +120,7 @@ TEST_CASE("Delete of the whole sample is rejected") {
   t.expectUnchanged();
 }
 
-TEST_CASE("Silence zeros exactly the selection") {
+SUBCASE("Silence zeros exactly the selection") {
   OpSample t;
   t.init(40, 2);
   int res = sampleOpSilence(&t.s, 10, 20);
@@ -132,7 +133,10 @@ TEST_CASE("Silence zeros exactly the selection") {
   }
 }
 
-TEST_CASE("Normalize scales a known peak to full scale") {
+}
+
+TEST_CASE("Normalize and fades") {
+SUBCASE("Normalize scales a known peak to full scale") {
   OpSample t;
   t.init(8, 1);
   for (uint32_t i = 0; i < 8; ++i) t.s.data[i] = (int16_t)(1000 * (int32_t)(i + 1));
@@ -143,7 +147,7 @@ TEST_CASE("Normalize scales a known peak to full scale") {
   CHECK(t.s.data[0] == 4000);
 }
 
-TEST_CASE("Normalize silent selection is a no-op") {
+SUBCASE("Normalize silent selection is a no-op") {
   OpSample t;
   t.init(10, 1);
   memset(t.s.data, 0, 10 * sizeof(int16_t));
@@ -154,7 +158,7 @@ TEST_CASE("Normalize silent selection is a no-op") {
   for (uint32_t i = 0; i < 10; ++i) CHECK(t.s.data[i] == 0);
 }
 
-TEST_CASE("Normalize with clean integer gain scales both channels equally") {
+SUBCASE("Normalize with clean integer gain scales both channels equally") {
   OpSample t;
   t.init(4, 2);
   t.s.data[0] = 100; t.s.data[1] = -200;
@@ -169,7 +173,7 @@ TEST_CASE("Normalize with clean integer gain scales both channels equally") {
   CHECK(t.s.data[0] == (int16_t)(100 * 3));
 }
 
-TEST_CASE("Fade in ramps from zero and leaves the rest untouched") {
+SUBCASE("Fade in ramps from zero and leaves the rest untouched") {
   OpSample t;
   t.init(10, 1);
   int res = sampleOpFade(&t.s, 2, 8, 1);
@@ -187,7 +191,7 @@ TEST_CASE("Fade in ramps from zero and leaves the rest untouched") {
   CHECK(t.s.data[9] == OpSample::value(9, 0));
 }
 
-TEST_CASE("Fade out mirrors fade in") {
+SUBCASE("Fade out mirrors fade in") {
   OpSample t;
   t.init(10, 1);
   int res = sampleOpFade(&t.s, 0, 10, 0);
@@ -198,7 +202,10 @@ TEST_CASE("Fade out mirrors fade in") {
   }
 }
 
-TEST_CASE("Undo round-trip restores a cropped sample byte-identically") {
+}
+
+TEST_CASE("Undo, ranges and marker helpers") {
+SUBCASE("Undo round-trip restores a cropped sample byte-identically") {
   OpSample t;
   t.init(100, 2);
   SampleUndo slot;
@@ -222,7 +229,7 @@ TEST_CASE("Undo round-trip restores a cropped sample byte-identically") {
   CHECK(slot.data == NULL);
 }
 
-TEST_CASE("Undo round-trip restores an in-place op (silence)") {
+SUBCASE("Undo round-trip restores an in-place op (silence)") {
   OpSample t;
   t.init(20, 1);
   SampleUndo slot;
@@ -235,7 +242,7 @@ TEST_CASE("Undo round-trip restores an in-place op (silence)") {
   sampleOpFreeUndo(&slot);
 }
 
-TEST_CASE("Undo prepare overwrites the previous slot") {
+SUBCASE("Undo prepare overwrites the previous slot") {
   OpSample t;
   t.init(10, 1);
   SampleUndo slot;
@@ -248,7 +255,7 @@ TEST_CASE("Undo prepare overwrites the previous slot") {
   sampleOpFreeUndo(&slot);
 }
 
-TEST_CASE("Apply with an empty slot errors") {
+SUBCASE("Apply with an empty slot errors") {
   OpSample t;
   t.init(10, 1);
   SampleUndo slot;
@@ -256,7 +263,7 @@ TEST_CASE("Apply with an empty slot errors") {
   CHECK(sampleOpApplyUndo(&t.s, &slot) == sampleOpErrorNoUndo);
 }
 
-TEST_CASE("Whole-sample fallback when selStart == selEnd") {
+SUBCASE("Whole-sample fallback when selStart == selEnd") {
   OpSample t;
   t.init(30, 1);
   // Silence with equal bounds silences everything
@@ -273,7 +280,7 @@ TEST_CASE("Whole-sample fallback when selStart == selEnd") {
   CHECK(t2.s.data[0] == 32767);
 }
 
-TEST_CASE("Inverted and out-of-bounds ranges are normalized") {
+SUBCASE("Inverted and out-of-bounds ranges are normalized") {
   OpSample t;
   t.init(20, 1);
   // Inverted range: swap on the fly
@@ -291,7 +298,7 @@ TEST_CASE("Inverted and out-of-bounds ranges are normalized") {
   for (uint32_t i = 15; i < 20; ++i) CHECK(t2.s.data[i] == 0);
 }
 
-TEST_CASE("Ops reject empty samples") {
+SUBCASE("Ops reject empty samples") {
   OpSample t;
   t.init(0, 1);
   t.s.data = NULL;
@@ -305,7 +312,7 @@ TEST_CASE("Ops reject empty samples") {
   CHECK(sampleOpPrepareUndo(&t.s, &slot) == sampleOpErrorNoSample);
 }
 
-TEST_CASE("Marker round-trip helpers hit boundary values") {
+SUBCASE("Marker round-trip helpers hit boundary values") {
   // 0-255 -> frame -> 0-255 round trip on a decent-sized sample.
   // NOTE: int loop counter - a uint8_t would wrap at 255 and never exit.
   for (int m = 0; m <= 255; ++m) {
@@ -324,7 +331,10 @@ TEST_CASE("Marker round-trip helpers hit boundary values") {
   CHECK(sampleFrameToEndMarker(1, 1) == 255);
 }
 
-TEST_CASE("WAV save round-trips through load") {
+}
+
+TEST_CASE("WAV save") {
+SUBCASE("WAV save round-trips through load") {
   const char* path = "test_save_roundtrip.wav";
 
   // Mono round trip
@@ -363,7 +373,7 @@ TEST_CASE("WAV save round-trips through load") {
   std::remove(path);
 }
 
-TEST_CASE("WAV save rejects empty samples and overlong paths") {
+SUBCASE("WAV save rejects empty samples and overlong paths") {
   OpSample t;
   t.init(0, 1);
   char error[64] = {0};
@@ -380,7 +390,10 @@ TEST_CASE("WAV save rejects empty samples and overlong paths") {
   CHECK(error[0] != 0);
 }
 
-TEST_CASE("Reverse mirrors a mono selection in place") {
+}
+
+TEST_CASE("Reverse") {
+SUBCASE("Reverse mirrors a mono selection in place") {
   OpSample t;
   t.init(50, 1);
   int res = sampleOpReverse(&t.s, 10, 20);
@@ -398,7 +411,7 @@ TEST_CASE("Reverse mirrors a mono selection in place") {
   CHECK(t.s.end == 255);
 }
 
-TEST_CASE("Reverse preserves stereo channel pairing") {
+SUBCASE("Reverse preserves stereo channel pairing") {
   OpSample t;
   t.init(40, 2);
   int res = sampleOpReverse(&t.s, 0, 40);
@@ -409,7 +422,7 @@ TEST_CASE("Reverse preserves stereo channel pairing") {
   }
 }
 
-TEST_CASE("Reverse of an odd-length selection keeps the middle frame") {
+SUBCASE("Reverse of an odd-length selection keeps the middle frame") {
   OpSample t;
   t.init(21, 1);
   int res = sampleOpReverse(&t.s, 0, 21);
@@ -421,7 +434,7 @@ TEST_CASE("Reverse of an odd-length selection keeps the middle frame") {
   CHECK(t.s.data[10] == OpSample::value(10, 0));
 }
 
-TEST_CASE("Reverse with equal bounds falls back to the whole sample") {
+SUBCASE("Reverse with equal bounds falls back to the whole sample") {
   OpSample t;
   t.init(30, 1);
   int res = sampleOpReverse(&t.s, 25, 25);
@@ -431,7 +444,7 @@ TEST_CASE("Reverse with equal bounds falls back to the whole sample") {
   }
 }
 
-TEST_CASE("Reverse is an involution and integrates with undo") {
+SUBCASE("Reverse is an involution and integrates with undo") {
   OpSample t;
   t.init(24, 1);
   REQUIRE(sampleOpReverse(&t.s, 4, 20) == sampleOpOk);
@@ -448,7 +461,7 @@ TEST_CASE("Reverse is an involution and integrates with undo") {
   sampleOpFreeUndo(&slot);
 }
 
-TEST_CASE("Reverse rejects empty samples and clamps ranges") {
+SUBCASE("Reverse rejects empty samples and clamps ranges") {
   OpSample t;
   t.init(0, 1);
   t.s.data = NULL;
@@ -463,6 +476,7 @@ TEST_CASE("Reverse rejects empty samples and clamps ranges") {
   }
   CHECK(t2.s.data[4] == OpSample::value(4, 0));
   CHECK(t2.s.data[15] == OpSample::value(15, 0));
+}
 }
 
 } // TEST_SUITE("sample_ops")

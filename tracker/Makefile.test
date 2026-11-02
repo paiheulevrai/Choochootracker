@@ -191,6 +191,12 @@ benchmark-song: $(BENCHMARK_EXECUTABLE)
 benchmark-song-release:
 	@$(MAKE) -f Makefile.test benchmark-song BUILD_DIR=build/benchmark-release CFLAGS='-std=c++17 -O3 -w -DNDEBUG -DTEST -DTEST_PORTMASTER_INPUT -D_USE_MATH_DEFINES'
 
+# Optimised, debug-info-free objects in their own directory: same results as the
+# default -O0 build, roughly three times faster to run.
+.PHONY: fast
+fast:
+	@$(MAKE) -f Makefile.test all BUILD_DIR=build/fast CFLAGS='-std=c++17 -Wall -g0 -O1 -DTEST -DTEST_PORTMASTER_INPUT'
+
 # Clean build artifacts
 clean:
 	@rm -rf $(BUILD_DIR)
@@ -230,6 +236,7 @@ help:
 	@echo "Makefile targets:"
 	@echo "  make -f Makefile.test -j4       Build and run tests on four cores"
 	@echo "  make -f Makefile.test build     Build changed files only"
+	@echo "  make -f Makefile.test -j4 fast  Build with -O1 -g0 and run tests (about 3x faster to run)"
 	@echo "  make -f Makefile.test clean     Remove build artifacts"
 	@echo "  make -f Makefile.test benchmark-song-release  Build the optimised song benchmark"
 	@echo "  make -f Makefile.test test-tsan Run tests under ThreadSanitizer"

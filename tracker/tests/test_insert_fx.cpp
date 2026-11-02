@@ -1036,24 +1036,6 @@ TEST_CASE("insert automation survives instruments and full phrase loops until st
   chipnomadRender(e.s, out, 960);
   CHECK(e.s->playbackState.tracks[0].inserts.valid[0] == 0);
 }
-TEST_CASE("insert effects recover from nonfinite input and rapid bypass/module changes") {
-  InsertChain chain(48000);
-  InsertConfig c[2]{};
-  InsertAutomation a{};
-  uint8_t v[2][8]{};
-  for (int k = 0; k < 60; ++k) {
-    insertSelect(&c[0], 1 + k % 5);
-    c[0].bypass = k % 3 == 0;
-    chain.sync(c, &a);
-    values(c, v);
-    auto audio = signal(1024);
-    audio[17] = NAN;
-    audio[18] = INFINITY;
-    chain.process(audio.data(), 1024, v);
-    if (!c[0].bypass)
-      for (float x : audio) CHECK(std::isfinite(x));
-  }
-}
 TEST_CASE(
     "insert motion recording resolves current track metadata and keeps discrete indices valid") {
   Engine e;
@@ -1091,155 +1073,180 @@ TEST_CASE(
   chipnomadSetLiveStickAxes(0, 0, 0, 0);
 }
 
-TEST_CASE("insert delay and control smoothing are independent of callback block size") {
-  for (int module = 1; module < insertModuleCount; ++module) {
-    CAPTURE(module);
+TEST_CASE("Insert effect robustness and block-size independence") {
+  SUBCASE("insert effects recover from nonfinite input and rapid bypass/module changes") {
+    InsertChain chain(48000);
     InsertConfig c[2]{};
-    insertSelect(&c[0], module);
-    if (module == insertTape) {
-      c[0].values[2] = 180;
-      c[0].values[3] = 180;
-      c[0].values[4] = 200;
+    InsertAutomation a{};
+    uint8_t v[2][8]{};
+    for (int k = 0; k < 60; ++k) {
+      insertSelect(&c[0], 1 + k % 5);
+      c[0].bypass = k % 3 == 0;
+      chain.sync(c, &a);
+      values(c, v);
+      auto audio = signal(1024);
+      audio[17] = NAN;
+      audio[18] = INFINITY;
+      chain.process(audio.data(), 1024, v);
+      if (!c[0].bypass)
+        for (float x : audio) CHECK(std::isfinite(x));
     }
-    InsertAutomation a{}, b{};
-    BeadsPool pool;
-    InsertChain whole(48000), singles(48000);
-    if (module == insertBeads) {
-      whole.attachBeads(0, pool.prepare(0, 48000));
-      singles.attachBeads(0, pool.prepare(1, 48000));
+  }
+
+  SUBCASE("insert delay and control smoothing are independent of callback block size") {
+    for (int module = 1; module < insertModuleCount; ++module) {
+      CAPTURE(module);
+      InsertConfig c[2]{};
+      insertSelect(&c[0], module);
+      if (module == insertTape) {
+        c[0].values[2] = 180;
+        c[0].values[3] = 180;
+        c[0].values[4] = 200;
+      }
+      InsertAutomation a{}, b{};
+      BeadsPool pool;
+      InsertChain whole(48000), singles(48000);
+      if (module == insertBeads) {
+        whole.attachBeads(0, pool.prepare(0, 48000));
+        singles.attachBeads(0, pool.prepare(1, 48000));
+      }
+      whole.sync(c, &a);
+      singles.sync(c, &b);
+      uint8_t v[2][8];
+      values(c, v);
+      auto x = signal(4096), y = x;
+      whole.process(x.data(), 4096, v);
+      for (int i = 0; i < 4096; ++i) singles.process(y.data() + i * 2, 1, v);
+      for (int i = 0; i < 8192; ++i) CHECK(x[i] == doctest::Approx(y[i]).epsilon(1e-6));
     }
-    whole.sync(c, &a);
-    singles.sync(c, &b);
-    uint8_t v[2][8];
-    values(c, v);
-    auto x = signal(4096), y = x;
-    whole.process(x.data(), 4096, v);
-    for (int i = 0; i < 4096; ++i) singles.process(y.data() + i * 2, 1, v);
-    for (int i = 0; i < 8192; ++i) CHECK(x[i] == doctest::Approx(y[i]).epsilon(1e-6));
   }
 }
 
-TEST_CASE("fresh live and preview starts clear inserts without disturbing other live tracks") {
-  Engine e;
-  e.s->project.tracksCount = 2;
-  chipnomadInitChips(e.s, 48000, nullptr);
-  auto& state = e.s->playbackState;
-  state.p->song[0][0] = 0;
-  state.p->chains[0].rows[0].phrase = 0;
-  auto& track = state.tracks[0];
-  track.inserts.valid[0] = 255;
-  auto serial = track.insertReset;
-  state.tracks[1].mode = PlaybackMode::live;
-  state.tracks[1].inserts.valid[0] = 255;
-  playbackStartLiveChain(&state, 0, 0);
-  CHECK(track.inserts.valid[0] == 0);
-  CHECK(track.insertReset == serial + 1);
-  CHECK(state.tracks[1].inserts.valid[0] == 255);
-  playbackStop(&state);
-  track.inserts.valid[1] = 255;
-  serial = track.insertReset;
-  playbackPreviewNote(&state, 0, 45, 0);
-  CHECK(track.inserts.valid[1] == 0);
-  CHECK(track.insertReset == serial + 1);
-}
 
-TEST_CASE("AY, chord and stereo voices each run one summed post-EQ serial insert chain") {
-  for (auto type : {InstrumentType::AY1, InstrumentType::Plaits, InstrumentType::Sample}) {
-    CAPTURE((int)type);
-    Engine dry, wet;
-    for (auto* state : {dry.s, wet.s}) {
-      auto& p = state->project;
-      getInstrumentFunctions(type).init(&p.instruments[0]);
-      p.instruments[0].volume = 120;
-      p.chipSetup.ay.clock = 1773400;
-      if (type == InstrumentType::Sample) {
-        auto& sample = p.instruments[0].chip.sample;
-        sample.channels = 2;
-        sample.frameCount = 1024;
-        sample.sampleRate = 48000;
-        sample.loopMode = 1;
-        sample.data = (int16_t*)malloc(4096);
-        for (int i = 0; i < 1024; ++i) {
-          sample.data[i * 2] = (int16_t)(12000 * sin(i * .031));
-          sample.data[i * 2 + 1] = (int16_t)(8000 * cos(i * .052));
+TEST_CASE("Insert chains across live, voice and track contexts") {
+  SUBCASE("fresh live and preview starts clear inserts without disturbing other live tracks") {
+    Engine e;
+    e.s->project.tracksCount = 2;
+    chipnomadInitChips(e.s, 48000, nullptr);
+    auto& state = e.s->playbackState;
+    state.p->song[0][0] = 0;
+    state.p->chains[0].rows[0].phrase = 0;
+    auto& track = state.tracks[0];
+    track.inserts.valid[0] = 255;
+    auto serial = track.insertReset;
+    state.tracks[1].mode = PlaybackMode::live;
+    state.tracks[1].inserts.valid[0] = 255;
+    playbackStartLiveChain(&state, 0, 0);
+    CHECK(track.inserts.valid[0] == 0);
+    CHECK(track.insertReset == serial + 1);
+    CHECK(state.tracks[1].inserts.valid[0] == 255);
+    playbackStop(&state);
+    track.inserts.valid[1] = 255;
+    serial = track.insertReset;
+    playbackPreviewNote(&state, 0, 45, 0);
+    CHECK(track.inserts.valid[1] == 0);
+    CHECK(track.insertReset == serial + 1);
+  }
+
+  SUBCASE("AY, chord and stereo voices each run one summed post-EQ serial insert chain") {
+    for (auto type : {InstrumentType::AY1, InstrumentType::Plaits, InstrumentType::Sample}) {
+      CAPTURE((int)type);
+      Engine dry, wet;
+      for (auto* state : {dry.s, wet.s}) {
+        auto& p = state->project;
+        getInstrumentFunctions(type).init(&p.instruments[0]);
+        p.instruments[0].volume = 120;
+        p.chipSetup.ay.clock = 1773400;
+        if (type == InstrumentType::Sample) {
+          auto& sample = p.instruments[0].chip.sample;
+          sample.channels = 2;
+          sample.frameCount = 1024;
+          sample.sampleRate = 48000;
+          sample.loopMode = 1;
+          sample.data = (int16_t*)malloc(4096);
+          for (int i = 0; i < 1024; ++i) {
+            sample.data[i * 2] = (int16_t)(12000 * sin(i * .031));
+            sample.data[i * 2 + 1] = (int16_t)(8000 * cos(i * .052));
+          }
+        }
+        p.song[0][0] = 0;
+        p.chains[0].rows[0].phrase = 0;
+        auto& row = p.phrases[0].rows[0];
+        row.note = 48;
+        row.instrument = 0;
+        if (type == InstrumentType::Plaits) {
+          row.fx[0][0] = fxCRD;
+          row.fx[0][1] = 0;
         }
       }
-      p.song[0][0] = 0;
-      p.chains[0].rows[0].phrase = 0;
-      auto& row = p.phrases[0].rows[0];
-      row.note = 48;
-      row.instrument = 0;
-      if (type == InstrumentType::Plaits) {
-        row.fx[0][0] = fxCRD;
-        row.fx[0][1] = 0;
+      insertSelect(&wet.s->project.trackInserts[0][0], insertDistortion);
+      insertSelect(&wet.s->project.trackInserts[0][1], insertDoubler);
+      for (auto* state : {dry.s, wet.s}) {
+        chipnomadInitChips(state, 48000, nullptr);
+        chipnomadQueuePlaybackStartSong(state, 0, 0, 1);
       }
-    }
-    insertSelect(&wet.s->project.trackInserts[0][0], insertDistortion);
-    insertSelect(&wet.s->project.trackInserts[0][1], insertDoubler);
-    for (auto* state : {dry.s, wet.s}) {
-      chipnomadInitChips(state, 48000, nullptr);
-      chipnomadQueuePlaybackStartSong(state, 0, 0, 1);
-    }
-    InsertChain expected(48000);
-    InsertAutomation a{};
-    auto* c = wet.s->project.trackInserts[0];
-    expected.sync(c, &a);
-    uint8_t v[2][8];
-    values(c, v);
-    double energy = 0;
-    for (int n = 0; n < 32; ++n) {
-      float x[512], y[512];
-      REQUIRE(chipnomadRender(dry.s, x, 256) == 256);
-      REQUIRE(chipnomadRender(wet.s, y, 256) == 256);
-      expected.process(x, 256, v);
-      for (int i = 0; i < 512; ++i) {
-        CHECK(y[i] == doctest::Approx(x[i]).epsilon(1e-5));
-        energy += y[i] * y[i];
+      InsertChain expected(48000);
+      InsertAutomation a{};
+      auto* c = wet.s->project.trackInserts[0];
+      expected.sync(c, &a);
+      uint8_t v[2][8];
+      values(c, v);
+      double energy = 0;
+      for (int n = 0; n < 32; ++n) {
+        float x[512], y[512];
+        REQUIRE(chipnomadRender(dry.s, x, 256) == 256);
+        REQUIRE(chipnomadRender(wet.s, y, 256) == 256);
+        expected.process(x, 256, v);
+        for (int i = 0; i < 512; ++i) {
+          CHECK(y[i] == doctest::Approx(x[i]).epsilon(1e-5));
+          energy += static_cast<double>(y[i]) * y[i];
+        }
       }
+      CHECK(energy > 0);
     }
-    CHECK(energy > 0);
   }
-}
-TEST_CASE("one instrument on two tracks modulates independent slot bases with multiple sources") {
-  Engine e;
-  auto& p = e.s->project;
-  p.tracksCount = 2;
-  p.chipsCount = 2;
-  for (int t = 0; t < 2; ++t) {
-    insertSelect(&p.trackInserts[t][0], insertDistortion);
-    p.trackInserts[t][0].values[0] = 40 + 80 * t;
-    p.song[0][t] = t;
-    p.chains[t].rows[0].phrase = t;
-    p.phrases[t].rows[0].note = 48;
-    p.phrases[t].rows[0].instrument = 0;
-  }
-  for (int i = 0; i < 2; ++i) {
-    auto& m = p.instruments[0].modulation[i];
-    m = {};
-    m.type = ModulationType::StickLinear;
-    m.destination = getInstrumentFunctions(InstrumentType::Braids).modDestinationsCount + 1 +
-                    genericModFirstInsert;
-    m.amount = 16;
-    m.p1 = i;
-  }
-  chipnomadSetLiveStickEnabled(1);
-  chipnomadSetLiveStickAxes(.5f, .25f, 0, 0);
-  chipnomadInitChips(e.s, 48000, nullptr);
-  chipnomadQueuePlaybackStartSong(e.s, 0, 0, 1);
-  float out[1920];
-  chipnomadRender(e.s, out, 960);
-  int a = e.s->insertValues[0][0][0], b = e.s->insertValues[1][0][0];
-  CHECK(a > 40);
-  CHECK(b - a == 80);
-  for (int n = 0; n < 10; ++n) {
+
+  SUBCASE("one instrument on two tracks modulates independent slot bases with multiple sources") {
+    Engine e;
+    auto& p = e.s->project;
+    p.tracksCount = 2;
+    p.chipsCount = 2;
+    for (int t = 0; t < 2; ++t) {
+      insertSelect(&p.trackInserts[t][0], insertDistortion);
+      p.trackInserts[t][0].values[0] = 40 + 80 * t;
+      p.song[0][t] = t;
+      p.chains[t].rows[0].phrase = t;
+      p.phrases[t].rows[0].note = 48;
+      p.phrases[t].rows[0].instrument = 0;
+    }
+    for (int i = 0; i < 2; ++i) {
+      auto& m = p.instruments[0].modulation[i];
+      m = {};
+      m.type = ModulationType::StickLinear;
+      m.destination = getInstrumentFunctions(InstrumentType::Braids).modDestinationsCount + 1 +
+                      genericModFirstInsert;
+      m.amount = 16;
+      m.p1 = i;
+    }
+    chipnomadSetLiveStickEnabled(1);
+    chipnomadSetLiveStickAxes(.5f, .25f, 0, 0);
+    chipnomadInitChips(e.s, 48000, nullptr);
+    chipnomadQueuePlaybackStartSong(e.s, 0, 0, 1);
+    float out[1920];
     chipnomadRender(e.s, out, 960);
-    CHECK(e.s->insertValues[0][0][0] == a);
-    CHECK(e.s->insertValues[1][0][0] == b);
+    int a = e.s->insertValues[0][0][0], b = e.s->insertValues[1][0][0];
+    CHECK(a > 40);
+    CHECK(b - a == 80);
+    for (int n = 0; n < 10; ++n) {
+      chipnomadRender(e.s, out, 960);
+      CHECK(e.s->insertValues[0][0][0] == a);
+      CHECK(e.s->insertValues[1][0][0] == b);
+    }
+    CHECK(p.trackInserts[0][0].values[0] == 40);
+    CHECK(p.trackInserts[1][0].values[0] == 120);
+    chipnomadSetLiveStickEnabled(0);
+    chipnomadSetLiveStickAxes(0, 0, 0, 0);
   }
-  CHECK(p.trackInserts[0][0].values[0] == 40);
-  CHECK(p.trackInserts[1][0].values[0] == 120);
-  chipnomadSetLiveStickEnabled(0);
-  chipnomadSetLiveStickAxes(0, 0, 0, 0);
 }
 
 TEST_CASE("insert tips return after real key release and categorized chooser selects modules") {

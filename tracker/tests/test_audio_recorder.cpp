@@ -10,7 +10,8 @@
 #include <cstring>
 #include <vector>
 
-static void removeFile(const char* path) { remove(path); }
+#include "test_helpers.h"
+using namespace testhelp;
 
 TEST_CASE("RecordingWavWriter open/write/close produces a valid WAV") {
   const char* path = "build/tests/test_recording.wav";
