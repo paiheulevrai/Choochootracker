@@ -85,7 +85,8 @@ TEST_CASE("external recording: capture -> ring -> writer produces valid WAV") {
   removeFile(path);
 }
 
-TEST_CASE("track bounce: engine hook -> ring -> pop round-trip") {
+TEST_CASE("track bounce") {
+SUBCASE("engine hook -> ring -> pop round-trip") {
   trackBounceStart(0);
   CHECK(trackBounceActiveTrack() == 0);
 
@@ -110,7 +111,7 @@ TEST_CASE("track bounce: engine hook -> ring -> pop round-trip") {
   CHECK(trackBounceActiveTrack() == -1);
 }
 
-TEST_CASE("track bounce: wrong track index is ignored") {
+SUBCASE("wrong track index is ignored") {
   trackBounceStart(2);
   // Captures for other tracks must be dropped.
   audioRecorderCaptureTrackSample(0, 0, 0.5f);
@@ -125,7 +126,7 @@ TEST_CASE("track bounce: wrong track index is ignored") {
   trackBounceStop();
 }
 
-TEST_CASE("track bounce: preview returns decimated mono samples") {
+SUBCASE("preview returns decimated mono samples") {
   trackBounceStart(1);
   // 6400 stereo samples -> 200 decimated preview entries (16:1 per frame).
   for (int i = 0; i < 6400; ++i)
@@ -140,7 +141,7 @@ TEST_CASE("track bounce: preview returns decimated mono samples") {
   trackBounceStop();
 }
 
-TEST_CASE("track bounce: capture gap is filled with silence") {
+SUBCASE("capture gap is filled with silence") {
   trackBounceStart(0);
   // Frames 0..1 captured, then the voice goes silent and the next capture
   // arrives at frame 50: frames 1..49 must be zero-filled so the WAV stays
@@ -162,7 +163,7 @@ TEST_CASE("track bounce: capture gap is filled with silence") {
   trackBounceStop();
 }
 
-TEST_CASE("track bounce: end-of-chunk fills remainder with silence") {
+SUBCASE("end-of-chunk fills remainder with silence") {
   trackBounceStart(0);
   // No capture at all in this chunk: end must emit exactly `frames` zero
   // stereo frames.
@@ -191,13 +192,13 @@ TEST_CASE("track bounce: end-of-chunk fills remainder with silence") {
   trackBounceStop();
 }
 
-TEST_CASE("track bounce: dropped counter starts at zero") {
+SUBCASE("dropped counter starts at zero") {
   trackBounceStart(0);
   CHECK(trackBounceDropped() == 0u);
   trackBounceStop();
 }
 
-TEST_CASE("track bounce: inactive by default") {
+SUBCASE("inactive by default") {
   CHECK(trackBounceActiveTrack() == -1);
   CHECK_FALSE(audioRecorderWantsTrackSample(0));
   // stop() keeps buffered data available for draining by design, so clear
@@ -205,6 +206,7 @@ TEST_CASE("track bounce: inactive by default") {
   int16_t out[64 * 2];
   while (trackBouncePop(out, 64) > 0) {}
   CHECK(trackBouncePop(out, 4) == 0);
+}
 }
 
 } // TEST_SUITE

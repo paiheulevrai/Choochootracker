@@ -105,7 +105,8 @@ static PhraseRow makeRow(uint8_t note) {
 // slice, not the pitch), so after rendering N frames the cursor sits at
 // sliceStart + N.
 
-TEST_CASE("SLI plays the numbered slice regardless of note pitch") {
+TEST_CASE("SLI slice selection") {
+SUBCASE("SLI plays the numbered slice regardless of note pitch") {
   EngineSample es;
   es.init(8820); // 10 slices of 882 frames
   // Slicing must be set BEFORE the engine snapshots the project.
@@ -127,7 +128,7 @@ TEST_CASE("SLI plays the numbered slice regardless of note pitch") {
   CHECK(v->playbackFrame() < 882);
 }
 
-TEST_CASE("SLI 00 keeps normal note mapping") {
+SUBCASE("SLI 00 keeps normal note mapping") {
   EngineSample es;
   es.init(8820);
   es.s.slice = sampleEncodeSlice(sliceModeEqual, 10);
@@ -147,7 +148,7 @@ TEST_CASE("SLI 00 keeps normal note mapping") {
   CHECK(v->playbackFrame() < 7938);
 }
 
-TEST_CASE("SLI value wraps past the last slice") {
+SUBCASE("SLI value wraps past the last slice") {
   EngineSample es;
   es.init(8820);
   es.s.slice = sampleEncodeSlice(sliceModeEqual, 10);
@@ -166,6 +167,8 @@ TEST_CASE("SLI value wraps past the last slice") {
 }
 
 // --- SPL: playback modes -----------------------------------------------------
+
+}
 
 TEST_CASE("long silent looping sample stays silent through RET and phrase wrap") {
   EngineSample es;
@@ -219,7 +222,8 @@ TEST_CASE("phrase loop crossfades a long sample at its retrigger") {
 // Non-sliced sample, root note: step 1.0, window 0..8820. After one tick
 // (882 frames) the cursor has moved 882 frames from its start.
 
-TEST_CASE("SPL 01 reverse plays the sample backwards") {
+TEST_CASE("SPL playback direction and loop mode mapping") {
+SUBCASE("SPL 01 reverse plays the sample backwards") {
   EngineSample es;
   es.init(8820);
   LazyEngine engine(es.s, 0);
@@ -245,7 +249,7 @@ TEST_CASE("SPL 01 reverse plays the sample backwards") {
   CHECK(second > 5000);
 }
 
-TEST_CASE("SPL 00 forward keeps ascending playback") {
+SUBCASE("SPL 00 forward keeps ascending playback") {
   EngineSample es;
   es.init(8820);
   LazyEngine engine(es.s, 0);
@@ -267,7 +271,7 @@ TEST_CASE("SPL 00 forward keeps ascending playback") {
   CHECK(v->playbackFrame() > first);
 }
 
-TEST_CASE("SPL 02 maps to loop and SPL 03 maps to ping-pong") {
+SUBCASE("SPL 02 maps to loop and SPL 03 maps to ping-pong") {
   EngineSample es;
   es.init(8820);
 
@@ -300,7 +304,7 @@ TEST_CASE("SPL 02 maps to loop and SPL 03 maps to ping-pong") {
 // FX changes it while the tracker proceeds. 00/01 keep the legacy local
 // override and must not clobber the instrument's loop mode.
 
-TEST_CASE("SPL 02-05 write the mapped loop mode into the instrument") {
+SUBCASE("SPL 02-05 write the mapped loop mode into the instrument") {
   EngineSample es;
   es.init(8820);
 
@@ -320,7 +324,7 @@ TEST_CASE("SPL 02-05 write the mapped loop mode into the instrument") {
   }
 }
 
-TEST_CASE("SPL 00 and 01 do not clobber the instrument loop mode") {
+SUBCASE("SPL 00 and 01 do not clobber the instrument loop mode") {
   EngineSample es;
   es.init(8820);
   es.s.loopMode = 3; // instrument says ping-pong
@@ -348,7 +352,7 @@ TEST_CASE("SPL 00 and 01 do not clobber the instrument loop mode") {
   }
 }
 
-TEST_CASE("SPL write-through persists across retriggers") {
+SUBCASE("SPL write-through persists across retriggers") {
   // The write-through mutates the audio project's instrument, so a later
   // row without SPL keeps the mode the previous row wrote.
   EngineSample es;
@@ -377,7 +381,10 @@ TEST_CASE("SPL write-through persists across retriggers") {
 // is inert and playback stays bit-identical. On the 8820-frame fixture,
 // loopStart 0x40 maps to frame 2213 (sampleMarkerToStartFrame).
 
-TEST_CASE("loop start is inert when the loop is off") {
+}
+
+TEST_CASE("loop start marker behaviour") {
+SUBCASE("loop start is inert when the loop is off") {
   // Two engines, same sample: one with loopStart 0, one with 0x40, both with
   // loopMode 0. The cursor trajectory must be identical (inert marker).
   EngineSample es;
@@ -412,7 +419,7 @@ TEST_CASE("loop start is inert when the loop is off") {
   }
 }
 
-TEST_CASE("forward loop wraps to the loop start marker") {
+SUBCASE("forward loop wraps to the loop start marker") {
   EngineSample es;
   es.init(8820);
   es.s.loopMode = 1;
@@ -433,7 +440,7 @@ TEST_CASE("forward loop wraps to the loop start marker") {
   CHECK(after < 2213.0 + 882.0);
 }
 
-TEST_CASE("ping-pong bounces at the loop start marker") {
+SUBCASE("ping-pong bounces at the loop start marker") {
   EngineSample es;
   es.init(8820);
   es.s.loopMode = 3;
@@ -457,7 +464,7 @@ TEST_CASE("ping-pong bounces at the loop start marker") {
   CHECK(minSeen < 8820.0);
 }
 
-TEST_CASE("region end moved below the loop start clamps it") {
+SUBCASE("region end moved below the loop start clamps it") {
   EngineSample es;
   es.init(8820);
   es.s.loopMode = 1;
@@ -481,7 +488,7 @@ TEST_CASE("region end moved below the loop start clamps it") {
   CHECK(wrapped);
 }
 
-TEST_CASE("SPL 03 ping-pong respects the loop start marker") {
+SUBCASE("SPL 03 ping-pong respects the loop start marker") {
   EngineSample es;
   es.init(8820);
   es.s.loopMode = 0; // instrument loop off; SPL must override
@@ -502,6 +509,8 @@ TEST_CASE("SPL 03 ping-pong respects the loop start marker") {
   // frame (2213), not the region start (0).
   CHECK(minSeen >= 2213.0 - 1.0);
   CHECK(minSeen < 8820.0);
+}
+
 }
 
 TEST_CASE("sample loop start survives save and load; missing field is zero") {
@@ -573,7 +582,8 @@ static double xfadeMaxJump(LazyEngine& engine, int ticks) {
   return maxJump;
 }
 
-TEST_CASE("SPL 04 crossfades the forward loop wrap") {
+TEST_CASE("loop crossfade via SPL and instrument loop modes") {
+SUBCASE("SPL 04 crossfades the forward loop wrap") {
   EngineSample es;
   es.init(8820);
   es.s.loopStart = 0x40; // frame 2213
@@ -591,7 +601,7 @@ TEST_CASE("SPL 04 crossfades the forward loop wrap") {
   CHECK(engine.voice()->active());
 }
 
-TEST_CASE("SPL 05 crossfades the ping-pong turns") {
+SUBCASE("SPL 05 crossfades the ping-pong turns") {
   EngineSample es;
   es.init(8820);
   es.s.loopStart = 0x40;
@@ -610,7 +620,7 @@ TEST_CASE("SPL 05 crossfades the ping-pong turns") {
   CHECK(engine.voice()->active());
 }
 
-TEST_CASE("SPL 04 keeps looping where SPL 00 would stop") {
+SUBCASE("SPL 04 keeps looping where SPL 00 would stop") {
   // SPL 04 must activate the loop like SPL 02 does: the voice stays alive
   // past the window end.
   EngineSample es;
@@ -625,7 +635,7 @@ TEST_CASE("SPL 04 keeps looping where SPL 00 would stop") {
   CHECK(engine.voice()->active());
 }
 
-TEST_CASE("SPL mode switch mid-note does not glitch") {
+SUBCASE("SPL mode switch mid-note does not glitch") {
   // Switching SPL 02 -> 03 while the voice plays must not produce a jump
   // larger than the material's own step: the new mode takes over from the
   // current position (the one-shot X-fade between modes is future work;
@@ -680,7 +690,7 @@ TEST_CASE("SPL mode switch mid-note does not glitch") {
 // the xfade parameter stays 0 (the SPL lane FX path can still force it for
 // modes 1/3). The wrap geometry matches the plain modes 1/3.
 
-TEST_CASE("instrument mode 2 crossfades the forward wrap without xfade param") {
+SUBCASE("instrument mode 2 crossfades the forward wrap without xfade param") {
   EngineSample es;
   es.init(8820);
   es.s.loopStart = 0x40; // frame 2213
@@ -697,7 +707,7 @@ TEST_CASE("instrument mode 2 crossfades the forward wrap without xfade param") {
   CHECK(engine.voice()->active());
 }
 
-TEST_CASE("instrument mode 4 crossfades the ping-pong turns without xfade param") {
+SUBCASE("instrument mode 4 crossfades the ping-pong turns without xfade param") {
   EngineSample es;
   es.init(8820);
   es.s.loopStart = 0x40;
@@ -712,7 +722,7 @@ TEST_CASE("instrument mode 4 crossfades the ping-pong turns without xfade param"
   CHECK(engine.voice()->active());
 }
 
-TEST_CASE("instrument modes 2 and 4 keep looping where mode 0 stops") {
+SUBCASE("instrument modes 2 and 4 keep looping where mode 0 stops") {
   EngineSample es;
   es.init(8820);
 
@@ -727,7 +737,7 @@ TEST_CASE("instrument modes 2 and 4 keep looping where mode 0 stops") {
   }
 }
 
-TEST_CASE("instrument mode 2 descending hard-wraps like mode 1") {
+SUBCASE("instrument mode 2 descending hard-wraps like mode 1") {
   // Legacy Start > End windows reverse the playback direction. A descending
   // forward loop (mode 1 or 2) must hard-wrap: the phase-aligned incoming
   // pass would read past the sample data (the wrap target sits at the
@@ -759,7 +769,10 @@ TEST_CASE("instrument mode 2 descending hard-wraps like mode 1") {
 // clamp(loopStart + acc, 0, 255). On the 8820-frame fixture, marker 0x40
 // maps to frame 2213 and one marker unit is (8820-1)/255 = 34.6 frames.
 
-TEST_CASE("LST positive shift moves the loop wrap point") {
+}
+
+TEST_CASE("LST loop start shifts") {
+SUBCASE("LST positive shift moves the loop wrap point") {
   EngineSample es;
   es.init(8820);
   es.s.loopMode = 1;
@@ -780,7 +793,7 @@ TEST_CASE("LST positive shift moves the loop wrap point") {
   CHECK(after < 3319.0 + 882.0);
 }
 
-TEST_CASE("LST negative shift moves the loop wrap point back") {
+SUBCASE("LST negative shift moves the loop wrap point back") {
   EngineSample es;
   es.init(8820);
   es.s.loopMode = 1;
@@ -801,7 +814,7 @@ TEST_CASE("LST negative shift moves the loop wrap point back") {
   CHECK(after < 4392.0 + 882.0);
 }
 
-TEST_CASE("LST accumulates across rows and survives retriggers") {
+SUBCASE("LST accumulates across rows and survives retriggers") {
   EngineSample es;
   es.init(8820);
   es.s.loopMode = 1;
@@ -834,7 +847,7 @@ TEST_CASE("LST accumulates across rows and survives retriggers") {
   CHECK(after < 3319.0 + 882.0);
 }
 
-TEST_CASE("LST clamps the effective marker at 0") {
+SUBCASE("LST clamps the effective marker at 0") {
   EngineSample es;
   es.init(8820);
   es.s.loopMode = 1;
@@ -855,7 +868,7 @@ TEST_CASE("LST clamps the effective marker at 0") {
   CHECK(after < 882.0);
 }
 
-TEST_CASE("LST accumulates past the marker limits until consumption") {
+SUBCASE("LST accumulates past the marker limits until consumption") {
   EngineSample es;
   es.init(8820);
   es.s.loopMode = 1;
@@ -878,7 +891,7 @@ TEST_CASE("LST accumulates past the marker limits until consumption") {
   CHECK(engine.state->playbackState.tracks[0].note.fx[fxLST].acc == 127);
 }
 
-TEST_CASE("LST is inert when the loop is off") {
+SUBCASE("LST is inert when the loop is off") {
   // Two engines, same sample: one with LST +0x20, one without any FX, both
   // with loopMode 0. The cursor trajectory must be identical (the shifted
   // marker is ignored in playback without an active loop).
@@ -913,6 +926,7 @@ TEST_CASE("LST is inert when the loop is off") {
   for (size_t i = 0; i < baseline.size(); ++i) {
     CHECK(baseline[i] == withLST[i]);
   }
+}
 }
 
 }  // TEST_SUITE("sample_fx")

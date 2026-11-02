@@ -131,7 +131,8 @@ const LinkBackend kFakeBackend = {
 
 TEST_SUITE("Link client") {
 
-TEST_CASE("Create/destroy lifecycle talks to the backend exactly once") {
+TEST_CASE("Link client lifecycle, selection and connection") {
+SUBCASE("Create/destroy lifecycle talks to the backend exactly once") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -145,7 +146,7 @@ TEST_CASE("Create/destroy lifecycle talks to the backend exactly once") {
   CHECK(g_fake.disableCalls == 0);  // never enabled, no disable needed
 }
 
-TEST_CASE("Select/Deselect are preference-only: no enable/disable calls") {
+SUBCASE("Select/Deselect are preference-only: no enable/disable calls") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -166,7 +167,7 @@ TEST_CASE("Select/Deselect are preference-only: no enable/disable calls") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Connect enables the backend and bumps the serial through connecting") {
+SUBCASE("Connect enables the backend and bumps the serial through connecting") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -184,7 +185,7 @@ TEST_CASE("Connect enables the backend and bumps the serial through connecting")
   linkClientDestroy(client);
 }
 
-TEST_CASE("Backend enable failure reports error status") {
+SUBCASE("Backend enable failure reports error status") {
   resetFake();
   g_fake.enableResult = 0;
   linkClientSetBackend(&kFakeBackend);
@@ -199,7 +200,7 @@ TEST_CASE("Backend enable failure reports error status") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Disconnect disables the backend and returns to selected") {
+SUBCASE("Disconnect disables the backend and returns to selected") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -226,7 +227,7 @@ TEST_CASE("Disconnect disables the backend and returns to selected") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Deselect while connected disables the backend") {
+SUBCASE("Deselect while connected disables the backend") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -242,7 +243,10 @@ TEST_CASE("Deselect while connected disables the backend") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Serial-bumped getters: tempo serial only moves on value change") {
+}
+
+TEST_CASE("Link client getters, capture, launch and poll") {
+SUBCASE("Serial-bumped getters: tempo serial only moves on value change") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -273,7 +277,7 @@ TEST_CASE("Serial-bumped getters: tempo serial only moves on value change") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Capture returns 0 when Link is not enabled") {
+SUBCASE("Capture returns 0 when Link is not enabled") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -287,7 +291,7 @@ TEST_CASE("Capture returns 0 when Link is not enabled") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("RequestBeatAtLaunch establishes a downbeat with or without peers") {
+SUBCASE("RequestBeatAtLaunch establishes a downbeat with or without peers") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -307,7 +311,7 @@ TEST_CASE("RequestBeatAtLaunch establishes a downbeat with or without peers") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Audio frame notification and filter reset reach the backend") {
+SUBCASE("Audio frame notification and filter reset reach the backend") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -323,7 +327,7 @@ TEST_CASE("Audio frame notification and filter reset reach the backend") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Poll resolves connecting to connected when peers appear") {
+SUBCASE("Poll resolves connecting to connected when peers appear") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -342,7 +346,7 @@ TEST_CASE("Poll resolves connecting to connected when peers appear") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Poll resolves connecting to noPeers after the discovery threshold") {
+SUBCASE("Poll resolves connecting to noPeers after the discovery threshold") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -359,7 +363,7 @@ TEST_CASE("Poll resolves connecting to noPeers after the discovery threshold") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Connect while already enabled is a no-op") {
+SUBCASE("Connect while already enabled is a no-op") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -373,7 +377,7 @@ TEST_CASE("Connect while already enabled is a no-op") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Destroy while connected disables first") {
+SUBCASE("Destroy while connected disables first") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -386,7 +390,10 @@ TEST_CASE("Destroy while connected disables first") {
   CHECK(g_fake.destroyCalls == 1);
 }
 
-TEST_CASE("Transport: serial bumps only on isPlaying change") {
+}
+
+TEST_CASE("Link client transport state") {
+SUBCASE("Transport: serial bumps only on isPlaying change") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -434,7 +441,7 @@ TEST_CASE("Transport: serial bumps only on isPlaying change") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Transport: getTransport before any capture reports not playing") {
+SUBCASE("Transport: getTransport before any capture reports not playing") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -447,7 +454,7 @@ TEST_CASE("Transport: getTransport before any capture reports not playing") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Disconnect resets transport to not playing") {
+SUBCASE("Disconnect resets transport to not playing") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -471,7 +478,10 @@ TEST_CASE("Disconnect resets transport to not playing") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Poll while connected publishes tempo and transport every frame") {
+}
+
+TEST_CASE("Link client publishing and shared tempo") {
+SUBCASE("Poll while connected publishes tempo and transport every frame") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -500,7 +510,7 @@ TEST_CASE("Poll while connected publishes tempo and transport every frame") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Poll downgrades connected to noPeers when the session empties") {
+SUBCASE("Poll downgrades connected to noPeers when the session empties") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   LinkClientState* client = linkClientCreate();
@@ -536,9 +546,7 @@ TEST_CASE("Poll downgrades connected to noPeers when the session empties") {
   linkClientDestroy(client);
 }
 
-}
-
-TEST_CASE("Link shared tempo can be seeded offline and edited with peers") {
+SUBCASE("Link shared tempo can be seeded offline and edited with peers") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   auto* client = linkClientCreate();
@@ -566,7 +574,7 @@ TEST_CASE("Link shared tempo can be seeded offline and edited with peers") {
   linkClientDestroy(client);
 }
 
-TEST_CASE("Link transport publishing requires connection and respects sync toggle") {
+SUBCASE("Link transport publishing requires connection and respects sync toggle") {
   resetFake();
   linkClientSetBackend(&kFakeBackend);
   auto* client = linkClientCreate();
@@ -588,4 +596,6 @@ TEST_CASE("Link transport publishing requires connection and respects sync toggl
   linkClientSetPlaying(client, 1, 3456);
   CHECK(g_fake.transportWrites == 2);
   linkClientDestroy(client);
+}
+}
 }
