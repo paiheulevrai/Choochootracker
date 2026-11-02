@@ -11,6 +11,10 @@ static int chain = 0;
 static uint16_t lastPhraseValue = 0;
 static uint8_t lastTransposeValue = 0;
 
+static const int minimapRows = 8;
+static const int minimapX = 10;
+static const int minimapCellX = 10;
+
 static int getColumnCount(int row);
 static void drawStatic(void);
 static void drawField(int col, int row, CellState state);
@@ -18,6 +22,7 @@ static void drawRowHeader(int row, CellState state);
 static void drawColHeader(int col, CellState state);
 static void drawCursor(int col, int row);
 static void drawSelection(int col1, int row1, int col2, int row2);
+static void drawMinimap(void);
 static int onEdit(int col, int row, CellEditAction action);
 static LoopRange getLoopRange(void);
 
@@ -154,6 +159,59 @@ static void draw(void) {
     if (chainRow >= screen.topRow && chainRow < screen.topRow + screenVisibleRows()) {
       gfxSetFgColor(appSettings.colorScheme.playMarkers);
       gfxPrint(2, 3 + chainRow - screen.topRow, ">");
+    }
+  }
+  drawMinimap();
+}
+
+static void drawMinimap(void) {
+  if (!chipnomadState || !pSongRow || !pSongTrack) return;
+
+  const Project* project = &chipnomadState->project;
+  const int activeRow = *pSongRow;
+  const int activeTrack = *pSongTrack;
+  if (activeRow < 0 || activeRow >= PROJECT_MAX_LENGTH ||
+      activeTrack < 0 || activeTrack >= project->tracksCount ||
+      activeTrack >= PROJECT_MAX_TRACKS) return;
+
+  int firstRow = activeRow - minimapRows / 2;
+  if (firstRow < 0) firstRow = 0;
+  if (firstRow > PROJECT_MAX_LENGTH - minimapRows)
+    firstRow = PROJECT_MAX_LENGTH - minimapRows;
+
+  const ColorScheme cs = appSettings.colorScheme;
+  gfxClearRect(minimapX, 0, 30, 11);
+
+  for (int track = 0; track < project->tracksCount && track < PROJECT_MAX_TRACKS; track++) {
+    char trackLabel[2] = {(char)('1' + track), '\0'};
+    gfxSetFgColor(track == activeTrack ? cs.textDefault : cs.textInfo);
+    gfxPrint(minimapCellX + track * 3, 2, trackLabel);
+  }
+
+  for (int rowOffset = 0; rowOffset < minimapRows; rowOffset++) {
+    const int songRow = firstRow + rowOffset;
+    const int y = 3 + rowOffset;
+
+    for (int track = 0; track < project->tracksCount && track < PROJECT_MAX_TRACKS; track++) {
+      const int x = minimapCellX + track * 3;
+      const uint16_t cell = project->song[songRow][track];
+      const int isActiveCell = songRow == activeRow && track == activeTrack;
+
+      if (isActiveCell) {
+        gfxSetFgColor(cs.textDefault);
+      } else if (cell == chain) {
+        gfxSetFgColor(cs.textTitles);
+      } else if (cell == EMPTY_VALUE_16) {
+        gfxSetFgColor(cs.textEmpty);
+      } else {
+        gfxSetFgColor(cs.textInfo);
+      }
+
+      if (cell == EMPTY_VALUE_16) {
+        gfxPrint(x, y, "--");
+      } else {
+        gfxPrintf(x, y, "%02X", (unsigned)cell);
+      }
     }
   }
 }
