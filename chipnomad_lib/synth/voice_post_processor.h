@@ -40,10 +40,22 @@ class VoicePostProcessor {
     float envelope = envelopeEnabled_ ? envelope_.next() : 1.0f;
     return filter_.process(sample, channel) * envelope * gain_;
   }
+  // Renderers can select these paths once per block. A full-level sustain
+  // cannot change until the next note/configuration event, between blocks.
+  bool filterActive() const { return filter_.active(); }
+  bool unityEnvelope() const {
+    return !envelopeEnabled_ ||
+      (envelope_.stage() == EnvelopeType::Stage::sustain && envelope_.level() == 1.0f);
+  }
+  template <bool Filter = true, bool UnityEnvelope = false>
   void processStereo(float* stereo) {
-    float envelope = envelopeEnabled_ ? envelope_.next() : 1.0f;
-    stereo[0] = filter_.process(stereo[0], 0) * envelope * gain_;
-    stereo[1] = filter_.process(stereo[1], 1) * envelope * gain_;
+    float envelope = UnityEnvelope ? 1.0f : (envelopeEnabled_ ? envelope_.next() : 1.0f);
+    if constexpr (Filter) {
+      stereo[0] = filter_.process(stereo[0], 0);
+      stereo[1] = filter_.process(stereo[1], 1);
+    }
+    stereo[0] = stereo[0] * envelope * gain_;
+    stereo[1] = stereo[1] * envelope * gain_;
   }
   bool envelopeActive() const { return !envelopeEnabled_ || envelope_.active(); }
   float envelopeLevel() const { return envelopeEnabled_ ? envelope_.level() : 1.0f; }

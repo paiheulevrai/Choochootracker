@@ -8,6 +8,27 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <array>
+
+namespace {
+constexpr size_t kGrainWindowSegments = 2048;
+// Shared by all voices and output rates; initialized before audio rendering.
+const std::array<float, kGrainWindowSegments + 1> grainWindow = [] {
+  std::array<float, kGrainWindowSegments + 1> table{};
+  for (size_t i = 0; i <= kGrainWindowSegments; ++i) {
+    const float window = sinf(3.14159265f * ((float)i / kGrainWindowSegments));
+    table[i] = window * window;
+  }
+  return table;
+}();
+
+float grainWindowAt(uint32_t age, float scale) {
+  const float position = age * scale;
+  const size_t index = (size_t)position;
+  if (index >= kGrainWindowSegments) return grainWindow.back();
+  return grainWindow[index] + (grainWindow[index + 1] - grainWindow[index]) * (position - index);
+}
+} // namespace
 
 #ifdef CCT_DISABLE_CONFIG_CACHE
 static constexpr bool kCacheConfigurations = false;
@@ -62,6 +83,7 @@ void SampleVoice::init(float outputSampleRate) {
   transitionPending_ = false;
   grainSize_ = (uint32_t)(outputSampleRate_ * 0.040f);
   grainHop_ = grainSize_ / 2;
+  grainWindowScale_ = kGrainWindowSegments / (float)(grainSize_ > 1 ? grainSize_ - 1 : 1);
   // 3 ms de-click tail, at least 2 frames so the linear weight never
   // divides by zero.
   transitionLength_ = outputSampleRate > 500.0f ? (uint32_t)(outputSampleRate * 0.003f) : 2;
@@ -635,6 +657,27 @@ void SampleVoice::renderTailFrame(float* frame) {
   --transitionFrames_;
 }
 
+template <bool Filter, bool UnityEnvelope>
+size_t SampleVoice::renderPlain(float* output, size_t frames) {
+  size_t rendered = 0;
+  const bool mono = sample_->channels == 1;
+  for (size_t i = 0; i < frames; ++i) {
+    rendered = i;
+    if constexpr (!UnityEnvelope) {
+      if (!post_.envelopeActive()) { kill(); break; }
+    }
+    output[i * 2] = sampleAt(position_, 0);
+    output[i * 2 + 1] = mono ? output[i * 2] : sampleAt(position_, 1);
+    post_.processStereo<Filter, UnityEnvelope>(output + i * 2);
+    finishFrame(output + i * 2);
+    if (!advancePosition()) { kill(); break; }
+    if constexpr (!UnityEnvelope) {
+      if (!post_.envelopeActive()) { kill(); break; }
+    }
+  }
+  return rendered;
+}
+
 void SampleVoice::render(float* output, size_t frames) {
   memset(output, 0, frames * 2 * sizeof(float));
   if (!sample_ || !sample_->data) return;
@@ -702,7 +745,15 @@ void SampleVoice::render(float* output, size_t frames) {
 
   size_t loopRendered = 0;
   const bool monoSource = sample_->channels == 1;
-  for (size_t i = 0; i < frames; i++) {
+  if (!granular_ && !xfade_.enabled() && !xfade_.active()) {
+    if (post_.filterActive()) {
+      loopRendered = post_.unityEnvelope() ? renderPlain<true, true>(output, frames)
+                                          : renderPlain<true, false>(output, frames);
+    } else {
+      loopRendered = post_.unityEnvelope() ? renderPlain<false, true>(output, frames)
+                                          : renderPlain<false, false>(output, frames);
+    }
+  } else for (size_t i = 0; i < frames; i++) {
     loopRendered = i;
     if (!post_.envelopeActive()) { kill(); break; }
     if (granular_) {
@@ -720,9 +771,7 @@ void SampleVoice::render(float* output, size_t frames) {
       }
       float windows[2];
       for (int grain = 0; grain < 2; ++grain) {
-        float phase = (float)grainAge_[grain] / (float)(grainSize_ - 1);
-        float window = sinf(3.14159265f * phase);
-        windows[grain] = window * window;
+        windows[grain] = grainWindowAt(grainAge_[grain], grainWindowScale_);
       }
       const int channels = monoSource ? 1 : 2;
       for (int channel = 0; channel < channels; ++channel) {

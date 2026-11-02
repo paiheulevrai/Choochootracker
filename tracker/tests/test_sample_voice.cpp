@@ -190,6 +190,78 @@ TEST_CASE("SampleVoice loops and grain time keeps rendering") {
   for (float value : output) CHECK(std::isfinite(value));
 }
 
+TEST_CASE("SampleVoice grain windows match the sine-squared reference across output rates") {
+  int16_t pcm[64];
+  for (auto& value : pcm) value = 16384;
+  InstrumentSample sample{};
+  sample.sampleRate = 44100;
+  sample.frameCount = 64;
+  sample.channels = 1;
+  sample.data = pcm;
+  sample.end = 255;
+  sample.sustain = 255;
+  for (int rate : {32000, 44100, 48000, 96000}) {
+    SampleVoice voice;
+    voice.init((float)rate);
+    voice.configure(&sample, 137.0f, 0.8f, 150.0f, 0, 255, 1, 20000, 0);
+    voice.noteOn();
+    const int size = (int)(rate * 0.040f);
+    const int ramp = (int)(rate * 0.002f);
+    std::vector<float> output(size * 6);
+    voice.render(output.data(), size * 3);
+    for (int i = 0; i < size * 3; ++i) {
+      const float a = sinf(3.14159265f * ((float)((i + size / 2) % size) / (size - 1)));
+      const float b = sinf(3.14159265f * ((float)(i % size) / (size - 1)));
+      const float fade = i < ramp ? (float)(i + 1) / ramp : 1.0f;
+      const float expected = (a * a + b * b) * 0.4f * fade;
+      CHECK(std::fabs(output[i * 2] - expected) < 0.000001f);
+      CHECK(output[i * 2] == output[i * 2 + 1]);
+    }
+  }
+}
+
+TEST_CASE("SampleVoice plain block path matches general rendering through note and filter changes") {
+  std::vector<int16_t> pcm(32768);
+  for (size_t i = 0; i < pcm.size(); ++i) pcm[i] = (int16_t)(sinf(i * 0.071f) * 24000.0f);
+  for (int channels : {1, 2}) {
+    InstrumentSample sample{};
+    sample.sampleRate = 44100;
+    sample.frameCount = (uint32_t)pcm.size() / channels;
+    sample.channels = channels;
+    sample.data = pcm.data();
+    sample.end = 255;
+    sample.sustain = 255;
+    sample.release = 10;
+    sample.filterCharacter = 1;
+    SampleVoice plain, general;
+    plain.init(48000.0f);
+    general.init(48000.0f);
+    auto configure = [&] {
+      plain.configure(&sample, 137.0f, 0.8f, 100, 0, 255, 1, 4200, 80);
+      // An enabled crossfade selects the general path. This long sample
+      // never approaches the seam during the comparison.
+      general.configure(&sample, 137.0f, 0.8f, 100, 0, 255, 2, 4200, 80);
+    };
+    configure();
+    plain.noteOn(); general.noteOn();
+    for (int block = 0; block < 16; ++block) {
+      if (block == 2 || block == 6) { sample.filterEnabled = 1; configure(); }
+      if (block == 4) { sample.filterEnabled = 0; configure(); }
+      if (block == 7) { sample.filterCharacter = 0; configure(); }
+      if (block == 8 || block == 12) { plain.noteOff(); general.noteOff(); }
+      if (block == 10) {
+        sample.attack = 12; sample.sustain = 171; configure();
+        plain.noteOn(); general.noteOn();
+      }
+      float a[256 * 2], b[256 * 2];
+      plain.render(a, 256); general.render(b, 256);
+      for (int i = 0; i < 512; ++i) CHECK(a[i] == b[i]);
+      CHECK(plain.active() == general.active());
+      CHECK(plain.playbackFrame() == general.playbackFrame());
+    }
+  }
+}
+
 TEST_CASE("sampleNormalizeSlice accepts counts 1..64 and rejects 0 and overflow") {
   CHECK(sampleNormalizeSlice(0) == 0);
   CHECK(sampleNormalizeSlice(1) == 1);

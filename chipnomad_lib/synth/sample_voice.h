@@ -60,6 +60,7 @@ class SampleVoice {
   uint32_t grainAge_[2];
   uint32_t grainSize_;
   uint32_t grainHop_;
+  float grainWindowScale_;
   uint32_t startFrame_;
   uint32_t endFrame_;
   // Loop wrap point: the LOOP START marker when a loop mode is active,
@@ -82,6 +83,8 @@ class SampleVoice {
   double seamDistance() const;
   void wrap();
   void renderTailFrame(float* frame);
+  template <bool Filter, bool UnityEnvelope>
+  size_t renderPlain(float* output, size_t frames);
   float sampleAt(double position, int channel) const;
   float grainSampleAt(double position, int channel) const;
   VoicePostProcessor<> post_;

@@ -1455,6 +1455,8 @@ CPU cost depends on the active engines and effects. Plaits physical models and C
 
 For Aggro instruments, set Resonance to zero when you do not need a resonant peak: this reduces processing work while keeping the filter's saturation.
 
+For Sampler instruments, disable the filter when you do not need it. With **SPD ALGO** set to **Granular**, keeping **Speed** at `100%` avoids granular time-stretching when you do not need to change the sample's duration.
+
 The CPU display is a smoothed measure of audio rendering time. It does not measure delays before the audio callback runs or in the device's audio output, so crackles can occur even with a low reading.
 
 On Android, audio continues when you switch to another app. Android can still stop the process during a long background session or when conserving battery. Audio output prefers AAudio to avoid intermittent crackling observed with OpenSL ES on the Pixel 7a. This buffered output prioritises stable playback and can add some response latency. The tracker canvas keeps its full 4:3 layout on square and other unusual screen ratios; unused space is shown as borders rather than cropping columns. If crackling persists, report the song, phone model, Android version and whether you are using the speaker, headphones or Bluetooth.

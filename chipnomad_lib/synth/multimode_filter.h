@@ -14,6 +14,7 @@ class MultimodeFilter {
   void configure(bool enabled, uint8_t character, uint8_t mode, bool slope24dB,
                  float cutoffHz, float resonance, uint8_t color = 128);
   void reset();
+  bool active() const { return enabled_ && character_ != 0; }
   float process(float input, int channel = 0);
 
  private:
