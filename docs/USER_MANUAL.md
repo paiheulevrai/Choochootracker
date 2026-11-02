@@ -346,6 +346,7 @@ An asterisk (`*`) appears next to a chain that is reused in the project. You can
 
 - **OPT + [LEFT/RIGHT]**: move between tracks
 - **OPT + [UP/DOWN]**: move between chains in the current track
+- **Double-tap OPT**: show or hide the Song minimap on the right. It shows eight nearby Song rows across all tracks, highlights uses of the edited chain, and distinguishes the current Song cell. The minimap is display-only and hidden by default. Its state is saved with the other settings on normal exit; there is no menu setting.
 - Select a range, then use **SHIFT + EDIT**: clone phrases
 - Select a range, then double-tap **EDIT**: open the BOUNCE TO SAMPLE screen for the selected chain rows of the current track (see Bounce under Song)
 

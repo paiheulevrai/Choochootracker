@@ -78,6 +78,7 @@ void initDefaultAppSettings(void) {
   appSettings.playbackCounterMode = 0;
   appSettings.playbackBarRows = 16;
   appSettings.playbackBarTicks = 6;
+  appSettings.chainMinimap = 0;
   appSettings.stickLiveMode = StickLiveMode::hold;
   for (auto& visual : appSettings.trackVisuals)
     visual.mode = TrackVisualMode::detailed;
@@ -256,6 +257,7 @@ int settingsSave(void) {
   fprintf(file, "playbackCounterMode: %d\n", appSettings.playbackCounterMode);
   fprintf(file, "playbackBarRows: %d\n", appSettings.playbackBarRows);
   fprintf(file, "playbackBarTicks: %d\n", appSettings.playbackBarTicks);
+  fprintf(file, "chainMinimap: %d\n", appSettings.chainMinimap);
 
   const char* stickLiveMode = appSettings.stickLiveMode == StickLiveMode::free ? "FREE" :
     appSettings.stickLiveMode == StickLiveMode::toggle ? "TOGGLE" : "HOLD";
@@ -506,6 +508,8 @@ int settingsLoad(void) {
       int ticks;
       if (sscanf(line + 18, "%d", &ticks) == 1 && ticks >= 1 && ticks <= 254)
         appSettings.playbackBarTicks = (uint8_t)ticks;
+    } else if (strncmp(line, "chainMinimap: ", 14) == 0) {
+      sscanf(line + 14, "%d", &appSettings.chainMinimap);
     } else if (strncmp(line, "stickLiveMode: ", 15) == 0) {
       appSettings.stickLiveMode = strcmp(line + 15, "FREE") == 0 ? StickLiveMode::free :
         strcmp(line + 15, "TOGGLE") == 0 ? StickLiveMode::toggle : StickLiveMode::hold;
@@ -745,6 +749,7 @@ int settingsLoad(void) {
   if (appSettings.braidsDrift < 0 || appSettings.braidsDrift > 4) appSettings.braidsDrift = 0;
   if (appSettings.braidsSignature < 0 || appSettings.braidsSignature > 4) appSettings.braidsSignature = 0;
   if (appSettings.waveformRefreshHz < 1 || appSettings.waveformRefreshHz > 60) appSettings.waveformRefreshHz = 30;
+  appSettings.chainMinimap = appSettings.chainMinimap == 1;
   for (int i = 0; i < MIDI_CHANNEL_COUNT; i++) {
     if (appSettings.midiChannelInstrument[i] < -1 || appSettings.midiChannelInstrument[i] >= PROJECT_MAX_INSTRUMENTS)
       appSettings.midiChannelInstrument[i] = -1;

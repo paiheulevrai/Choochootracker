@@ -127,6 +127,7 @@ struct AppSettings {
   uint8_t playbackCounterMode; // 0 = bars, 1 = elapsed time, 2 = off
   uint8_t playbackBarRows;
   uint8_t playbackBarTicks;
+  int chainMinimap;
   // Port indices are runtime-only (not saved): enumeration order isn't
   // stable across reboots/replugging. -1 = off. What IS saved is each
   // device's name (below); appSetup() resolves it back to a live index on

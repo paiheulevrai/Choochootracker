@@ -161,7 +161,7 @@ static void draw(void) {
       gfxPrint(2, 3 + chainRow - screen.topRow, ">");
     }
   }
-  drawMinimap();
+  if (appSettings.chainMinimap) drawMinimap();
 }
 
 static void drawMinimap(void) {
@@ -360,6 +360,12 @@ static int inputScreenNavigation(int keys, int tapCount) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  if (isKeyDown && keys == keyOpt && tapCount == 2) {
+    appSettings.chainMinimap = !appSettings.chainMinimap;
+    fullRedraw();
+    screenMessage(MESSAGE_TIME, appSettings.chainMinimap ? "Chain minimap ON" : "Chain minimap OFF");
+    return 1;
+  }
   if (screen.selectMode == 0 && inputScreenNavigation(keys, tapCount)) return 1;
   return screenInput(&screen, isKeyDown, keys, tapCount);
 }
