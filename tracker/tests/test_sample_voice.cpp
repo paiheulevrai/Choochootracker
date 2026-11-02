@@ -255,42 +255,7 @@ TEST_CASE("SampleVoice plain block path matches general rendering through note a
   }
 }
 
-TEST_CASE("sampleNormalizeSlice accepts counts 1..64 and rejects 0 and overflow") {
-  CHECK(sampleNormalizeSlice(0) == 0);
-  CHECK(sampleNormalizeSlice(1) == 1);
-  CHECK(sampleNormalizeSlice(2) == 2);
-  CHECK(sampleNormalizeSlice(3) == 3);
-  CHECK(sampleNormalizeSlice(4) == 4);
-  CHECK(sampleNormalizeSlice(6) == 6);
-  CHECK(sampleNormalizeSlice(8) == 8);
-  CHECK(sampleNormalizeSlice(16) == 16);
-  CHECK(sampleNormalizeSlice(32) == 32);
-  CHECK(sampleNormalizeSlice(64) == 64);
-  CHECK(sampleNormalizeSlice(65) == 0);
-  CHECK(sampleNormalizeSlice(255) == 0);
-}
 
-TEST_CASE("sampleSliceFrames splits the whole sample evenly and clamps extras") {
-  const uint8_t counts[] = {2, 4, 8, 16, 32};
-  for (uint8_t count : counts) {
-    uint32_t previousEnd = 0;
-    for (uint8_t index = 0; index < count; ++index) {
-      uint32_t start = 0;
-      uint32_t end = 0;
-      sampleSliceFrames(256, count, index, &start, &end);
-      CHECK(start == previousEnd);
-      CHECK(end == (uint32_t)(index + 1) * 256 / count);
-      CHECK(end > start);
-      previousEnd = end;
-    }
-    CHECK(previousEnd == 256);
-    uint32_t start = 0;
-    uint32_t end = 0;
-    sampleSliceFrames(256, count, 255, &start, &end);
-    CHECK(start == (uint32_t)(count - 1) * 256 / count);
-    CHECK(end == 256);
-  }
-}
 
 TEST_CASE("SampleVoice Off uses Start/End and sliced notes use even windows") {
   int16_t pcm[32];
@@ -661,181 +626,11 @@ static InstrumentSample makeSliceSample(uint32_t frameCount, uint8_t start, uint
   return sample;
 }
 
-TEST_CASE("sampleSliceInitEven divides the loop region evenly for any count") {
-  // Full-sample loop (start 0, end 255) on 256 frames: bounds at i*256/N.
-  InstrumentSample sample = makeSliceSample(256, 0, 255);
 
-  uint8_t count = sampleSliceInitEven(&sample, sliceModeEqual, 3);
-  CHECK(count == 3);
-  CHECK(sample.slice == sampleEncodeSlice(sliceModeEqual, 3));
-  CHECK(sample.sliceBounds[0] == 0);
-  CHECK(sample.sliceBounds[1] == 85);
-  CHECK(sample.sliceBounds[2] == 170);
 
-  count = sampleSliceInitEven(&sample, sliceModeEqual, 5);
-  CHECK(count == 5);
-  CHECK(sample.sliceBounds[0] == 0);
-  CHECK(sample.sliceBounds[1] == 51);
-  CHECK(sample.sliceBounds[2] == 102);
-  CHECK(sample.sliceBounds[3] == 153);
-  CHECK(sample.sliceBounds[4] == 204);
 
-  count = sampleSliceInitEven(&sample, sliceModeEqual, 64);
-  CHECK(count == 64);
-  CHECK(sample.sliceBounds[63] == 252);
-  CHECK(sample.slice == sampleEncodeSlice(sliceModeEqual, 64));
 
-  // Counts clamp into 1..64.
-  count = sampleSliceInitEven(&sample, sliceModeEqual, 0);
-  CHECK(count == 1);
-  count = sampleSliceInitEven(&sample, sliceModeEqual, 200);
-  CHECK(count == 64);
 
-  // AUTO uses the same even division as its Phase 1 placeholder.
-  count = sampleSliceInitEven(&sample, sliceModeAuto, 4);
-  CHECK(count == 4);
-  CHECK(sample.slice == sampleEncodeSlice(sliceModeAuto, 4));
-  CHECK(sample.sliceBounds[2] == 128);
-
-  // The loop region follows the Start/End markers: markers 64/128 on 256
-  // frames map to frames 64 and 128, so N=4 divides [64, 128).
-  InstrumentSample windowed = makeSliceSample(256, 64, 128);
-  count = sampleSliceInitEven(&windowed, sliceModeEqual, 4);
-  CHECK(count == 4);
-  CHECK(windowed.sliceBounds[0] == 64);
-  CHECK(windowed.sliceBounds[1] == 80);
-  CHECK(windowed.sliceBounds[2] == 96);
-  CHECK(windowed.sliceBounds[3] == 112);
-}
-
-TEST_CASE("sampleSliceInitLazy clears bounds and keeps one whole-loop slice") {
-  InstrumentSample sample = makeSliceSample(256, 0, 255);
-  sampleSliceInitEven(&sample, sliceModeEqual, 4);
-  CHECK(sample.sliceBounds[3] == 192);
-
-  uint8_t count = sampleSliceInitLazy(&sample);
-  CHECK(count == 1);
-  CHECK(sample.slice == sampleEncodeSlice(sliceModeLazy, 1));
-  CHECK(sample.sliceBounds[0] == 0);
-  CHECK(sample.sliceBounds[1] == 0);
-  CHECK(sample.sliceBounds[3] == 0);
-}
-
-TEST_CASE("sampleSliceBoundCount reports the sentinel count per mode") {
-  InstrumentSample sample = makeSliceSample(256, 0, 255);
-  CHECK(sampleSliceBoundCount(&sample) == 0);
-
-  sampleSliceInitEven(&sample, sliceModeEqual, 7);
-  CHECK(sampleSliceBoundCount(&sample) == 7);
-
-  sampleSliceInitEven(&sample, sliceModeAuto, 9);
-  CHECK(sampleSliceBoundCount(&sample) == 9);
-
-  sampleSliceInitLazy(&sample);
-  CHECK(sampleSliceBoundCount(&sample) == 1);
-
-  sample.slice = 0;
-  CHECK(sampleSliceBoundCount(&sample) == 0);
-}
-
-TEST_CASE("sampleSliceNudge moves one bound and keeps the mode sticky") {
-  InstrumentSample sample = makeSliceSample(256, 0, 255);
-  sampleSliceInitEven(&sample, sliceModeEqual, 4);
-
-  // Slice 1 starts at 64; +5 moves only that bound.
-  int32_t frame = sampleSliceNudge(&sample, 1, 5);
-  CHECK(frame == 69);
-  CHECK(sample.sliceBounds[1] == 69);
-  CHECK(sample.sliceBounds[0] == 0);
-  CHECK(sample.sliceBounds[2] == 128);
-  CHECK(sample.sliceBounds[3] == 192);
-  CHECK(sample.slice == sampleEncodeSlice(sliceModeEqual, 4));
-
-  // A bound cannot cross its neighbours: clamps to the next bound.
-  frame = sampleSliceNudge(&sample, 1, 1000);
-  CHECK(frame == 128);
-  CHECK(sample.sliceBounds[1] == 128);
-
-  // Clamps to the previous bound (0 for the first slice); a nudge that
-  // leaves the bound unchanged reports -1.
-  CHECK(sampleSliceNudge(&sample, 0, -50) == -1);
-  CHECK(sample.sliceBounds[0] == 0);
-
-  // The last slice's right edge is the loop end.
-  frame = sampleSliceNudge(&sample, 3, 1000);
-  CHECK(frame == 256);
-
-  // Out-of-range and unsliced inputs fail.
-  CHECK(sampleSliceNudge(&sample, 4, 1) == -1);
-  sample.slice = 0;
-  CHECK(sampleSliceNudge(&sample, 0, 1) == -1);
-}
-
-TEST_CASE("sampleSliceSplit inserts the midpoint bound and returns the right half") {
-  InstrumentSample sample = makeSliceSample(256, 0, 255);
-  sampleSliceInitEven(&sample, sliceModeEqual, 2);
-
-  // Split slice 0 ([0,128)) at 64: count 3, current becomes slice 1.
-  int newSlice = sampleSliceSplit(&sample, 0);
-  CHECK(newSlice == 1);
-  CHECK(sampleSliceBoundCount(&sample) == 3);
-  CHECK(sample.sliceBounds[0] == 0);
-  CHECK(sample.sliceBounds[1] == 64);
-  CHECK(sample.sliceBounds[2] == 128);
-  CHECK(sample.slice == sampleEncodeSlice(sliceModeEqual, 3));
-
-  // Splitting the last slice uses the loop end as its right edge.
-  newSlice = sampleSliceSplit(&sample, 2);
-  CHECK(newSlice == 3);
-  CHECK(sampleSliceBoundCount(&sample) == 4);
-  CHECK(sample.sliceBounds[3] == 192);
-
-  // A degenerate (empty) slice cannot be split: nudge slice 1's start to
-  // the loop end minus one frame, leaving a single-frame slice.
-  sampleSliceInitEven(&sample, sliceModeEqual, 2);
-  CHECK(sampleSliceNudge(&sample, 1, 127) == 255);
-  CHECK(sampleSliceSplit(&sample, 1) == -1);
-
-  // Out-of-range and unsliced inputs fail.
-  CHECK(sampleSliceSplit(&sample, 5) == -1);
-  sample.slice = 0;
-  CHECK(sampleSliceSplit(&sample, 0) == -1);
-}
-
-TEST_CASE("sampleSliceDelete removes one bound and keeps the mode sticky") {
-  InstrumentSample sample = makeSliceSample(256, 0, 255);
-  sampleSliceInitEven(&sample, sliceModeEqual, 3);
-
-  // Delete slice 1: bounds shift down, the caller lands on slice 0.
-  int next = sampleSliceDelete(&sample, 1);
-  CHECK(next == 0);
-  CHECK(sampleSliceBoundCount(&sample) == 2);
-  CHECK(sample.sliceBounds[0] == 0);
-  CHECK(sample.sliceBounds[1] == 170);
-  CHECK(sample.sliceBounds[2] == 0);
-  CHECK(sample.slice == sampleEncodeSlice(sliceModeEqual, 2));
-
-  // Deleting the first slice keeps the caller at 0.
-  next = sampleSliceDelete(&sample, 0);
-  CHECK(next == 0);
-  CHECK(sampleSliceBoundCount(&sample) == 1);
-  CHECK(sample.sliceBounds[0] == 170);
-
-  // Deleting the last remaining slice turns the mode off but keeps the
-  // bounds in memory (toggling back restores them).
-  InstrumentSample windowed = makeSliceSample(256, 64, 128);
-  sampleSliceInitEven(&windowed, sliceModeEqual, 1);
-  CHECK(windowed.sliceBounds[0] == 64);
-  next = sampleSliceDelete(&windowed, 0);
-  CHECK(next == -1);
-  CHECK(windowed.slice == 0);
-  CHECK(windowed.sliceBounds[0] == 64);
-
-  // Out-of-range and unsliced inputs fail.
-  CHECK(sampleSliceDelete(&sample, 5) == -1);
-  sample.slice = 0;
-  CHECK(sampleSliceDelete(&sample, 0) == -1);
-}
 
 TEST_CASE("Mode switches follow the universal editing model") {
   InstrumentSample sample = makeSliceSample(256, 0, 255);
@@ -873,52 +668,268 @@ TEST_CASE("Mode switches follow the universal editing model") {
   CHECK(sample.sliceBounds[1] == 64);
 }
 
-TEST_CASE("sampleSliceInsertAtFrame inserts sorted and rejects duplicates") {
-  InstrumentSample sample = makeSliceSample(256, 0, 255);
-  sampleSliceInitEven(&sample, sliceModeEqual, 2);
 
-  int at = sampleSliceInsertAtFrame(&sample, 64);
-  CHECK(at == 1);
-  CHECK(sampleSliceBoundCount(&sample) == 3);
-  CHECK(sample.sliceBounds[1] == 64);
-  CHECK(sample.sliceBounds[2] == 128);
+TEST_CASE("Sample slice bound editing and framing") {
+  SUBCASE("sampleNormalizeSlice accepts counts 1..64 and rejects 0 and overflow") {
+    CHECK(sampleNormalizeSlice(0) == 0);
+    CHECK(sampleNormalizeSlice(1) == 1);
+    CHECK(sampleNormalizeSlice(2) == 2);
+    CHECK(sampleNormalizeSlice(3) == 3);
+    CHECK(sampleNormalizeSlice(4) == 4);
+    CHECK(sampleNormalizeSlice(6) == 6);
+    CHECK(sampleNormalizeSlice(8) == 8);
+    CHECK(sampleNormalizeSlice(16) == 16);
+    CHECK(sampleNormalizeSlice(32) == 32);
+    CHECK(sampleNormalizeSlice(64) == 64);
+    CHECK(sampleNormalizeSlice(65) == 0);
+    CHECK(sampleNormalizeSlice(255) == 0);
+  }
 
-  // Duplicate bounds are rejected.
-  CHECK(sampleSliceInsertAtFrame(&sample, 64) == -1);
-  CHECK(sampleSliceInsertAtFrame(&sample, 0) == -1);
+  SUBCASE("sampleSliceFrames splits the whole sample evenly and clamps extras") {
+    const uint8_t counts[] = {2, 4, 8, 16, 32};
+    for (uint8_t count : counts) {
+      uint32_t previousEnd = 0;
+      for (uint8_t index = 0; index < count; ++index) {
+        uint32_t start = 0;
+        uint32_t end = 0;
+        sampleSliceFrames(256, count, index, &start, &end);
+        CHECK(start == previousEnd);
+        CHECK(end == (uint32_t)(index + 1) * 256 / count);
+        CHECK(end > start);
+        previousEnd = end;
+      }
+      CHECK(previousEnd == 256);
+      uint32_t start = 0;
+      uint32_t end = 0;
+      sampleSliceFrames(256, count, 255, &start, &end);
+      CHECK(start == (uint32_t)(count - 1) * 256 / count);
+      CHECK(end == 256);
+    }
+  }
 
-  // Frames outside the loop region are rejected.
-  CHECK(sampleSliceInsertAtFrame(&sample, 256) == -1);
-  CHECK(sampleSliceInsertAtFrame(&sample, 999) == -1);
+  SUBCASE("sampleSliceInitEven divides the loop region evenly for any count") {
+    // Full-sample loop (start 0, end 255) on 256 frames: bounds at i*256/N.
+    InstrumentSample sample = makeSliceSample(256, 0, 255);
 
-  // Insert before the first bound shifts it right.
-  at = sampleSliceInsertAtFrame(&sample, 32);
-  CHECK(at == 1);
-  CHECK(sample.sliceBounds[0] == 0);
-  CHECK(sample.sliceBounds[1] == 32);
-  CHECK(sample.sliceBounds[2] == 64);
+    uint8_t count = sampleSliceInitEven(&sample, sliceModeEqual, 3);
+    CHECK(count == 3);
+    CHECK(sample.slice == sampleEncodeSlice(sliceModeEqual, 3));
+    CHECK(sample.sliceBounds[0] == 0);
+    CHECK(sample.sliceBounds[1] == 85);
+    CHECK(sample.sliceBounds[2] == 170);
 
-  sample.slice = 0;
-  CHECK(sampleSliceInsertAtFrame(&sample, 32) == -1);
-}
+    count = sampleSliceInitEven(&sample, sliceModeEqual, 5);
+    CHECK(count == 5);
+    CHECK(sample.sliceBounds[0] == 0);
+    CHECK(sample.sliceBounds[1] == 51);
+    CHECK(sample.sliceBounds[2] == 102);
+    CHECK(sample.sliceBounds[3] == 153);
+    CHECK(sample.sliceBounds[4] == 204);
 
-TEST_CASE("sampleSliceStartFrame reads bounds and falls back for legacy samples") {
-  InstrumentSample sample = makeSliceSample(256, 0, 255);
+    count = sampleSliceInitEven(&sample, sliceModeEqual, 64);
+    CHECK(count == 64);
+    CHECK(sample.sliceBounds[63] == 252);
+    CHECK(sample.slice == sampleEncodeSlice(sliceModeEqual, 64));
 
-  // Legacy sample: sentinel 8, bounds all zero -> even division fallback.
-  sample.slice = 8;
-  CHECK(sampleSliceStartFrame(&sample, 0, sample.start, sample.end) == 0);
-  CHECK(sampleSliceStartFrame(&sample, 3, sample.start, sample.end) == 96);
-  CHECK(sampleSliceStartFrame(&sample, 8, sample.start, sample.end) == -1);
+    // Counts clamp into 1..64.
+    count = sampleSliceInitEven(&sample, sliceModeEqual, 0);
+    CHECK(count == 1);
+    count = sampleSliceInitEven(&sample, sliceModeEqual, 200);
+    CHECK(count == 64);
 
-  // Populated bounds win over the fallback.
-  sampleSliceInitEven(&sample, sliceModeEqual, 4);
-  sampleSliceNudge(&sample, 2, 10);
-  CHECK(sampleSliceStartFrame(&sample, 2, sample.start, sample.end) == 138);
-  CHECK(sampleSliceStartFrame(&sample, 0, sample.start, sample.end) == 0);
+    // AUTO uses the same even division as its Phase 1 placeholder.
+    count = sampleSliceInitEven(&sample, sliceModeAuto, 4);
+    CHECK(count == 4);
+    CHECK(sample.slice == sampleEncodeSlice(sliceModeAuto, 4));
+    CHECK(sample.sliceBounds[2] == 128);
 
-  sample.slice = 0;
-  CHECK(sampleSliceStartFrame(&sample, 0, sample.start, sample.end) == -1);
+    // The loop region follows the Start/End markers: markers 64/128 on 256
+    // frames map to frames 64 and 128, so N=4 divides [64, 128).
+    InstrumentSample windowed = makeSliceSample(256, 64, 128);
+    count = sampleSliceInitEven(&windowed, sliceModeEqual, 4);
+    CHECK(count == 4);
+    CHECK(windowed.sliceBounds[0] == 64);
+    CHECK(windowed.sliceBounds[1] == 80);
+    CHECK(windowed.sliceBounds[2] == 96);
+    CHECK(windowed.sliceBounds[3] == 112);
+  }
+
+  SUBCASE("sampleSliceInitLazy clears bounds and keeps one whole-loop slice") {
+    InstrumentSample sample = makeSliceSample(256, 0, 255);
+    sampleSliceInitEven(&sample, sliceModeEqual, 4);
+    CHECK(sample.sliceBounds[3] == 192);
+
+    uint8_t count = sampleSliceInitLazy(&sample);
+    CHECK(count == 1);
+    CHECK(sample.slice == sampleEncodeSlice(sliceModeLazy, 1));
+    CHECK(sample.sliceBounds[0] == 0);
+    CHECK(sample.sliceBounds[1] == 0);
+    CHECK(sample.sliceBounds[3] == 0);
+  }
+
+  SUBCASE("sampleSliceBoundCount reports the sentinel count per mode") {
+    InstrumentSample sample = makeSliceSample(256, 0, 255);
+    CHECK(sampleSliceBoundCount(&sample) == 0);
+
+    sampleSliceInitEven(&sample, sliceModeEqual, 7);
+    CHECK(sampleSliceBoundCount(&sample) == 7);
+
+    sampleSliceInitEven(&sample, sliceModeAuto, 9);
+    CHECK(sampleSliceBoundCount(&sample) == 9);
+
+    sampleSliceInitLazy(&sample);
+    CHECK(sampleSliceBoundCount(&sample) == 1);
+
+    sample.slice = 0;
+    CHECK(sampleSliceBoundCount(&sample) == 0);
+  }
+
+  SUBCASE("sampleSliceNudge moves one bound and keeps the mode sticky") {
+    InstrumentSample sample = makeSliceSample(256, 0, 255);
+    sampleSliceInitEven(&sample, sliceModeEqual, 4);
+
+    // Slice 1 starts at 64; +5 moves only that bound.
+    int32_t frame = sampleSliceNudge(&sample, 1, 5);
+    CHECK(frame == 69);
+    CHECK(sample.sliceBounds[1] == 69);
+    CHECK(sample.sliceBounds[0] == 0);
+    CHECK(sample.sliceBounds[2] == 128);
+    CHECK(sample.sliceBounds[3] == 192);
+    CHECK(sample.slice == sampleEncodeSlice(sliceModeEqual, 4));
+
+    // A bound cannot cross its neighbours: clamps to the next bound.
+    frame = sampleSliceNudge(&sample, 1, 1000);
+    CHECK(frame == 128);
+    CHECK(sample.sliceBounds[1] == 128);
+
+    // Clamps to the previous bound (0 for the first slice); a nudge that
+    // leaves the bound unchanged reports -1.
+    CHECK(sampleSliceNudge(&sample, 0, -50) == -1);
+    CHECK(sample.sliceBounds[0] == 0);
+
+    // The last slice's right edge is the loop end.
+    frame = sampleSliceNudge(&sample, 3, 1000);
+    CHECK(frame == 256);
+
+    // Out-of-range and unsliced inputs fail.
+    CHECK(sampleSliceNudge(&sample, 4, 1) == -1);
+    sample.slice = 0;
+    CHECK(sampleSliceNudge(&sample, 0, 1) == -1);
+  }
+
+  SUBCASE("sampleSliceSplit inserts the midpoint bound and returns the right half") {
+    InstrumentSample sample = makeSliceSample(256, 0, 255);
+    sampleSliceInitEven(&sample, sliceModeEqual, 2);
+
+    // Split slice 0 ([0,128)) at 64: count 3, current becomes slice 1.
+    int newSlice = sampleSliceSplit(&sample, 0);
+    CHECK(newSlice == 1);
+    CHECK(sampleSliceBoundCount(&sample) == 3);
+    CHECK(sample.sliceBounds[0] == 0);
+    CHECK(sample.sliceBounds[1] == 64);
+    CHECK(sample.sliceBounds[2] == 128);
+    CHECK(sample.slice == sampleEncodeSlice(sliceModeEqual, 3));
+
+    // Splitting the last slice uses the loop end as its right edge.
+    newSlice = sampleSliceSplit(&sample, 2);
+    CHECK(newSlice == 3);
+    CHECK(sampleSliceBoundCount(&sample) == 4);
+    CHECK(sample.sliceBounds[3] == 192);
+
+    // A degenerate (empty) slice cannot be split: nudge slice 1's start to
+    // the loop end minus one frame, leaving a single-frame slice.
+    sampleSliceInitEven(&sample, sliceModeEqual, 2);
+    CHECK(sampleSliceNudge(&sample, 1, 127) == 255);
+    CHECK(sampleSliceSplit(&sample, 1) == -1);
+
+    // Out-of-range and unsliced inputs fail.
+    CHECK(sampleSliceSplit(&sample, 5) == -1);
+    sample.slice = 0;
+    CHECK(sampleSliceSplit(&sample, 0) == -1);
+  }
+
+  SUBCASE("sampleSliceDelete removes one bound and keeps the mode sticky") {
+    InstrumentSample sample = makeSliceSample(256, 0, 255);
+    sampleSliceInitEven(&sample, sliceModeEqual, 3);
+
+    // Delete slice 1: bounds shift down, the caller lands on slice 0.
+    int next = sampleSliceDelete(&sample, 1);
+    CHECK(next == 0);
+    CHECK(sampleSliceBoundCount(&sample) == 2);
+    CHECK(sample.sliceBounds[0] == 0);
+    CHECK(sample.sliceBounds[1] == 170);
+    CHECK(sample.sliceBounds[2] == 0);
+    CHECK(sample.slice == sampleEncodeSlice(sliceModeEqual, 2));
+
+    // Deleting the first slice keeps the caller at 0.
+    next = sampleSliceDelete(&sample, 0);
+    CHECK(next == 0);
+    CHECK(sampleSliceBoundCount(&sample) == 1);
+    CHECK(sample.sliceBounds[0] == 170);
+
+    // Deleting the last remaining slice turns the mode off but keeps the
+    // bounds in memory (toggling back restores them).
+    InstrumentSample windowed = makeSliceSample(256, 64, 128);
+    sampleSliceInitEven(&windowed, sliceModeEqual, 1);
+    CHECK(windowed.sliceBounds[0] == 64);
+    next = sampleSliceDelete(&windowed, 0);
+    CHECK(next == -1);
+    CHECK(windowed.slice == 0);
+    CHECK(windowed.sliceBounds[0] == 64);
+
+    // Out-of-range and unsliced inputs fail.
+    CHECK(sampleSliceDelete(&sample, 5) == -1);
+    sample.slice = 0;
+    CHECK(sampleSliceDelete(&sample, 0) == -1);
+  }
+
+  SUBCASE("sampleSliceInsertAtFrame inserts sorted and rejects duplicates") {
+    InstrumentSample sample = makeSliceSample(256, 0, 255);
+    sampleSliceInitEven(&sample, sliceModeEqual, 2);
+
+    int at = sampleSliceInsertAtFrame(&sample, 64);
+    CHECK(at == 1);
+    CHECK(sampleSliceBoundCount(&sample) == 3);
+    CHECK(sample.sliceBounds[1] == 64);
+    CHECK(sample.sliceBounds[2] == 128);
+
+    // Duplicate bounds are rejected.
+    CHECK(sampleSliceInsertAtFrame(&sample, 64) == -1);
+    CHECK(sampleSliceInsertAtFrame(&sample, 0) == -1);
+
+    // Frames outside the loop region are rejected.
+    CHECK(sampleSliceInsertAtFrame(&sample, 256) == -1);
+    CHECK(sampleSliceInsertAtFrame(&sample, 999) == -1);
+
+    // Insert before the first bound shifts it right.
+    at = sampleSliceInsertAtFrame(&sample, 32);
+    CHECK(at == 1);
+    CHECK(sample.sliceBounds[0] == 0);
+    CHECK(sample.sliceBounds[1] == 32);
+    CHECK(sample.sliceBounds[2] == 64);
+
+    sample.slice = 0;
+    CHECK(sampleSliceInsertAtFrame(&sample, 32) == -1);
+  }
+
+  SUBCASE("sampleSliceStartFrame reads bounds and falls back for legacy samples") {
+    InstrumentSample sample = makeSliceSample(256, 0, 255);
+
+    // Legacy sample: sentinel 8, bounds all zero -> even division fallback.
+    sample.slice = 8;
+    CHECK(sampleSliceStartFrame(&sample, 0, sample.start, sample.end) == 0);
+    CHECK(sampleSliceStartFrame(&sample, 3, sample.start, sample.end) == 96);
+    CHECK(sampleSliceStartFrame(&sample, 8, sample.start, sample.end) == -1);
+
+    // Populated bounds win over the fallback.
+    sampleSliceInitEven(&sample, sliceModeEqual, 4);
+    sampleSliceNudge(&sample, 2, 10);
+    CHECK(sampleSliceStartFrame(&sample, 2, sample.start, sample.end) == 138);
+    CHECK(sampleSliceStartFrame(&sample, 0, sample.start, sample.end) == 0);
+
+    sample.slice = 0;
+    CHECK(sampleSliceStartFrame(&sample, 0, sample.start, sample.end) == -1);
+  }
 }
 
 TEST_CASE("SampleVoice plays stored slice bounds and legacy fallback identically") {
