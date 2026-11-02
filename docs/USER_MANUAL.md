@@ -32,6 +32,10 @@ options or back, **START** to play, and **SELECT** for selection. Controls
 can be reassigned in **Settings > Controls > Key mapping**; a USB keyboard
 also works.
 
+Tap **POWER** to save the current project and enter sleep. Press **POWER**
+again to wake the console; playback stays stopped until you press **START**.
+An active recording is finished before sleep.
+
 ### Miyoo Mini / Mini Plus (Onion OS)
 
 Extract the MiyooPorts archive at the root of the SD card so that its `Roms/PORTS/` folders merge with Onion's existing folders. Start **ChooChooTracker** from the Ports menu after refreshing the collection. Back up the app's `projects/` folder before replacing an existing installation.

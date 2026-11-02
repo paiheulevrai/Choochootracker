@@ -1,12 +1,19 @@
 #include "corelib_mainloop.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <SDL2/SDL.h>
 #include "corelib_gfx.h"
 #include "corelib_keymap.h"
 #include "corelib_input.h"
 #include "../../src/corelib/corelib_assets.h"
 #include "../../src/common.h"
+#ifdef PORTMASTER_BUILD
+#include "nextui_power.h"
+#include <errno.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 #ifdef ANDROID_BUILD
 #include "../android/extra_buttons_android.h"
 extern void androidPerformTouchHaptic(void);
@@ -33,6 +40,40 @@ void mainLoopSetTargetFps(int fps) {
 }
 int mainLoopGetTargetFps(void) { return requestedFps; }
 int mainLoopGetFrameTimeUs(void) { return frameTimeUs; }
+
+#ifdef PORTMASTER_BUILD
+static void nextuiSuspend(void (*onEvent)(MainLoopEventData)) {
+  const char* systemPath = getenv("SYSTEM_PATH");
+  char suspendPath[PATH_LENGTH];
+  if (!systemPath || snprintf(suspendPath, sizeof(suspendPath), "%s/bin/suspend", systemPath) >= (int)sizeof(suspendPath) ||
+      access(suspendPath, X_OK) != 0) {
+    SDL_Log("CCT suspend unavailable: NextUI suspend helper not found");
+    return;
+  }
+
+  onEvent({MainLoopEvent::sleep, {0}});
+  sync();
+  // The helper owns NextUI's sleep/resume hooks, Wi-Fi, Bluetooth and the
+  // kernel suspend request. Only exec/_exit run in the child of this SDL app.
+  const pid_t child = fork();
+  int status = -1;
+  if (child == 0) {
+    execl(suspendPath, suspendPath, (char*)NULL);
+    _exit(127);
+  }
+  if (child > 0) {
+    pid_t result;
+    do { result = waitpid(child, &status, 0); } while (result < 0 && errno == EINTR);
+    if (result < 0) status = -1;
+  }
+  SDL_Log("CCT NextUI suspend returned: %d", status);
+
+  // Restore the UI/audio even if the platform refused to enter suspend.
+  onEvent({MainLoopEvent::wake, {0}});
+  gfxHandleRenderReset();
+  onEvent({MainLoopEvent::fullRedraw, {0}});
+}
+#endif
 
 #ifdef GAMEPAD_SUPPORT
 // Gamepad support
@@ -201,6 +242,12 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
   int menu = 0;
   MainLoopEventData eventData;
 
+#ifdef PORTMASTER_BUILD
+  const char* nextui = getenv("CCT_NEXTUI");
+  const bool nextuiPowerEnabled = nextui && strcmp(nextui, "1") == 0;
+  NextUIPowerButton nextuiPower;
+#endif
+
 #ifdef MOBILE_LIFECYCLE
   int wakeRedrawFrames = 0;
 #endif
@@ -321,6 +368,16 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 
     while (SDL_PollEvent(&event)) {
       interactionUntil = SDL_GetTicks() + 250;
+#ifdef PORTMASTER_BUILD
+      if (nextuiPowerEnabled && (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
+          event.key.keysym.scancode == SDL_SCANCODE_POWER) {
+        if (nextuiPower.update(event.type == SDL_KEYDOWN, SDL_GetTicks(), event.key.repeat != 0)) {
+          nextuiSuspend(onEvent);
+          nextuiPower.onResume(SDL_GetTicks());
+        }
+        continue;
+      }
+#endif
       // The Menu+X quit combo mirrors a physical button chord on handhelds
       // without an easy way back to a Quit menu item (PortMaster/consoles).
       // On desktop, Menu/X happen to be bound to Ctrl/S, which makes Ctrl+S

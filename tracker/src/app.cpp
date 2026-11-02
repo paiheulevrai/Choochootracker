@@ -993,10 +993,9 @@ void appDraw(void) {
 // audio handler: stop any active capture recording, drop armed inputs, close
 // and re-enumerate capture, then reopen the output device. The helper box
 // shows an animated notice while the restart runs.
-static void handleAudioDeviceRemoved(int isCapture) {
+static void refreshAudioDevices(bool showNotification) {
   if (!appHasProject()) return;
-  (void)isCapture; // both capture loss and output loss get the same rebuild
-  screenNotifyAudioRestart();
+  if (showNotification) screenNotifyAudioRestart();
   audioInputManagerStopRecording();
   audioInputManager.disarmAll();
   if (!audioManager.refreshDevices || audioManager.refreshDevices()) {
@@ -1406,14 +1405,22 @@ void appOnEvent(MainLoopEventData eventData) {
     break;
   }
   case MainLoopEvent::audioDeviceRemoved:
-    handleAudioDeviceRemoved(eventData.data.value);
+    refreshAudioDevices(true);
     break;
   case MainLoopEvent::exit:
     // Auto-save the current project and settings on exit
     autosaveProject();
     settingsSave();
     break;
-  case MainLoopEvent::sleep:
+  case MainLoopEvent::sleep: {
+#ifdef PORTMASTER_BUILD
+    const char* nextui = getenv("CCT_NEXTUI");
+    if (nextui && strcmp(nextui, "1") == 0) {
+      audioInputManagerStopRecording();
+      audioInputPause(1);
+      appResetInputState();
+    }
+#endif
     // Pause audio when app goes to background
     if (appHasProject()) audioManager.pause();
     if (appHasProject() && chipnomadState) {
@@ -1425,10 +1432,20 @@ void appOnEvent(MainLoopEventData eventData) {
     // Save settings
     settingsSave();
     break;
-  case MainLoopEvent::wake:
+  }
+  case MainLoopEvent::wake: {
+#ifdef PORTMASTER_BUILD
+    const char* nextui = getenv("CCT_NEXTUI");
+    if (nextui && strcmp(nextui, "1") == 0) {
+      // ALSA streams and USB/Bluetooth devices may change across deep sleep.
+      refreshAudioDevices(false);
+      break;
+    }
+#endif
     // Resume audio when app comes back to foreground
     if (appHasProject()) audioManager.resume();
     break;
+  }
   case MainLoopEvent::fullRedraw:
     // Force full screen redraw
     gfxSetBgColor(appSettings.colorScheme.background);
