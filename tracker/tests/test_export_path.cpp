@@ -2,6 +2,7 @@
 #include "common.h"
 #include "corelib/corelib_file.h"
 #include "export_path.h"
+#include "test_helpers.h"
 
 #include <cstdio>
 #include <cstring>
@@ -14,6 +15,8 @@
 #define chdir _chdir
 #define getcwd _getcwd
 #endif
+
+using namespace testhelp;
 
 TEST_SUITE("export_path") {
 
@@ -52,17 +55,6 @@ struct ExportPathFixture {
   }
 };
 
-static bool dirExists(const char* path) {
-  struct stat st;
-  return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-}
-
-static bool fileExists(const char* path) {
-  FILE* f = fopen(path, "r");
-  if (!f) return false;
-  fclose(f);
-  return true;
-}
 
 TEST_CASE_FIXTURE(ExportPathFixture, "Default base dir is <cwd>/samples/Exports") {
   char base[EXPORT_PATH_MAX];

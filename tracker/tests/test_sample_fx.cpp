@@ -690,36 +690,23 @@ SUBCASE("SPL mode switch mid-note does not glitch") {
 // the xfade parameter stays 0 (the SPL lane FX path can still force it for
 // modes 1/3). The wrap geometry matches the plain modes 1/3.
 
-SUBCASE("instrument mode 2 crossfades the forward wrap without xfade param") {
-  EngineSample es;
-  es.init(8820);
-  es.s.loopStart = 0x40; // frame 2213
-  es.s.loopMode = 2;     // Loop X: xfade derived from the mode
-  LazyEngine engine(es.s, 0);
-
-  PhraseRow row = makeRow(48);
-  chipnomadQueuePlaybackStartPhraseRow(engine.state, 0, &row);
-
-  // Same worst-case ramp as SPL 04: the hard wrap jumps 0.2016 in one
+SUBCASE("instrument modes 2 and 4 crossfade the wrap without xfade param") {
+  // Same worst-case ramp as SPL 04/05: the hard wrap jumps 0.2016 in one
   // sample; the crossfade spreads it over the 1651-frame window.
-  const double fadeJump = xfadeMaxJump(engine, 30);
-  CHECK(fadeJump < 0.01);
-  CHECK(engine.voice()->active());
-}
+  for (auto [mode, ticks] : {std::pair<uint8_t, int>{2, 30}, {4, 40}}) {
+    CAPTURE(int(mode));
+    EngineSample es;
+    es.init(8820);
+    es.s.loopStart = 0x40; // frame 2213
+    es.s.loopMode = mode;  // Loop X / Ping X: xfade derived from the mode
+    LazyEngine engine(es.s, 0);
 
-SUBCASE("instrument mode 4 crossfades the ping-pong turns without xfade param") {
-  EngineSample es;
-  es.init(8820);
-  es.s.loopStart = 0x40;
-  es.s.loopMode = 4; // Ping X: xfade derived from the mode
-  LazyEngine engine(es.s, 0);
+    PhraseRow row = makeRow(48);
+    chipnomadQueuePlaybackStartPhraseRow(engine.state, 0, &row);
 
-  PhraseRow row = makeRow(48);
-  chipnomadQueuePlaybackStartPhraseRow(engine.state, 0, &row);
-
-  const double fadeJump = xfadeMaxJump(engine, 40);
-  CHECK(fadeJump < 0.01);
-  CHECK(engine.voice()->active());
+    CHECK(xfadeMaxJump(engine, ticks) < 0.01);
+    CHECK(engine.voice()->active());
+  }
 }
 
 SUBCASE("instrument modes 2 and 4 keep looping where mode 0 stops") {
@@ -737,30 +724,8 @@ SUBCASE("instrument modes 2 and 4 keep looping where mode 0 stops") {
   }
 }
 
-SUBCASE("instrument mode 2 descending hard-wraps like mode 1") {
-  // Legacy Start > End windows reverse the playback direction. A descending
-  // forward loop (mode 1 or 2) must hard-wrap: the phase-aligned incoming
-  // pass would read past the sample data (the wrap target sits at the
-  // region end). Only ping-pong (modes 3/4) arms a fade on the way down.
-  EngineSample es;
-  es.init(8820);
-  es.s.start = 200; // descending window: start marker above end marker
-  es.s.end = 40;
-  es.s.loopStart = 0x40;
-  es.s.loopMode = 2;
-  LazyEngine engine(es.s, 0);
-
-  PhraseRow row = makeRow(48);
-  chipnomadQueuePlaybackStartPhraseRow(engine.state, 0, &row);
-
-  // The descending pass must survive the wrap and keep playing (a bad
-  // incoming read would produce garbage or kill the voice).
-  engine.render(882 * 4);
-  CHECK(engine.voice()->active());
-  const double frame = engine.voice()->playbackFrame();
-  CHECK(frame >= 0.0);
-  CHECK(frame < 8820.0);
-}
+// The descending forward-loop hard wrap is covered at voice level by
+// test_sample_voice.cpp ("mode 2 descending hard-wraps like mode 1").
 
 // --- LST: relative loop start FX ---------------------------------------------
 // LST shifts the loop start marker relative to its current position: the

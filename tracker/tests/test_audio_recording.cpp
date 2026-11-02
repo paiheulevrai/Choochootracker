@@ -13,7 +13,8 @@
 #include <thread>
 #include <chrono>
 
-static void removeFile(const char* path) { remove(path); }
+#include "test_helpers.h"
+using namespace testhelp;
 
 TEST_SUITE("recording") {
 

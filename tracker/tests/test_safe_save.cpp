@@ -11,16 +11,8 @@
 #include <memory>
 #include <string>
 #include <vector>
-#ifdef _WIN32
-#include <direct.h>
-static int makeDirectory(const char* path) { return _mkdir(path); }
-static int removeDirectory(const char* path) { return _rmdir(path); }
-#else
-#include <sys/stat.h>
-#include <unistd.h>
-static int makeDirectory(const char* path) { return mkdir(path, 0755); }
-static int removeDirectory(const char* path) { return rmdir(path); }
-#endif
+#include "test_helpers.h"
+using namespace testhelp;
 
 TEST_SUITE("safe_save") {
 
@@ -35,23 +27,6 @@ InstrumentSample constantSample(std::vector<int16_t>& pcm, int16_t value) {
   sample.channels = 1;
   sample.sampleRate = 44100;
   return sample;
-}
-
-bool fileExists(const char* path) {
-  FILE* file = std::fopen(path, "rb");
-  if (file) std::fclose(file);
-  return file != nullptr;
-}
-
-std::string readFile(const char* path) {
-  std::string text;
-  FILE* file = std::fopen(path, "rb");
-  if (!file) return text;
-  char buffer[4096];
-  size_t n;
-  while ((n = std::fread(buffer, 1, sizeof(buffer), file)) > 0) text.append(buffer, n);
-  std::fclose(file);
-  return text;
 }
 
 }  // namespace

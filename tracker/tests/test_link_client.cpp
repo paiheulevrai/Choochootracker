@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "link/link_client.h"
 #include "link/link_backend.h"
+#include "chipnomad_lib.h"
 
 #include <vector>
 #include <cstdint>
@@ -126,6 +127,17 @@ const LinkBackend kFakeBackend = {
   fakeSetTransportSync,
   fakeSetPlaying,
 };
+
+// Mirrors app.cpp's UI-tick Link block: poll the client's session tempo and
+// apply it to the project's tick rate on serial change.
+void simulateUiTick(ChipNomadState* state, uint32_t* appliedSerial) {
+  uint32_t serial = 0;
+  const float bpm = linkClientGetSessionTempo(state->linkClient, &serial);
+  if (bpm > 0.0f && serial != *appliedSerial) {
+    *appliedSerial = serial;
+    state->project.tickRate = bpm * 0.4f;
+  }
+}
 
 }  // namespace
 
@@ -596,6 +608,91 @@ SUBCASE("Link transport publishing requires connection and respects sync toggle"
   linkClientSetPlaying(client, 1, 3456);
   CHECK(g_fake.transportWrites == 2);
   linkClientDestroy(client);
+}
+}
+
+TEST_CASE("Link tempo sync is receiver-only") {
+SUBCASE("TEMPO-2: joining adopts the session tempo") {
+  resetFake();
+  g_fake.sessionTempo = 110.0;
+  g_fake.peers = 1;
+  linkClientSetBackend(&kFakeBackend);
+  ChipNomadState* state = chipnomadCreate();
+  REQUIRE(state != nullptr);
+
+  linkClientSelect(state->linkClient);
+  linkClientConnect(state->linkClient);
+  uint32_t statusSerial = 0;
+  CHECK(linkClientGetStatus(state->linkClient, &statusSerial) == LinkStatus::connecting);
+
+  // Audio thread publishes the session snapshot; UI poll resolves
+  // connecting -> connected and adopts the tempo.
+  double tempo = 0; uint64_t peers = 0; int isPlaying = 0;
+  REQUIRE(linkClientCaptureAudioSessionState(state->linkClient, &tempo, &peers, &isPlaying));
+  linkClientPoll(state->linkClient);
+  CHECK(linkClientGetStatus(state->linkClient, &statusSerial) == LinkStatus::connected);
+
+  uint32_t appliedSerial = 0;
+  simulateUiTick(state, &appliedSerial);
+  CHECK(linkClientGetSessionTempo(state->linkClient, &statusSerial) == doctest::Approx(110.0f));
+  // 110 BPM * 0.4 = 44.0 Hz tick rate.
+  CHECK(state->project.tickRate == doctest::Approx(44.0).epsilon(0.001));
+
+  chipnomadDestroy(state);
+}
+
+SUBCASE("TEMPO-3: loading a song never pushes tempo to the session") {
+  resetFake();
+  g_fake.sessionTempo = 110.0;
+  g_fake.peers = 1;
+  linkClientSetBackend(&kFakeBackend);
+  ChipNomadState* state = chipnomadCreate();
+
+  linkClientSelect(state->linkClient);
+  linkClientConnect(state->linkClient);
+  double tempo = 0; uint64_t peers = 0; int isPlaying = 0;
+  REQUIRE(linkClientCaptureAudioSessionState(state->linkClient, &tempo, &peers, &isPlaying));
+  linkClientPoll(state->linkClient);
+
+  // "Load" a project with a different tick rate: the session tempo is
+  // untouched and setTempo is never called.
+  state->project.tickRate = 50.0f;
+  uint32_t statusSerial = 0;
+  CHECK(linkClientGetSessionTempo(state->linkClient, &statusSerial) == doctest::Approx(110.0f));
+  CHECK(g_fake.tempoWrites == 0);
+  // The next UI tick re-applies the session tempo over the loaded value.
+  uint32_t appliedSerial = 0;
+  simulateUiTick(state, &appliedSerial);
+  CHECK(state->project.tickRate == doctest::Approx(44.0).epsilon(0.001));
+  CHECK(g_fake.tempoWrites == 0);
+
+  chipnomadDestroy(state);
+}
+
+SUBCASE("TEMPO-5: connect with no peers does not jump the tempo") {
+  resetFake();
+  g_fake.peers = 0;  // no session out there
+  linkClientSetBackend(&kFakeBackend);
+  ChipNomadState* state = chipnomadCreate();
+  state->project.tickRate = 50.0f;  // 125 BPM
+
+  linkClientSelect(state->linkClient);
+  linkClientConnect(state->linkClient);
+  double tempo = 0; uint64_t peers = 0; int isPlaying = 0;
+  REQUIRE(linkClientCaptureAudioSessionState(state->linkClient, &tempo, &peers, &isPlaying));
+  CHECK(tempo == 0.0);
+  linkClientPoll(state->linkClient);
+  uint32_t statusSerial = 0;
+  CHECK(linkClientGetStatus(state->linkClient, &statusSerial) == LinkStatus::connecting);
+
+  // The tempo field stays where the user left it.
+  CHECK(linkClientGetSessionTempo(state->linkClient, &statusSerial) == 0.0f);
+  uint32_t appliedSerial = 0;
+  simulateUiTick(state, &appliedSerial);
+  CHECK(state->project.tickRate == doctest::Approx(50.0).epsilon(0.001));
+  CHECK(g_fake.tempoWrites == 0);
+
+  chipnomadDestroy(state);
 }
 }
 }

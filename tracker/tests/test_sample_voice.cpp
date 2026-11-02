@@ -11,15 +11,8 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-static void writeU16(FILE* file, uint16_t value) {
-  fputc(value & 0xff, file);
-  fputc(value >> 8, file);
-}
-
-static void writeU32(FILE* file, uint32_t value) {
-  writeU16(file, value & 0xffff);
-  writeU16(file, value >> 16);
-}
+#include "test_helpers.h"
+using namespace testhelp;
 
 TEST_CASE("SampleVoice renders PCM16 with envelope and every filter mode") {
   int16_t pcm[512];

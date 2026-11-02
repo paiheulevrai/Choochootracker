@@ -3,6 +3,7 @@
 #include "doctest.h"
 #include "audio_input_manager.h"
 #include "corelib_audio.h"
+#include "common.h"
 
 #include <cstring>
 #include <vector>
@@ -176,4 +177,24 @@ TEST_CASE("AudioInputManager levels pipeline: capture -> snapshot -> receive") {
   AudioInputManagerTestPeer::disarmSlotForTest(audioInputManager, 0);
   AudioInputManagerTestPeer::disarmSlotForTest(audioInputManager, 1);
   AudioInputManagerTestPeer::captureOpenForTest(audioInputManager, false);
+}
+
+// Stub contract of the corelib audio capture API: the test build links
+// tests/mocks/corelib_audio_mock.cpp, so there are no devices, setup fails
+// cleanly, and pause/cleanup are safe no-ops.
+TEST_CASE("audio input capture API stub contract") {
+  CHECK(audioInputDeviceCount() == 0);
+
+  // Out-of-range name query fails and leaves the buffer empty.
+  char name[AUDIO_DEVICE_NAME_LENGTH + 1] = {0};
+  REQUIRE(audioInputDeviceName(0, name, sizeof(name)) != 0);
+  CHECK(name[0] == 0);
+
+  // Setup without a device fails with a non-zero result and must not crash.
+  AudioCaptureCallback* cb = nullptr;
+  CHECK(audioInputSetup(cb, 48000, 512, 2, -1) != 0);
+
+  audioInputPause(1);
+  audioInputPause(0);
+  audioInputCleanup();
 }
