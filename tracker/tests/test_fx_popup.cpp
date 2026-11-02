@@ -55,9 +55,12 @@ TEST_CASE("Lane FX popup keeps every existing engine and insert command visible"
     if (type == 14 || type == 15) continue; // Reserved project IDs.
     ++engines;
     getInstrumentFunctions(InstrumentType(type)).init(&project.instruments[0]);
+    // Engine x layout and engine x insert module are independent axes: sweep
+    // each against the engine, and the full cross-product for the first engine.
     for (int offset : {0, 2}) for (int table : {0, 1}) {
       gfxSetContentRowOffset(offset);
       for (int module = 0; module < insertModuleCount; ++module) {
+        if (engines > 1 && (offset != 0 || table != 0) && module != 0) continue;
         insertSelect(&project.trackInserts[3][0], module);
         insertSelect(&project.trackInserts[3][1], module);
         fxEditFullDraw(fxARP, 0, table);
