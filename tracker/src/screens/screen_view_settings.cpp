@@ -43,8 +43,10 @@ static const char* playheadNames[2] = {
   "Loop pattern",    // PlayheadMode::followPattern - loops the whole pattern
 };
 
-static const size_t kMarqueeWidth = 8;   // visible characters for the value
-static const size_t kMarqueeValueX = 25; // value column on the Playhead row
+static const size_t kMarqueeWidth = 10;  // visible characters for the value
+static const size_t kMarqueeValueX = 23; // value column on the Playhead row
+                                         // (same column as the other
+                                         // toggleboxes)
 
 // Marquee: the position is recomputed per frame from the clock (no tickers
 // to reset); a full redraw happens only when the offset changes.
@@ -88,11 +90,81 @@ static void viewStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
   gfxPrint(0, 0, "VIEW");
 }
+
+// Fixed description shown under the cursor while it rests on the Mode row
+// (wrapped over the three bottom canvas rows 17..19):
+//   Simplified: patterns with adjustable length instead of chains/phrases
+//   Classic:    the LSDJ-style song -> chain -> phrase structure
+static const char* modeDescription(ViewMode mode) {
+  return mode == ViewMode::simplified
+    ? "Uses patterns with adjustable length instead of chains and phrases"
+    : "Follows LSDJ-style song - chain - phrase structure";
+}
+
+#define VIEW_DESC_WIDTH (40)
+#define VIEW_DESC_ROWS (3)
+#define VIEW_DESC_TOP_Y (17)
+
+static int lastDescVisible = 0;  // session: were the rows just drawn?
+
+// Wrap `text` into lines of at most `width` chars; breaks at spaces.
+// Returns the line count; lines[] hold up to VIEW_DESC_ROWS entries.
+static int wrapDescription(const char* text, int width,
+  char lines[][VIEW_DESC_WIDTH + 1]) {
+  int lineCount = 0;
+  const char* p = text;
+  while (*p && lineCount < VIEW_DESC_ROWS) {
+    while (*p == ' ') p++;
+    if (!*p) break;
+    int take = 0;
+    int lastSpace = -1;
+    while (p[take] && take < width) {
+      if (p[take] == ' ') lastSpace = take;
+      take++;
+    }
+    if (p[take] && lastSpace > 0) take = lastSpace;  // break at the space
+    if (take == 0) take = 1;                         // defensive
+    memcpy(lines[lineCount], p, take);
+    lines[lineCount][take] = 0;
+    lineCount++;
+    p += take;
+  }
+  return lineCount;
+}
+
+static void drawDescriptionRow(void) {
+  const int onModeRow = viewData.cursorRow == 0;
+  if (!onModeRow) {
+    if (lastDescVisible) {
+      // Cursor left the Mode row: wipe the description.
+      gfxSetBgColor(appSettings.colorScheme.background);
+      gfxClearRect(0, VIEW_DESC_TOP_Y, 40, VIEW_DESC_ROWS);
+      lastDescVisible = 0;
+    }
+    return;
+  }
+
+  char lines[VIEW_DESC_ROWS][VIEW_DESC_WIDTH + 1];
+  const int count = wrapDescription(
+    modeDescription(chipnomadState ? chipnomadState->project.viewMode
+                                   : ViewMode::classic),
+    VIEW_DESC_WIDTH, lines);
+  gfxSetFgColor(appSettings.colorScheme.textInfo);
+  for (int i = 0; i < count; i++) {
+    gfxPrint(0, VIEW_DESC_TOP_Y + i, lines[i]);
+  }
+  if (count < VIEW_DESC_ROWS) {
+    gfxSetBgColor(appSettings.colorScheme.background);
+    gfxClearRect(0, VIEW_DESC_TOP_Y + count, 40,
+      VIEW_DESC_ROWS - count);
+  }
+  lastDescVisible = 1;
+}
 static void viewCursor(int, int row) {
   if (row == 0) gfxCursor(23, 2, 10);       // "Classic"/"Simplified" (Mode)
   else if (row == 1) gfxCursor(23, 3, 10);  // "Classic"/"Simplified" (Default)
   else if (row == 2) gfxCursor(23, 4, 2);   // default length: 1..16
-  else if (row == 3) gfxCursor(23, 5, 8);   // playhead marquee window
+  else if (row == 3) gfxCursor(23, 5, 10);  // playhead marquee window
 }
 static void viewField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
@@ -167,21 +239,18 @@ static int viewEdit(int, int row, CellEditAction action) {
   }
 
   if (row == 1) {
-    // Default mode (app setting).
-    if (action == CellEditAction::tap || action == CellEditAction::doubleTap ||
-        action == CellEditAction::increase || action == CellEditAction::decrease) {
+    // Default mode (app setting): ONLY EDIT + LEFT/RIGHT toggles it, same
+    // clicking logic as the Mode row. A plain EDIT tap changes nothing.
+    if (action == CellEditAction::increase || action == CellEditAction::decrease) {
       appSettings.defaultViewMode = appSettings.defaultViewMode ? 0 : 1;
       if (settingsSave() != 0) screenMessage(MESSAGE_TIME_ERROR, "Could not save setting");
       screenFullRedraw(&viewData);
       return 1;
     }
-    if (action == CellEditAction::clear) {
-      appSettings.defaultViewMode = 0;
-      if (settingsSave() != 0) screenMessage(MESSAGE_TIME_ERROR, "Could not save setting");
-      screenFullRedraw(&viewData);
-      return 1;
+    if (action == CellEditAction::tap || action == CellEditAction::doubleTap) {
+      screenMessage(MESSAGE_TIME, "EDIT + LEFT/RIGHT to switch");
     }
-    return 0;
+    return 1;  // Always consume: nothing here may change the default directly.
   }
 
   if (row == 2) {
@@ -240,6 +309,10 @@ static void initData() {
 static void viewRedraw(void) { screenFullRedraw(&viewData); }
 
 static void draw(void) {
+  // Mode-row description lives in the bottom canvas rows; it must be
+  // repainted whenever the cursor changes rows (cheap: at most 3 prints).
+  drawDescriptionRow();
+
   if (!simplifiedActive()) return;
   if (marqueeText != (int)chipnomadState->project.playheadMode) {
     // Value changed: restart the marquee for the new text.
@@ -259,6 +332,7 @@ static void setup(int input) {
   (void)input;
   initData();
   resetMarquee();
+  lastDescVisible = 0;
   viewRedraw();
 }
 

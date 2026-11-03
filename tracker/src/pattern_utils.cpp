@@ -433,7 +433,9 @@ int convertChainsToPatterns(Project* p) {
       for (int r = 0; r < 16 && barCount < PROJECT_MAX_PATTERN_LENGTH; r++) {
         uint16_t phrase = p->chains[chainIdx].rows[r].phrase;
         if (phrase == EMPTY_VALUE_16) break;
-        int transpose = p->chains[chainIdx].rows[r].transpose;
+        // transpose is a SIGNED value in a uint8_t: FF = -1 (playback casts
+        // it to int8_t). Read it as signed or FF bakes as +255.
+        int transpose = (int8_t)p->chains[chainIdx].rows[r].transpose;
         if (transpose != 0) {
           // Bake the transpose: clone the phrase, shift its notes, point
           // the bar at the clone. chains[] stays untouched.
@@ -525,7 +527,8 @@ int convertPatternsToChains(Project* p) {
           continue;
         }
 
-        int transpose = pat->bars[b].transpose;
+        // Same signed read as the classic conversion: FF = -1.
+        int transpose = (int8_t)pat->bars[b].transpose;
 
         // Dedupe within the pattern: an earlier bar whose baked content is
         // identical shares its phrase slot (spec: "bars exactly the same ...
@@ -549,7 +552,7 @@ int convertPatternsToChains(Project* p) {
         for (int prev = 0; prev < b; prev++) {
           if (barPhrase[prev] == EMPTY_VALUE_16) continue;
           int prevSrc = pat->bars[prev].phrase;
-          int prevT = pat->bars[prev].transpose;
+          int prevT = (int8_t)pat->bars[prev].transpose;
           if (transpose == prevT && prevSrc == srcPhrase) {
             reuse = prev;  // identical source and transpose
             break;

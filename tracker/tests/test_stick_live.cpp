@@ -85,6 +85,13 @@ struct StickLiveFixture {
     appSetup();
     appActivateProject();
     currentScreen = &screenSong;
+    // The spine routes Project/Settings + SHIFT+RIGHT to the Chain screen
+    // only when the Song cursor sits on a non-empty cell (an empty cell
+    // lands on Song instead — the chain screen would show garbage). Give
+    // every song row a chain so the classic spine holds.
+    for (int row = 0; row < PROJECT_MAX_LENGTH; ++row)
+      for (int track = 0; track < PROJECT_MAX_TRACKS; ++track)
+        chipnomadState->project.song[row][track] = 0;
   }
   ~StickLiveFixture() {
     inputRawCallback = nullptr;

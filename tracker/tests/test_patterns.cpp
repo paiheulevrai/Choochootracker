@@ -373,10 +373,48 @@ TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: pattern number = cha
   CHECK(project->chainToPatternMap[9] == patternIdx);
 }
 
-TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: note clamped at pitch table ceiling") {
-  // Chain row transpose pushes notes past the table end → clamped.
+TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: negative transpose bakes down, positive up (user scenario)") {
+  // Chain 01, phrase 001 with four C-4 (48) notes. Chain rows: 001 @ 00,
+  // 001 @ FF (= -1 SIGNED), 001 @ 01. Converted bars must play C-4, B-3
+  // (47), C#-4 (49) — FF is a signed transpose, not +255.
+  project->chains[1].rows[0].phrase = 1;
+  project->chains[1].rows[1].phrase = 1;
+  project->chains[1].rows[2].phrase = 1;
+  project->chains[1].rows[0].transpose = 0x00;
+  project->chains[1].rows[1].transpose = 0xFF;  // -1
+  project->chains[1].rows[2].transpose = 0x01;  // +1
+  for (int r = 0; r < 4; r++) project->phrases[1].rows[r].note = 48;  // C-4
+  project->song[0][0] = 1;
+
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  Pattern* pat = &project->patterns[1];
+  REQUIRE(pat->length == 3);
+  // Bar 0: transpose 0 → references the original phrase directly.
+  CHECK(pat->bars[0].phrase == 1);
+  // Bar 1: baked clone with C-4 shifted DOWN one semitone → B-3 (47).
+  uint16_t bakedDown = pat->bars[1].phrase;
+  CHECK(bakedDown != 1);
+  CHECK(project->phrases[bakedDown].rows[0].note == 47);
+  CHECK(project->phrases[bakedDown].rows[3].note == 47);
+  // Bar 2: baked clone shifted UP one semitone → C#-4 (49).
+  uint16_t bakedUp = pat->bars[2].phrase;
+  CHECK(bakedUp != 1);
+  CHECK(bakedUp != bakedDown);
+  CHECK(project->phrases[bakedUp].rows[0].note == 49);
+  // Original phrase untouched.
+  CHECK(project->phrases[1].rows[0].note == 48);
+  // Bar transposes are zeroed (all baked into the notes).
+  CHECK(pat->bars[0].transpose == 0);
+  CHECK(pat->bars[1].transpose == 0);
+  CHECK(pat->bars[2].transpose == 0);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: note clamped at pitch table edges") {
+  // Transpose is SIGNED (FF = -1). Upward clamp: transpose +100 pushes
+  // notes past the table end → clamped to the ceiling. Downward clamp:
+  // transpose -100 on a low note → clamped to 0.
   setupTestChain(project.get(), 2, 15, 1);
-  project->chains[2].rows[0].transpose = 200;  // way over the ceiling
+  project->chains[2].rows[0].transpose = 100;  // +100 (still positive signed)
   project->phrases[15].rows[0].note = 100;
   project->song[0][0] = 2;
 
@@ -386,11 +424,23 @@ TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: note clamped at pitc
   CHECK(baked != 15);
   uint8_t maxNote = (uint8_t)(project->pitchTable.length - 1);
   CHECK(project->phrases[baked].rows[0].note == maxNote);
+
+  // Downward clamp: fresh project state via a second chain/phrase pair.
+  project->chains[3].rows[0].phrase = 16;
+  project->chains[3].rows[0].transpose = 0x9C;  // -100 signed
+  project->phrases[16].rows[0].note = 30;
+  project->song[1][0] = 3;
+
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  Pattern* pat3 = &project->patterns[3];
+  REQUIRE(pat3->length == 1);
+  uint16_t bakedDown = pat3->bars[0].phrase;
+  CHECK(bakedDown != 16);
+  CHECK(project->phrases[bakedDown].rows[0].note == 0);  // clamped at the floor
+
   // NOTE_OFF and empty notes are not shifted.
   project->phrases[15].rows[1].note = NOTE_OFF;
   project->phrases[15].rows[2].note = EMPTY_VALUE_8;
-  Chain snapshot = project->chains[2];
-  (void)snapshot;
 }
 
 TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: empty chain becomes 1-bar pattern with empty phrase (decision #8)") {
