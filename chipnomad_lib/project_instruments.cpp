@@ -402,6 +402,26 @@ static int initSinteredInstrument(Instrument* instrument) {
 }
 static int freeSinteredInstrument(Instrument* instrument) { freeCommon(instrument); return 0; }
 
+static const char* modNamePD(int index) {
+  static const char* names[] = {"Off", "Volume", "Pitch", "PD1", "PD2", "PD3", "PD4", "PD5", "PD6", "PD7", "PD8"};
+  return index >= 0 && index < 11 ? names[index] : "Off";
+}
+static void initPDBase(InstrumentPDBase* pd) {
+  for (int i = 0; i < 8; ++i) {
+    pd->macro[i] = 128;
+    snprintf(pd->macroName[i], sizeof(pd->macroName[i]), "P%d", i + 1);
+  }
+}
+static int initPDVCOInstrument(Instrument* instrument) {
+  initCommon(instrument); instrument->type = InstrumentType::PDVCO;
+  initVoicePostSettings(&instrument->chip.pdVco); initPDBase(&instrument->chip.pdVco); return 0;
+}
+static int initPDVoiceInstrument(Instrument* instrument) {
+  initCommon(instrument); instrument->type = InstrumentType::PDVoice;
+  initPDBase(&instrument->chip.pdVoice); return 0;
+}
+static int freePDInstrument(Instrument* instrument) { freeCommon(instrument); return 0; }
+
 static const char* modNameMidi(int modIndex) {
   return "Off";
 }
@@ -462,6 +482,7 @@ static const InstrumentModDestination destDrumSynth[] = {N,D("Volume",instrument
 static const InstrumentModDestination destMonk[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Vowel",fxMWV,255,InstrumentMotionValue::raw),D("Voice",fxMIN,255,InstrumentMotionValue::raw),D("Breath",fxMAM,255,InstrumentMotionValue::raw),D("Glide",fxMFL,255,InstrumentMotionValue::raw),D("Vibrato",fxMFB,255,InstrumentMotionValue::raw),D("Vib rate",fxMSH,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destMME[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Waves",fxMWV,255,InstrumentMotionValue::raw),D("Interval",fxMIN,255,InstrumentMotionValue::raw),D("Amount",fxMAM,255,InstrumentMotionValue::raw),D("Flow",fxMFL,255,InstrumentMotionValue::raw),D("Feedback",fxMFB,255,InstrumentMotionValue::raw),D("Shaper",fxMSH,255,InstrumentMotionValue::raw),D("Cutoff",fxMCF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxMRS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destSintered[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Decay",fxSDC,255,InstrumentMotionValue::raw),D("Mod",fxSMD,255,InstrumentMotionValue::raw),D("A",fxSA,255,InstrumentMotionValue::raw),D("B",fxSB,255,InstrumentMotionValue::raw),D("Motion",fxSMO,255,InstrumentMotionValue::raw),D("C",fxSC,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF3,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxSRS3,255,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destPD[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("PD1",fxPD1,255,InstrumentMotionValue::raw),D("PD2",fxPD2,255,InstrumentMotionValue::raw),D("PD3",fxPD3,255,InstrumentMotionValue::raw),D("PD4",fxPD4,255,InstrumentMotionValue::raw),D("PD5",fxPD5,255,InstrumentMotionValue::raw),D("PD6",fxPD6,255,InstrumentMotionValue::raw),D("PD7",fxPD7,255,InstrumentMotionValue::raw),D("PD8",fxPD8,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destMidi[] = {N};
 static const InstrumentModDestination destOPLL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw)};
 #undef N
@@ -481,6 +502,7 @@ static const InstrumentFX fxMonk[]={F(fxMWV,"MWV"),F(fxMIN,"MIN"),F(fxMAM,"MAM")
 static const InstrumentFX fxMME[]={F(fxMMD,"MMD"),F(fxMWV,"MWV"),F(fxMIN,"MIN"),F(fxMAM,"MAM"),F(fxMFL,"MFL"),F(fxMFB,"MFB"),F(fxMSH,"MSH"),F(fxMCF,"MCF"),F(fxMRS,"MRS")};
 static const InstrumentFX fxSoundFont[]={F(fxFPT,"FPT"),F(fxFCF,"FCF"),F(fxFRS,"FRS"),F(fxFAT,"FAT"),F(fxFHD,"FHD"),F(fxFDC,"FDC"),F(fxFSU,"FSU"),F(fxFRL,"FRL")};
 static const InstrumentFX fxSintered[]={F(fxSMDL,"SMD"),F(fxSDC,"SDC"),F(fxSMD,"SMP"),F(fxSA,"SMA"),F(fxSB,"SMB"),F(fxSMO,"SMO"),F(fxSC,"SMC"),F(fxSCF3,"SCF"),F(fxSRS3,"SRS")};
+static const InstrumentFX fxPD[]={F(fxPD1,"PD1"),F(fxPD2,"PD2"),F(fxPD3,"PD3"),F(fxPD4,"PD4"),F(fxPD5,"PD5"),F(fxPD6,"PD6"),F(fxPD7,"PD7"),F(fxPD8,"PD8")};
 static const InstrumentFX fxMidi[]={F(fxMC1,"MC1"),F(fxMC2,"MC2"),F(fxMC3,"MC3"),F(fxMC4,"MC4")};
 #undef F
 #define COUNT(a) (uint8_t)(sizeof(a) / sizeof((a)[0]))
@@ -499,9 +521,8 @@ static const InstrumentDefinition instrumentDefinitions[] = {
   {"Bogie",InstrumentCategory::drums,InstrumentScreenKind::drumSynth,destDrumSynth,COUNT(destDrumSynth),fxDrumSynth,COUNT(fxDrumSynth),{10,modNameDrumSynth,initDrumSynthInstrument,freeDrumSynthInstrument,0,0}},
   {"MME",InstrumentCategory::synth,InstrumentScreenKind::mme,destMME,COUNT(destMME),fxMME,COUNT(fxMME),{10,modNameMME,initMMEInstrument,freeMMEInstrument,1,1}},
   {"Sintered",InstrumentCategory::drums,InstrumentScreenKind::sintered,destSintered,COUNT(destSintered),fxSintered,COUNT(fxSintered),{10,modNameSintered,initSinteredInstrument,freeSinteredInstrument,0,0}},
-  // Keep the retired PD slots so existing MIDI instruments retain their on-disk type ID.
-  {"Retired",InstrumentCategory::none,InstrumentScreenKind::none,destNone,COUNT(destNone),NULL,0,{0,modNameNone,initNoneInstrument,freeNoneInstrument,0,0}},
-  {"Retired",InstrumentCategory::none,InstrumentScreenKind::none,destNone,COUNT(destNone),NULL,0,{0,modNameNone,initNoneInstrument,freeNoneInstrument,0,0}},
+  {"PD-VCO",InstrumentCategory::synth,InstrumentScreenKind::pd,destPD,COUNT(destPD),fxPD,COUNT(fxPD),{10,modNamePD,initPDVCOInstrument,freePDInstrument,1,0}},
+  {"PD-voice",InstrumentCategory::synth,InstrumentScreenKind::pd,destPD,COUNT(destPD),fxPD,COUNT(fxPD),{10,modNamePD,initPDVoiceInstrument,freePDInstrument,0,0}},
   {"MIDI Out",InstrumentCategory::utility,InstrumentScreenKind::midi,destMidi,COUNT(destMidi),fxMidi,COUNT(fxMidi),{0,modNameMidi,initMidiInstrument,freeMidiInstrument,0,0}},
   {"OPLL / MSX",InstrumentCategory::fm,InstrumentScreenKind::opl,destOPLL,COUNT(destOPLL),NULL,0,{2,modNameOPLL,initOPLLInstrument,freeNoneInstrument,1,0}},
   {"VRC7",InstrumentCategory::fm,InstrumentScreenKind::opl,destOPLL,COUNT(destOPLL),NULL,0,{2,modNameOPLL,initVRC7Instrument,freeNoneInstrument,1,0}},
@@ -636,6 +657,7 @@ InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument)
     case InstrumentType::DrumSynth: return &instrument->chip.drumSynth;
     case InstrumentType::MME: return &instrument->chip.mme;
     case InstrumentType::Sintered: return &instrument->chip.sintered;
+    case InstrumentType::PDVCO: return &instrument->chip.pdVco;
     default: return NULL;
   }
 }
@@ -677,6 +699,12 @@ int instrumentMotionDestination(const Instrument* instrument, int destination, F
       *base = destination == 3 ? instrument->chip.mme.waves : destination == 4 ? instrument->chip.mme.interval : destination == 5 ? instrument->chip.mme.amount : destination == 6 ? instrument->chip.mme.flow : destination == 7 ? instrument->chip.mme.feedback : destination == 8 ? instrument->chip.mme.shaper : destination == 9 ? instrument->chip.mme.filterCutoffHz : instrument->chip.mme.filterResonance; break;
     case InstrumentType::Sintered:
       *base = destination == 3 ? instrument->chip.sintered.decay : destination == 4 ? instrument->chip.sintered.mod : destination == 5 ? instrument->chip.sintered.a : destination == 6 ? instrument->chip.sintered.b : destination == 7 ? instrument->chip.sintered.motion : destination == 8 ? instrument->chip.sintered.c : destination == 9 ? instrument->chip.sintered.filterCutoffHz : instrument->chip.sintered.filterResonance; break;
+    case InstrumentType::PDVCO:
+    case InstrumentType::PDVoice: {
+      const InstrumentPDBase* pd = instrument->type == InstrumentType::PDVCO ? static_cast<const InstrumentPDBase*>(&instrument->chip.pdVco) : &instrument->chip.pdVoice;
+      if (destination < 3 || destination > 10) return 0;
+      *base = pd->macro[destination - 3]; break;
+    }
     default: return 0;
   }
   return 1;
@@ -842,6 +870,12 @@ int instrumentSetCCDestination(Instrument* instrument, int destination, uint8_t 
       else if (destination == 10) instrument->chip.sintered.filterResonance = value;
       else return 0;
       break;
+    case InstrumentType::PDVCO:
+    case InstrumentType::PDVoice: {
+      InstrumentPDBase* pd = instrument->type == InstrumentType::PDVCO ? static_cast<InstrumentPDBase*>(&instrument->chip.pdVco) : &instrument->chip.pdVoice;
+      if (destination < 3 || destination > 10) return 0;
+      pd->macro[destination - 3] = value; break;
+    }
     default: return 0;
   }
   return 1;
@@ -883,6 +917,12 @@ const char* instrumentModDestinationName(InstrumentType type, int destination) {
 }
 
 const char* instrumentModDestinationNameForInstrument(const Instrument* instrument, int destination) {
+  if (instrument && destination >= 3 && destination <= 10 &&
+      (instrument->type == InstrumentType::PDVCO || instrument->type == InstrumentType::PDVoice)) {
+    const InstrumentPDBase* pd = instrument->type == InstrumentType::PDVCO
+      ? static_cast<const InstrumentPDBase*>(&instrument->chip.pdVco) : &instrument->chip.pdVoice;
+    return pd->macroName[destination - 3];
+  }
   if (instrument && destination >= 3 && destination <= 8) {
     if (instrument->type == InstrumentType::MME) {
       static const char* sync[] = {"Waves", "Interval", "SyncAmt", "Reset", "Feedback", "Shaper"};

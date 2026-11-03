@@ -58,6 +58,7 @@ extern ScreenData screenInstrumentMME;
 extern ScreenData screenInstrumentMonk;
 bool instrumentMonkTouchCell(int col, int row, int* targetCol, int* targetRow);
 extern ScreenData screenInstrumentSintered;
+extern ScreenData screenInstrumentPD;
 extern ScreenData screenInstrumentMidi;
 extern ScreenData screenInstrumentOPLL;
 extern ScreenData screenInstrumentOPL;

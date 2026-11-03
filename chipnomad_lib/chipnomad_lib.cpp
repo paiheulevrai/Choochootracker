@@ -18,6 +18,7 @@
 #include "synth/audio_input_voice.h"
 #include "monk_patch.h"
 #include "synth/sintered_voice.h"
+#include "synth/pd_voice.h"
 #include "synth/opll_voice.h"
 #include "synth/sid_voice.h"
 #include "synth/dx7_voice.h"
@@ -65,6 +66,7 @@ static void updateDrumSynthVoices(ChipNomadState* state);
 static void updateMMEVoices(ChipNomadState* state);
 static void updateMonkVoices(ChipNomadState* state);
 static void updateSinteredVoices(ChipNomadState* state);
+static void updatePDVoices(ChipNomadState* state);
 static void updateOPLLVoices(ChipNomadState* state);
 static void updateDX7Voices(ChipNomadState* state);
 static void updateFourOpVoices(ChipNomadState* state);
@@ -1079,6 +1081,7 @@ void chipnomadDestroy(ChipNomadState* state) {
       if(!voice)delete state->dx7Parts[i];
       delete state->opllVoices[i][voice];
       delete state->sinteredVoices[i][voice];
+      delete state->pdVoices[i][voice];
     }
   }
 
@@ -1157,6 +1160,7 @@ static void prepareMissingVoices(PreparedInstrumentVoices* prepared,
 static InstrumentType voicePoolType(InstrumentType type) {
   switch (type) {
     case InstrumentType::VRC7: return InstrumentType::OPLL;
+    case InstrumentType::PDVoice: return InstrumentType::PDVCO;
     case InstrumentType::OPL3: return InstrumentType::OPL2;
     case InstrumentType::GBPulse:
     case InstrumentType::GBNoise: return InstrumentType::SegaPSG;
@@ -1171,7 +1175,7 @@ bool chipnomadCanSwitchInstrumentLive(InstrumentType type) {
     case InstrumentType::Braids: case InstrumentType::Plaits:
     case InstrumentType::PlaitsAlt: case InstrumentType::AChChid:
     case InstrumentType::DrumSynth: case InstrumentType::MME:
-    case InstrumentType::Sintered: case InstrumentType::Monk: case InstrumentType::AudioIn:
+    case InstrumentType::Sintered: case InstrumentType::PDVCO: case InstrumentType::Monk: case InstrumentType::AudioIn:
     case InstrumentType::OPLL: case InstrumentType::OPL2:
     case InstrumentType::SegaPSG: case InstrumentType::DX7:
     case InstrumentType::GenesisFM: case InstrumentType::SID:
@@ -1205,6 +1209,8 @@ PreparedInstrumentVoices* chipnomadPrepareInstrumentVoices(ChipNomadState* state
       prepareMissingVoices(prepared, state->mmeVoices, rate); break;
     case InstrumentType::Sintered:
       prepareMissingVoices(prepared, state->sinteredVoices, rate); break;
+    case InstrumentType::PDVCO:
+      prepareMissingVoices(prepared, state->pdVoices, rate); break;
     case InstrumentType::OPLL:
       prepareMissingVoices(prepared, state->opllVoices, rate); break;
     case InstrumentType::OPL2:
@@ -1279,6 +1285,7 @@ void chipnomadInstallInstrumentVoices(ChipNomadState* state, PreparedInstrumentV
     case InstrumentType::DrumSynth: installVoices(state->drumSynthVoices, prepared); break;
     case InstrumentType::MME: installVoices(state->mmeVoices, prepared); break;
     case InstrumentType::Sintered: installVoices(state->sinteredVoices, prepared); break;
+    case InstrumentType::PDVCO: installVoices(state->pdVoices, prepared); break;
     case InstrumentType::OPLL: installVoices(state->opllVoices, prepared); break;
     case InstrumentType::OPL2: installVoices(state->oplVoices, prepared); break;
     case InstrumentType::SegaPSG: installVoices(state->simpleChipVoices, prepared); break;
@@ -1392,6 +1399,7 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
   syncVoicePool(state->oplVoices, has(InstrumentType::OPL2) || has(InstrumentType::OPL3), inLayer(InstrumentType::OPL2), rate);
   syncVoicePool(state->opllVoices, has(InstrumentType::OPLL) || has(InstrumentType::VRC7), inLayer(InstrumentType::OPLL), rate);
   syncVoicePool(state->sinteredVoices, has(InstrumentType::Sintered), inLayer(InstrumentType::Sintered), rate);
+  syncVoicePool(state->pdVoices, has(InstrumentType::PDVCO) || has(InstrumentType::PDVoice), inLayer(InstrumentType::PDVCO), rate);
   const bool directDX7 = has(InstrumentType::DX7), layerDX7 = inLayer(InstrumentType::DX7);
   for (int i = 0; i < VOICE_OWNER_COUNT; ++i) {
     const bool needed = i < PROJECT_MAX_TRACKS ? directDX7 : layerDX7;
@@ -1602,7 +1610,7 @@ static void updateAudioRateModulations(ChipNomadState* state, int frames) {
   updateAChChidVoices(state);
   updateDrumSynthVoices(state);
   updateMMEVoices(state); updateMonkVoices(state);
-  updateSinteredVoices(state); updateOPLLVoices(state); updateOPLVoices(state); updateFourOpVoices(state); updateSimpleChipVoices(state); updateSIDVoices(state); updateDX7Voices(state);
+  updateSinteredVoices(state); updatePDVoices(state); updateOPLLVoices(state); updateOPLVoices(state); updateFourOpVoices(state); updateSimpleChipVoices(state); updateSIDVoices(state); updateDX7Voices(state);
   updateInsertValues(state);
 }
 
@@ -1686,7 +1694,7 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   updateSoundbankVoices(state);
   updateSampleVoices(state); updateAudioInputVoices(state); updateSCWFVoices(state); updateBraidsVoices(state);
   updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); updateDrumSynthVoices(state);
-  updateMMEVoices(state); updateMonkVoices(state); updateSinteredVoices(state); updateOPLLVoices(state); updateOPLVoices(state); updateFourOpVoices(state); updateSimpleChipVoices(state); updateSIDVoices(state); updateDX7Voices(state); applyVoiceEvents(state, dueMicros);
+  updateMMEVoices(state); updateMonkVoices(state); updateSinteredVoices(state); updatePDVoices(state); updateOPLLVoices(state); updateOPLVoices(state); updateFourOpVoices(state); updateSimpleChipVoices(state); updateSIDVoices(state); updateDX7Voices(state); applyVoiceEvents(state, dueMicros);
   for (int t = 0; t < state->audioProject.tracksCount; ++t) {
     PlaybackTrackState& track = state->playbackState.tracks[t];
     if (track.note.instrument < PROJECT_MAX_INSTRUMENTS &&
@@ -2083,6 +2091,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
     renderStereoVoiceTracks(state, state->monkVoices, output, frames, true);
     renderMonoVoiceTracks(state, state->mmeVoices, output, frames);
     renderMonoVoiceTracks(state, state->sinteredVoices, output, frames);
+    renderStereoVoiceTracks(state, state->pdVoices, output, frames);
     renderMonoVoiceTracks(state, state->opllVoices, output, frames);
     for(int t=0;t<voiceOwnerLimit(state);++t) {
       if (!voiceOwnerValid(state, t)) continue;
@@ -2278,6 +2287,19 @@ static void applyVoiceEvents(ChipNomadState* state, uint64_t dueMicros) {
           if (track->note.noteKilled || (track->note.noteTriggered && slot >= track->chordVoiceCount)) state->sinteredVoices[trackIdx][slot]->kill();
           else if (track->note.noteTriggered) state->sinteredVoices[trackIdx][slot]->noteOn();
         break;
+      case InstrumentType::PDVCO:
+      case InstrumentType::PDVoice: {
+        PDVoice* voice = state->pdVoices[trackIdx][0];
+        if (!voice) break;
+        if (track->note.noteKilled) voice->kill();
+        else if (track->note.noteTriggered) {
+          uint8_t note = track->chordPitchFinal[0];
+          voice->setNote(note == EMPTY_VALUE_8 ? 60.0f :
+            (state->audioProject.linearPitch ? state->audioProject.pitchTable.values[note] / 100.0f : note + 12.0f) + track->note.fineOffset / 100.0f);
+          voice->noteOn();
+        } else if (track->note.noteReleased) voice->noteOff();
+        break;
+      }
       case InstrumentType::Midi: {
         // No voice object: send real MIDI Note On/Off instead, through the
         // router (see midi/midi_router.h), which tracks the active note per
@@ -3008,6 +3030,50 @@ static void updateSinteredVoices(ChipNomadState* state) {
         (project->linearPitch ? project->pitchTable.values[note] : (note + 12) * 100) + track->note.fineOffset + pitch;
       voices[slot]->configure(&configured, (float)cents, (gain < 0.0f ? 0.0f : gain) / track->chordVoiceCount,
         (uint16_t)clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ), (uint8_t)clampInt(resonance, 0, 255));
+    }
+  }
+}
+
+static void updatePDVoices(ChipNomadState* state) {
+  if (!state->pdVoices[0][0]) return;
+  Project* project = &state->audioProject;
+  PlaybackState* playback = &state->playbackState;
+  static const FX pdFX[8] = {fxPD1, fxPD2, fxPD3, fxPD4, fxPD5, fxPD6, fxPD7, fxPD8};
+  for (int trackIdx = 0; trackIdx < voiceOwnerLimit(state); ++trackIdx) {
+    if (!voiceOwnerValid(state, trackIdx)) continue;
+    PlaybackTrackState* track = voiceOwnerState(state, trackIdx);
+    PDVoice* voice = state->pdVoices[trackIdx][0];
+    if (!voice) continue;
+    if (track->note.instrument == EMPTY_VALUE_8) { voice->kill(); continue; }
+    Instrument* instrument = &project->instruments[track->note.instrument];
+    if (instrument->type != InstrumentType::PDVCO && instrument->type != InstrumentType::PDVoice) { voice->kill(); continue; }
+    const bool vco = instrument->type == InstrumentType::PDVCO;
+    InstrumentPDBase* pd = vco ? static_cast<InstrumentPDBase*>(&instrument->chip.pdVco) : &instrument->chip.pdVoice;
+    if (!voice->load(pd->path)) continue;
+    int macros[8];
+    for (int i = 0; i < 8; ++i)
+      macros[i] = slewEngineFX(track, pdFX[i], track->note.fx[pdFX[i]].isOn ? track->note.fx[pdFX[i]].fxValue : pd->macro[i]);
+    float gain = phraseGain(playback, track, instrument);
+    int pitch = 0;
+    for (int i = 0; i < 4; ++i) {
+      PlaybackModState* stateMod = &track->note.modulation[i]; if (!stateMod->modulation) continue;
+      int value = playbackModScaleToRange(stateMod->outValue, 255);
+      int destination = stateMod->modulation->destination;
+      if (destination == 1) gain = modulationIsAdditive(stateMod->modulation->type) ? gain + value / 255.0f : value / 255.0f;
+      else if (destination == 2) pitch += playbackModScaleToRange(stateMod->outValue, 1200);
+      else if (destination >= 3 && destination <= 10) macros[destination - 3] += value;
+    }
+    uint8_t clamped[8];
+    for (int i = 0; i < 8; ++i) clamped[i] = (uint8_t)clampInt(macros[i], 0, 255);
+    voice->configure(clamped, vco, !vco && instrument->chip.pdVoice.stereo, gain < 0.0f ? 0.0f : gain);
+    uint8_t note = track->chordPitchFinal[0];
+    voice->setNote(note == EMPTY_VALUE_8 ? 60.0f :
+      ((project->linearPitch ? project->pitchTable.values[note] / 100.0f : note + 12.0f) + (track->note.fineOffset + pitch) / 100.0f));
+    if (vco) {
+      InstrumentPDVCO* p = &instrument->chip.pdVco;
+      voice->setPost(p->filterEnabled != 0, p->filterCharacter, p->filterMode, p->filterSlope24dB != 0,
+        p->filterCutoffHz, p->filterResonance / 255.0f, envelopeTime(p->attack), envelopeTime(p->decay),
+        p->sustain / 255.0f, envelopeTime(p->release), p->envelopeShape);
     }
   }
 }

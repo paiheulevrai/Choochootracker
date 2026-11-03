@@ -11,7 +11,8 @@
 TEST_CASE("OPLL types preserve existing IDs and do not grow instrument snapshots") {
   CHECK(int(InstrumentType::Midi) == 16);
   CHECK(int(InstrumentType::Sintered) == 13);
-  CHECK(getInstrumentDefinition((InstrumentType)14)->category == InstrumentCategory::none);
+  CHECK(int(InstrumentType::PDVCO) == 14);
+  CHECK(int(InstrumentType::PDVoice) == 15);
   CHECK(getInstrumentDefinition(InstrumentType::totalCount)->category == InstrumentCategory::none);
   CHECK(sizeof(InstrumentOPLL) <= sizeof(InstrumentSample));
   for (auto type : {InstrumentType::OPLL, InstrumentType::VRC7}) {

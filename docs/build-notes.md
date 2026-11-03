@@ -16,6 +16,36 @@ The Windows makefile enables `_USE_MATH_DEFINES` before compiling, so the
 vendored SID core can use the CRT math constants under C++17. The Docker
 cross-build enables the same flag.
 
+The Windows-only Pure Data POC uses libpd `0.12.1` and its pinned `pure-data`
+submodule. Initialise only those dependencies; the Android-only
+`jni/opensl_stream` submodule is not needed:
+
+```powershell
+git submodule update --init tracker/external/libpd
+git -C tracker/external/libpd config submodule.pure-data.url https://github.com/pure-data/pure-data.git
+git -C tracker/external/libpd submodule update --init pure-data
+```
+
+Build through MSYS2 UCRT64 from PowerShell. The temporary-directory overrides
+avoid permission failures under `C:\msys64\tmp`:
+
+```powershell
+New-Item -ItemType Directory -Force tracker\build\msys-tmp | Out-Null
+& 'C:\msys64\usr\bin\bash.exe' -lc 'export PATH=/ucrt64/bin:/usr/bin:$PATH; export TMP=/c/Users/<you>/Desktop/mobilegroove/tracker/build/msys-tmp; export TEMP=$TMP; export TMPDIR=$TMP; cd /c/Users/<you>/Desktop/mobilegroove/tracker; make -j4 windows'
+```
+
+Equivalently, from an MSYS2 UCRT64 shell:
+
+```sh
+cd tracker
+export TMP="$PWD/build/msys-tmp" TEMP="$PWD/build/msys-tmp" TMPDIR="$PWD/build/msys-tmp"
+make -j4 windows
+```
+
+The makefile builds libpd statically with `MULTI=true`, `EXTRA=false` and
+`UTIL=false`. The executable, SDL runtime DLLs, demo Pd patches and libpd BSD
+notice are written to `tracker/build/windows/`.
+
 The ChooChooPlayer visualizer uses the same Windows toolchain:
 
 ```sh

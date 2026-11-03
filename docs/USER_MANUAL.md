@@ -468,6 +468,46 @@ The EQ screen draws the combined frequency response from 20 Hz to 20 kHz, with g
 
 The EQ works on the track the instrument plays on, before the track's insert effects and sends. If a track changes to another instrument, that instrument's EQ takes over. An instrument keeps its EQ number when you change its type. Saving an instrument as a `.cni` file includes its EQ settings; loading it puts them in an unused EQ of the project, or in an EQ that already has the same settings.
 
+### Pure Data instruments (Windows POC)
+
+`PD-VCO` and `PD-voice` load Pd Vanilla `.pd` patches from the instrument
+screen. This POC is available only in the Windows build. Each active tracker
+track owns an independent libpd instance.
+
+- `PD-VCO` treats the patch as a mono oscillator and passes its left output
+  through ChooChooTracker's standard filter and ADSR. The patch should not add
+  its own amplitude envelope.
+- `PD-voice` is a complete voice: its patch owns its envelope and filtering.
+  Its left and right outputs are mixed directly. Without `audio stereo`
+  metadata, the left channel is duplicated to the right.
+- The instrument page shows the patch status and eight `00-FF` macros. Phrase
+  and Table FX `PD1` through `PD8` replace the corresponding macro value for
+  that row.
+- Saved projects use a path relative to the `.cct` when the patch is inside
+  the project folder. Missing patches leave the instrument silent and do not
+  prevent the song from opening.
+
+Only Pd Vanilla objects are supported. Native externals, third-party DLLs and
+community packs are neither loaded nor distributed by ChooChooTracker; custom
+patches run at the user's own risk.
+
+#### Patch contract
+
+Receive MIDI notes on `[r cct-note]`, gate `0/1` on `[r cct-gate]`, and macros
+normalised to `0..1` on `[r cct-m1]` through `[r cct-m8]`. Send audio to
+`[throw~ cct-out-l]` and optionally `[throw~ cct-out-r]`, and include the
+bundled `[cct-output~]` abstraction to route those buses to libpd.
+
+When the tracker bangs `cct-meta`, reply to `cct-meta` with
+`param <1-8> <short_name>` messages. Underscores display as spaces. Send
+`audio stereo` as well only when the patch provides a real right channel.
+Search paths are limited to the patch folder and ChooChooTracker's bundled Pd
+abstractions.
+
+Two intentionally silly examples are installed in the `pd` folder:
+`Warp Wobble.pd` is a phase-warped `PD-VCO`, and `Pigeon Laser.pd` is a noisy
+gliding `PD-voice` with its own envelope.
+
 ### AY Classic, AY Plus and AY Sample
 
 These are the original ChipNomad AY/YM engines. AY Classic exposes hardware-style tone, noise and envelope controls. AY Plus adds software oscillators and richer modulation. AY Sample reproduces a sample through AY-style volume levels and is distinct from the Sampler engine.
@@ -1488,7 +1528,7 @@ Desktop and PortMaster. Settings > **MIDI** opens this submenu: **MIDI In** / **
 
 ## 15. Credits and licensing
 
-ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP, Warps-derived MME DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. The aChChid engine uses Open303 by Robin Schmidt, copyright 2009, under the MIT License. MonkSynth uses JonET’s native DSP under the MIT License; see `LICENSE.monksynth.txt`. Bogie and Sintered are original native implementations. MIDI I/O uses RtMidi by Gary P. Scavone, under its MIT-style license. See the packaged license files for exact attribution.
+ChooChooTracker is a fork of ChipNomad and retains its MIT licensing approach. Braids, Plaits, Plaits-Alt, Clouds DSP, Warps-derived MME DSP and stmlib code are derived from Mutable Instruments' open-source releases under their applicable MIT notices. Plaits-Alt is sourced from the lylepmills/eurorack Plaits Lab fork; its retained source notices apply. The aChChid engine uses Open303 by Robin Schmidt, copyright 2009, under the MIT License. MonkSynth uses JonET’s native DSP under the MIT License; see `LICENSE.monksynth.txt`. The Windows Pure Data POC statically links libpd/Pure Data under the Standard Improved BSD License. Bogie and Sintered are original native implementations. MIDI I/O uses RtMidi by Gary P. Scavone, under its MIT-style license. See the packaged license files for exact attribution.
 
 ## Track insert effects
 

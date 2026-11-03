@@ -196,9 +196,12 @@ enum FX : FXId {
   // Alias for PCM sample start. Appended to preserve project FX IDs.
   fxSTA,
 
+  // Pure Data instrument macros. They occupy the IDs reserved for them
+  // before fxMC1, so older projects keep their meaning.
+  fxPD1, fxPD2, fxPD3, fxPD4, fxPD5, fxPD6, fxPD7, fxPD8,
+
   // MIDI Out: send a CC whose number is set per-instrument (see
   // InstrumentMidi's ccNumber[]). Appended to preserve project FX IDs.
-  // Values formerly used by PD stay reserved for file compatibility.
   fxMC1 = fxSTA + 9, fxMC2, fxMC3, fxMC4,
 
   // aChChid tie. Appended to preserve project FX IDs.

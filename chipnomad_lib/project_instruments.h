@@ -26,6 +26,8 @@ enum class InstrumentType : uint8_t {
   DrumSynth = 11,
   MME = 12,
   Sintered = 13,
+  PDVCO = 14,
+  PDVoice = 15,
   Midi = 16,
   OPLL = 17,
   VRC7 = 18,
@@ -558,6 +560,17 @@ struct InstrumentSoundFont {
   SoundbankControls controls;
 };
 
+struct InstrumentPDBase {
+  char path[PROJECT_SAMPLE_PATH_LENGTH + 1];
+  uint8_t macro[8];
+  char macroName[8][16];
+};
+
+struct InstrumentPDVCO : InstrumentVoicePostSettings, InstrumentPDBase {};
+struct InstrumentPDVoice : InstrumentPDBase {
+  uint8_t stereo;
+};
+
 union InstrumentChipData {
   InstrumentSoundFont soundfont;
   InstrumentSID sid;
@@ -581,6 +594,8 @@ union InstrumentChipData {
   InstrumentMME mme;
   InstrumentMonk monk;
   InstrumentSintered sintered;
+  InstrumentPDVCO pdVco;
+  InstrumentPDVoice pdVoice;
   InstrumentMidi midi;
   InstrumentVoicePostSettings audioIn;
   InstrumentLayer layer;
@@ -631,7 +646,7 @@ struct InstrumentFunctions {
 // This is metadata, not an audio abstraction: renderers keep their typed
 // paths while screens, validation and motion routing share this one catalogue.
 enum class InstrumentCategory : uint8_t { none, chip, sample, synth, drums, utility, fm };
-enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme, sintered, midi, opll, opl, simpleChip, dx7, soundfont, monk, audioIn, layer };
+enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme, sintered, midi, opll, opl, simpleChip, dx7, soundfont, monk, audioIn, layer, pd };
 enum class InstrumentMotionValue : uint8_t { raw, speed, cutoff };
 
 static constexpr FXId instrumentNoFX = FX_ID_EMPTY;

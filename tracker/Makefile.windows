@@ -14,9 +14,12 @@ OUTPUT_EXT = .exe
 SDL_CFLAGS := $(filter-out -Dmain=SDL_main,$(shell sdl2-config --cflags))
 SDL_LIBS := $(shell sdl2-config --libs)
 
+LIBPD_DIR = external/libpd
+LIBPD_STATIC = $(LIBPD_DIR)/libs/libpd.a
 XTRA_CFLAGS = $(SDL_CFLAGS) -DDESKTOP_BUILD -DGAMEPAD_SUPPORT -D__USE_MINGW_ANSI_STDIO=1 -D__WINDOWS_MM__ \
+	-DPD_ENABLED -DPDINSTANCE -DPD_INTERNAL -I$(LIBPD_DIR)/libpd_wrapper -I$(LIBPD_DIR)/pure-data/src \
 	-DLINK_PLATFORM_WINDOWS=1 -DINCL_EXTRA_HTON_FUNCTIONS=1 -D_WIN32_WINNT=0x0601 -DASIO_STANDALONE=1 -DASIO_NO_TYPEID=1 -DASIO_VERSION_NAMESPACE=link_asio_1_38_2 -Wno-multichar
-XTRA_LIBS = $(SDL_LIBS) -lws2_32 -liphlpapi -lkernel32 -static-libgcc -static-libstdc++ -lwinmm
+XTRA_LIBS = $(SDL_LIBS) $(LIBPD_STATIC) -lws2_32 -liphlpapi -lkernel32 -static-libgcc -static-libstdc++ -lwinmm
 # The pinned SID core uses the CRT's optional math constants in C++17.
 WINDOWS_CFLAGS = $(filter-out -flto,$(COMMON_CFLAGS)) -D_USE_MATH_DEFINES
 WINDRES ?= $(shell command -v x86_64-w64-mingw32-windres 2>/dev/null || command -v windres)
@@ -52,22 +55,35 @@ $(WINDOWS_ICON): packaging/windows/choochootracker.rc packaging/windows/choochoo
 	@mkdir -p $(dir $@)
 	$(WINDRES) $< -O coff -o $@
 
-.PHONY: windows choochooplayer
+.PHONY: windows choochooplayer pd-test
 
 # Build the visualizer through its own source list, using the same MSYS2
 # toolchain and runtime conventions as the tracker.
 choochooplayer:
 	$(MAKE) -C ../choochooplayer windows
 
-windows: $(TARGET)
+windows: $(LIBPD_STATIC) $(TARGET)
 	cp "$$(dirname "$$(command -v sdl2-config)")/SDL2.dll" $(BUILD)/
 	cp "$$(dirname "$$(command -v sdl2-config)")/libwinpthread-1.dll" $(BUILD)/
 	cp -r packaging/common/* $(BUILD)/
 
-$(TARGET): $(OBJECTS) $(WINDOWS_ICON)
+pd-test: $(LIBPD_STATIC)
+	$(CXX) -std=c++17 -DPD_ENABLED -DPDINSTANCE -DPD_INTERNAL \
+		-I../chipnomad_lib -I$(LIBPD_DIR)/libpd_wrapper -I$(LIBPD_DIR)/pure-data/src \
+		tests/pd_runtime_smoke.cpp ../chipnomad_lib/synth/pd_voice.cpp \
+		../chipnomad_lib/synth/multimode_filter.cpp ../chipnomad_lib/synth/audio_math.cpp \
+		$(LIBPD_STATIC) -lws2_32 -lkernel32 \
+		-o $(BUILD)/pd_runtime_smoke.exe
+	$(BUILD)/pd_runtime_smoke.exe
+
+$(TARGET): $(OBJECTS) $(WINDOWS_ICON) $(LIBPD_STATIC)
 	mkdir -p $(BUILD)
 	@$(file >$(BUILD)/objects.rsp,$(subst $(space),$(newline),$(OBJECTS) $(WINDOWS_ICON)))
 	$(CXX) $(WINDOWS_CFLAGS) @$(BUILD)/objects.rsp $(XTRA_LIBS) $(OUTPUT)
+
+$(LIBPD_STATIC): platforms/windows/libpd_ucrt_compat.h
+	$(MAKE) -C $(LIBPD_DIR) CC=gcc libpd STATIC=true MULTI=true EXTRA=false UTIL=false \
+		ADDITIONAL_CFLAGS="-include ../../platforms/windows/libpd_ucrt_compat.h"
 
 NATIVE_SCREENSHOT_OBJECT = $(BUILD)/obj/tests/native_chip_ui.o
 NATIVE_SCREENSHOT_TARGET = $(BUILD)/native-chip-screenshots$(OUTPUT_EXT)
@@ -80,6 +96,10 @@ $(NATIVE_SCREENSHOT_OBJECT): tests/native_chip_ui.cpp $(HEADER_STAMP) Makefile.w
 native-chip-screenshots: $(filter-out $(call object_for,platforms/shared/main.cpp),$(OBJECTS)) $(NATIVE_SCREENSHOT_OBJECT)
 	@$(file >$(BUILD)/native-chip-screenshots-objects.rsp,$(subst $(space),$(newline),$(filter-out $(call object_for,platforms/shared/main.cpp),$(OBJECTS)) $(NATIVE_SCREENSHOT_OBJECT)))
 	$(CXX) $(WINDOWS_CFLAGS) @$(BUILD)/native-chip-screenshots-objects.rsp $(XTRA_LIBS) -o $(NATIVE_SCREENSHOT_TARGET)
+
+$(LIBPD_STATIC): platforms/windows/libpd_ucrt_compat.h
+	$(MAKE) -C $(LIBPD_DIR) CC=gcc libpd STATIC=true MULTI=true EXTRA=false UTIL=false \
+		ADDITIONAL_CFLAGS="-include ../../platforms/windows/libpd_ucrt_compat.h"
 
 # Docker-based Windows build (internal target)
 .PHONY: .windows-docker

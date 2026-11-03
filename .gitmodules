@@ -4,3 +4,6 @@
 [submodule "chipnomad_lib/external/asio"]
 	path = chipnomad_lib/external/asio
 	url = https://github.com/chriskohlhoff/asio
+[submodule "tracker/external/libpd"]
+	path = tracker/external/libpd
+	url = https://github.com/libpd/libpd.git

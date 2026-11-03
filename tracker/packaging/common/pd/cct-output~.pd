@@ -1,0 +1,7 @@
+#N canvas 180 180 240 120 10;
+#X obj 15 15 catch~ cct-out-l;
+#X obj 15 50 dac~ 1;
+#X obj 130 15 catch~ cct-out-r;
+#X obj 130 50 dac~ 2;
+#X connect 0 0 1 0;
+#X connect 2 0 3 0;
