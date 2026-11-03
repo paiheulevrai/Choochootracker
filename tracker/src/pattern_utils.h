@@ -8,33 +8,43 @@ extern "C" {
 #endif
 
 // ── Pattern / chain conversion ──────────────────────────────────────────────
-// These functions implement the bidirectional classic ↔ simplified conversion
-// described in the patterns spec (decisions #1, #5, #8).
+// These functions implement the bidirectional classic <-> simplified conversion
+// (interchange feature; supersedes the original patterns-spec decisions #1,
+// #5, #8 wording).
 //
 // Behaviour contract:
 //
 //   convertChainsToPatterns(p):
-//     - Walks p->song[row][track]; for each non-empty chain cell, finds or
-//       creates the matching pattern (via chainToPatternMap / patternToChainMap)
-//       and rewrites the cell to point at the pattern.
-//     - Existing patterns are NOT regenerated (decision #5: chains[] and
-//       patterns[] stay independent after first generation). Only chains
-//       without a mapping get a fresh pattern.
-//     - chains[] is left untouched.
+//     - Collects the unique chains used in the song (ascending) and converts
+//       each: pattern number = chain number when that pattern slot is free,
+//       else the closest free pattern slot.
+//     - Length = consecutive non-empty chain rows (playback stops at the
+//       first empty row; the pattern must reproduce that exactly).
+//     - Bars reference the chain rows' phrases in order. A chain-row
+//       transpose != 0 is BAKED into the notes: the phrase is cloned into a
+//       fresh slot (clamped to the pitch table range) and the bar points at
+//       the clone; transpose == 0 bars reference the original phrase.
+//     - Mapped chains are left untouched (only song cells rewritten).
+//     - chains[] content is never modified - it is the stored original.
 //     - Sets p->viewMode = ViewMode::simplified.
 //
 //   convertPatternsToChains(p):
-//     - Walks p->song[row][track]; for each non-empty pattern cell, finds or
-//       creates the matching chain (via patternToChainMap / chainToPatternMap)
-//       and rewrites the cell to point at the chain.
-//     - Existing chains are NOT regenerated — original classic content is
-//       preserved (decision #5's "so it can be reversed" guarantee).
-//     - patterns[] is left untouched.
+//     - Collects the unique patterns used in the song (ascending, lowest
+//       number first) and converts each:
+//       * Mapped patterns keep their chains untouched (stored original);
+//         only song cells are rewritten.
+//       * Unmapped patterns allocate a chain holding EXACTLY the pattern's
+//         bar count as phrase rows (remaining rows empty). Bar k wants
+//         phrase number (pattern + k); if occupied, the closest free number
+//         is used (gaps allowed). Bars with identical baked content share
+//         one phrase. Transpose != 0 bars are baked into fresh clones.
+//     - patterns[] content is never modified.
 //     - Sets p->viewMode = ViewMode::classic.
 //
 //   Both functions return 0 on success, non-zero on a fatal error (out of
-//   pattern or chain slots). On failure the project is left in an indeterminate
-//   state — caller should reload from disk.
+//   pattern, chain or phrase slots). On failure the project is left in an
+//   indeterminate state - caller should reload from disk. viewMode flips
+//   only on success.
 //
 // Edge cases (decision #8):
 //   - An empty chain (all rows have EMPTY_VALUE_16 phrase) is converted to a

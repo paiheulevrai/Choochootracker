@@ -1511,6 +1511,35 @@ Both modes share the same root, scale, **Custom** note editing and track checkbo
 
 Use **Save** before changing instrument types or loading another project.
 
+### View window
+
+The View row opens the view window, which controls how the Song screen is
+interpreted:
+
+- **Mode** is the active project view: **Classic** (LSDJ-style
+  Song → Chain → Phrase) or **Simplified** (Song rows are patterns of 1–16
+  bars). Switching the mode opens a warning screen — a conversion rewrites
+  the whole song structure and might damage it. Choose **Save and proceed**
+  (saves the project first, asking for a filename if it has none yet),
+  **Proceed without saving**, or **Cancel**. While the conversion runs the
+  status line shows `Converting...`, afterwards `Converted!`.
+
+  Conversion preserves the music: in classic → simplified each chain becomes
+  a pattern with the same number (or the closest free one), containing the
+  chain's phrases as bars in order, with chain transposes baked into the
+  notes. In simplified → classic each pattern becomes a chain whose phrase
+  numbers follow the pattern number (skipping occupied numbers), and bars
+  with identical content share one phrase. Chains and patterns that were
+  converted earlier keep their original content — only structures added
+  since the last conversion are converted, so switching back and forth is
+  safe.
+- **Default mode** is the view new projects start in (a global setting,
+  remembered in `settings.txt`).
+- **Default length** (visible in Simplified mode) is the length of newly
+  created patterns.
+- **Playhead** (visible in Simplified mode) chooses between looping the bar
+  the cursor views and playing the whole pattern.
+
 ### Ableton Link
 
 Ableton Link shares tempo and beat phase between apps on the same local network (Wi-Fi or Ethernet). Two ChooChooTracker devices can connect directly without Ableton Live or a computer. Each participant can change the shared tempo; there is no fixed leader. Joining an existing session adopts its tempo.
