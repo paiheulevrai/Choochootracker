@@ -24,20 +24,23 @@ extern "C" {
 //       transpose != 0 is BAKED into the notes: the phrase is cloned into a
 //       fresh slot (clamped to the pitch table range) and the bar points at
 //       the clone; transpose == 0 bars reference the original phrase.
-//     - Mapped chains are left untouched (only song cells rewritten).
-//     - chains[] content is never modified - it is the stored original.
+//     - MAPPED pairs: the pattern is REBUILT from the chain's CURRENT
+//       content too (the leaving classic mode is the source of truth, so
+//       classic-side edits propagate into the pattern).
+//     - chains[] content is never modified by this direction.
 //     - Sets p->viewMode = ViewMode::simplified.
 //
 //   convertPatternsToChains(p):
 //     - Collects the unique patterns used in the song (ascending, lowest
 //       number first) and converts each:
-//       * Mapped patterns keep their chains untouched (stored original);
-//         only song cells are rewritten.
-//       * Unmapped patterns allocate a chain holding EXACTLY the pattern's
-//         bar count as phrase rows (remaining rows empty). Bar k wants
-//         phrase number (pattern + k); if occupied, the closest free number
-//         is used (gaps allowed). Bars with identical baked content share
-//         one phrase. Transpose != 0 bars are baked into fresh clones.
+//       * Every pattern (mapped or not) gets its chain REBUILT from the
+//         pattern's CURRENT bars - the leaving simplified mode is the
+//         source of truth, so simplified-side edits propagate into the
+//         chain. The chain holds EXACTLY the pattern's bar count as phrase
+//         rows (remaining rows empty). Bar k wants phrase number
+//         (pattern + k); if occupied, the closest free number is used
+//         (gaps allowed). Bars with identical baked content share one
+//         phrase. Transpose != 0 bars are baked into fresh clones.
 //     - patterns[] content is never modified.
 //     - Sets p->viewMode = ViewMode::classic.
 //

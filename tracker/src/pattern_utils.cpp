@@ -406,6 +406,52 @@ static int conversionCollectSongCells(Project* p, int simplified,
 // project is left in an indeterminate state and the caller should reload
 // from disk (pre-existing contract; viewMode is flipped LAST so a failed
 // call does not silently change the mode).
+
+// Build/rebuild `pat` from the chain's CURRENT rows: consecutive non-empty
+// rows become bars (playback stops at the first empty row), transposes are
+// baked into cloned phrases, bar transposes zeroed. Used for BOTH mapped
+// pairs (classic edits must propagate — the leaving mode is the source of
+// truth) and fresh allocations. Returns 0 on success.
+static int conversionBuildPatternFromChain(Project* p, int chainIdx,
+  int patternIdx) {
+  Pattern* pat = &p->patterns[patternIdx];
+  patternClear(pat);
+
+  int barCount = 0;
+  for (int r = 0; r < 16 && barCount < PROJECT_MAX_PATTERN_LENGTH; r++) {
+    uint16_t phrase = p->chains[chainIdx].rows[r].phrase;
+    if (phrase == EMPTY_VALUE_16) break;
+    // transpose is a SIGNED value in a uint8_t: FF = -1 (playback casts
+    // it to int8_t). Read it as signed or FF bakes as +255.
+    int transpose = (int8_t)p->chains[chainIdx].rows[r].transpose;
+    if (transpose != 0) {
+      // Bake the transpose: clone the phrase, shift its notes, point
+      // the bar at the clone. chains[] stays untouched.
+      int baked = conversionBakeTranspose(p, phrase, patternIdx, transpose);
+      if (baked == EMPTY_VALUE_16) return 2;  // phrases full
+      pat->bars[barCount].phrase = (uint16_t)baked;
+      pat->bars[barCount].transpose = 0;
+    } else {
+      pat->bars[barCount].phrase = phrase;
+      pat->bars[barCount].transpose = 0;
+    }
+    barCount++;
+  }
+
+  // Edge case: empty chain (zero non-empty rows) → 1-bar pattern with
+  // a freshly allocated empty phrase (spec decision #8).
+  if (barCount == 0) {
+    int emptyPhrase = patternFindClosestEmptyPhrase(p, patternIdx);
+    if (emptyPhrase == EMPTY_VALUE_16) return 2;  // phrases full
+    pat->bars[0].phrase = (uint16_t)emptyPhrase;
+    pat->bars[0].transpose = 0;
+    barCount = 1;
+  }
+
+  pat->length = (uint8_t)barCount;
+  return 0;
+}
+
 int convertChainsToPatterns(Project* p) {
   uint16_t cells[PROJECT_MAX_CHAINS];
   int count = conversionCollectSongCells(p, 0, cells);
@@ -423,47 +469,15 @@ int convertChainsToPatterns(Project* p) {
         patternIdx = (uint16_t)findClosestEmptyPattern(p, chainIdx);
       }
       if (patternIdx == EMPTY_VALUE_16) return 1;  // patterns full
-
-      Pattern* pat = &p->patterns[patternIdx];
-      patternClear(pat);
-
-      // Walk the chain's non-empty rows top-down (playback stops at the
-      // first empty row — the pattern must reproduce that exactly).
-      int barCount = 0;
-      for (int r = 0; r < 16 && barCount < PROJECT_MAX_PATTERN_LENGTH; r++) {
-        uint16_t phrase = p->chains[chainIdx].rows[r].phrase;
-        if (phrase == EMPTY_VALUE_16) break;
-        // transpose is a SIGNED value in a uint8_t: FF = -1 (playback casts
-        // it to int8_t). Read it as signed or FF bakes as +255.
-        int transpose = (int8_t)p->chains[chainIdx].rows[r].transpose;
-        if (transpose != 0) {
-          // Bake the transpose: clone the phrase, shift its notes, point
-          // the bar at the clone. chains[] stays untouched.
-          int baked = conversionBakeTranspose(p, phrase, patternIdx, transpose);
-          if (baked == EMPTY_VALUE_16) return 2;  // phrases full
-          pat->bars[barCount].phrase = (uint16_t)baked;
-          pat->bars[barCount].transpose = 0;
-        } else {
-          pat->bars[barCount].phrase = phrase;
-          pat->bars[barCount].transpose = 0;
-        }
-        barCount++;
-      }
-
-      // Edge case: empty chain (zero non-empty rows) → 1-bar pattern with
-      // a freshly allocated empty phrase (spec decision #8).
-      if (barCount == 0) {
-        int emptyPhrase = patternFindClosestEmptyPhrase(p, patternIdx);
-        if (emptyPhrase == EMPTY_VALUE_16) return 2;  // phrases full
-        pat->bars[0].phrase = (uint16_t)emptyPhrase;
-        pat->bars[0].transpose = 0;
-        barCount = 1;
-      }
-
-      pat->length = (uint8_t)barCount;
       p->chainToPatternMap[chainIdx] = patternIdx;
       p->patternToChainMap[patternIdx] = chainIdx;
     }
+
+    // Mapped or fresh: the pattern is REBUILT from the chain's current
+    // content (the leaving classic mode is the source of truth — classic
+    // edits must propagate).
+    int result = conversionBuildPatternFromChain(p, chainIdx, patternIdx);
+    if (result != 0) return result;
   }
 
   // Rewrite every song cell: chain index → its pattern.
@@ -484,9 +498,92 @@ int convertChainsToPatterns(Project* p) {
 
 // ── Convert pattern → chain (simplified→classic) ────────────────────────────
 // See the block comment above "Shared conversion helpers" for the contract.
-// Mapped patterns keep their chains untouched (the stored original); only
-// unmapped ones (created after the original conversion) are converted.
+// The leaving simplified mode is the source of truth: mapped patterns ALSO
+// get their chains REBUILT from the pattern's current bars (simplified-mode
+// edits propagate), exactly like unmapped ones.
 // Returns 0 on success; non-zero on a fatal error (slots exhausted).
+
+// Build/rebuild the chain at `chainIdx` from the pattern's CURRENT bars:
+// exactly `length` phrase rows (remaining rows empty), per-bar phrase slots
+// (pattern+bar desired, closest free fallback), baked transposes, content
+// dedupe within the pattern. Returns 0 on success.
+static int conversionBuildChainFromPattern(Project* p,
+  ConversionPhraseState* st, int patternIdx, int chainIdx) {
+  Chain* ch = &p->chains[chainIdx];
+  chainClear(ch);
+
+  Pattern* pat = &p->patterns[patternIdx];
+  int len = pat->length;
+  if (len < 1) len = 1;
+  if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+  pat->length = (uint8_t)len;
+
+  // Within this pattern: phrase chosen for each distinct baked content.
+  // barPhrase[b] = chain phrase index for bar b.
+  uint16_t barPhrase[PROJECT_MAX_PATTERN_LENGTH];
+  for (int b = 0; b < len; b++) {
+    uint16_t srcPhrase = pat->bars[b].phrase;
+    if (srcPhrase == EMPTY_VALUE_16) {
+      barPhrase[b] = EMPTY_VALUE_16;
+      ch->rows[b].phrase = EMPTY_VALUE_16;
+      ch->rows[b].transpose = 0;
+      continue;
+    }
+
+    // Same signed read as the classic conversion: FF = -1.
+    int transpose = (int8_t)pat->bars[b].transpose;
+
+    // Dedupe within the pattern: an earlier bar whose baked content is
+    // identical shares its phrase slot (spec: "bars exactly the same ...
+    // name them the same to save space").
+    // Sharing cases: same src + same transpose (incl. t = 0), or two
+    // untransposed bars with identical content. Transposed bars always own
+    // their fresh clone and never dedupe with a different (src, t) pair.
+    int reuse = -1;
+    for (int prev = 0; prev < b; prev++) {
+      if (barPhrase[prev] == EMPTY_VALUE_16) continue;
+      int prevSrc = pat->bars[prev].phrase;
+      int prevT = (int8_t)pat->bars[prev].transpose;
+      if (transpose == prevT && prevSrc == srcPhrase) {
+        reuse = prev;  // identical source and transpose
+        break;
+      }
+      if (transpose == 0 && prevT == 0 &&
+          conversionPhraseContentEqual(p, srcPhrase, prevSrc)) {
+        reuse = prev;  // untransposed bars with identical content
+        break;
+      }
+    }
+
+    if (reuse >= 0) {
+      barPhrase[b] = barPhrase[reuse];
+      ch->rows[b].phrase = barPhrase[reuse];
+      ch->rows[b].transpose = 0;
+      continue;
+    }
+
+    int slot;
+    if (transpose != 0) {
+      // Bake into a fresh slot near (pattern + bar).
+      int baked = conversionBakeTranspose(p, srcPhrase, patternIdx + b,
+        transpose);
+      if (baked == EMPTY_VALUE_16) return 2;  // phrases full
+      slot = baked;
+    } else {
+      slot = conversionAllocatePhraseSlot(p, st, patternIdx, b);
+      if (slot == EMPTY_VALUE_16) return 2;  // phrases full
+      // Copy (don't move) the content so the pattern keeps its own phrase
+      // data — both structures coexist for the way back.
+      p->phrases[slot] = p->phrases[srcPhrase];
+    }
+    conversionClaimSlot(st, slot);
+    barPhrase[b] = (uint16_t)slot;
+    ch->rows[b].phrase = (uint16_t)slot;
+    ch->rows[b].transpose = 0;
+  }
+  return 0;
+}
+
 int convertPatternsToChains(Project* p) {
   uint16_t cells[PROJECT_MAX_PATTERNS];
   int count = conversionCollectSongCells(p, 1, cells);
@@ -505,95 +602,13 @@ int convertPatternsToChains(Project* p) {
       if (chainIdx == EMPTY_VALUE_16) return 1;  // chains full
       p->patternToChainMap[patternIdx] = chainIdx;
       p->chainToPatternMap[chainIdx] = patternIdx;
-
-      Chain* ch = &p->chains[chainIdx];
-      chainClear(ch);
-
-      Pattern* pat = &p->patterns[patternIdx];
-      int len = pat->length;
-      if (len < 1) len = 1;
-      if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
-      pat->length = (uint8_t)len;
-
-      // Within this pattern: phrase chosen for each distinct baked content.
-      // barPhrase[b] = chain phrase index for bar b.
-      uint16_t barPhrase[PROJECT_MAX_PATTERN_LENGTH];
-      for (int b = 0; b < len; b++) {
-        uint16_t srcPhrase = pat->bars[b].phrase;
-        if (srcPhrase == EMPTY_VALUE_16) {
-          barPhrase[b] = EMPTY_VALUE_16;
-          ch->rows[b].phrase = EMPTY_VALUE_16;
-          ch->rows[b].transpose = 0;
-          continue;
-        }
-
-        // Same signed read as the classic conversion: FF = -1.
-        int transpose = (int8_t)pat->bars[b].transpose;
-
-        // Dedupe within the pattern: an earlier bar whose baked content is
-        // identical shares its phrase slot (spec: "bars exactly the same ...
-        // name them the same to save space").
-        // Baked content identity: same source phrase AND same transpose
-        // (identical by definition), OR different source phrases with
-        // transposes already baked into their stored note values such that
-        // the resulting content compares equal — checked with a direct
-        // content comparison of what the chain row will play:
-        //   bar A: phrase a, transpose ta → content(a) shifted by ta
-        //   bar B: phrase b, transpose tb → content(b) shifted by tb
-        // To compare cheaply and exactly, compare the stored source phrases
-        // when transposes are equal, and otherwise materialize nothing —
-        // instead simulate: content(a)+ta vs content(b)+tb must be equal
-        // elementwise. Since the chain already BAKED transposes into fresh
-        // clones for t != 0, a bar with t != 0 always owns its clone and
-        // never dedupes with a different (src, t) pair. The only sharing
-        // cases are therefore: same src + same t (incl. t = 0), or same src
-        // content with t = 0 on both bars (different src, equal content).
-        int reuse = -1;
-        for (int prev = 0; prev < b; prev++) {
-          if (barPhrase[prev] == EMPTY_VALUE_16) continue;
-          int prevSrc = pat->bars[prev].phrase;
-          int prevT = (int8_t)pat->bars[prev].transpose;
-          if (transpose == prevT && prevSrc == srcPhrase) {
-            reuse = prev;  // identical source and transpose
-            break;
-          }
-          if (transpose == 0 && prevT == 0 &&
-              conversionPhraseContentEqual(p, srcPhrase, prevSrc)) {
-            reuse = prev;  // untransposed bars with identical content
-            break;
-          }
-        }
-
-        if (reuse >= 0) {
-          barPhrase[b] = barPhrase[reuse];
-          ch->rows[b].phrase = barPhrase[reuse];
-          ch->rows[b].transpose = 0;
-          continue;
-        }
-
-        int slot;
-        if (transpose != 0) {
-          // Bake into a fresh slot near (pattern + bar).
-          int baked = conversionBakeTranspose(p, srcPhrase, patternIdx + b,
-            transpose);
-          if (baked == EMPTY_VALUE_16) return 2;  // phrases full
-          slot = baked;
-        } else {
-          slot = conversionAllocatePhraseSlot(p, &st, patternIdx, b);
-          if (slot == EMPTY_VALUE_16) return 2;  // phrases full
-          // Move the content: the chain now owns this slot. The pattern
-          // keeps referencing its ORIGINAL phrase number — after this
-          // conversion both structures coexist (the pattern stays valid if
-          // the user converts back). Content: copy, don't move, so the
-          // original phrase keeps its data.
-          p->phrases[slot] = p->phrases[srcPhrase];
-        }
-        conversionClaimSlot(&st, slot);
-        barPhrase[b] = (uint16_t)slot;
-        ch->rows[b].phrase = (uint16_t)slot;
-        ch->rows[b].transpose = 0;
-      }
     }
+
+    // Mapped or fresh: the chain is REBUILT from the pattern's current
+    // content (the leaving simplified mode is the source of truth —
+    // simplified edits must propagate).
+    int result = conversionBuildChainFromPattern(p, &st, patternIdx, chainIdx);
+    if (result != 0) return result;
   }
 
   // Rewrite every song cell: pattern index → its chain.
