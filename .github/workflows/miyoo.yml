@@ -21,7 +21,7 @@ jobs:
       - name: Install packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install --yes autoconf automake curl git libtool p7zip-full xz-utils zip unzip
+          sudo apt-get install --yes autoconf automake curl git libtool xz-utils zip unzip
       - name: Fetch Miyoo SDK
         run: |
           cache="$RUNNER_TEMP/miyoo"
@@ -69,9 +69,6 @@ jobs:
           package=$(find releases -maxdepth 1 -type f -name '*-MiyooPorts.zip' -print -quit)
           test -n "$package"
           unzip -t "$package"
-          package_7z="${package%.zip}.7z"
-          (cd tracker/build/miyooports/package && 7z a "$GITHUB_WORKSPACE/$package_7z" Roms)
-          7z l "$package_7z"
           unzip -p "$package" 'Roms/PORTS/Games/ChooChooTracker/choochootracker' > choochootracker.miyoo
           ! readelf -V choochootracker.miyoo | grep -Eq 'GLIBC_(2\.29|[3-9]\.)'
           ! readelf -d choochootracker.miyoo | grep -q 'libstdc++'
@@ -80,9 +77,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: choochootracker-miyooports
-          path: |
-            releases/*-MiyooPorts.zip
-            releases/*-MiyooPorts.7z
+          path: releases/*-MiyooPorts.zip
           if-no-files-found: error
       - name: Update release archives
         if: inputs.release_tag != ''
@@ -94,7 +89,7 @@ jobs:
           gh release download "$RELEASE_TAG" --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP/release-checksums"
           sums="$RUNNER_TEMP/release-checksums/SHA256SUMS.txt"
           grep -v 'MiyooPorts' "$sums" > "$sums.new"
-          sha256sum releases/*-MiyooPorts.7z releases/*-MiyooPorts.zip | sed 's#  releases/#  #' >> "$sums.new"
+          sha256sum releases/*-MiyooPorts.zip | sed 's#  releases/#  #' >> "$sums.new"
           mv "$sums.new" "$sums"
-          gh release upload "$RELEASE_TAG" releases/*-MiyooPorts.zip releases/*-MiyooPorts.7z --clobber
+          gh release upload "$RELEASE_TAG" releases/*-MiyooPorts.zip --clobber
           gh release upload "$RELEASE_TAG" "$sums" --clobber
