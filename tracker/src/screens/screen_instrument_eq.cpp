@@ -15,7 +15,7 @@
 #include <string.h>
 
 namespace {
-enum Row { rowBand, rowShape, rowFrequency, rowGain, rowQ, rowCount };
+enum Row { rowEQ, rowBand, rowShape, rowFrequency, rowGain, rowQ, rowCount };
 
 // Character layout. The graph keeps clear of the track list on the right.
 constexpr int kGraphX = 3, kGraphY = 2, kGraphColumns = 31, kGraphRows = 11;
@@ -47,7 +47,7 @@ int bandColor(int band) {
   return band == 0 ? cs.warning : band == 1 ? cs.textTitles : cs.playMarkers;
 }
 
-int rowY(int row) { return kTableY + row; }
+int rowY(int row) { return kTableY + row - rowBand; }
 
 ///////////////////////////////////////////////////////////////////////////////
 // Graph
@@ -162,7 +162,7 @@ void drawGraph() {
 ///////////////////////////////////////////////////////////////////////////////
 // Fields
 
-int columns(int) { return INSTRUMENT_EQ_BANDS; }
+int columns(int row) { return row == rowEQ ? 1 : INSTRUMENT_EQ_BANDS; }
 
 void formatValue(char* text, size_t size, int band, int row) {
   const InstrumentEQBand& b = eq().bands[band];
@@ -186,6 +186,7 @@ void formatValue(char* text, size_t size, int band, int row) {
 }
 
 int fieldWidth(int col, int row) {
+  if (row == rowEQ) return 2;
   char text[16];
   formatValue(text, sizeof(text), col, row);
   return (int)strlen(text);
@@ -223,12 +224,17 @@ void drawStatic() {
   }
   gfxSetFgColor(cs.textLabel);
   static const char* const labels[] = {"Band", "Shape", "Freq", "Gain", "Q"};
-  for (int row = 0; row < rowCount; ++row) gfxPrint(0, rowY(row), labels[row]);
+  for (int row = rowBand; row < rowCount; ++row) gfxPrint(0, rowY(row), labels[row - rowBand]);
   drawGraph();
 }
 
 void drawField(int col, int row, CellState state) {
   const ColorScheme& cs = appSettings.colorScheme;
+  if (row == rowEQ) {
+    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textTitles);
+    gfxPrintf(3, 0, "%02X", bank);
+    return;
+  }
   const InstrumentEQBand& b = eq().bands[col];
   char text[16];
   formatValue(text, sizeof(text), col, row);
@@ -242,6 +248,10 @@ void drawField(int col, int row, CellState state) {
 }
 
 void drawCursor(int col, int row) {
+  if (row == rowEQ) {
+    gfxCursor(3, 0, 2);
+    return;
+  }
   gfxCursor(kValueX[col], rowY(row), fieldWidth(col, row));
 }
 
@@ -319,8 +329,21 @@ int editBand(int band, int row, CellEditAction action) {
   }
 }
 
+int changeBank(int step) {
+  if (master() || !step) return 0;
+  const int next = std::clamp(bank + step, 0, PROJECT_EQ_BANKS - 1);
+  if (next != bank) {
+    bank = (uint8_t)next;
+    chipnomadState->project.instruments[cInstrument].eq = bank;
+    projectModified = 1;
+    screenFullRedraw(&data);
+  }
+  return 1;
+}
+
 int onEdit(int col, int row, CellEditAction action) {
   action = convertMultiAction(action);
+  if (row == rowEQ) return changeBank(direction(action, 1, 16));
   if (!editBand(col, row, action)) return 0;
   projectModified = 1;
   // A new shape changes which settings are dimmed.
@@ -331,6 +354,7 @@ int onEdit(int col, int row, CellEditAction action) {
 }
 
 const char* hint() {
+  if (data.cursorRow == rowEQ) return "";
   const InstrumentEQBand& b = eq().bands[data.cursorCol];
   switch (data.cursorRow) {
     case rowBand:
@@ -365,7 +389,7 @@ void draw() {
 
 int onInput(int isKeyDown, int keys, int tapCount) {
   if (!keys) chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
-  if (keys == keyOpt || keys == (keyLeft | keyShift)) {
+  if (isKeyDown && (keys == keyOpt || keys == (keyLeft | keyShift))) {
     chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
     screenMessage(0, "");
     screenSetup(master() ? &screenMixer : &screenInstrument, master() ? 0 : cInstrument);

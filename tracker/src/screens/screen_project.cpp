@@ -19,6 +19,7 @@
 #include "string_utils.h"
 #include "midi/midi_router.h"
 #include "link/link_client.h"
+#include "synth/instrument_eq.h"
 #include <string.h>
 #include <strings.h>
 
@@ -239,6 +240,7 @@ static void doLoadProject(void) {
 static void doNewProject(void) {
   Project replacement;
   projectInitAY(&replacement);
+  instrumentEQInitPresets(&replacement);
   audioManager.replaceProject(&replacement);
   projectModified = 0;
   appSettings.projectFilename[0] = 0;

@@ -107,6 +107,169 @@ TEST_CASE("An unused EQ bank is one no instrument uses, flat ones first") {
   CHECK(instrumentEQUnusedBank(&p, 0) == 2);
 }
 
+TEST_CASE("NEW EQ presets seed twenty editable banks without assigning or changing the master") {
+  auto project = std::make_unique<Project>();
+  projectInit(project.get());
+  getInstrumentFunctions(InstrumentType::Braids).init(&project->instruments[0]);
+  project->masterEQ.bands[1].gain = -2;
+  const InstrumentEQ master = project->masterEQ;
+  instrumentEQInitPresets(project.get());
+  CHECK(instrumentEQSame(master, project->masterEQ));
+  CHECK(project->instruments[0].eq == EMPTY_VALUE_8);
+  const int frequencies[] = {25, 80, 180, 8000, 300, 650, 3200, 10000,
+                            90, 30, 65, 100, 100, 250, 250, 350, 120, 250, 120, 1000};
+  using S = EQShape;
+  const S shapes[] = {S::lowCut, S::lowCut, S::lowCut, S::highCut, S::bell, S::bell, S::bell, S::highShelf,
+                      S::lowCut, S::lowCut, S::bell, S::lowCut, S::lowShelf, S::lowShelf, S::lowCut,
+                      S::lowCut, S::lowShelf, S::lowShelf, S::highCut, S::bell};
+  const int gains[] = {0, 0, 0, 0, -6, -6, -6, 4, 0, 0, 4, 0, 4, 3, 0, 0, -6, -3, 0, -18};
+  const int qs[] = {42, 42, 42, 42, 48, 54, 48, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 84};
+  const int activeBands[] = {1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 2, 3, 3, 1, 2, 1, 1};
+  for (int bank = 0; bank < PROJECT_EQ_BANKS; ++bank) {
+    CAPTURE(bank);
+    const auto& eq = project->eqBanks[bank];
+    if (bank < 0x10 || bank > 0x23) {
+      CHECK(instrumentEQIsDefault(eq));
+      continue;
+    }
+    CHECK(instrumentEQAudible(eq));
+    CHECK(eq.bands[0].frequency == frequencies[bank - 0x10]);
+    CHECK(eq.bands[0].shape == shapes[bank - 0x10]);
+    CHECK(eq.bands[0].gain == gains[bank - 0x10]);
+    CHECK(eq.bands[0].q == qs[bank - 0x10]);
+    int active = 0;
+    for (const auto& band : eq.bands) {
+      if (band.shape != EQShape::off) ++active;
+      CHECK(band.frequency >= kEQFrequencyMin);
+      CHECK(band.frequency <= kEQFrequencyMax);
+      CHECK(band.gain >= kEQGainMin);
+      CHECK(band.gain <= kEQGainMax);
+      CHECK(band.q >= kEQQMin);
+      CHECK(band.q <= kEQQMax);
+    }
+    struct RemainingBands {
+      int bank;
+      InstrumentEQBand second, third;
+    };
+    const InstrumentEQBand off = {S::off, 1000, 0, 48};
+    const RemainingBands remaining[] = {
+      {0x18, {S::bell, 300, -4, 48}, {S::bell, 2500, 4, 42}},
+      {0x19, {S::bell, 250, -4, 48}, {S::bell, 900, 4, 42}},
+      {0x1a, {S::bell, 300, -6, 48}, {S::bell, 3000, 4, 48}},
+      {0x1b, {S::bell, 200, 4, 48}, {S::bell, 5000, 4, 42}},
+      {0x1c, {S::bell, 800, -3, 42}, {S::highShelf, 8000, 4, 42}},
+      {0x1d, {S::highShelf, 2500, -3, 42}, off},
+      {0x1e, {S::bell, 1200, 10, 60}, {S::highCut, 6000, 0, 42}},
+      {0x1f, {S::bell, 1500, 4, 48}, {S::highCut, 3500, 0, 42}},
+      {0x21, {S::highShelf, 2500, 3, 42}, off},
+    };
+    for (const auto& expected : remaining) {
+      CAPTURE(expected.bank);
+      const auto& eq = project->eqBanks[expected.bank];
+      for (int band = 1; band < INSTRUMENT_EQ_BANDS; ++band) {
+        const auto& value = band == 1 ? expected.second : expected.third;
+        CHECK(eq.bands[band].shape == value.shape);
+        CHECK(eq.bands[band].frequency == value.frequency);
+        CHECK(eq.bands[band].gain == value.gain);
+        CHECK(eq.bands[band].q == value.q);
+      }
+    }
+    CHECK(active == activeBands[bank - 0x10]);
+    for (int previous = 0x10; previous < bank; ++previous)
+      CHECK_FALSE(instrumentEQSame(eq, project->eqBanks[previous]));
+  }
+  CHECK(project->eqBanks[0x1c].bands[1].gain == -3); // -1.5 dB, not -3 dB.
+  CHECK(project->eqBanks[0x23].bands[0].q == 84);
+  project->eqBanks[0x23].bands[0].frequency = 1700;
+  CHECK(project->eqBanks[0x23].bands[0].frequency == 1700);
+}
+
+TEST_CASE("NEW EQ preset responses perform their intended utility") {
+  auto project = std::make_unique<Project>();
+  projectInit(project.get());
+  instrumentEQInitPresets(project.get());
+  for (float rate : {32000.0f, 44100.0f, 48000.0f}) {
+    CAPTURE(rate);
+    auto response = [&](int bank, float hz) { return instrumentEQResponseDb(project->eqBanks[bank], hz, rate); };
+    CHECK(fabsf(response(0x10, 25) + 3.01f) < 0.03f);
+    CHECK(response(0x10, 100) > -0.1);
+    CHECK(response(0x11, 20) < -23);
+    CHECK(response(0x12, 45) < -23);
+    CHECK(fabsf(response(0x13, 8000) + 3.01f) < 0.03f);
+    CHECK(fabsf(response(0x14, 300) + 3) < 0.01f);
+    CHECK(fabsf(response(0x15, 650) + 3) < 0.01f);
+    CHECK(fabsf(response(0x16, 3200) + 3) < 0.01f);
+    CHECK(fabsf(response(0x17, 10000) - 1) < 0.02f);
+    CHECK(response(0x18, 30) < -19);
+    CHECK(response(0x18, 2500) > 1.8);
+    CHECK(response(0x19, 900) > 1.7);
+    CHECK(response(0x1a, 300) < -2.6);
+    CHECK(response(0x1b, 5000) > 1.9);
+    CHECK(response(0x1c, 800) < -1.3);
+    CHECK(response(0x1c, 50) > 1.8);
+    CHECK(response(0x1d, 50) > 1.4);
+    CHECK(response(0x1d, 10000) < -1.4);
+    CHECK(response(0x1e, 1200) > 4.9);
+    CHECK(response(0x1f, 50) < -33);
+    CHECK(response(0x1f, 1500) > 1.6);
+    CHECK(response(0x20, 20) < -2.9);
+    CHECK(response(0x20, 1000) > -0.1);
+    CHECK(response(0x21, 50) < -1.4);
+    CHECK(response(0x21, 10000) > 1.4);
+    CHECK(response(0x22, 30) > -0.1);
+    CHECK(response(0x22, 480) < -23);
+    CHECK(fabsf(response(0x23, 1000) + 9) < 0.01f);
+    CHECK(response(0x23, 500) > -0.15);
+    for (int bank = 0x10; bank <= 0x23; ++bank) {
+      InstrumentEQFilter filter;
+      filter.init(rate);
+      filter.configure(project->eqBanks[bank]);
+      std::vector<float> audio(8192);
+      audio[0] = audio[1] = 0.1f;
+      filter.process(audio.data(), int(audio.size() / 2));
+      for (float sample : audio) REQUIRE(std::isfinite(sample));
+    }
+  }
+}
+
+TEST_CASE("Unused flat EQ banks are allocated before NEW presets") {
+  auto project = std::make_unique<Project>();
+  projectInit(project.get());
+  instrumentEQInitPresets(project.get());
+  for (int i = 0; i < 16; ++i) {
+    getInstrumentFunctions(InstrumentType::Braids).init(&project->instruments[i]);
+    project->instruments[i].eq = i;
+  }
+  CHECK(instrumentEQUnusedBank(project.get(), -1) == 0x24);
+  const InstrumentEQ original = project->eqBanks[0x10];
+  InstrumentEQ imported = bell(-8);
+  CHECK(instrumentEQAdopt(project.get(), imported, 16) == 0x24);
+  CHECK(instrumentEQSame(original, project->eqBanks[0x10]));
+  CHECK(instrumentEQAdopt(project.get(), original, 16) == 0x10);
+}
+
+TEST_CASE("NEW EQ presets and edits round trip while old projects retain flat banks") {
+  auto saved = std::make_unique<Project>(), loaded = std::make_unique<Project>();
+  fillFXNames();
+  projectInit(saved.get());
+  projectInit(loaded.get());
+  REQUIRE(projectLoad(saved.get(), "packaging/common/projects/gm-midi-demo.cct") == 0);
+  instrumentEQInitPresets(saved.get());
+  saved->eqBanks[0x23].bands[0].frequency = 1700;
+  instrumentEQDefaults(&saved->eqBanks[0x12]); // Clearing a preset must stay flat after loading.
+  const char* path = "test_new_eq_presets.cct";
+  REQUIRE(projectSave(saved.get(), path) == 0);
+  REQUIRE(projectLoad(loaded.get(), path) == 0);
+  for (int bank = 0; bank < PROJECT_EQ_BANKS; ++bank)
+    CHECK(instrumentEQSame(saved->eqBanks[bank], loaded->eqBanks[bank]));
+  CHECK(instrumentEQIsDefault(loaded->masterEQ));
+  REQUIRE(projectLoad(loaded.get(), "packaging/common/projects/gm-midi-demo.cct") == 0);
+  for (const auto& eq : loaded->eqBanks) CHECK(instrumentEQIsDefault(eq));
+  std::remove(path);
+  projectFree(saved.get());
+  projectFree(loaded.get());
+}
+
 TEST_CASE("Instrument EQ response matches the filter") {
   const InstrumentEQ boost = bell(12);  // +6 dB at 1 kHz
   CHECK(instrumentEQResponseDb(boost, 1000.0f, 48000.0f) == doctest::Approx(6.0f).epsilon(0.01));
@@ -305,19 +468,19 @@ TEST_CASE("EQ screen edits move the band and OPT returns to the instrument") {
   REQUIRE(eqPage);
   InstrumentEQBand& low = chipnomadState->project.eqBanks[7].bands[0];
   // Band row: sideways is frequency, up and down is gain.
-  eqPage->onEdit(0, 0, CellEditAction::increaseBig);
+  eqPage->onEdit(0, 1, CellEditAction::increaseBig);
   CHECK(low.gain == 2);
-  eqPage->onEdit(0, 0, CellEditAction::increase);
-  eqPage->onEdit(0, 0, CellEditAction::decrease);
+  eqPage->onEdit(0, 1, CellEditAction::increase);
+  eqPage->onEdit(0, 1, CellEditAction::decrease);
   CHECK(low.frequency == 100);
-  eqPage->onEdit(0, 2, CellEditAction::increaseBig);  // Freq: half an octave
+  eqPage->onEdit(0, 3, CellEditAction::increaseBig);  // Freq: half an octave
   CHECK(low.frequency == 141);
-  eqPage->onEdit(0, 1, CellEditAction::decrease);     // Shape: Lo shelf to Lo cut
+  eqPage->onEdit(0, 2, CellEditAction::decrease);     // Shape: Lo shelf to Lo cut
   CHECK(low.shape == EQShape::lowCut);
-  CHECK(eqPage->onEdit(0, 3, CellEditAction::increase) == 0);  // cuts have no gain
-  eqPage->onEdit(0, 0, CellEditAction::increaseBig);  // a cut's dot moves its resonance
+  CHECK(eqPage->onEdit(0, 4, CellEditAction::increase) == 0);  // cuts have no gain
+  eqPage->onEdit(0, 1, CellEditAction::increaseBig);  // a cut's dot moves its resonance
   CHECK(low.q == 44);
-  eqPage->onEdit(0, 0, CellEditAction::clear);
+  eqPage->onEdit(0, 1, CellEditAction::clear);
   CHECK(low.shape == EQShape::lowShelf);
   CHECK(low.gain == 0);
   screenInstrumentEQ.onInput(1, keyOpt, 1);
@@ -335,4 +498,80 @@ TEST_CASE("Master EQ FE screen returns to the mixer") {
   CHECK(std::string(mockGfxCells[1], 13) == "Master output");
   screenInstrumentEQ.onInput(1, keyOpt, 1);
   CHECK(currentScreen == &screenMixer);
+}
+
+TEST_CASE("EQ screen EDIT arrows assign banks only to the current instrument") {
+  EQPage e(InstrumentType::Braids);
+  auto& project = chipnomadState->project;
+  instrumentEQInitPresets(&project);
+  e.instrument().eq = 0x16;
+  getInstrumentFunctions(InstrumentType::Braids).init(&project.instruments[1]);
+  project.instruments[1].eq = 0x16;
+  InstrumentEQ original[PROJECT_EQ_BANKS];
+  memcpy(original, project.eqBanks, sizeof(original));
+  currentScreen = &screenInstrumentEQ;
+  screenInstrumentEQ.setup(0x16);
+  screenInstrumentEQ.fullRedraw();
+  REQUIRE(mockScreenData);
+  mockScreenData->cursorCol = 2;
+  mockScreenData->cursorRow = 3;
+  projectModified = 0;
+  CHECK(screenInstrumentEQ.onInput(1, keyOpt | keyRight, 1) == 1);
+  CHECK(e.instrument().eq == 0x16);
+  CHECK(projectModified == 0);
+  mockScreenData->cursorCol = 0;
+  mockScreenData->cursorRow = 0;
+  CHECK(mockScreenData->getColumnCount(0) == 1);
+  CHECK(mockScreenData->onEdit(0, 0, CellEditAction::clear) == 0);
+  CHECK(screenInstrumentEQ.onInput(0, keyOpt | keyRight, 1) == 1);
+  CHECK(e.instrument().eq == 0x16);
+  CHECK(projectModified == 0);
+  CHECK(mockScreenData->onEdit(0, 0, CellEditAction::increase) == 1);
+  CHECK(e.instrument().eq == 0x17);
+  CHECK(projectModified == 1);
+  CHECK(currentScreen == &screenInstrumentEQ);
+  CHECK(mockScreenData->cursorCol == 0);
+  CHECK(mockScreenData->cursorRow == 0);
+  mockScreenData->drawStatic();
+  CHECK(std::string(mockGfxCells[0], 5) == "EQ 17");
+  CHECK(std::string(mockGfxCells[1], 10) == "Used by 00");
+  mockScreenData->onEdit(0, 0, CellEditAction::decrease);
+  CHECK(e.instrument().eq == 0x16);
+  CHECK(project.instruments[1].eq == 0x16);
+  mockScreenData->onEdit(0, 4, CellEditAction::decrease);
+  CHECK(project.eqBanks[0x16].bands[0].gain == original[0x16].bands[0].gain - 1);
+  project.eqBanks[0x16] = original[0x16];
+  for (int bank = 0; bank < PROJECT_EQ_BANKS; ++bank)
+    CHECK(instrumentEQSame(project.eqBanks[bank], original[bank]));
+  CHECK(mockScreenData->onEdit(0, 0, CellEditAction::increase) == 1);
+  CHECK(e.instrument().eq == 0x17);
+  CHECK(mockScreenData->onEdit(0, 0, CellEditAction::increaseBig) == 1);
+  CHECK(e.instrument().eq == 0x27);
+  CHECK(mockScreenData->onEdit(0, 0, CellEditAction::decreaseBig) == 1);
+  CHECK(e.instrument().eq == 0x17);
+  screenInstrumentEQ.onInput(1, keyOpt, 1);
+  CHECK(currentScreen == &screenInstrument);
+}
+
+TEST_CASE("EQ screen bank browsing stops at 00 and 7F and leaves master FE alone") {
+  EQPage e(InstrumentType::Sample);
+  for (int bank : {0, PROJECT_EQ_BANKS - 1, PROJECT_MASTER_EQ_BANK}) {
+    CAPTURE(bank);
+    currentScreen = &screenInstrumentEQ;
+    e.instrument().eq = bank == PROJECT_MASTER_EQ_BANK ? 7 : bank;
+    screenInstrumentEQ.setup(bank);
+    screenInstrumentEQ.fullRedraw();
+    mockScreenData->cursorRow = 0;
+    projectModified = 0;
+    mockScreenData->onEdit(0, 0, bank == 0 ? CellEditAction::decrease : CellEditAction::increase);
+    CHECK(projectModified == 0);
+    CHECK(e.instrument().eq == (bank == PROJECT_MASTER_EQ_BANK ? 7 : bank));
+    CHECK(currentScreen == &screenInstrumentEQ);
+    if (bank == PROJECT_MASTER_EQ_BANK) {
+      CHECK(mockScreenData->onEdit(0, 0, CellEditAction::decrease) == 0);
+      CHECK(e.instrument().eq == 7);
+      mockScreenData->drawStatic();
+      CHECK(std::string(mockGfxCells[0], 5) == "EQ FE");
+    }
+  }
 }
