@@ -80,34 +80,44 @@ TEST_CASE_FIXTURE(PatternFixture, "patternIsEmpty: respects length") {
   CHECK(patternIsEmpty(project.get(), 5));
 }
 
-TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: basic conversion preserves phrases and transpose") {
-  // Set up a chain at index 3 with 3 phrases (10, 11, 12) and transposes 0, 2, 4.
+TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: basic conversion preserves phrases, bakes transpose") {
+  // Set up a chain at index 3 with 3 phrases (10, 11, 12) and transposes 0, 2,
+  // 4. The transposed rows are baked into cloned phrases; transpose == 0
+  // bars reference the original phrase directly.
   setupTestChain(project.get(), 3, 10, 3);
   project->song[0][0] = 3;  // song cell points to chain 3
 
   REQUIRE(convertChainsToPatterns(project.get()) == 0);
   CHECK(project->viewMode == ViewMode::simplified);
 
-  // The song cell should now point to a pattern index. The pattern index is
-  // allocated by findClosestEmptyPattern(p, 3) which prefers index 3 if it's
-  // empty (which it is by default). So patternIdx may or may not equal 3 —
-  // either way it should be a valid pattern index.
+  // Pattern 3 is free, so the pattern takes the chain's own number.
   uint16_t patternIdx = project->song[0][0];
-  CHECK(patternIdx < PROJECT_MAX_PATTERNS);
+  CHECK(patternIdx == 3);
 
   // The mapping should be recorded.
   CHECK(project->chainToPatternMap[3] == patternIdx);
   CHECK(project->patternToChainMap[patternIdx] == 3);
 
-  // The pattern should have length 3 and matching phrases + transposes.
+  // The pattern should have length 3. Bar 0 (transpose 0) references the
+  // original phrase 10; bars 1/2 (transposes 2/4) reference clones with
+  // baked notes.
   Pattern* pat = &project->patterns[patternIdx];
   CHECK(pat->length == 3);
   CHECK(pat->bars[0].phrase == 10);
   CHECK(pat->bars[0].transpose == 0);
-  CHECK(pat->bars[1].phrase == 11);
-  CHECK(pat->bars[1].transpose == 2);
-  CHECK(pat->bars[2].phrase == 12);
-  CHECK(pat->bars[2].transpose == 4);
+
+  // Bar 1: clone of phrase 11 with notes shifted by +2.
+  uint16_t baked1 = pat->bars[1].phrase;
+  CHECK(baked1 != 11);
+  CHECK(project->phrases[11].rows[0].note == 49);  // original untouched
+  CHECK(project->phrases[baked1].rows[0].note == 51);
+
+  // Bar 2: clone of phrase 12 with notes shifted by +4.
+  uint16_t baked2 = pat->bars[2].phrase;
+  CHECK(baked2 != 12);
+  CHECK(baked2 != baked1);
+  CHECK(project->phrases[12].rows[0].note == 50);  // original untouched
+  CHECK(project->phrases[baked2].rows[0].note == 54);
 }
 
 TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: empty chain becomes 1-bar pattern with empty phrase (decision #8)") {
@@ -155,48 +165,261 @@ TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: reverses the first c
   CHECK(std::memcmp(&project->chains[3], &original, sizeof(Chain)) == 0);
 }
 
-TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: regenerates chain from edited pattern (issue #6)") {
-  // Scenario: start classic with an empty chain, switch to simplified,
-  // edit the pattern (add bars + notes), switch back to classic — the
-  // chain should reflect the pattern's content (not stay empty).
-  // Per the user-facing spec: "Phrase values in chain should be generated
-  // according to the logic from the first prompt".
+TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: mapped pattern restores original chain content") {
+  // Scenario: start classic with an EMPTY chain 5, switch to simplified
+  // (chain 5 becomes mapped pattern 5), edit the pattern in simplified
+  // mode, switch back. The chain is MAPPED, so its ORIGINAL (empty) content
+  // is restored — simplified-mode edits to converted originals do not
+  // propagate back (user decision: mapped pairs are left untouched).
   project->song[0][0] = 5;  // chain 5 (empty)
-  // chain 5 is empty by default (chainClear sets all rows to EMPTY_VALUE_16).
 
-  // classic → simplified: empty chain becomes 1-bar pattern with empty phrase.
   REQUIRE(convertChainsToPatterns(project.get()) == 0);
   uint16_t patternIdx = project->song[0][0];
-  REQUIRE(patternIdx < PROJECT_MAX_PATTERNS);
+  REQUIRE(patternIdx == 5);
   Pattern* pat = &project->patterns[patternIdx];
-  CHECK(pat->length == 1);
+  REQUIRE(pat->length == 1);
   uint16_t phrase0 = pat->bars[0].phrase;
-  CHECK(phrase0 != EMPTY_VALUE_16);
+  REQUIRE(phrase0 != EMPTY_VALUE_16);
 
-  // Add a second bar to the pattern (creates a fresh empty phrase).
+  // Edit the pattern in simplified mode.
   REQUIRE(patternAddEmptyBar(project.get(), patternIdx));
   CHECK(pat->length == 2);
-  uint16_t phrase1 = pat->bars[1].phrase;
-  CHECK(phrase1 != EMPTY_VALUE_16);
-  CHECK(phrase1 != phrase0);
-
-  // Add some notes to both phrases so they're not empty.
   project->phrases[phrase0].rows[0].note = 48;
-  project->phrases[phrase1].rows[0].note = 50;
+  project->phrases[pat->bars[1].phrase].rows[0].note = 50;
 
-  // Switch back to classic: chain should be regenerated from the pattern.
+  // Switch back to classic: chain 5 keeps its ORIGINAL (empty) content.
+  REQUIRE(convertPatternsToChains(project.get()) == 0);
+  CHECK(project->viewMode == ViewMode::classic);
+  CHECK(project->song[0][0] == 5);
+  CHECK(chainIsEmpty(project.get(), 5));
+  // The pattern was not modified by the conversion.
+  CHECK(pat->length == 2);
+  CHECK(project->phrases[phrase0].rows[0].note == 48);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: pattern added in simplified mode builds a fresh chain") {
+  // A pattern with NO mapping (created entirely in simplified mode, placed
+  // in the song) converts to a brand-new chain with per-bar phrase slots:
+  // bar k wants phrase (pattern + k); free slots take the content.
+  project->viewMode = ViewMode::simplified;
+  project->patterns[5].length = 2;
+  project->patterns[5].bars[0].phrase = 70;
+  project->patterns[5].bars[1].phrase = 71;
+  project->phrases[70].rows[0].note = 48;
+  project->phrases[71].rows[0].note = 50;
+  project->song[0][0] = 5;
+
   REQUIRE(convertPatternsToChains(project.get()) == 0);
   CHECK(project->viewMode == ViewMode::classic);
 
   uint16_t chainIdx = project->song[0][0];
   CHECK(chainIdx < PROJECT_MAX_CHAINS);
+  CHECK(project->patternToChainMap[5] == chainIdx);
   Chain* ch = &project->chains[chainIdx];
-  // The chain's first 2 rows should match the pattern's bars.
-  CHECK(ch->rows[0].phrase == phrase0);
-  CHECK(ch->rows[1].phrase == phrase1);
-  // Remaining rows should be empty (chainClear).
+  // Bar 0 wants phrase 5 (pattern number) — empty+unreferenced → slot 5.
+  CHECK(ch->rows[0].phrase == 5);
+  CHECK(project->phrases[5].rows[0].note == 48);
+  // Bar 1 wants phrase 6 — also free.
+  CHECK(ch->rows[1].phrase == 6);
+  CHECK(project->phrases[6].rows[0].note == 50);
+  // Remaining rows empty (playback stops at the first empty row).
   CHECK(ch->rows[2].phrase == EMPTY_VALUE_16);
   CHECK(ch->rows[15].phrase == EMPTY_VALUE_16);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: occupied desired slot falls back to closest free") {
+  // Pattern 11, 4 bars, but phrase 12 is occupied by content → the sequence
+  // becomes 11, 13, 14, 15 (per-phrase closest free; gaps allowed).
+  // Build the pattern directly in simplified mode.
+  project->viewMode = ViewMode::simplified;
+  project->patterns[11].length = 4;
+  for (int b = 0; b < 4; b++) {
+    project->patterns[11].bars[b].phrase = 100 + b;
+    project->patterns[11].bars[b].transpose = 0;
+    project->phrases[100 + b].rows[0].note = 40 + b;
+  }
+  // Phrase 12 is occupied (has content).
+  project->phrases[12].rows[0].note = 30;
+  project->song[0][0] = 11;
+
+  REQUIRE(convertPatternsToChains(project.get()) == 0);
+  Chain* ch = &project->chains[project->song[0][0]];
+  CHECK(ch->rows[0].phrase == 11);
+  CHECK(ch->rows[1].phrase == 13);  // 12 occupied → closest free
+  CHECK(ch->rows[2].phrase == 14);
+  CHECK(ch->rows[3].phrase == 15);
+  // Contents were copied in order.
+  CHECK(project->phrases[13].rows[0].note == 41);
+  CHECK(project->phrases[14].rows[0].note == 42);
+  CHECK(project->phrases[15].rows[0].note == 43);
+  // Original pattern phrases remain untouched.
+  CHECK(project->phrases[101].rows[0].note == 41);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: identical bars share a phrase slot") {
+  // Bars 0 and 2 reference the same phrase; bar 1 references a different
+  // phrase with IDENTICAL content. All three untransposed bars share one
+  // slot in the chain.
+  project->viewMode = ViewMode::simplified;
+  project->patterns[7].length = 3;
+  project->patterns[7].bars[0].phrase = 20;
+  project->patterns[7].bars[1].phrase = 21;
+  project->patterns[7].bars[2].phrase = 20;
+  project->phrases[20].rows[0].note = 55;
+  project->phrases[21] = project->phrases[20];  // identical content
+  project->song[0][0] = 7;
+
+  REQUIRE(convertPatternsToChains(project.get()) == 0);
+  Chain* ch = &project->chains[project->song[0][0]];
+  CHECK(ch->rows[0].phrase == ch->rows[1].phrase);
+  CHECK(ch->rows[0].phrase == ch->rows[2].phrase);
+  CHECK(ch->rows[0].phrase == 7);  // desired slot pattern+0
+  CHECK(project->phrases[7].rows[0].note == 55);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: transposed bar bakes into fresh slot") {
+  project->viewMode = ViewMode::simplified;
+  project->patterns[4].length = 1;
+  project->patterns[4].bars[0].phrase = 30;
+  project->patterns[4].bars[0].transpose = 3;
+  project->phrases[30].rows[0].note = 48;
+  project->song[0][0] = 4;
+
+  REQUIRE(convertPatternsToChains(project.get()) == 0);
+  Chain* ch = &project->chains[project->song[0][0]];
+  // The chain row holds a baked clone: note 48 + 3 = 51.
+  uint16_t baked = ch->rows[0].phrase;
+  CHECK(baked != 30);
+  CHECK(ch->rows[0].transpose == 0);
+  CHECK(project->phrases[baked].rows[0].note == 51);
+  // Original phrase untouched (pattern keeps referencing it).
+  CHECK(project->phrases[30].rows[0].note == 48);
+  CHECK(project->patterns[4].bars[0].phrase == 30);
+  CHECK(project->patterns[4].bars[0].transpose == 3);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: mapped pattern keeps chain untouched, song rewritten") {
+  // Round trip: convert, then convert back. The chain must be byte-identical
+  // (stored original) and the song cell rewritten back to the chain number.
+  setupTestChain(project.get(), 3, 10, 3);
+  project->song[0][0] = 3;
+  Chain original = project->chains[3];
+
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  REQUIRE(convertPatternsToChains(project.get()) == 0);
+  CHECK(project->viewMode == ViewMode::classic);
+  CHECK(project->song[0][0] == 3);
+  CHECK(std::memcmp(&project->chains[3], &original, sizeof(Chain)) == 0);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "conversion round trip: only additions convert") {
+  // Convert classic → simplified. Add a NEW pattern to the song in
+  // simplified mode. Convert back → the original chain is untouched, the
+  // new pattern becomes a new chain. Convert to simplified again → the
+  // first chain is skipped (mapped), only the new one is processed.
+  setupTestChain(project.get(), 3, 10, 3);
+  project->song[0][0] = 3;
+  Chain original = project->chains[3];
+
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  CHECK(project->song[0][0] == 3);  // pattern 3
+
+  // Add a new simplified-mode pattern at song row 1: pattern 20, 2 bars.
+  project->viewMode = ViewMode::simplified;
+  project->patterns[20].length = 2;
+  project->patterns[20].bars[0].phrase = 60;
+  project->patterns[20].bars[1].phrase = 61;
+  project->phrases[60].rows[0].note = 44;
+  project->phrases[61].rows[0].note = 45;
+  project->song[1][0] = 20;
+
+  // Convert back: pattern 3 is mapped (chain 3 untouched); pattern 20 is
+  // new and becomes chain 20 with phrases 20/21.
+  REQUIRE(convertPatternsToChains(project.get()) == 0);
+  CHECK(project->viewMode == ViewMode::classic);
+  CHECK(project->song[0][0] == 3);
+  CHECK(project->song[1][0] == 20);
+  CHECK(std::memcmp(&project->chains[3], &original, sizeof(Chain)) == 0);
+  CHECK(project->chains[20].rows[0].phrase == 20);
+  CHECK(project->chains[20].rows[1].phrase == 21);
+  CHECK(project->phrases[20].rows[0].note == 44);
+  CHECK(project->phrases[21].rows[0].note == 45);
+
+  // Convert to simplified again: chain 3 is mapped → untouched; chain 20 is
+  // mapped → untouched. Song cells point at patterns 3 and 20.
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  CHECK(project->viewMode == ViewMode::simplified);
+  CHECK(project->song[0][0] == 3);
+  CHECK(project->song[1][0] == 20);
+  CHECK(std::memcmp(&project->chains[3], &original, sizeof(Chain)) == 0);
+  CHECK(project->chains[20].rows[0].phrase == 20);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: pattern number = chain number, occupied falls back") {
+  // Chain 9 converts while pattern 9 is already occupied by an unrelated
+  // pattern → the pattern takes the closest free slot instead.
+  setupTestChain(project.get(), 9, 40, 2);
+  project->song[0][0] = 9;
+  // Occupy pattern 9 with content.
+  project->patterns[9].length = 1;
+  project->patterns[9].bars[0].phrase = 50;
+  project->phrases[50].rows[0].note = 33;
+
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  uint16_t patternIdx = project->song[0][0];
+  CHECK(patternIdx != 9);
+  CHECK(patternIdx != EMPTY_VALUE_16);
+  CHECK(project->patterns[patternIdx].length == 2);
+  CHECK(project->chainToPatternMap[9] == patternIdx);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: note clamped at pitch table ceiling") {
+  // Chain row transpose pushes notes past the table end → clamped.
+  setupTestChain(project.get(), 2, 15, 1);
+  project->chains[2].rows[0].transpose = 200;  // way over the ceiling
+  project->phrases[15].rows[0].note = 100;
+  project->song[0][0] = 2;
+
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  Pattern* pat = &project->patterns[project->song[0][0]];
+  uint16_t baked = pat->bars[0].phrase;
+  CHECK(baked != 15);
+  uint8_t maxNote = (uint8_t)(project->pitchTable.length - 1);
+  CHECK(project->phrases[baked].rows[0].note == maxNote);
+  // NOTE_OFF and empty notes are not shifted.
+  project->phrases[15].rows[1].note = NOTE_OFF;
+  project->phrases[15].rows[2].note = EMPTY_VALUE_8;
+  Chain snapshot = project->chains[2];
+  (void)snapshot;
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: empty chain becomes 1-bar pattern with empty phrase (decision #8)") {
+  // Empty chain at index 5 (chainClear already set all rows to EMPTY_VALUE_16).
+  project->song[0][0] = 5;
+
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+
+  uint16_t patternIdx = project->song[0][0];
+  CHECK(patternIdx == 5);
+  Pattern* pat = &project->patterns[patternIdx];
+  CHECK(pat->length == 1);
+  // The single bar should reference an empty phrase.
+  CHECK(pat->bars[0].phrase != EMPTY_VALUE_16);
+  CHECK(pat->bars[0].phrase < PROJECT_MAX_PHRASES);
+  CHECK(phraseIsEmpty(project.get(), pat->bars[0].phrase));
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: chains[] untouched (decision #5)") {
+  setupTestChain(project.get(), 3, 10, 3);
+  project->song[0][0] = 3;
+
+  // Snapshot the chain's content before conversion.
+  Chain original = project->chains[3];
+
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+
+  // The chain should be byte-identical after conversion.
+  CHECK(std::memcmp(&project->chains[3], &original, sizeof(Chain)) == 0);
 }
 
 TEST_CASE_FIXTURE(PatternFixture, "patternMultiplyLengthByTwo: duplicates bars, isolated phrases") {

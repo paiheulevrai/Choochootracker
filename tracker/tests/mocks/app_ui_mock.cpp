@@ -108,6 +108,13 @@ void fileBrowserSetup(const char* title, const char* extension, const char*,
   mockBrowserExtension = extension;
 }
 
+void fileBrowserSetupFolderMode(const char* title, const char*, const char*,
+                                const char* extension, void (*)(const char*),
+                                void (*)(void)) {
+  mockBrowserTitle = title;
+  mockBrowserExtension = extension;
+}
+
 int instrumentCommonColumnCount(int) { return 1; }
 int instrumentLiveValue(int) { return -1; }
 float instrumentLivePosition(int) { return -1.0f; }

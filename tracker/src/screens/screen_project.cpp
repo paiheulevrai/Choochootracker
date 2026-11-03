@@ -1,6 +1,5 @@
 #include "field_style.h"
 #include "screen_project.h"
-#include "screen_view_mode.h"
 #include "common.h"
 #include "corelib/corelib_file.h"
 #include "corelib_gfx.h"
@@ -249,16 +248,30 @@ void projectOpenFromScreenAtPath(const AppScreen* returnScreen, const char* path
   screenSetup(&screenFileBrowser, 0);
 }
 
-// New-project entry through the view mode chooser: the chooser builds the
-// project itself in confirm() (mode + simplified seeding), then returns to
-// the Song screen.
-static void newProjectFromChooser(void) {
-  viewModeChooserSetup(&screenProject);
+// New-project flow: build the project directly in the DEFAULT view mode
+// (appSettings.defaultViewMode — global setting, editable in the View
+// window). No chooser screen; the mode can be switched later via the View
+// window's full conversion.
+static void doNewProject(void) {
+  Project replacement;
+  projectInitAY(&replacement);
+  replacement.viewMode =
+    appSettings.defaultViewMode == 1 ? ViewMode::simplified : ViewMode::classic;
+  if (replacement.viewMode == ViewMode::simplified) {
+    projectUtilsSeedSimplifiedPatterns(&replacement);
+  }
+  audioManager.replaceProject(&replacement);
+  projectModified = 0;
+  appSettings.projectFilename[0] = 0;
+  exportResetFolderTracking();
+  settingsSave();
+  screensInitAll();
+  screenSetup(projectReturnScreen, 0);
 }
 
 void projectCreateNewFromScreen(const AppScreen* returnScreen) {
   projectReturnScreen = returnScreen ? returnScreen : &screenProject;
-  newProjectFromChooser();
+  doNewProject();
 }
 
 static void cancelConfirm(void) {
@@ -359,8 +372,8 @@ void projectCommonDrawStatic(void) {
   gfxPrint(0, 10, "Tempo");
   gfxPrint(0, 11, "Sync");
   gfxPrint(0, 12, "Sync out");
-  gfxPrint(0, 14, "Link");
-  gfxPrint(0, 15, "Transport");
+  gfxPrint(0, 13, "Link");
+  gfxPrint(0, 14, "Transport");
 }
 
 void projectCommonDrawCursor(int col, int row) {
@@ -383,7 +396,7 @@ void projectCommonDrawCursor(int col, int row) {
     // Linear pitch
     gfxCursor(13, 9, 3);
   } else if (row >= 5 && row <= 9) {
-    static const int y[] = {10, 11, 12, 14, 15};
+    static const int y[] = {10, 11, 12, 13, 14};
     const int width = row == 5 ? 3 : row == 8 ? (linkClientIsEnabled(chipnomadState->linkClient) ? 12 : 9) : 4;
     gfxCursor(13, y[row - 5], width);
   }
@@ -418,7 +431,7 @@ void projectCommonDrawField(int col, int row, CellState state) {
     // Linear pitch
     gfxPrint(13, 9, chipnomadState->project.linearPitch ? "ON " : "OFF");
   } else if (row >= 5 && row <= 9) {
-    static const int y[] = {10, 11, 12, 14, 15};
+    static const int y[] = {10, 11, 12, 13, 14};
     const int line = y[row - 5];
     gfxClearRect(13, line, 27, 1);
     if (row == 5) {
@@ -483,10 +496,10 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
       // New project — opens the mode chooser (Classic/Simplified) which
       // builds the new project on confirm.
       if (projectModified) {
-        confirmSetup("Lose unsaved changes?", newProjectFromChooser, cancelConfirm);
+        confirmSetup("Lose unsaved changes?", doNewProject, cancelConfirm);
         screenSetup(&screenConfirm, 0);
       } else {
-        newProjectFromChooser();
+        doNewProject();
       }
       handled = 1;
     } else if (col == 3) {

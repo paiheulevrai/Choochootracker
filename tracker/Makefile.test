@@ -85,7 +85,7 @@ TRACKER_SRC_SOURCES = src/screens/instrument_monk.cpp src/soundbank_library.cpp 
                       src/screens/screen_settings.cpp \
                       src/screens/screen_settings_submenus.cpp \
                       src/screens/screen_view_settings.cpp \
-                      src/screens/screen_view_mode.cpp \
+                      src/screens/screen_view_convert.cpp \
                       src/screens/screen_midi.cpp \
                       src/screens/screen_midi_channel_map.cpp \
                       src/screens/screen_midi_cc.cpp \

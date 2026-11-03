@@ -9,7 +9,6 @@
 #include "startup_timing.h"
 #include "screens.h"
 #include "screen_project.h"
-#include "screen_view_mode.h"
 #include "corelib_gfx.h"
 #include "corelib_file.h"
 #include "corelib_mainloop.h"
@@ -252,7 +251,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     projectOpenFromScreen(&screenTitle);
 #endif
   }
-  else { viewModeChooserSetup(&screenTitle); }
+  else { projectCreateNewFromScreen(&screenSong); }
   return 1;
 }
 

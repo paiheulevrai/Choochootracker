@@ -109,6 +109,7 @@ void initDefaultAppSettings(void) {
   appSettings.backgroundReaction = 50;
   appSettings.backgroundResolution = BackgroundResolution::low;
   appSettings.defaultPatternLength = 1;
+  appSettings.defaultViewMode = 0;
 
   // Audio input recording defaults: nothing enumerated, nothing armed,
   // monitoring off, no recording folder override.
@@ -274,6 +275,7 @@ int settingsSave(void) {
   fprintf(file, "backgroundReaction: %u\n", appSettings.backgroundReaction);
   fprintf(file, "backgroundResolution: %d\n", (int)appSettings.backgroundResolution);
   fprintf(file, "defaultPatternLength: %d\n", appSettings.defaultPatternLength);
+  fprintf(file, "defaultViewMode: %d\n", appSettings.defaultViewMode);
   for (int track = 0; track < PROJECT_MAX_TRACKS; ++track)
     fprintf(file, "trackVisuals%d: %d\n", track + 1, (int)appSettings.trackVisuals[track].mode);
 
@@ -412,6 +414,10 @@ int settingsLoad(void) {
       int dpl;
       if (sscanf(line + 22, "%d", &dpl) == 1 && dpl >= 1 && dpl <= PROJECT_MAX_PATTERN_LENGTH)
         appSettings.defaultPatternLength = (uint8_t)dpl;
+    } else if (strncmp(line, "defaultViewMode: ", 17) == 0) {
+      int dvm;
+      if (sscanf(line + 17, "%d", &dvm) == 1 && (dvm == 0 || dvm == 1))
+        appSettings.defaultViewMode = (uint8_t)dvm;
     } else if (strncmp(line, "persistentWaveform: ", 20) == 0) {
       int enabled;
       if (sscanf(line + 20, "%d", &enabled) == 1 && (enabled == 0 || enabled == 1))

@@ -423,9 +423,9 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
   if (currentScreen == &screenProject) {
     // Field y-coordinates: row 0 buttons at y=3, File/Title/Author at
     // y=5/6/7, Linear pitch y=9, Tempo y=10, Sync y=11, Sync out y=12,
-    // Link y=14, Transport y=15, then the extra rows: Pitch table y=17,
-    // Scale y=18, View y=19.
-    const int fieldY[] = {3, 5, 6, 7, 9, 10, 11, 12, 14, 15, 17, 18, 19};
+    // Link y=13, Transport y=14, then the extra rows: Pitch table y=16,
+    // Scale y=17, View y=18.
+    const int fieldY[] = {3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17, 18};
     int field = -1, column = 0;
     for (unsigned i = 0; i < sizeof(fieldY) / sizeof(fieldY[0]); ++i)
       if (row == fieldY[i]) field = i;
