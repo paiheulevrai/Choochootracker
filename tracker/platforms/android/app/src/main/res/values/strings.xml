@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ChooChooTracker</string>
+    <string name="background_audio_channel">Background audio</string>
+    <string name="background_audio_channel_description">Keeps tracker audio playing while the app is in the background.</string>
+    <string name="background_audio_notification">Audio is active in the background</string>
 </resources>

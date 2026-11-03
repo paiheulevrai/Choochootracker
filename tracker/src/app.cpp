@@ -1427,11 +1427,13 @@ void appOnEvent(MainLoopEventData eventData) {
       appResetInputState();
     }
 #endif
-    // Pause audio when app goes to background
+#ifndef ANDROID_BUILD
     if (appHasProject()) audioManager.pause();
+#endif
     if (appHasProject() && chipnomadState) {
-      // Stop playback to avoid state issues
+#ifndef ANDROID_BUILD
       chipnomadQueuePlaybackStop(chipnomadState);
+#endif
       // Auto-save project
       autosaveProject();
     }
@@ -1448,8 +1450,9 @@ void appOnEvent(MainLoopEventData eventData) {
       break;
     }
 #endif
-    // Resume audio when app comes back to foreground
+#ifndef ANDROID_BUILD
     if (appHasProject()) audioManager.resume();
+#endif
     break;
   }
   case MainLoopEvent::fullRedraw:

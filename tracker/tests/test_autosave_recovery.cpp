@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "common.h"
 #include "app.h"
+#include "audio_manager.h"
 #include "project_utils.h"
 #include "app_ui_mock.h"
 #include <cstdio>
@@ -128,4 +129,48 @@ TEST_CASE_FIXTURE(AutosaveFixture, "Starting another project preserves an unexam
   quitApp();
   CHECK(readAll(previous) == unreadable);
   CHECK(readAll(autosave) != unreadable);
+}
+
+TEST_CASE_FIXTURE(AutosaveFixture, "Background lifecycle saves the project and preserves platform playback policy") {
+  appSetup();
+  projectInitAY(&chipnomadState->project);
+  appActivateProject();
+  auto& project = chipnomadState->project;
+  project.song[0][0] = 0;
+  project.chains[0].rows[0].phrase = 0;
+  chipnomadQueueProjectRefresh(chipnomadState);
+  chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1);
+  float output[1024] = {};
+  chipnomadRender(chipnomadState, output, 512);
+  REQUIRE(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+
+  struct RestoreAudioManager {
+    AudioManager saved = audioManager;
+    ~RestoreAudioManager() { audioManager = saved; }
+  } restoreAudioManager;
+  static int pauseCalls, resumeCalls;
+  pauseCalls = resumeCalls = 0;
+  audioManager.pause = [] { ++pauseCalls; };
+  audioManager.resume = [] { ++resumeCalls; };
+
+  MainLoopEventData event = {};
+  event.type = MainLoopEvent::sleep;
+  appOnEvent(event);
+  chipnomadRender(chipnomadState, output, 512);
+  CHECK(std::filesystem::exists(autosave));
+#ifdef ANDROID_BUILD
+  CHECK(pauseCalls == 0);
+  CHECK(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+#else
+  CHECK(pauseCalls == 1);
+  CHECK_FALSE(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying);
+#endif
+
+  event.type = MainLoopEvent::wake;
+  appOnEvent(event);
+#ifdef ANDROID_BUILD
+  CHECK(resumeCalls == 0);
+#else
+  CHECK(resumeCalls == 1);
+#endif
 }

@@ -636,6 +636,7 @@ public final class ChooChooTrackerActivity extends SDLActivity {
 
     @Override protected void onResume() {
         super.onResume();
+        stopService(new Intent(this, BackgroundAudioService.class));
         if (requestedSharedStorage && hasSharedStorage()) {
             requestedSharedStorage = false;
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
@@ -649,7 +650,13 @@ public final class ChooChooTrackerActivity extends SDLActivity {
         if (midiManager != null) rebuildMidiEndpoints();
     }
 
+    @Override protected void onPause() {
+        startForegroundService(new Intent(this, BackgroundAudioService.class));
+        super.onPause();
+    }
+
     @Override protected void onDestroy() {
+        stopService(new Intent(this, BackgroundAudioService.class));
         synchronized (this) {
             closeMidiInput();
             closeMidiOutput();
