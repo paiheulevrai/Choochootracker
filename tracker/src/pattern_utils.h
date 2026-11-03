@@ -24,19 +24,23 @@ extern "C" {
 //       transpose != 0 is BAKED into the notes: the phrase is cloned into a
 //       fresh slot (clamped to the pitch table range) and the bar points at
 //       the clone; transpose == 0 bars reference the original phrase.
-//     - MAPPED pairs: the pattern is REBUILT from the chain's CURRENT
-//       content too (the leaving classic mode is the source of truth, so
-//       classic-side edits propagate into the pattern).
+//     - MAPPED pairs still IN SYNC with their chain (neither side edited
+//       since the last conversion — content-equivalence check) are left
+//       untouched: the saved conversion state is restored.
+//     - MAPPED pairs that changed (chain edited in classic) and fresh
+//       allocations are rebuilt from the chain's CURRENT content, so
+//       classic-side edits propagate into the pattern.
 //     - chains[] content is never modified by this direction.
 //     - Sets p->viewMode = ViewMode::simplified.
 //
 //   convertPatternsToChains(p):
 //     - Collects the unique patterns used in the song (ascending, lowest
 //       number first) and converts each:
-//       * Every pattern (mapped or not) gets its chain REBUILT from the
-//         pattern's CURRENT bars - the leaving simplified mode is the
-//         source of truth, so simplified-side edits propagate into the
-//         chain. The chain holds EXACTLY the pattern's bar count as phrase
+//       * Mapped patterns still IN SYNC with their chain are left
+//         untouched (saved conversion state restored); edited/added ones
+//         get their chain REBUILT from the pattern's CURRENT bars, so
+//         simplified-side edits propagate. The chain holds EXACTLY the
+//         pattern's bar count as phrase
 //         rows (remaining rows empty). Bar k wants phrase number
 //         (pattern + k); if occupied, the closest free number is used
 //         (gaps allowed). Bars with identical baked content share one

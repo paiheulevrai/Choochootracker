@@ -1415,10 +1415,11 @@ interpreted:
   chain's phrases as bars in order, with chain transposes baked into the
   notes. In simplified → classic each pattern becomes a chain whose phrase
   numbers follow the pattern number (skipping occupied numbers), and bars
-  with identical content share one phrase. Whichever structure you just
-  edited is the source of truth: converting syncs its counterpart from the
-  current content, so edits made in either mode carry across every
-  conversion (phrase numbers may shift, notes never change).
+  with identical content share one phrase. The conversion scans for changes:
+  chains and patterns that are unchanged since the last conversion keep
+  their converted state exactly, while ones edited (or added) since are
+  rebuilt from the current content — so edits made in either mode carry
+  across, and untouched parts are never disturbed.
 - **Default mode** is the view new projects start in (a global setting,
   remembered in `settings.txt`).
 - **Default length** (visible in Simplified mode) is the length of newly
