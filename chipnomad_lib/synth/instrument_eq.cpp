@@ -22,26 +22,26 @@ constexpr InstrumentEQBand kDefaultBands[INSTRUMENT_EQ_BANDS] = {
 using S = EQShape;
 constexpr InstrumentEQBand kOff = {S::off, 1000, 0, 48};
 constexpr InstrumentEQ kNewProjectPresets[] = {
-  {{{S::lowCut, 25, 0, 42}, kOff, kOff}},                                      // 10 Sub Clean
-  {{{S::lowCut, 80, 0, 42}, kOff, kOff}},                                      // 11 Low Cut
-  {{{S::lowCut, 180, 0, 42}, kOff, kOff}},                                     // 12 Thin Out
-  {{{S::highCut, 8000, 0, 42}, kOff, kOff}},                                   // 13 Darken
-  {{{S::bell, 300, -6, 48}, kOff, kOff}},                                     // 14 De-Mud
-  {{{S::bell, 650, -6, 54}, kOff, kOff}},                                     // 15 De-Box
-  {{{S::bell, 3200, -6, 48}, kOff, kOff}},                                    // 16 De-Harsh
-  {{{S::highShelf, 10000, 4, 42}, kOff, kOff}},                                // 17 Air
-  {{{S::lowCut, 90, 0, 42}, {S::bell, 300, -4, 48}, {S::bell, 2500, 4, 42}}},  // 18 Vocal Focus
-  {{{S::lowCut, 30, 0, 42}, {S::bell, 250, -4, 48}, {S::bell, 900, 4, 42}}},   // 19 Bass Read
-  {{{S::bell, 65, 4, 42}, {S::bell, 300, -6, 48}, {S::bell, 3000, 4, 48}}},    // 1A Kick Shape
-  {{{S::lowCut, 100, 0, 42}, {S::bell, 200, 4, 48}, {S::bell, 5000, 4, 42}}},  // 1B Snare Shape
-  {{{S::lowShelf, 100, 4, 42}, {S::bell, 800, -3, 42}, {S::highShelf, 8000, 4, 42}}}, // 1C Smile
-  {{{S::lowShelf, 250, 3, 42}, {S::highShelf, 2500, -3, 42}, kOff}},           // 1D Warm Tilt
-  {{{S::lowCut, 250, 0, 42}, {S::bell, 1200, 10, 60}, {S::highCut, 6000, 0, 42}}}, // 1E Nasal
-  {{{S::lowCut, 350, 0, 42}, {S::bell, 1500, 4, 48}, {S::highCut, 3500, 0, 42}}}, // 1F Telephone
-  {{{S::lowShelf, 120, -6, 42}, kOff, kOff}},                                 // 20 Low Tame
-  {{{S::lowShelf, 250, -3, 42}, {S::highShelf, 2500, 3, 42}, kOff}},           // 21 Bright Tilt
-  {{{S::highCut, 120, 0, 42}, kOff, kOff}},                                   // 22 Sub Isolate
-  {{{S::bell, 1000, -18, 84}, kOff, kOff}},                                   // 23 Notch Search
+  {{{S::lowCut, 25, 0, 42}, kOff, kOff}},                                      // 01 Sub Clean
+  {{{S::lowCut, 80, 0, 42}, kOff, kOff}},                                      // 02 Low Cut
+  {{{S::lowCut, 180, 0, 42}, kOff, kOff}},                                     // 03 Thin Out
+  {{{S::highCut, 8000, 0, 42}, kOff, kOff}},                                   // 04 Darken
+  {{{S::bell, 300, -6, 48}, kOff, kOff}},                                     // 05 De-Mud
+  {{{S::bell, 650, -6, 54}, kOff, kOff}},                                     // 06 De-Box
+  {{{S::bell, 3200, -6, 48}, kOff, kOff}},                                    // 07 De-Harsh
+  {{{S::highShelf, 10000, 4, 42}, kOff, kOff}},                                // 08 Air
+  {{{S::lowCut, 90, 0, 42}, {S::bell, 300, -4, 48}, {S::bell, 2500, 4, 42}}},  // 09 Vocal Focus
+  {{{S::lowCut, 30, 0, 42}, {S::bell, 250, -4, 48}, {S::bell, 900, 4, 42}}},   // 0A Bass Read
+  {{{S::bell, 65, 4, 42}, {S::bell, 300, -6, 48}, {S::bell, 3000, 4, 48}}},    // 0B Kick Shape
+  {{{S::lowCut, 100, 0, 42}, {S::bell, 200, 4, 48}, {S::bell, 5000, 4, 42}}},  // 0C Snare Shape
+  {{{S::lowShelf, 100, 4, 42}, {S::bell, 800, -3, 42}, {S::highShelf, 8000, 4, 42}}}, // 0D Smile
+  {{{S::lowShelf, 250, 3, 42}, {S::highShelf, 2500, -3, 42}, kOff}},           // 0E Warm Tilt
+  {{{S::lowCut, 250, 0, 42}, {S::bell, 1200, 10, 60}, {S::highCut, 6000, 0, 42}}}, // 0F Nasal
+  {{{S::lowCut, 350, 0, 42}, {S::bell, 1500, 4, 48}, {S::highCut, 3500, 0, 42}}}, // 10 Telephone
+  {{{S::lowShelf, 120, -6, 42}, kOff, kOff}},                                 // 11 Low Tame
+  {{{S::lowShelf, 250, -3, 42}, {S::highShelf, 2500, 3, 42}, kOff}},           // 12 Bright Tilt
+  {{{S::highCut, 120, 0, 42}, kOff, kOff}},                                   // 13 Sub Isolate
+  {{{S::bell, 1000, -18, 84}, kOff, kOff}},                                   // 14 Notch Search
 };
 static_assert(sizeof(kNewProjectPresets) / sizeof(kNewProjectPresets[0]) == 20,
               "NEW seeds twenty EQ banks");
@@ -117,7 +117,7 @@ void instrumentEQDefaults(InstrumentEQ* eq) {
 }
 
 void instrumentEQInitPresets(Project* project) {
-  memcpy(project->eqBanks + 0x10, kNewProjectPresets, sizeof(kNewProjectPresets));
+  memcpy(project->eqBanks + 0x01, kNewProjectPresets, sizeof(kNewProjectPresets));
 }
 
 bool instrumentEQIsDefault(const InstrumentEQ& eq) {

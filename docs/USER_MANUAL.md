@@ -480,7 +480,7 @@ The EQ works on the track the instrument plays on, before the track's insert eff
 
 #### NEW project EQ starting points
 
-**NEW** seeds banks `10-23` (hexadecimal) with twenty editable starting points.
+**NEW** seeds banks `01-14` (hexadecimal) with twenty editable starting points.
 Other banks and the master EQ stay flat; no instrument is assigned an EQ
 automatically. Loading an existing project does not add or replace presets.
 The banks are saved as ordinary project EQ settings, so edits and shared-bank
@@ -492,26 +492,26 @@ Cuts and shelves use Q 0.71. Bell Q values are shown; unused bands are Off.
 
 | Bank | Name | Band 1 | Band 2 | Band 3 | Starting use |
 |---|---|---|---|---|---|
-| `10` | Sub Clean | LC 25 Hz | Off | Off | Remove infrasonic rumble from bass or kick. |
-| `11` | Low Cut | LC 80 Hz | Off | Off | Clear low end from voices, leads or melodic samples. |
-| `12` | Thin Out | LC 180 Hz | Off | Off | Make room below pads and textures. |
-| `13` | Darken | HC 8 kHz | Off | Off | Soften bright noise, hats or distortion. |
-| `14` | De-Mud | Bell 300 Hz, -3 dB, Q 1 | Off | Off | Reduce low-mid buildup. |
-| `15` | De-Box | Bell 650 Hz, -3 dB, Q 1.41 | Off | Off | Reduce a boxy or cardboard tone. |
-| `16` | De-Harsh | Bell 3.2 kHz, -3 dB, Q 1 | Off | Off | Tame aggressive upper mids. |
-| `17` | Air | HS 10 kHz, +2 dB | Off | Off | Gently open a dark voice or pad; also raises noise. |
-| `18` | Vocal Focus | LC 90 Hz | Bell 300 Hz, -2 dB, Q 1 | Bell 2.5 kHz, +2 dB, Q 0.71 | Reduce rumble and mud, add articulation. |
-| `19` | Bass Read | LC 30 Hz | Bell 250 Hz, -2 dB, Q 1 | Bell 900 Hz, +2 dB, Q 0.71 | Emphasise existing bass harmonics on small speakers. |
-| `1A` | Kick Shape | Bell 65 Hz, +2 dB, Q 0.71 | Bell 300 Hz, -3 dB, Q 1 | Bell 3 kHz, +2 dB, Q 1 | Weight and attack, less cardboard. Tune 65 Hz to the kick. |
-| `1B` | Snare Shape | LC 100 Hz | Bell 200 Hz, +2 dB, Q 1 | Bell 5 kHz, +2 dB, Q 0.71 | Clean sub, add body and crack. |
-| `1C` | Smile | LS 100 Hz, +2 dB | Bell 800 Hz, -1.5 dB, Q 0.71 | HS 8 kHz, +2 dB | Broad, gentle low/high emphasis. |
-| `1D` | Warm Tilt | LS 250 Hz, +1.5 dB | HS 2.5 kHz, -1.5 dB | Off | Warmer overall balance; an approximate tilt. |
-| `1E` | Nasal | LC 250 Hz | Bell 1.2 kHz, +5 dB, Q 2 | HC 6 kHz | Pinched voices, narrow leads and metallic percussion. |
-| `1F` | Telephone | LC 350 Hz | Bell 1.5 kHz, +2 dB, Q 1 | HC 3.5 kHz | Band-limited voices, breaks and transitions. |
-| `20` | Low Tame | LS 120 Hz, -3 dB | Off | Off | Reduce excess bass without removing it. |
-| `21` | Bright Tilt | LS 250 Hz, -1.5 dB | HS 2.5 kHz, +1.5 dB | Off | Brighter overall balance. |
-| `22` | Sub Isolate | HC 120 Hz | Off | Off | Keep only the low end for a layer or effect. |
-| `23` | Notch Search | Bell 1 kHz, -9 dB, Q 8 | Off | Off | Move the frequency onto a specific ringing resonance. |
+| `01` | Sub Clean | LC 25 Hz | Off | Off | Remove infrasonic rumble from bass or kick. |
+| `02` | Low Cut | LC 80 Hz | Off | Off | Clear low end from voices, leads or melodic samples. |
+| `03` | Thin Out | LC 180 Hz | Off | Off | Make room below pads and textures. |
+| `04` | Darken | HC 8 kHz | Off | Off | Soften bright noise, hats or distortion. |
+| `05` | De-Mud | Bell 300 Hz, -3 dB, Q 1 | Off | Off | Reduce low-mid buildup. |
+| `06` | De-Box | Bell 650 Hz, -3 dB, Q 1.41 | Off | Off | Reduce a boxy or cardboard tone. |
+| `07` | De-Harsh | Bell 3.2 kHz, -3 dB, Q 1 | Off | Off | Tame aggressive upper mids. |
+| `08` | Air | HS 10 kHz, +2 dB | Off | Off | Gently open a dark voice or pad; also raises noise. |
+| `09` | Vocal Focus | LC 90 Hz | Bell 300 Hz, -2 dB, Q 1 | Bell 2.5 kHz, +2 dB, Q 0.71 | Reduce rumble and mud, add articulation. |
+| `0A` | Bass Read | LC 30 Hz | Bell 250 Hz, -2 dB, Q 1 | Bell 900 Hz, +2 dB, Q 0.71 | Emphasise existing bass harmonics on small speakers. |
+| `0B` | Kick Shape | Bell 65 Hz, +2 dB, Q 0.71 | Bell 300 Hz, -3 dB, Q 1 | Bell 3 kHz, +2 dB, Q 1 | Weight and attack, less cardboard. Tune 65 Hz to the kick. |
+| `0C` | Snare Shape | LC 100 Hz | Bell 200 Hz, +2 dB, Q 1 | Bell 5 kHz, +2 dB, Q 0.71 | Clean sub, add body and crack. |
+| `0D` | Smile | LS 100 Hz, +2 dB | Bell 800 Hz, -1.5 dB, Q 0.71 | HS 8 kHz, +2 dB | Broad, gentle low/high emphasis. |
+| `0E` | Warm Tilt | LS 250 Hz, +1.5 dB | HS 2.5 kHz, -1.5 dB | Off | Warmer overall balance; an approximate tilt. |
+| `0F` | Nasal | LC 250 Hz | Bell 1.2 kHz, +5 dB, Q 2 | HC 6 kHz | Pinched voices, narrow leads and metallic percussion. |
+| `10` | Telephone | LC 350 Hz | Bell 1.5 kHz, +2 dB, Q 1 | HC 3.5 kHz | Band-limited voices, breaks and transitions. |
+| `11` | Low Tame | LS 120 Hz, -3 dB | Off | Off | Reduce excess bass without removing it. |
+| `12` | Bright Tilt | LS 250 Hz, -1.5 dB | HS 2.5 kHz, +1.5 dB | Off | Brighter overall balance. |
+| `13` | Sub Isolate | HC 120 Hz | Off | Off | Keep only the low end for a layer or effect. |
+| `14` | Notch Search | Bell 1 kHz, -9 dB, Q 8 | Off | Off | Move the frequency onto a specific ringing resonance. |
 
 These are not universal fixes: adjust frequency and gain to the source, compare
 at similar loudness and leave headroom for boosts. Notch Search requires tuning;

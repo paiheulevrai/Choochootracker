@@ -12,7 +12,7 @@ constexpr uint8_t kEQQMin = 24, kEQQMax = 96;      // Q 0.25 .. 16
 constexpr uint16_t kEQFrequencyMin = 20, kEQFrequencyMax = 20000;
 
 void instrumentEQDefaults(InstrumentEQ* eq);
-// Seeds editable banks 10-23 for NEW only; loaders keep their flat defaults.
+// Seeds editable banks 01-14 for NEW only; loaders keep their flat defaults.
 void instrumentEQInitPresets(Project* project);
 bool instrumentEQIsDefault(const InstrumentEQ& eq);
 bool instrumentEQSame(const InstrumentEQ& a, const InstrumentEQ& b);

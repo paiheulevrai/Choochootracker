@@ -307,37 +307,37 @@ int main(int argc,char** argv){
     auto& project=chipnomadState->project;
     require(instrumentEQIsDefault(project.masterEQ),"NEW master stays flat");
     for(int bank=0;bank<PROJECT_EQ_BANKS;++bank)
-      require(instrumentEQAudible(project.eqBanks[bank])==(bank>=0x10&&bank<=0x23),
-              "NEW presets only occupy 10-23");
+      require(instrumentEQAudible(project.eqBanks[bank])==(bank>=0x01&&bank<=0x14),
+              "NEW presets only occupy 01-14");
     for(const auto& instrument:project.instruments)
       require(instrument.eq==EMPTY_VALUE_8,"NEW assigns no EQ");
     prepareHomepageInstrument(InstrumentType::Braids,"EQ test");
-    project.instruments[0].eq=0x0f;
+    project.instruments[0].eq=0x00;
     getInstrumentFunctions(InstrumentType::Braids).init(&project.instruments[1]);
-    project.instruments[1].eq=0x0f;
-    screenSetup(&screenInstrumentEQ,0x0f);appDraw();
+    project.instruments[1].eq=0x00;
+    screenSetup(&screenInstrumentEQ,0x00);appDraw();
     key(1,keyOpt|keyRight);key(0,0);
-    require(project.instruments[0].eq==0x0f,"OPT right outside EQ number does not browse");
+    require(project.instruments[0].eq==0x00,"OPT right outside EQ number does not browse");
     key(1,keyUp);key(0,0);
-    for(int bank=0x10;bank<=0x23;++bank) {
+    for(int bank=0x01;bank<=0x14;++bank) {
       key(1,keyEdit);key(1,keyEdit|keyRight);key(0,0);
       require(currentScreen==&screenInstrumentEQ&&project.instruments[0].eq==bank,
               "EDIT right browses and assigns EQ without leaving screen");
-      require(project.instruments[1].eq==0x0f,"browsing leaves shared instrument alone");
+      require(project.instruments[1].eq==0x00,"browsing leaves shared instrument alone");
       char name[64];snprintf(name,sizeof(name),"eq-preset-%02x",bank);capture(name);
     }
     key(1,keyEdit);key(1,keyEdit|keyLeft);key(0,0);
-    require(project.instruments[0].eq==0x22,"EDIT left selects previous EQ");
+    require(project.instruments[0].eq==0x13,"EDIT left selects previous EQ");
     key(1,keyEdit);key(1,keyEdit|keyRight);key(0,0);
-    require(project.instruments[0].eq==0x23,"EDIT right also changes EQ number");
+    require(project.instruments[0].eq==0x14,"EDIT right also changes EQ number");
     key(1,keyEdit);key(1,keyEdit|keyLeft);key(0,0);
     key(1,keyDown);key(0,0);
     key(1,keyEdit|keyUp);key(0,0);
-    require(project.eqBanks[0x22].bands[0].q==44,"DOWN returns from EQ number to editable Band");
+    require(project.eqBanks[0x13].bands[0].q==44,"DOWN returns from EQ number to editable Band");
     key(1,keyUp);key(0,0);
     key(1,keyOpt);appDraw();
     require(currentScreen==&screenInstrument,"OPT immediately exits from EQ number");
-    printf("NEW EQ presets 10-23: neutral master, no assigned instruments and twenty EQ screens passed\n");
+    printf("NEW EQ presets 01-14: neutral master, no assigned instruments and twenty EQ screens passed\n");
     appCleanup();gfxCleanup();SDL_Quit();return 0;
   }
   if(argc==3 && !strcmp(argv[2],"--modulation-transfer-only")) {
