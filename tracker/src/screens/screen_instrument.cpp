@@ -270,9 +270,13 @@ static void setInstrumentType(InstrumentType newType) {
   int preserveEnvelope = oldPost && (oldPost->attack || oldPost->decay || oldPost->sustain || oldPost->release);
   if (preserveEnvelope) savedEnvelope = *oldPost;
   const uint8_t savedEQ = instrument->eq;
+  const Instrument previous = *instrument;
   getInstrumentFunctions(oldType).free(instrument);
   instrument->type = newType;
   getInstrumentFunctions(newType).init(instrument);
+  const int adjustedModulations = instrumentTransferModulations(&previous, instrument);
+  if (adjustedModulations)
+    screenMessage(MESSAGE_TIME, "%d modulation target(s) adjusted", adjustedModulations);
   // The EQ stays when trying another sound source; clearing the type resets it.
   if (newType != InstrumentType::none) instrument->eq = savedEQ;
   if (preserveEnvelope && !isSimpleChip(newType)) {

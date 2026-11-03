@@ -659,6 +659,7 @@ struct InstrumentModDestination {
   FXId fx;                    // Lane FX identifier, or instrumentNoFX.
   uint16_t range;             // Native modulation range.
   InstrumentMotionValue value;
+  uint8_t order = 0;          // Logical control order when legacy IDs differ.
 };
 
 struct InstrumentFX {
@@ -707,6 +708,8 @@ int instrumentGenericModDestination(InstrumentType type, int destination);
 int modulationIsLiveStick(ModulationType type);
 int modulationIsAdditive(ModulationType type);
 int modulationSequenceDestinationAllowed(const Instrument* instrument, const Modulation* modulation, int destination);
+// Returns the number of destinations approximated or disabled.
+int instrumentTransferModulations(const Instrument* source, Instrument* target);
 
 enum GenericModDestination {
   genericModReverbSend = 0,

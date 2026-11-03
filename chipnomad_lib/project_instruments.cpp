@@ -1,4 +1,6 @@
 #include <string.h>
+#include <algorithm>
+#include <vector>
 #include "project_instruments.h"
 #include "project.h"
 #include "monk_patch.h"
@@ -431,6 +433,7 @@ static int initLayerInstrument(Instrument* instrument) {
 // The one source of truth for family metadata.  Values are accessed through
 // typed code below; no union member is addressed by an offset.
 #define D(n, f, r, v) {n, (FXId)(f), r, v}
+#define O(n, f, r, v, order) {n, (FXId)(f), r, v, order}
 #define N D("-", instrumentNoFX, 0, InstrumentMotionValue::raw)
 static const InstrumentModDestination destAudioIn[] = {N,
   D("Volume", instrumentNoFX, 255, InstrumentMotionValue::raw),
@@ -456,8 +459,8 @@ static const InstrumentModDestination destBraids[] = {N,D("Volume",instrumentNoF
 static const InstrumentModDestination destSample[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Start",fxSST,255,InstrumentMotionValue::raw),D("End",fxSEN,255,InstrumentMotionValue::raw),D("Speed",fxSSP,500,InstrumentMotionValue::speed),D("Loop",fxSLP,4,InstrumentMotionValue::raw),D("Cutoff",fxSCF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxSRS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destPlaits[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Harmonic",fxPHA,16384,InstrumentMotionValue::raw),D("Timbre",fxPTM,16384,InstrumentMotionValue::raw),D("Morph",fxPMO,16384,InstrumentMotionValue::raw),D("AuxMix",fxPAX,255,InstrumentMotionValue::raw),D("Cutoff",fxPCF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxPRS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destSCWF[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Detune",fxSDT,255,InstrumentMotionValue::raw),D("Mix",fxSMX,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF2,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
-static const InstrumentModDestination destBYOWTBL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Detune",fxSDT,255,InstrumentMotionValue::raw),D("Mix",fxSMX,255,InstrumentMotionValue::raw),D("Index A",fxBIA,255,InstrumentMotionValue::raw),D("Index B",fxBIB,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF2,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
-static const InstrumentModDestination destAChChid[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Cutoff",fxACF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxARS,255,InstrumentMotionValue::raw),D("EnvMod",fxAEM,255,InstrumentMotionValue::raw),D("Decay",fxADC,255,InstrumentMotionValue::raw),D("Accent",fxAAC,255,InstrumentMotionValue::raw),D("Timbre",fxATM,16384,InstrumentMotionValue::raw),D("Color",fxACL,16384,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destBYOWTBL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),O("Detune",fxSDT,255,InstrumentMotionValue::raw,5),O("Mix",fxSMX,255,InstrumentMotionValue::raw,6),O("Index A",fxBIA,255,InstrumentMotionValue::raw,3),O("Index B",fxBIB,255,InstrumentMotionValue::raw,4),D("Cutoff",fxSCF2,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destAChChid[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Cutoff",fxACF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxARS,255,InstrumentMotionValue::raw),D("EnvMod",fxAEM,255,InstrumentMotionValue::raw),D("Decay",fxADC,255,InstrumentMotionValue::raw),D("Accent",fxAAC,255,InstrumentMotionValue::raw),O("Timbre",fxATM,16384,InstrumentMotionValue::raw,3),O("Color",fxACL,16384,InstrumentMotionValue::raw,4)};
 static const InstrumentModDestination destDrumSynth[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Decay",fxDDC,255,InstrumentMotionValue::raw),D("Tone",fxDTO,255,InstrumentMotionValue::raw),D("Sweep",fxDSW,255,InstrumentMotionValue::raw),D("Noise",fxDNO,255,InstrumentMotionValue::raw),D("FM",fxDFM,255,InstrumentMotionValue::raw),D("Drive",fxDDR,255,InstrumentMotionValue::raw),D("Cutoff",fxDCF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxDRS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destMonk[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Vowel",fxMWV,255,InstrumentMotionValue::raw),D("Voice",fxMIN,255,InstrumentMotionValue::raw),D("Breath",fxMAM,255,InstrumentMotionValue::raw),D("Glide",fxMFL,255,InstrumentMotionValue::raw),D("Vibrato",fxMFB,255,InstrumentMotionValue::raw),D("Vib rate",fxMSH,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destMME[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Waves",fxMWV,255,InstrumentMotionValue::raw),D("Interval",fxMIN,255,InstrumentMotionValue::raw),D("Amount",fxMAM,255,InstrumentMotionValue::raw),D("Flow",fxMFL,255,InstrumentMotionValue::raw),D("Feedback",fxMFB,255,InstrumentMotionValue::raw),D("Shaper",fxMSH,255,InstrumentMotionValue::raw),D("Cutoff",fxMCF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxMRS,255,InstrumentMotionValue::raw)};
@@ -466,6 +469,7 @@ static const InstrumentModDestination destMidi[] = {N};
 static const InstrumentModDestination destOPLL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw)};
 #undef N
 #undef D
+#undef O
 #define F(f, n) {(FXId)(f), n}
 static const InstrumentFX fxAY1[]={F(fxAYM,"AYM"),F(fxNOI,"NOI"),F(fxNOA,"NOA"),F(fxERT,"ERT"),F(fxEAU,"EAU"),F(fxEVB,"EVB"),F(fxEBN,"EBN"),F(fxESL,"ESL"),F(fxENT,"ENT"),F(fxEPT,"EPT"),F(fxEPL,"EPL"),F(fxEPH,"EPH")};
 static const InstrumentFX fxAY2[]={F(fxAYM,"AYM"),F(fxNOI,"NOI"),F(fxNOA,"NOA"),F(fxTNN,"TNN"),F(fxTNP,"TNP"),F(fxTNF,"TNF"),F(fxTRT,"TRT"),F(fxEAU,"EAU"),F(fxENN,"ENN"),F(fxENP,"ENP"),F(fxENF,"ENF"),F(fxERT,"ERT"),F(fxSFT,"SFT"),F(fxSFN,"SFN"),F(fxSFP,"SFP"),F(fxSFF,"SFF"),F(fxSRT,"SRT"),F(fxSFM,"SFM"),F(fxPWM,"PWM"),F(fxSPL,"SPL"),F(fxSWT,"SWT")};
@@ -918,4 +922,83 @@ const char* instrumentCCDestinationName(const Instrument* instrument, int destin
   if (destination >= midiCCDestinationAttack && destination <= midiCCDestinationRelease)
     return envelope[destination - midiCCDestinationAttack];
   return instrumentModDestinationNameForInstrument(instrument, destination);
+}
+
+enum {
+  transferVolume = genericModTotalCount,
+  transferPitch, transferCutoff, transferResonance
+};
+
+static int sharedModulationTarget(const Instrument* instrument, int destination) {
+  int generic = instrumentGenericModDestination(instrument->type, destination);
+  if ((generic >= 0 && generic < genericModFMBrightness) ||
+      generic == genericModInstrumentPan || generic == genericModTrackPan) return generic;
+  if (generic == genericModSIDCutoff) return transferCutoff;
+  if (generic == genericModSIDResonance) return transferResonance;
+  if (generic >= genericModSIDAttack && generic <= genericModSIDRelease)
+    return genericModEnvelopeAttack + generic - genericModSIDAttack;
+  const auto* definition = instrumentModDestination(instrument->type, destination);
+  if (!definition) return -1;
+  if (strcmp(definition->name, "Volume") == 0) return transferVolume;
+  if (strcmp(definition->name, "Pitch") == 0) return transferPitch;
+  if (definition->value == InstrumentMotionValue::cutoff) return transferCutoff;
+  if (strcmp(definition->name, "Reso") == 0) return transferResonance;
+  return -1;
+}
+
+static std::vector<int> orderedModulationTargets(const Instrument* instrument) {
+  std::vector<int> destinations;
+  for (int d = 1; d <= getInstrumentFunctions(instrument->type).modDestinationsCount + genericModTotalCount; ++d)
+    if (instrumentModDestinationAvailable(instrument, d) && sharedModulationTarget(instrument, d) < 0)
+      destinations.push_back(d);
+  auto order = [&](int d) {
+    const auto* definition = instrumentModDestination(instrument->type, d);
+    return definition && definition->order ? int(definition->order) : d;
+  };
+  std::stable_sort(destinations.begin(), destinations.end(),
+    [&](int a, int b) { return order(a) < order(b); });
+  return destinations;
+}
+
+int instrumentTransferModulations(const Instrument* source, Instrument* target) {
+  if (source->type == InstrumentType::none || target->type == InstrumentType::none) return 0;
+  const auto oldTargets = orderedModulationTargets(source);
+  const auto newTargets = orderedModulationTargets(target);
+  int adjusted = 0;
+  for (int i = 0; i < 4; ++i) {
+    const Modulation saved = source->modulation[i];
+    Modulation& modulation = target->modulation[i];
+    modulation = saved;
+    modulation.destination = 0;
+    if (!saved.destination) continue;
+    const int shared = sharedModulationTarget(source, saved.destination);
+    if (shared >= 0) {
+      for (int d = 1; d <= getInstrumentFunctions(target->type).modDestinationsCount + genericModTotalCount; ++d)
+        if (sharedModulationTarget(target, d) == shared &&
+            modulationSequenceDestinationAllowed(target, &modulation, d)) {
+          modulation.destination = d;
+          break;
+        }
+      if (!modulation.destination) ++adjusted;
+      continue;
+    }
+    const int generic = instrumentGenericModDestination(source->type, saved.destination);
+    const int sameTarget = getInstrumentFunctions(target->type).modDestinationsCount + 1 + generic;
+    if (generic >= genericModFMBrightness &&
+        modulationSequenceDestinationAllowed(target, &modulation, sameTarget)) {
+      modulation.destination = sameTarget;
+      continue;
+    }
+    const auto previous = std::find(oldTargets.begin(), oldTargets.end(), saved.destination);
+    if (previous != oldTargets.end() && !newTargets.empty()) {
+      int rank = std::min(int(previous - oldTargets.begin()), int(newTargets.size()) - 1);
+      for (; rank >= 0; --rank)
+        if (modulationSequenceDestinationAllowed(target, &modulation, newTargets[rank])) {
+          modulation.destination = newTargets[rank];
+          break;
+        }
+    }
+    ++adjusted;
+  }
+  return adjusted;
 }

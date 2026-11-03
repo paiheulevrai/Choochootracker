@@ -601,6 +601,18 @@ Every model can use the shared LP/BP/HP multimode filter, with Clean, Classic, A
 
 On the Modulation screen, press **EDIT** on a source to choose a family (Envelopes, LFO or Sticks), then its source. **Left** and **Right** still cycle sources directly.
 
+Changing an instrument's **Type** keeps its four modulation sources, all source
+parameters and signed amounts. Shared destinations (Volume, Pitch, filter,
+envelope, pan, sends, modulator parameters and inserts) keep their function when
+the new engine supports it. Engine-specific controls follow their logical order:
+first macro to first macro, second to second, and so on. If the new engine has
+fewer controls, the destination uses its last available macro; a missing shared
+function or an engine with no suitable control uses **Off**. Source restrictions
+still apply. A message reports adjusted destinations. The same position can have
+a different musical role, and switching back does not recover an earlier
+destination. Choosing **None** still clears the instrument; loading an instrument
+or preset still loads that sound's own modulations.
+
 ### Sintered
 
 **Sintered** is a native one-shot digital percussion synth. Notes set its fundamental pitch; its seven models are `Knot`, `Shard`, `Burst`, `Comb`, `Logic`, `Melt` and `Squall`. Every model has **Decay** and **Motion**, plus model-specific controls: Knot uses Mod/Ratio/Spread/Fold, Shard Mod/Ratio/Feedback/Bite, Burst Mod/Noise/Color/Feedback, Comb Mod/Time/Damping/Regen, Logic Mod/Rate/Pattern/Crush, Melt Mod/Ratio/Chaos/Drive and Squall FM/Detune/Voices/Clip.

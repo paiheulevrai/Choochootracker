@@ -300,6 +300,91 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+  if(argc==3 && !strcmp(argv[2],"--modulation-transfer-only")) {
+    screensInitAll();waveformDisplayInit();monitorDisplayInit();backgroundInit();
+    *pSongRow=*pChainRow=*pSongTrack=0;
+    auto& project=chipnomadState->project;
+    auto verify=[](const Instrument& before,const Instrument& after) {
+      Instrument expected=after;
+      instrumentTransferModulations(&before,&expected);
+      require(!std::memcmp(expected.modulation,after.modulation,sizeof(after.modulation)),
+              "UI applies full modulation transfer");
+    };
+    auto prepare=[&]() -> Instrument& {
+      auto& instrument=prepareHomepageInstrument(InstrumentType::Braids,"Transfer");
+      instrument.modulation[0]={ModulationType::ADSR,5,-70,11,22,180,44,55};
+      instrument.modulation[1]={ModulationType::SLFO,3,80,9,1,100,4,187};
+      instrument.modulation[2]={ModulationType::StickRate,4,-90,3,24,0,0,0};
+      instrument.modulation[3]={ModulationType::Sequence,
+        uint8_t(getInstrumentFunctions(instrument.type).modDestinationsCount+1+genericModFirstInsert+9),
+        110,uint8_t(SequenceSource::tranceGate),0,17,249,64};
+      screenSetup(&screenInstrument,0);appDraw();
+      return instrument;
+    };
+    for(int header:{0,1}) {
+      appSettings.persistentWaveform=header;
+      Instrument before=prepare();
+      require(instrumentCommonOnEdit(0,0,CellEditAction::increase),"direct type change");
+      appDraw();
+      require(project.instruments[0].type==InstrumentType::Plaits,"direct change selects Plaits");
+      verify(before,project.instruments[0]);
+      require(project.instruments[0].modulation[0].destination==7,"direct change retains Cutoff");
+      require(project.instruments[0].modulation[1].destination==3,"direct change follows macro rank");
+      require(std::strstr(screenGetActiveMessage(),"modulation target")!=nullptr,"adjusted targets reported");
+      capture(header?"modulation-transfer-direct-header-on":"modulation-transfer-direct-header-off");
+      before=prepare();
+      tapEdit();
+      require(currentScreen==&screenSelectionPopup,"type popup");
+      key(1,keyRight);
+      for(int step=0;step<3;++step)key(1,keyDown);
+      tapEdit();
+      require(currentScreen==&screenInstrument&&project.instruments[0].type==InstrumentType::MME,
+              "popup selects MME");
+      verify(before,project.instruments[0]);
+      require(project.instruments[0].modulation[0].destination==9,"popup retains Cutoff");
+      require(project.instruments[0].modulation[2].destination==4,"popup follows second macro");
+      screenSetup(&screenModulation,0);appDraw();
+      capture(header?"modulation-transfer-popup-header-on":"modulation-transfer-popup-header-off");
+    }
+    const Instrument saved=project.instruments[0];
+    const char* path="modulation-transfer-test.cni";
+    require(instrumentSave(&project,path,0)==0,"save transferred modulation");
+    getInstrumentFunctions(InstrumentType::Sintered).init(&project.instruments[0]);
+    require(instrumentLoad(&project,path,0)==0,"load transferred modulation");
+    require(!std::memcmp(saved.modulation,project.instruments[0].modulation,sizeof(saved.modulation)),
+            "CNI loads its own full modulation, not current engine modulation");
+    require(std::remove(path)==0,"remove temporary instrument");
+    prepare();
+    chipnomadInitChips(chipnomadState,48000,nullptr);
+    chipnomadReserveRenderBuffers(chipnomadState,512);
+    project.tracksCount=1;project.song[0][0]=0;
+    chainClear(&project.chains[0]);project.chains[0].rows[0].phrase=0;
+    phraseClear(&project.phrases[0]);
+    project.phrases[0].rows[0].note=36;project.phrases[0].rows[0].instrument=0;
+    require(chipnomadQueueProjectRefresh(chipnomadState),"refresh playback fixture");
+    require(chipnomadQueuePlaybackStartSong(chipnomadState,0,0,1),"start playback");
+    std::vector<float> audio(1024);
+    require(chipnomadRender(chipnomadState,audio.data(),512)==512,"render old engine");
+    require(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying,"playing before switch");
+    const Instrument before=project.instruments[0];
+    require(instrumentCommonOnEdit(0,0,CellEditAction::increase),"live type change");
+    appDraw();verify(before,project.instruments[0]);
+    require(chipnomadQueueProjectRefresh(chipnomadState),"publish switched instrument");
+    for(int block=0;block<16;++block) {
+      require(chipnomadRender(chipnomadState,audio.data(),512)==512,"render switched engine");
+      for(float value:audio)require(std::isfinite(value),"finite live-switch audio");
+    }
+    require(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying,"live switch preserves playback");
+    require(!std::memcmp(project.instruments[0].modulation,chipnomadState->audioProject.instruments[0].modulation,
+                         sizeof(before.modulation)),"audio snapshot receives transferred modulation");
+    require(instrumentCommonOnEdit(0,0,CellEditAction::clear),"clear type");
+    appDraw();
+    require(project.instruments[0].type==InstrumentType::none,"None clears instrument");
+    for(const auto& modulation:project.instruments[0].modulation)
+      require(modulation.destination==0,"None does not retain routes");
+    printf("Modulation transfer: direct and popup changes, both headers, CNI and live playback passed\n");
+    chipnomadDestroy(chipnomadState);gfxCleanup();SDL_Quit();return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--modulation-gate-only")) {
     projectFree(&chipnomadState->project);
     projectInitAY(&chipnomadState->project);
