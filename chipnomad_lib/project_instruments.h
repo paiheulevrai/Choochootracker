@@ -358,6 +358,7 @@ struct InstrumentSintered : InstrumentVoicePostSettings {
   uint8_t b;
   uint8_t motion;
   uint8_t c;
+  uint8_t gate;
 };
 
 struct InstrumentPlaits : InstrumentVoicePostSettings {

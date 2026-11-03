@@ -25,6 +25,7 @@
 static SelectionItem destinationCategories[8];
 static SelectionItem sourceCategories[4];
 static SelectionItem insertDestinations[16];
+static char insertLabels[16][64];
 static char insertHelpers[16][64];
 static const SelectionItem envelopeSources[] = {{"ADSR", (int)ModulationType::ADSR, NULL, 0}, {"AHD", (int)ModulationType::AHD, NULL, 0}};
 static const SelectionItem lfoSources[] = {{"LFO", (int)ModulationType::LFO, NULL, 0}, {"syncLFO", (int)ModulationType::SLFO, NULL, 0}, {"slowLFO", (int)ModulationType::SlowLFO, NULL, 0}, {"FAST LFO", (int)ModulationType::FLFO, NULL, 0}};
@@ -182,8 +183,11 @@ static void openDestinationPopup(int modIndex) {
     const auto& d = insertDescriptor(c.module);
     if (!insertParameterModulatable(c.module, i % 8, c.values[0])) continue;
     snprintf(insertHelpers[i],sizeof(insertHelpers[i]),"F%d%d TF%d %s: %s",i/8+1,i%8+1,i/8+1,d.name,i%8<d.count?d.parameters[i%8].name:"Inactive");
+    const char* parameter = d.parameters[i % 8].name;
+    if (strlen(parameter) > 14) parameter = d.parameters[i % 8].label;
+    snprintf(insertLabels[i], sizeof(insertLabels[i]), "F%d%d %s", i / 8 + 1, i % 8 + 1, parameter);
     int destination=firstGeneric+genericModFirstInsert+i;
-    insertDestinations[insertCount++]={instrumentModDestinationName(instrument->type,destination),destination,NULL,0,insertHelpers[i]};
+    insertDestinations[insertCount++]={insertLabels[i],destination,NULL,0,insertHelpers[i]};
   }
   destinationCategories[categoryCount++]={"INSERT FX",-1,insertDestinations,insertCount};
   selectionPopupSetup("DESTINATION", destinationCategories, categoryCount,
@@ -480,7 +484,7 @@ static void drawCursor(int col, int row) {
                                       mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) ? "TGATE" : modTypeName(mod->type))); break;
     case 1: {
       Instrument* inst = &chipnomadState->project.instruments[cInstrument];
-      gfxCursor(valX, y, strlen(instrumentModDestinationName(inst->type, mod->destination)));
+      gfxCursor(valX, y, strlen(instrumentModDestinationNameForInstrument(inst, mod->destination)));
       break;
     }
     case 2: gfxCursor(valX, y, 2); break; // Amt
@@ -526,10 +530,10 @@ static void drawField(int col, int row, CellState state) {
                          mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) ? "TGATE" : modTypeName(mod->type));
       break;
     case 1: // Destination
-      gfxClearRect(valX, y, 8, 1);
+      gfxClearRect(valX, y, COL_RIGHT_X - COL_LEFT_VAL, 1);
       {
         Instrument* inst = &chipnomadState->project.instruments[cInstrument];
-        gfxPrint(valX, y, instrumentModDestinationName(inst->type, mod->destination));
+        gfxPrint(valX, y, instrumentModDestinationNameForInstrument(inst, mod->destination));
       }
       break;
     case 2: // Amount

@@ -2274,9 +2274,7 @@ static void applyVoiceEvents(ChipNomadState* state, uint64_t dueMicros) {
         applyEvent(state->mmeVoices[trackIdx]);
         break;
       case InstrumentType::Sintered:
-        for (int slot = 0; slot < CHORD_MAX_VOICES; ++slot)
-          if (track->note.noteKilled || (track->note.noteTriggered && slot >= track->chordVoiceCount)) state->sinteredVoices[trackIdx][slot]->kill();
-          else if (track->note.noteTriggered) state->sinteredVoices[trackIdx][slot]->noteOn();
+        applyEvent(state->sinteredVoices[trackIdx]);
         break;
       case InstrumentType::Midi: {
         // No voice object: send real MIDI Note On/Off instead, through the

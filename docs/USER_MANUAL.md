@@ -605,6 +605,8 @@ On the Modulation screen, press **EDIT** on a source to choose a family (Envelop
 
 **Sintered** is a native one-shot digital percussion synth. Notes set its fundamental pitch; its seven models are `Knot`, `Shard`, `Burst`, `Comb`, `Logic`, `Melt` and `Squall`. Every model has **Decay** and **Motion**, plus model-specific controls: Knot uses Mod/Ratio/Spread/Fold, Shard Mod/Ratio/Feedback/Bite, Burst Mod/Noise/Color/Feedback, Comb Mod/Time/Damping/Regen, Logic Mod/Rate/Pattern/Crush, Melt Mod/Ratio/Chaos/Drive and Squall FM/Detune/Voices/Clip.
 
+The seventh control, **Gate**, is a toggle: **OFF** preserves the one-shot decay (including in older projects); **ON** sustains the note while its gate is open, then fades out using **Decay** on note-off. Press **EDIT** to toggle it. Motion and the initial impact still run once per trigger; retriggering resets the voice in either mode.
+
 Motion is an internal macro envelope, not pitch glide: values below `80` use an AD shape, `80` disables it, and values above `80` use a decay-only shape. Moving farther from the centre makes the sweep deeper and longer. Its destinations are fixed per model, so Sintered stays predictable in tracker patterns: Knot animates Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive; Squall FM. All models reset their state on a note trigger and bound internal feedback for repeatable hits.
 
 ### MonkSynth
@@ -639,6 +641,8 @@ Choose **SYNTH → MME** from the Instrument Type menu.
 The six macros are **Waves**, **Interval**, **Amount**, **Flow**, **Feedback** and **Shaper**. Waves selects musical A/B waveform pairs. Amount controls the model's core interaction, Flow changes its direction or algorithm variant, and Feedback is bounded but becomes deliberately wild at the end of its range. Shaper is a shared final stage which moves from clean through saturation to wavefolding.
 
 MME uses the shared LP/BP/HP multimode filter and ADSR. All six macros, Cutoff and Resonance are available to modulation and motion recording. Hold **EDIT** on Model to open the model popup.
+
+The modulation **Dest** fields and destination popup use the current model's parameter names for both MME and Sintered. **INSERT FX** popup entries show the `F11`-`F28` code followed by the parameter description; the footer identifies the insert module and its full parameter name.
 
 ### Audio in
 
@@ -1478,7 +1482,7 @@ Desktop and PortMaster. Settings > **MIDI** opens this submenu: **MIDI In** / **
 
 - **Sound preview from a MIDI keyboard**: with a MIDI In device selected, playing notes on the connected keyboard auditions an instrument on any screen, the same as the on-screen **EDIT + PLAY** shortcut on the [Instrument](#5-instruments) screen. This is preview only - it does not enter notes into the song.
 - **Channel mapping**: opens a list of the 16 MIDI channels; assign each one an instrument (`OFF` by default) so notes received on that channel preview that instrument regardless of which one is selected on the Instrument screen - e.g. channel `01` -> instrument `05`. A channel left `OFF` falls back to the currently selected instrument, the original behavior. This mapping is saved to settings.txt.
-- **MIDI CC mapping**: each row shows **ON**, **CH**, **CC**, and **DESTINATION**. Press **EDIT** on **CC** to learn a controller. On **DESTINATION**, press **EDIT** to open the category popup: choose **Song**, a track, or a named instrument on the left, then its parameter on the right. This selects the target and parameter together, for example `Track 2: Mute` or `03 Bass: Cutoff`. **EDIT + Left/Right** cycles through the same choices without opening the popup. Choose **Unassigned** to clear a destination. Disabled rows retain their destination label. **PLAY** starts or stops the song from this screen.
+- **MIDI CC mapping**: 64 mapping rows are available per project; each row shows **ON**, **CH**, **CC**, and **DESTINATION**. Press **EDIT** on **CC** to learn a controller. On **DESTINATION**, press **EDIT** to open the category popup: choose **Song**, a track, or a named instrument on the left, then its parameter on the right. This selects the target and parameter together, for example `Track 2: Mute` or `03 Bass: Cutoff`. **EDIT + Left/Right** cycles through the same choices without opening the popup. Choose **Unassigned** to clear a destination. Disabled rows retain their destination label. **PLAY** starts or stops the song from this screen.
 
   Use momentary buttons for **Song play/stop**, **Mute**, and **Solo**. Each press toggles playback or the selected track's mute/solo state; releasing the button leaves that state unchanged. Each transition from `0-63` to `64-127` counts as a press. A new mapping ignores the CC that learned/configured it and takes effect on the next physical movement, so setting up mappings during playback cannot reset a patch to zero.
 - **Driving an external MIDI device**: give a track the [MIDI Out](#midi-out) instrument type and set its Channel; triggering notes on that track sends real MIDI to the selected MIDI Out device instead of making sound in ChooChooTracker.

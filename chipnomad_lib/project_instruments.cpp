@@ -398,7 +398,7 @@ static int initSinteredInstrument(Instrument* instrument) {
   initCommon(instrument); instrument->type = InstrumentType::Sintered;
   InstrumentSintered* s = &instrument->chip.sintered;
   s->model = SinteredModel::knot; s->decay = 82; s->mod = 112; s->a = 128;
-  s->b = 96; s->motion = 128; s->c = 64; initVoicePostSettings(s); return 0;
+  s->b = 96; s->motion = 128; s->c = 64; s->gate = 0; initVoicePostSettings(s); return 0;
 }
 static int freeSinteredInstrument(Instrument* instrument) { freeCommon(instrument); return 0; }
 

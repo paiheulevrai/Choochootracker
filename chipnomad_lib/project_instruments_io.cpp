@@ -540,6 +540,7 @@ static int loadInstrumentSintered(FILE* file, Instrument* instrument) {
     else if (strncmp(line, "- B: ", 5) == 0) sscanf(line, "- B: %hhu", &s->b);
     else if (strncmp(line, "- Motion: ", 10) == 0) sscanf(line, "- Motion: %hhu", &s->motion);
     else if (strncmp(line, "- C: ", 5) == 0) sscanf(line, "- C: %hhu", &s->c);
+    else if (strncmp(line, "- Gate: ", 8) == 0) sscanf(line, "- Gate: %hhu", &s->gate);
     else loadVoicePostSetting(line, s);
     consumeLine(file);
   }
@@ -810,6 +811,7 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
   } else if (instrument->type == InstrumentType::Sintered) {
     InstrumentSintered* s = &instrument->chip.sintered;
     if ((uint8_t)s->model >= (uint8_t)SinteredModel::totalCount) s->model = SinteredModel::knot;
+    s->gate = s->gate != 0;
     if (s->filterCutoffHz > FILTER_CUTOFF_MAX_HZ) s->filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
   }
 
@@ -1067,6 +1069,7 @@ static int saveInstrumentSintered(FILE* file, Instrument* instrument) {
   fprintf(file, "- Sintered decay: %hhu\n", s->decay); fprintf(file, "- Mod: %hhu\n", s->mod);
   fprintf(file, "- A: %hhu\n", s->a); fprintf(file, "- B: %hhu\n", s->b);
   fprintf(file, "- Motion: %hhu\n", s->motion); fprintf(file, "- C: %hhu\n", s->c);
+  fprintf(file, "- Gate: %hhu\n", s->gate);
   saveVoicePostSettings(file, s); return 0;
 }
 

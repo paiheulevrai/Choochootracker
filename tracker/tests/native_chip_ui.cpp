@@ -16,6 +16,8 @@
 #include "corelib_gfx.h"
 #include "screens.h"
 #include "screen_instrument.h"
+#include "field_style.h"
+#include "screen_layout.h"
 #include "selection_popup.h"
 #include "waveform_display.h"
 #include "monitor_display.h"
@@ -298,6 +300,91 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+  if(argc==3 && !strcmp(argv[2],"--modulation-gate-only")) {
+    projectFree(&chipnomadState->project);
+    projectInitAY(&chipnomadState->project);
+    screensInitAll();waveformDisplayInit();monitorDisplayInit();backgroundInit();
+    appSettings.backgroundIntensity=0;
+    *pSongTrack=0;
+    auto checkText=[](int x,int y,int width,const char* text,int color) {
+      gfxUpdateScreen();
+      SDL_Rect region{x*gfxGetCharWidth(),(y+gfxGetContentRowOffset())*gfxGetCharHeight(),
+                      width*gfxGetCharWidth(),gfxGetCharHeight()};
+      auto read=[&] {
+        std::vector<uint32_t> pixels(region.w*region.h);
+        require(SDL_RenderReadPixels(renderer,&region,SDL_PIXELFORMAT_ARGB8888,
+                                     pixels.data(),region.w*4)==0,"read text pixels");
+        return pixels;
+      };
+      const auto actual=read();
+      gfxClearRect(x,y,width,1);gfxSetFgColor(color);gfxPrint(x,y,text);gfxUpdateScreen();
+      const auto expected=read();
+      if(actual!=expected)fprintf(stderr,"Text mismatch at (%d,%d), width %d: %s\n",x,y,width,text);
+      require(actual==expected,text);
+    };
+    for(int header:{0,1}) {
+      appSettings.persistentWaveform=header;
+      for(auto type:{InstrumentType::Sintered,InstrumentType::MME}) {
+        auto& instrument=prepareHomepageInstrument(type,"Mod names");
+        for(int model=0;model<7;++model) {
+          if(type==InstrumentType::Sintered)instrument.chip.sintered.model=(SinteredModel)model;
+          else instrument.chip.mme.model=(MMEModel)model;
+          for(int destination=3;destination<=8;++destination) {
+            for(auto& modulation:instrument.modulation)modulation.destination=destination;
+            screenSetup(&screenModulation,0);appDraw();
+            const char* name=instrumentModDestinationNameForInstrument(&instrument,destination);
+            checkText(7,screenModulationRowY(1),10,name,fieldNameColor(CellState::normal));
+            checkText(24,screenModulationRowY(1),10,name,fieldNameColor(CellState::normal));
+          }
+        }
+        char name[64];snprintf(name,sizeof(name),"modulation-names-%d-header-%d",int(type),header);capture(name);
+      }
+      auto& instrument=prepareHomepageInstrument(InstrumentType::Sintered,"Gate mode");
+      screenSetup(&screenInstrument,0);appDraw();
+      require(screenInstrumentSintered.rows==11&&screenInstrumentSintered.getColumnCount(10)==1,"Gate is seventh control");
+      checkText(8,14,8,"OFF",fieldValueColor(CellState::normal));
+      screenInstrumentSintered.onEdit(0,10,CellEditAction::tap);appDraw();
+      require(instrument.chip.sintered.gate==1,"Gate tap turns on");
+      checkText(8,14,8,"ON",fieldValueColor(CellState::normal));
+      screenInstrumentSintered.drawCursor(0,10);
+      int x,y,width;gfxGetCursor(&x,&y,&width);require(x==8&&y==14&&width==3,"Gate cursor width");
+      capture(header?"sintered-gate-header-on":"sintered-gate-header-off");
+      screenInstrumentSintered.onEdit(0,10,CellEditAction::tap);
+      require(instrument.chip.sintered.gate==0,"Gate tap turns off");
+      screenInstrumentSintered.onEdit(0,10,CellEditAction::increase);
+      require(instrument.chip.sintered.gate==1,"Gate directional edit");
+      screenInstrumentSintered.onEdit(0,10,CellEditAction::clear);
+      require(instrument.chip.sintered.gate==0,"Gate clear restores one shot");
+    }
+    appSettings.persistentWaveform=0;
+    auto& instrument=prepareHomepageInstrument(InstrumentType::Sintered,"Insert names");
+    screenSetup(&screenModulation,0);appDraw();key(1,keyDown);key(0,0);
+    for(int module=1;module<insertModuleCount;++module) {
+      insertSelect(&chipnomadState->project.trackInserts[0][0],module);
+      insertSelect(&chipnomadState->project.trackInserts[0][1],module);
+      const auto& descriptor=insertDescriptor(module);
+      int first=-1;
+      for(int i=0;i<8;++i)
+        if(insertParameterModulatable(module,i,chipnomadState->project.trackInserts[0][0].values[0])) {first=i;break;}
+      require(first>=0,"insert has modulation targets");
+      instrument.modulation[0].destination=getInstrumentFunctions(instrument.type).modDestinationsCount+1+genericModFirstInsert+first;
+      currentScreen->fullRedraw();appDraw();tapEdit();
+      require(currentScreen==&screenSelectionPopup,"insert destination popup");
+      int row=2;
+      for(int slot=0;slot<2;++slot)for(int parameter=0;parameter<8;++parameter) {
+        if(!insertParameterModulatable(module,parameter,chipnomadState->project.trackInserts[0][slot].values[0]))continue;
+        const auto& definition=descriptor.parameters[parameter];
+        const char* name=strlen(definition.name)>14?definition.label:definition.name;
+        char expected[64];snprintf(expected,sizeof(expected),"F%d%d %s",slot+1,parameter+1,name);
+        require(strlen(expected)<=18,"insert description fits list");
+        checkText(22,row++,18,expected,appSettings.colorScheme.textDefault);
+      }
+      char name[64];snprintf(name,sizeof(name),"modulation-insert-%d",module);capture(name);
+      key(1,keyOpt);key(0,0);
+    }
+    printf("Modulation names, insert descriptions and Sintered Gate UI passed\n");
+    chipnomadDestroy(chipnomadState);gfxCleanup();SDL_Quit();return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--midi-mapping-only")) {
     projectFree(&chipnomadState->project);
     projectInitAY(&chipnomadState->project);

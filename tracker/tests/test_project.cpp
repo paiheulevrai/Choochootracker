@@ -159,6 +159,7 @@ TEST_CASE("Tape Echo settings survive save and load") {
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "projectInit enables MIDI CC mapping rows") {
+  CHECK(PROJECT_MAX_MIDI_CC_MAPPINGS == 64);
   for (int i = 0; i < PROJECT_MAX_MIDI_CC_MAPPINGS; ++i)
     CHECK(p.midiCCMappings[i].enabled == 1);
 }
@@ -195,6 +196,10 @@ TEST_CASE("MIDI CC mappings survive save and load") {
   std::strcpy(saved.title, "MIDI CC");
   std::strcpy(saved.pitchTable.name, "MIDI CC");
   saved.midiCCMappings[0] = {1, 2, 74, 3, 4};
+  getInstrumentFunctions(InstrumentType::Sintered).init(&saved.instruments[10]);
+  saved.instruments[10].chip.sintered.gate = 1;
+  for (int i = 1; i < 64; ++i)
+    saved.midiCCMappings[i] = {uint8_t(i % 2), uint8_t(i % 16), uint8_t(i), uint8_t(i + 1), 3};
   const char* path = "build/tests/midi_cc_io.cct";
   REQUIRE(projectSave(&saved, path) == 0);
   REQUIRE(projectLoad(&loaded, path) == 0);
@@ -203,6 +208,40 @@ TEST_CASE("MIDI CC mappings survive save and load") {
   CHECK(loaded.midiCCMappings[0].cc == 74);
   CHECK(loaded.midiCCMappings[0].instrument == 3);
   CHECK(loaded.midiCCMappings[0].destination == 4);
+  CHECK(loaded.instruments[10].chip.sintered.gate == 1);
+  for (int i = 1; i < 64; ++i) {
+    CAPTURE(i);
+    CHECK(loaded.midiCCMappings[i].enabled == i % 2);
+    CHECK(loaded.midiCCMappings[i].channel == i % 16);
+    CHECK(loaded.midiCCMappings[i].cc == i);
+    CHECK(loaded.midiCCMappings[i].instrument == i + 1);
+    CHECK(loaded.midiCCMappings[i].destination == 3);
+  }
+  const char* legacyPath = "build/tests/midi_cc_legacy_io.cct";
+  {
+    std::ifstream input(path);
+    std::ofstream output(legacyPath);
+    REQUIRE(input.good()); REQUIRE(output.good());
+    std::string line;
+    while (std::getline(input, line)) {
+      if (line.rfind("- MIDI CC mappings: ", 0) == 0)
+        output << "- MIDI CC mappings: 32\n";
+      else {
+        unsigned slot = 0;
+        if (std::sscanf(line.c_str(), "- MIDI CC: %u", &slot) == 1 && slot >= 32) continue;
+        output << line << '\n';
+      }
+    }
+  }
+  REQUIRE(projectLoad(&loaded, legacyPath) == 0);
+  for (int i = 0; i < 32; ++i)
+    CHECK(loaded.midiCCMappings[i].cc == saved.midiCCMappings[i].cc);
+  for (int i = 32; i < 64; ++i) {
+    CHECK(loaded.midiCCMappings[i].enabled == 1);
+    CHECK(loaded.midiCCMappings[i].destination == midiCCDestinationNone);
+  }
+  std::remove(legacyPath);
+  std::remove(path);
 }
 
 TEST_CASE("scale project settings survive save and load") {

@@ -719,6 +719,7 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC destination combines target and par
   auto* data = mockScreenData;
   REQUIRE(data);
   CHECK(data->getColumnCount(0) == 4);
+  CHECK(data->rows == 64);
   CHECK(screenMidiCC.getPlaybackLevel() == ScreenPlaybackLevel::song);
   CHECK(screenMidiCC.onInput(1, keyPlay, 0) == 0);
   gfxClear();
@@ -739,10 +740,10 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC destination combines target and par
   CHECK(project.midiCCMappings[0].cc == 1);
   project.midiCCMappings[1].destination = midiCCDestinationNone;
 
-  data->cursorRow = 20;
+  data->cursorRow = 63;
   data->cursorCol = 3;
-  data->topRow = 12;
-  auto& mapping = project.midiCCMappings[20];
+  data->topRow = 55;
+  auto& mapping = project.midiCCMappings[63];
   projectModified = 0;
   currentScreen = &screenMidiCC;
   auto open = [&] {
@@ -763,9 +764,9 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC destination combines target and par
   press(keyOpt);
   CHECK(currentScreen == &screenMidiCC);
   screenMidiCC.setup(-1);
-  CHECK(data->cursorRow == 20);
+  CHECK(data->cursorRow == 63);
   CHECK(data->cursorCol == 3);
-  CHECK(data->topRow == 12);
+  CHECK(data->topRow == 55);
   CHECK(projectModified == 0);
 
   open();
@@ -794,7 +795,7 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC destination combines target and par
   CHECK(mapping.instrument == 1);
   screenMidiCC.setup(-1);
   mapping.enabled = 0;
-  data->drawField(3, 20, CellState::normal);
+  data->drawField(3, 63, CellState::normal);
   CHECK(std::string(mockGfxCells[10] + 14, 13) == "Track 2: Solo");
 
   open();
@@ -803,10 +804,10 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC destination combines target and par
   press(keyEdit); // Volume
   CHECK(mapping.instrument == 3);
   CHECK(mapping.destination == 1);
-  data->drawField(3, 20, CellState::normal);
+  data->drawField(3, 63, CellState::normal);
   CHECK(std::string(mockGfxCells[10] + 14, 26).find(": Volume") != std::string::npos);
   CHECK(mockTextRight < 40);
-  data->drawCursor(3, 20);
+  data->drawCursor(3, 63);
   CHECK(std::string(screenGetActiveMessage()).find("Long Bass Name: Volume") != std::string::npos);
 }
 
@@ -885,7 +886,7 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI mute and solo toggle on presses while 
   audioManager.toggleTrackSolo = [](int track) { CHECK(track == 2); ++soloCalls; };
   auto tick = [&] { appOnEvent({MainLoopEvent::tick}); };
   tick();
-  auto& mapping = chipnomadState->project.midiCCMappings[0];
+  auto& mapping = chipnomadState->project.midiCCMappings[63];
   for (int destination : {midiCCDestinationTrackMute, midiCCDestinationTrackSolo}) {
     CAPTURE(destination);
     mapping = {1, 0, 41, 2, (uint8_t)destination};

@@ -25,12 +25,14 @@ void SinteredVoice::configure(const InstrumentSintered* instrument, float pitchC
 
 void SinteredVoice::noteOn() {
   age_ = amplitude_ = feedback_ = dc_ = noiseLow_ = 0.0f; combIndex_ = 0; active_ = true;
+  decayAge_ = 0.0f; gateHigh_ = true;
   randomState_ = 0x53494e54u; memset(phase_, 0, sizeof(phase_)); memset(comb_, 0, sizeof(comb_)); post_.noteOn(true);
   float d = parameters_.decay / 255.0f;
   static const float tails[] = {.85f, .70f, .48f, 1.10f, .42f, .80f, .85f};
   duration_ = .018f + d * d * tails[(int)parameters_.model];
 }
-void SinteredVoice::kill() { active_ = false; post_.kill(); }
+void SinteredVoice::noteOff() { gateHigh_ = false; }
+void SinteredVoice::kill() { active_ = gateHigh_ = false; post_.kill(); }
 float SinteredVoice::random() { randomState_ = randomState_ * 1664525u + 1013904223u; return ((randomState_ >> 8) * (1.0f / 8388608.0f)) - 1.0f; }
 float SinteredVoice::osc(float frequency, int slot) {
   phase_[slot] += frequency / sampleRate_; phase_[slot] -= floorf(phase_[slot]); return sinf(2.0f * kPi * phase_[slot]);
@@ -57,6 +59,7 @@ void SinteredVoice::render(float* output, size_t frames) {
   static constexpr float modelGain[] = {1.822647f, 1.995262f, 1.995262f, 1.995262f, 1.995262f, 1.995262f, .75f};
   const float calibration = modelGain[(int)parameters_.model];
   const float motion = (parameters_.motion - 128) / 128.0f;
+  const bool holding = parameters_.gate != 0 && gateHigh_;
   const float motionDepth = fabsf(motion);
   const float motionTime = .012f + motionDepth * .08f;
   const bool fixedA = parameters_.model != SinteredModel::burst &&
@@ -76,7 +79,7 @@ void SinteredVoice::render(float* output, size_t frames) {
     }
   }
   for (size_t i = 0; i < frames; ++i) {
-    if (age_ >= duration_) { kill(); memset(output + i, 0, (frames - i) * sizeof(float)); break; }
+    if (decayAge_ >= duration_) { kill(); memset(output + i, 0, (frames - i) * sizeof(float)); break; }
     float movement = 0.0f;
     if (parameters_.motion != 128) {
       float x = age_ / motionTime;
@@ -149,10 +152,11 @@ void SinteredVoice::render(float* output, size_t frames) {
     float raw = audioTanh(sample + feedback_ * (.2f + mod * 1.4f)); dc_ += .02f * (raw - dc_);
     float target = (raw - dc_) * (.12f + baseMod * .82f);
     feedback_ += (target - feedback_) * (.025f + .10f * (1.0f - c));
-    amplitude_ = expf(-5.5f * age_ / duration_);
+    amplitude_ = expf(-5.5f * decayAge_ / duration_);
     float processed = post_.process(audioTanh(sample) * amplitude_ * calibration);
     if (parameters_.model == SinteredModel::squall) processed = audioTanh(processed * (1.0f + c * 15.0f));
     output[i] = audioTanh(processed);
     age_ += 1.0f / sampleRate_;
+    if (!holding) decayAge_ += 1.0f / sampleRate_;
   }
 }
