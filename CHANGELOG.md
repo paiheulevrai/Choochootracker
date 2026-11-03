@@ -1,5 +1,35 @@
 # ChooChooTracker changelog
 
+## v1.0.23-alpha (draft)
+
+Changes since v1.0.21-alpha, including the v1.0.22-alpha NextUI hotfix.
+
+- Add Layer instruments combining up to three referenced instruments, with
+  independent tuning, level and modulation, and a Stereo Width insert.
+- Add master EQ and technical instrument EQ presets in banks 01-14 for new
+  projects; bank 00 stays flat and existing projects remain unchanged.
+- Add Sintered gate mode for sustained notes, clearer model-specific modulation
+  labels and insert parameter descriptions, and preserve modulation assignments
+  when changing instrument engines.
+- Expand MIDI CC mapping to 64 rows per project, improve destination selection
+  and controller learning, and support momentary-button toggles.
+- Add customizable animated backgrounds using theme accent colors, battery
+  percentage/runtime displays, and a playback counter visibility setting.
+- Add a Song-context minimap on the Chain screen, toggled with a persistent
+  OPT double tap; fix Windows tracker rendering after resizing.
+- Improve startup time, audio callback and input routing, filter coefficient
+  caching, mono sample playback, sampler grain windows and block rendering.
+- Fix audio output cycling around unavailable devices and Android background
+  audio continuity.
+- Add the NextUI Pak Store package for TrimUI Brick and Smart Pro, fix controls
+  and button labels, add short-Power-press suspend, and fix battery detection.
+- Restore the known Miyoo SDL runtime and allow release archive refreshes.
+- Add F-Droid metadata and Android listing resources, web font-generation
+  resources, and consolidate tests with a faster test build target.
+- Align the application, Android version name/code and Pak metadata on release
+  23. Release downloads cover Windows, Android, Linux AppImage, Raspberry Pi,
+  PortMaster, NextUI, MiyooPorts and Web.
+
 ## v1.0.19-alpha (October 19, 2026)
 
 - Added SoundFont instruments with collection browsing and Lane FX, plus

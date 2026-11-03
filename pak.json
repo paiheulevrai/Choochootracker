@@ -1,12 +1,13 @@
 {
   "name": "ChooChooTracker",
-  "version": "v1.0.22-alpha",
+  "version": "v1.0.23-alpha",
   "type": "TOOL",
   "description": "A portable music tracker combining classic sound chips, modern synth engines and samples.",
   "author": "ChooChooTracker contributors",
   "repo_url": "https://github.com/paiheulevrai/Choochootracker",
   "release_filename": "ChooChooTracker.pak.zip",
   "changelog": {
+    "v1.0.23-alpha": "Add Layer instruments, Stereo Width, master EQ, technical EQ presets, animated backgrounds, a Chain minimap, Sintered gate mode and 64 MIDI CC mappings. Improve audio performance, Android background playback, and NextUI controls, suspend and battery reporting.",
     "v1.0.22-alpha": "Fix unresponsive controls on NextUI, restore native gamepad bindings for existing installations, and match the TrimUI button labels.",
     "v1.0.21-alpha": "Initial NextUI release for TrimUI Brick and Smart Pro."
   },
