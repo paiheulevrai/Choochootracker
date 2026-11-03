@@ -604,6 +604,13 @@ static bool inputBranchNavigation(int keys) {
   //   Mixer→Song→Phrase works because the Song screen's own SHIFT+RIGHT goes
   //   straight to Phrase in simplified view; stepping LEFT from Phrase lands
   //   on Song (its own SHIFT+LEFT also returns to Song).
+  // Classic extra guard: the Chain screen indexes chains[] with
+  // song[*pSongRow][*pSongTrack], so stepping into it while the Song cursor
+  // sits on an EMPTY cell (e.g. SHIFT+UP to Project from an empty song row,
+  // then SHIFT+RIGHT) dereferences chains[32767] and shows the "CHAIN 7FFF"
+  // garbage screen (bug report: nonexistent chain filled with 000 phrases).
+  // Re-route to Song in that case — the Song screen's own SHIFT+RIGHT
+  // already blocks empty cells with "Enter a chain".
   const bool simplified =
       chipnomadState->project.viewMode == ViewMode::simplified;
   const AppScreen* spine[] = {&screenMixer, &screenSong,
@@ -611,6 +618,14 @@ static bool inputBranchNavigation(int keys) {
                               &screenPhrase, &screenInstrument, &screenTable};
   column += keys & keyRight ? 1 : -1;
   if (column > 5) column = 5;
+  if (!simplified && spine[column] == &screenChain && pSongRow && pSongTrack &&
+      *pSongRow >= 0 && *pSongRow < PROJECT_MAX_LENGTH && *pSongTrack >= 0 &&
+      *pSongTrack < PROJECT_MAX_TRACKS &&
+      chipnomadState->project.song[*pSongRow][*pSongTrack] == EMPTY_VALUE_16) {
+    // Empty cell under the Song cursor: the Chain screen has nothing to
+    // show. Land on the Song screen instead.
+    spine[column] = &screenSong;
+  }
   chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
   screenMessage(0, "");
   screenSetup(spine[column], column >= 4 ? cInstrument : -1);

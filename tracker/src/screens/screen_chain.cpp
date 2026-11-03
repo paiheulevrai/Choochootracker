@@ -62,6 +62,10 @@ static void init(void) {
 
 static void setup(int input) {
   chain = chipnomadState->project.song[*pSongRow][*pSongTrack];
+  // Defensive: an out-of-range or EMPTY cell must never index chains[].
+  // (Navigation guards route empty cells to the Song screen; this clamp
+  // keeps any other entry path safe.)
+  if (chain >= PROJECT_MAX_CHAINS) chain = 0;
   screen.selectMode = 0;
 }
 
