@@ -219,12 +219,11 @@ TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: pattern added in sim
   CHECK(chainIdx < PROJECT_MAX_CHAINS);
   CHECK(project->patternToChainMap[5] == chainIdx);
   Chain* ch = &project->chains[chainIdx];
-  // Bar 0 wants phrase 5 (pattern number) — empty+unreferenced → slot 5.
-  CHECK(ch->rows[0].phrase == 5);
-  CHECK(project->phrases[5].rows[0].note == 48);
-  // Bar 1 wants phrase 6 — also free.
-  CHECK(ch->rows[1].phrase == 6);
-  CHECK(project->phrases[6].rows[0].note == 50);
+  // Lowest-free-first: bars pack into slots 0 and 1.
+  CHECK(ch->rows[0].phrase == 0);
+  CHECK(project->phrases[0].rows[0].note == 48);
+  CHECK(ch->rows[1].phrase == 1);
+  CHECK(project->phrases[1].rows[0].note == 50);
   // Remaining rows empty (playback stops at the first empty row).
   CHECK(ch->rows[2].phrase == EMPTY_VALUE_16);
   CHECK(ch->rows[15].phrase == EMPTY_VALUE_16);
@@ -247,14 +246,17 @@ TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: occupied desired slo
 
   REQUIRE(convertPatternsToChains(project.get()) == 0);
   Chain* ch = &project->chains[project->song[0][0]];
-  CHECK(ch->rows[0].phrase == 11);
-  CHECK(ch->rows[1].phrase == 13);  // 12 occupied → closest free
-  CHECK(ch->rows[2].phrase == 14);
-  CHECK(ch->rows[3].phrase == 15);
+  // Lowest-free-first naming: slots 0..3 regardless of the pattern number
+  // (phrase 12's occupancy no longer matters — naming packs from 000).
+  CHECK(ch->rows[0].phrase == 0);
+  CHECK(ch->rows[1].phrase == 1);
+  CHECK(ch->rows[2].phrase == 2);
+  CHECK(ch->rows[3].phrase == 3);
   // Contents were copied in order.
-  CHECK(project->phrases[13].rows[0].note == 41);
-  CHECK(project->phrases[14].rows[0].note == 42);
-  CHECK(project->phrases[15].rows[0].note == 43);
+  CHECK(project->phrases[0].rows[0].note == 40);
+  CHECK(project->phrases[1].rows[0].note == 41);
+  CHECK(project->phrases[2].rows[0].note == 42);
+  CHECK(project->phrases[3].rows[0].note == 43);
   // Original pattern phrases remain untouched.
   CHECK(project->phrases[101].rows[0].note == 41);
 }
@@ -276,8 +278,8 @@ TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: identical bars share
   Chain* ch = &project->chains[project->song[0][0]];
   CHECK(ch->rows[0].phrase == ch->rows[1].phrase);
   CHECK(ch->rows[0].phrase == ch->rows[2].phrase);
-  CHECK(ch->rows[0].phrase == 7);  // desired slot pattern+0
-  CHECK(project->phrases[7].rows[0].note == 55);
+  CHECK(ch->rows[0].phrase == 0);  // lowest free slot
+  CHECK(project->phrases[0].rows[0].note == 55);
 }
 
 TEST_CASE_FIXTURE(PatternFixture, "convertPatternsToChains: transposed bar bakes into fresh slot") {
@@ -422,6 +424,58 @@ TEST_CASE_FIXTURE(PatternFixture, "conversion: unchanged pairs keep slot numbers
   CHECK(std::memcmp(&project->patterns[3], &snapshot3, sizeof(Pattern)) == 0);
   CHECK(project->patterns[20].bars[1].phrase == 52);  // edit carried
   CHECK(project->patterns[20].bars[0].phrase == snapshot20.bars[0].phrase);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "conversion: repeated edit cycles leave untouched pairs byte-identical") {
+  // Mirrors the app workflow: alternate conversions, editing the LIVE mode's
+  // structure each cycle. Every conversion rebuilds only the edited pair;
+  // all other pairs stay byte-identical throughout.
+  setupTestChain(project.get(), 1, 30, 2);
+  setupTestChain(project.get(), 2, 40, 2);
+  project->song[0][0] = 1;
+  project->song[1][0] = 2;
+
+  // classic -> simplified
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  Pattern snap1 = project->patterns[1];
+  Pattern snap2 = project->patterns[2];
+  Chain chainSnap2 = project->chains[2];
+
+  // Cycle 1 (in simplified): edit PATTERN 1's bar 0 to a new phrase.
+  project->patterns[1].bars[0].phrase = 60;
+  project->phrases[60].rows[0].note = 55;
+
+  // simplified -> classic: chain 1 rebuilt (edit carried), chain 2 restored.
+  REQUIRE(convertPatternsToChains(project.get()) == 0);
+  CHECK(std::memcmp(&project->chains[2], &chainSnap2, sizeof(Chain)) == 0);
+  const bool cycle1Carried =
+    project->phrases[project->chains[1].rows[0].phrase].rows[0].note == 55;
+  CHECK(cycle1Carried);
+
+  // Cycle 2 (in classic): edit CHAIN 2's row 1 to a new phrase (and clear
+  // the row's old transpose — a fresh untransposed phrase).
+  project->chains[2].rows[1].phrase = 62;
+  project->chains[2].rows[1].transpose = 0;
+  project->phrases[62].rows[0].note = 66;
+  Pattern snap1b = project->patterns[1];
+  // classic -> simplified: pattern 2 rebuilt (edit carried), pattern 1
+  // untouched.
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  CHECK(std::memcmp(&project->patterns[1], &snap1b, sizeof(Pattern)) == 0);
+  const bool cycle2Carried =
+    project->phrases[project->patterns[2].bars[1].phrase].rows[0].note == 66;
+  CHECK(cycle2Carried);
+  // Chain 2 keeps the edited phrase (conversion never touches chains).
+  CHECK(project->chains[2].rows[1].phrase == 62);
+
+  // Cycle 3 (in simplified): edit PATTERN 2 bar 0; pattern 1 must stay put.
+  project->patterns[2].bars[0].phrase = 70;
+  project->phrases[70].rows[0].note = 77;
+  REQUIRE(convertPatternsToChains(project.get()) == 0);
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  CHECK(project->phrases[project->patterns[2].bars[0].phrase].rows[0].note == 77);
+  CHECK(project->patterns[1].bars[0].phrase == 60);  // untouched through cycles
+  CHECK(project->phrases[project->chains[2].rows[0].phrase].rows[0].note == 77);
 }
 
 TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: pattern number = chain number, occupied falls back") {

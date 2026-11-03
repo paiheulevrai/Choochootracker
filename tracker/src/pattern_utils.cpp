@@ -257,10 +257,10 @@ int viewModeIsEmpty(Project* p, int cellIdx) {
 //     saved conversion state is restored. Patterns that changed (edited
 //     after the conversion) and unmapped ones allocate/rebuild a chain with
 //     EXACTLY their bar count as phrase rows (remaining rows empty —
-//     playback stops there, same as an empty pattern bar). Bar k wants
-//     phrase number (pattern + k); occupied → closest free phrase number
-//     (gaps allowed). Bars whose BAKED content is identical share one
-//     phrase slot to save space.
+//     playback stops there, same as an empty pattern bar). Chain phrase
+//     slots are allocated LOWEST-FREE-FIRST (scanning upward from 000), so
+//     converted phrases pack compactly regardless of the pattern number.
+//     Bars whose BAKED content is identical share one phrase slot.
 
 // Note clamp used when baking a transpose into a phrase's notes. Matches
 // the phrase editor's note ceiling: the last entry of the pitch table.
@@ -269,118 +269,6 @@ static uint8_t conversionMaxNote(Project* p) {
   if (max < 0) max = 0;
   if (max > 255) max = 255;
   return (uint8_t)max;
-}
-
-// Bake `transpose` into a COPY of src and place it in a fresh phrase slot
-// (closest unallocated to `targetIdx`). Never modifies src in place:
-// chains[] must stay untouched during classic→simplified (it is the stored
-// original). Returns the new phrase index or EMPTY_VALUE_16 when the phrase
-// pool is exhausted.
-static int conversionBakeTranspose(Project* p, int src, int targetIdx,
-  int transpose) {
-  int dst = patternFindClosestEmptyPhrase(p, targetIdx);
-  if (dst == EMPTY_VALUE_16) return EMPTY_VALUE_16;
-
-  p->phrases[dst] = p->phrases[src];
-  const uint8_t maxNote = conversionMaxNote(p);
-  for (int r = 0; r < 16; r++) {
-    uint8_t note = p->phrases[dst].rows[r].note;
-    if (note == EMPTY_VALUE_8 || note == NOTE_OFF) continue;
-    int shifted = (int)note + transpose;
-    if (shifted < 0) shifted = 0;
-    if (shifted > maxNote) shifted = maxNote;
-    p->phrases[dst].rows[r].note = (uint8_t)shifted;
-  }
-  return dst;
-}
-
-// Do two phrases hold identical content? Both structs are POD (verified:
-// FXCell has no data-bearing helper members), so memcmp is exact. Callers
-// must pass valid phrase indices.
-static int conversionPhraseContentEqual(Project* p, int a, int b) {
-  return memcmp(&p->phrases[a], &p->phrases[b], sizeof(Phrase)) == 0;
-}
-
-// ── Post-conversion change detection ────────────────────────────────────────
-// A mapped chain/pattern pair is IN SYNC when the pattern bars still hold
-// exactly what the chain rows play — i.e. neither side was edited since the
-// last conversion (or ever, for the first one). In-sync pairs are left
-// untouched on conversion (the saved conversion state is restored);
-// out-of-sync (edited, or added after the conversion) pairs are rebuilt
-// from the leaving mode's current content.
-//
-// Equivalence rule: the pattern's bar count equals the chain's consecutive
-// non-empty row count, and every bar's phrase content equals the row's
-// phrase content shifted by the row's SIGNED transpose (that is exactly
-// what baking produces; untransposed rows shift by 0 = verbatim content).
-// Notes shifted out of range clamp at conversion time, so the baked side
-// already holds the clamped values — the comparison below applies the same
-// clamp to the source side.
-static int conversionPairInSync(Project* p, int chainIdx, int patternIdx) {
-  const Chain* ch = &p->chains[chainIdx];
-  const Pattern* pat = &p->patterns[patternIdx];
-
-  int chainLen = 0;
-  for (int r = 0; r < 16; r++) {
-    if (ch->rows[r].phrase == EMPTY_VALUE_16) break;
-    chainLen++;
-  }
-
-  int len = pat->length;
-  if (len < 1) len = 1;
-  if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
-
-  if (chainLen == 0) {
-    // Empty chain: in sync only with a 1-bar pattern whose bar holds
-    // empty content (the fresh-phrase edge case conversion produces).
-    if (len != 1) return 0;
-    uint16_t barPhrase = pat->bars[0].phrase;
-    if (barPhrase == EMPTY_VALUE_16) return 1;  // empty bar ↔ empty chain
-    return phraseIsEmpty(p, barPhrase);
-  }
-
-  if (len != chainLen) return 0;  // bars added/removed after conversion
-
-  for (int r = 0; r < chainLen; r++) {
-    uint16_t rowPhrase = ch->rows[r].phrase;
-    uint16_t barPhrase = pat->bars[r].phrase;
-    if (rowPhrase == EMPTY_VALUE_16 || barPhrase == EMPTY_VALUE_16) return 0;
-    if (rowPhrase >= PROJECT_MAX_PHRASES || barPhrase >= PROJECT_MAX_PHRASES)
-      return 0;
-    const int transpose = (int8_t)ch->rows[r].transpose;
-    const Phrase* src = &p->phrases[rowPhrase];
-    const Phrase* baked = &p->phrases[barPhrase];
-    const uint8_t maxNote = conversionMaxNote(p);
-    for (int n = 0; n < 16; n++) {
-      uint8_t srcNote = src->rows[n].note;
-      uint8_t barNote = baked->rows[n].note;
-      if (transpose == 0) {
-        if (barNote != srcNote) return 0;
-        continue;
-      }
-      if (srcNote == EMPTY_VALUE_8 || srcNote == NOTE_OFF) {
-        if (barNote != srcNote) return 0;
-        continue;
-      }
-      int expected = (int)srcNote + transpose;
-      if (expected < 0) expected = 0;
-      if (expected > maxNote) expected = maxNote;
-      if (barNote != (uint8_t)expected) return 0;
-    }
-    // Non-note columns are never touched by baking: compare per row
-    // (note is the first member of each 16-byte row, so the rest of the
-    // row — instrument, volume, FX — is contiguous after it).
-    for (int n = 0; n < 16; n++) {
-      const uint8_t* srcRow = reinterpret_cast<const uint8_t*>(&src->rows[n]);
-      const uint8_t* bakRow = reinterpret_cast<const uint8_t*>(&baked->rows[n]);
-      // Skip row[0] (note): compare the remaining 15 bytes.
-      if (memcmp(srcRow + 1, bakRow + 1,
-                 sizeof(PhraseRow) - 1) != 0) {
-        return 0;
-      }
-    }
-  }
-  return 1;
 }
 
 // Phrase-slot state for allocation scans: referenced-by-anything and/or
@@ -423,27 +311,21 @@ static void conversionBuildPhraseState(Project* p, ConversionPhraseState* st) {
 // closest slot that is merely empty (referenced-but-empty phrases are
 // fair game — content is what matters). Returns EMPTY_VALUE_16 when no
 // empty slot exists at all.
+// Allocate a chain phrase slot for the next converted bar: the LOWEST free
+// phrase number (scanning upward from 0 — the same convention as
+// findEmptyPhrase), preferring slots that are empty AND unreferenced, then
+// merely empty. Converted phrases therefore pack compactly from 000 upward
+// instead of anchoring to the pattern number (user request: naming starts
+// with the lowest possible number). Returns EMPTY_VALUE_16 when no empty
+// slot exists at all.
 static int conversionAllocatePhraseSlot(Project* p,
   const ConversionPhraseState* st, int patternIdx, int bar) {
-  int desired = patternIdx + bar;
-  if (desired >= PROJECT_MAX_PHRASES) desired = PROJECT_MAX_PHRASES - 1;
-  if (desired < 0) desired = 0;
-
-  if (!st->hasContent[desired] && !st->referenced[desired]) return desired;
-
-  // Outward scan for empty+unreferenced, then empty.
+  (void)p;
+  (void)patternIdx;
+  (void)bar;
   for (int pass = 0; pass < 2; pass++) {
-    for (int offset = 0; offset < PROJECT_MAX_PHRASES; offset++) {
-      int hi = desired + offset;
-      int lo = desired - offset;
-      if (hi < PROJECT_MAX_PHRASES && !st->hasContent[hi] &&
-          (pass == 1 || !st->referenced[hi])) {
-        return hi;
-      }
-      if (lo >= 0 && lo != hi && !st->hasContent[lo] &&
-          (pass == 1 || !st->referenced[lo])) {
-        return lo;
-      }
+    for (int i = 0; i < PROJECT_MAX_PHRASES; i++) {
+      if (!st->hasContent[i] && (pass == 1 || !st->referenced[i])) return i;
     }
   }
   return EMPTY_VALUE_16;
@@ -456,6 +338,109 @@ static void conversionClaimSlot(ConversionPhraseState* st, int phrase) {
     st->referenced[phrase] = 1;
     st->hasContent[phrase] = 1;
   }
+}
+
+// Bake `transpose` into a COPY of src and place it in the LOWEST free
+// phrase slot (same compact numbering as conversionAllocatePhraseSlot;
+// scanning upward from 0). Never modifies src in place: chains[] must stay
+// untouched during classic→simplified (it is the stored original). The slot
+// is claimed in `st` so later bars cannot reuse it. Returns the new phrase
+// index or EMPTY_VALUE_16 when the phrase pool is exhausted.
+static int conversionBakeTranspose(Project* p, ConversionPhraseState* st,
+  int src, int transpose) {
+  int dst = conversionAllocatePhraseSlot(p, st, 0, 0);
+  if (dst == EMPTY_VALUE_16) return EMPTY_VALUE_16;
+  conversionClaimSlot(st, dst);
+
+  p->phrases[dst] = p->phrases[src];
+  const uint8_t maxNote = conversionMaxNote(p);
+  for (int r = 0; r < 16; r++) {
+    uint8_t note = p->phrases[dst].rows[r].note;
+    if (note == EMPTY_VALUE_8 || note == NOTE_OFF) continue;
+    int shifted = (int)note + transpose;
+    if (shifted < 0) shifted = 0;
+    if (shifted > maxNote) shifted = maxNote;
+    p->phrases[dst].rows[r].note = (uint8_t)shifted;
+  }
+  return dst;
+}
+
+// Do two phrases hold identical content? Both structs are POD (verified:
+// FXCell has no data-bearing helper members), so memcmp is exact. Callers
+// must pass valid phrase indices.
+static int conversionPhraseContentEqual(Project* p, int a, int b) {
+  return memcmp(&p->phrases[a], &p->phrases[b], sizeof(Phrase)) == 0;
+}
+
+// ── Content comparison helpers (reconciliation) ─────────────────────────────
+// Conversions RECONCILE the counterpart instead of blindly rebuilding it:
+// rows/bars that already play the same music keep their phrase number AND
+// transpose (the saved conversion state is recalled verbatim); only rows
+// whose music changed are re-allocated. This is what makes round trips
+// lossless and preserves the user's transposed rows.
+
+// Does the phrase at `target` hold `src`'s content shifted by `transpose`
+// (with the same clamping baking uses)? transpose == 0 → verbatim memcmp.
+static int conversionShiftedContentEqual(Project* p, int src, int transpose,
+  int target) {
+  const Phrase* a = &p->phrases[src];
+  const Phrase* b = &p->phrases[target];
+  const uint8_t maxNote = conversionMaxNote(p);
+  for (int n = 0; n < 16; n++) {
+    const uint8_t* aRow = reinterpret_cast<const uint8_t*>(&a->rows[n]);
+    const uint8_t* bRow = reinterpret_cast<const uint8_t*>(&b->rows[n]);
+    uint8_t srcNote = a->rows[n].note;
+    uint8_t dstNote = b->rows[n].note;
+    if (transpose == 0) {
+      if (dstNote != srcNote) return 0;
+    } else if (srcNote == EMPTY_VALUE_8 || srcNote == NOTE_OFF) {
+      if (dstNote != srcNote) return 0;
+    } else {
+      int expected = (int)srcNote + transpose;
+      if (expected < 0) expected = 0;
+      if (expected > maxNote) expected = maxNote;
+      if (dstNote != (uint8_t)expected) return 0;
+    }
+    // Non-note columns are never touched by baking: compare per row
+    // (note is the first member of each 16-byte row, so the rest of the
+    // row — instrument, volume, FX — is contiguous after it).
+    if (memcmp(aRow + 1, bRow + 1, sizeof(PhraseRow) - 1) != 0) return 0;
+  }
+  return 1;
+}
+
+// Two-sided variant: does phrase `a` with transpose `aTranspose` play the
+// same music as phrase `b` with transpose `bTranspose`? Each side's played
+// note is its stored note clamped after the shift; non-note columns compare
+// verbatim.
+static int conversionShiftedPairEqual(Project* p, int a, int aTranspose,
+  int b, int bTranspose) {
+  const Phrase* pa = &p->phrases[a];
+  const Phrase* pb = &p->phrases[b];
+  const uint8_t maxNote = conversionMaxNote(p);
+  for (int n = 0; n < 16; n++) {
+    uint8_t aNote = pa->rows[n].note;
+    uint8_t bNote = pb->rows[n].note;
+    int playedA;
+    if (aNote == EMPTY_VALUE_8 || aNote == NOTE_OFF || aTranspose == 0) {
+      playedA = aNote;
+    } else {
+      int v = (int)aNote + aTranspose;
+      playedA = v < 0 ? 0 : v > maxNote ? maxNote : v;
+    }
+    int playedB;
+    if (bNote == EMPTY_VALUE_8 || bNote == NOTE_OFF || bTranspose == 0) {
+      playedB = bNote;
+    } else {
+      int v = (int)bNote + bTranspose;
+      playedB = v < 0 ? 0 : v > maxNote ? maxNote : v;
+    }
+    if (playedA != playedB) return 0;
+    const uint8_t* aRow = reinterpret_cast<const uint8_t*>(&pa->rows[n]);
+    const uint8_t* bRow = reinterpret_cast<const uint8_t*>(&pb->rows[n]);
+    if (memcmp(aRow + 1, bRow + 1, sizeof(PhraseRow) - 1) != 0) return 0;
+  }
+  return 1;
 }
 
 // Collect the unique cell indices referenced by the song grid into out[]
@@ -491,43 +476,55 @@ static int conversionCollectSongCells(Project* p, int simplified,
 // from disk (pre-existing contract; viewMode is flipped LAST so a failed
 // call does not silently change the mode).
 
-// Build/rebuild `pat` from the chain's CURRENT rows: consecutive non-empty
-// rows become bars (playback stops at the first empty row), transposes are
-// baked into cloned phrases, bar transposes zeroed. Used for BOTH mapped
-// pairs (classic edits must propagate — the leaving mode is the source of
-// truth) and fresh allocations. Returns 0 on success.
-static int conversionBuildPatternFromChain(Project* p, int chainIdx,
-  int patternIdx) {
+// Reconcile `pat` with the chain's CURRENT rows: consecutive non-empty rows
+// are the pattern's bars. A bar that already plays the row's music (content
+// shifted by the row's signed transpose) is left untouched — phrase number
+// AND hidden transpose preserved (saved conversion state recalled). Bars
+// whose music changed are baked into fresh lowest-free slots. Rows beyond
+// the chain's run are dropped from the pattern's active length. Returns 0
+// on success.
+static int conversionReconcilePatternFromChain(Project* p,
+  ConversionPhraseState* st, int chainIdx, int patternIdx) {
   Pattern* pat = &p->patterns[patternIdx];
-  patternClear(pat);
+  const Chain* ch = &p->chains[chainIdx];
 
   int barCount = 0;
   for (int r = 0; r < 16 && barCount < PROJECT_MAX_PATTERN_LENGTH; r++) {
-    uint16_t phrase = p->chains[chainIdx].rows[r].phrase;
+    uint16_t phrase = ch->rows[r].phrase;
     if (phrase == EMPTY_VALUE_16) break;
     // transpose is a SIGNED value in a uint8_t: FF = -1 (playback casts
     // it to int8_t). Read it as signed or FF bakes as +255.
-    int transpose = (int8_t)p->chains[chainIdx].rows[r].transpose;
-    if (transpose != 0) {
-      // Bake the transpose: clone the phrase, shift its notes, point
-      // the bar at the clone. chains[] stays untouched.
-      int baked = conversionBakeTranspose(p, phrase, patternIdx, transpose);
+    int transpose = (int8_t)ch->rows[r].transpose;
+    uint16_t curBar = pat->bars[barCount].phrase;
+    if (curBar != EMPTY_VALUE_16 && curBar < PROJECT_MAX_PHRASES &&
+        conversionShiftedContentEqual(p, phrase, transpose, curBar)) {
+      // Same music: keep the bar exactly as saved.
+      pat->bars[barCount].transpose = 0;  // bars never carry transpose
+    } else if (transpose != 0) {
+      // Music changed and the row is transposed: bake into a fresh slot.
+      int baked = conversionBakeTranspose(p, st, phrase, transpose);
       if (baked == EMPTY_VALUE_16) return 2;  // phrases full
       pat->bars[barCount].phrase = (uint16_t)baked;
       pat->bars[barCount].transpose = 0;
     } else {
+      // Music changed, untransposed: point the bar at the row's phrase.
       pat->bars[barCount].phrase = phrase;
       pat->bars[barCount].transpose = 0;
     }
     barCount++;
   }
 
-  // Edge case: empty chain (zero non-empty rows) → 1-bar pattern with
-  // a freshly allocated empty phrase (spec decision #8).
+  // Edge case: empty chain (zero non-empty rows) → 1-bar pattern with a
+  // freshly allocated empty phrase, lowest free slot (spec decision #8).
   if (barCount == 0) {
-    int emptyPhrase = patternFindClosestEmptyPhrase(p, patternIdx);
-    if (emptyPhrase == EMPTY_VALUE_16) return 2;  // phrases full
-    pat->bars[0].phrase = (uint16_t)emptyPhrase;
+    uint16_t curBar = pat->bars[0].phrase;
+    if (curBar == EMPTY_VALUE_16 ||
+        (curBar < PROJECT_MAX_PHRASES && !phraseIsEmpty(p, curBar))) {
+      int emptyPhrase = conversionAllocatePhraseSlot(p, st, 0, 0);
+      if (emptyPhrase == EMPTY_VALUE_16) return 2;  // phrases full
+      conversionClaimSlot(st, emptyPhrase);
+      pat->bars[0].phrase = (uint16_t)emptyPhrase;
+    }
     pat->bars[0].transpose = 0;
     barCount = 1;
   }
@@ -539,6 +536,11 @@ static int conversionBuildPatternFromChain(Project* p, int chainIdx,
 int convertChainsToPatterns(Project* p) {
   uint16_t cells[PROJECT_MAX_CHAINS];
   int count = conversionCollectSongCells(p, 0, cells);
+
+  // Shared lowest-free phrase allocator state (baked clones + the
+  // empty-chain edge phrase claim slots here).
+  ConversionPhraseState st;
+  conversionBuildPhraseState(p, &st);
 
   for (int ci = 0; ci < count; ci++) {
     int chainIdx = cells[ci];
@@ -556,17 +558,13 @@ int convertChainsToPatterns(Project* p) {
       if (patternIdx == EMPTY_VALUE_16) return 1;  // patterns full
       p->chainToPatternMap[chainIdx] = patternIdx;
       p->patternToChainMap[patternIdx] = chainIdx;
-    } else if (conversionPairInSync(p, chainIdx, patternIdx)) {
-      // Mapped and still in sync with its chain (neither side edited since
-      // the last conversion): restore the saved conversion state — leave
-      // the pattern untouched. Newly allocated patterns always build.
-      continue;
     }
 
-    // Fresh or mapped-and-dirty: the pattern is (RE)BUILT from the chain's
-    // current content (the leaving classic mode is the source of truth —
-    // classic edits must propagate).
-    int result = conversionBuildPatternFromChain(p, chainIdx, patternIdx);
+    // Mapped or fresh: reconcile the pattern against the chain's current
+    // content — matching bars keep their saved phrase slots, changed ones
+    // rebuild (classic edits propagate).
+    int result = conversionReconcilePatternFromChain(p, &st, chainIdx,
+      patternIdx);
     if (result != 0) return result;
   }
 
@@ -593,26 +591,61 @@ int convertChainsToPatterns(Project* p) {
 // edits propagate), exactly like unmapped ones.
 // Returns 0 on success; non-zero on a fatal error (slots exhausted).
 
-// Build/rebuild the chain at `chainIdx` from the pattern's CURRENT bars:
-// exactly `length` phrase rows (remaining rows empty), per-bar phrase slots
-// (pattern+bar desired, closest free fallback), baked transposes, content
-// dedupe within the pattern. Returns 0 on success.
-static int conversionBuildChainFromPattern(Project* p,
+// Reconcile the chain at `chainIdx` with the pattern's CURRENT bars: the
+// chain gets exactly the pattern's bar count as phrase rows (remaining rows
+// empty). A row that already plays the bar's music keeps its phrase number
+// AND transpose (saved conversion state recalled); rows whose music changed
+// are re-allocated (transposed bars bake into fresh lowest-free slots).
+// Bars with identical baked content share one phrase. Returns 0 on success.
+static int conversionReconcileChainFromPattern(Project* p,
   ConversionPhraseState* st, int patternIdx, int chainIdx) {
   Chain* ch = &p->chains[chainIdx];
-  chainClear(ch);
-
   Pattern* pat = &p->patterns[patternIdx];
   int len = pat->length;
   if (len < 1) len = 1;
   if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
   pat->length = (uint8_t)len;
 
+  // Track which chain rows this reconciliation has already consumed so a
+  // later bar cannot reuse a row that was kept for an earlier position.
+  const Chain saved = *ch;
+  bool rowUsed[16];
+  for (int r = 0; r < 16; r++) rowUsed[r] = false;
+
   // Within this pattern: phrase chosen for each distinct baked content.
   // barPhrase[b] = chain phrase index for bar b.
   uint16_t barPhrase[PROJECT_MAX_PATTERN_LENGTH];
   for (int b = 0; b < len; b++) {
     uint16_t srcPhrase = pat->bars[b].phrase;
+
+    // Keep an existing row when it already plays this bar's music (row
+    // content shifted by the row transpose == bar content shifted by the
+    // bar transpose). Kept rows keep their saved phrase number AND
+    // transpose — the conversion state is recalled verbatim.
+    bool kept = false;
+    if (srcPhrase != EMPTY_VALUE_16 && srcPhrase < PROJECT_MAX_PHRASES) {
+      const int barTranspose = (int8_t)pat->bars[b].transpose;
+      for (int r = 0; r < 16; r++) {
+        if (rowUsed[r]) continue;
+        uint16_t rowPhrase = saved.rows[r].phrase;
+        if (rowPhrase == EMPTY_VALUE_16 || rowPhrase >= PROJECT_MAX_PHRASES)
+          continue;
+        const int rowTranspose = (int8_t)saved.rows[r].transpose;
+        if (!conversionShiftedPairEqual(p, rowPhrase, rowTranspose,
+                                        srcPhrase, barTranspose)) {
+          continue;
+        }
+        ch->rows[b].phrase = rowPhrase;
+        ch->rows[b].transpose = saved.rows[r].transpose;
+        rowUsed[r] = true;
+        barPhrase[b] = rowPhrase;
+        kept = true;
+        break;
+      }
+    }
+    if (kept) continue;
+
+    // No saved row plays this bar's music: rebuild the row.
     if (srcPhrase == EMPTY_VALUE_16) {
       barPhrase[b] = EMPTY_VALUE_16;
       ch->rows[b].phrase = EMPTY_VALUE_16;
@@ -620,15 +653,10 @@ static int conversionBuildChainFromPattern(Project* p,
       continue;
     }
 
-    // Same signed read as the classic conversion: FF = -1.
     int transpose = (int8_t)pat->bars[b].transpose;
 
     // Dedupe within the pattern: an earlier bar whose baked content is
-    // identical shares its phrase slot (spec: "bars exactly the same ...
-    // name them the same to save space").
-    // Sharing cases: same src + same transpose (incl. t = 0), or two
-    // untransposed bars with identical content. Transposed bars always own
-    // their fresh clone and never dedupe with a different (src, t) pair.
+    // identical shares its phrase slot.
     int reuse = -1;
     for (int prev = 0; prev < b; prev++) {
       if (barPhrase[prev] == EMPTY_VALUE_16) continue;
@@ -654,13 +682,12 @@ static int conversionBuildChainFromPattern(Project* p,
 
     int slot;
     if (transpose != 0) {
-      // Bake into a fresh slot near (pattern + bar).
-      int baked = conversionBakeTranspose(p, srcPhrase, patternIdx + b,
-        transpose);
+      // Bake into a fresh lowest-free slot.
+      int baked = conversionBakeTranspose(p, st, srcPhrase, transpose);
       if (baked == EMPTY_VALUE_16) return 2;  // phrases full
       slot = baked;
     } else {
-      slot = conversionAllocatePhraseSlot(p, st, patternIdx, b);
+      slot = conversionAllocatePhraseSlot(p, st, 0, 0);
       if (slot == EMPTY_VALUE_16) return 2;  // phrases full
       // Copy (don't move) the content so the pattern keeps its own phrase
       // data — both structures coexist for the way back.
@@ -670,6 +697,12 @@ static int conversionBuildChainFromPattern(Project* p,
     barPhrase[b] = (uint16_t)slot;
     ch->rows[b].phrase = (uint16_t)slot;
     ch->rows[b].transpose = 0;
+  }
+
+  // Rows beyond the pattern length: empty (playback stops there).
+  for (int r = len; r < 16; r++) {
+    ch->rows[r].phrase = EMPTY_VALUE_16;
+    ch->rows[r].transpose = 0;
   }
   return 0;
 }
@@ -693,17 +726,14 @@ int convertPatternsToChains(Project* p) {
       if (chainIdx == EMPTY_VALUE_16) return 1;  // chains full
       p->patternToChainMap[patternIdx] = chainIdx;
       p->chainToPatternMap[chainIdx] = patternIdx;
-    } else if (conversionPairInSync(p, chainIdx, patternIdx)) {
-      // Mapped and still in sync with its pattern (neither side edited
-      // since the last conversion): restore the saved conversion state —
-      // leave the chain untouched. Newly allocated chains always build.
-      continue;
+      chainClear(&p->chains[chainIdx]);
     }
 
-    // Fresh or mapped-and-dirty: the chain is (RE)BUILT from the pattern's
-    // current content (the leaving simplified mode is the source of truth —
-    // simplified edits must propagate).
-    int result = conversionBuildChainFromPattern(p, &st, patternIdx, chainIdx);
+    // Mapped or fresh: reconcile the chain against the pattern's current
+    // content — matching rows keep their saved phrase slots and transposes,
+    // changed ones rebuild (simplified edits propagate).
+    int result = conversionReconcileChainFromPattern(p, &st, patternIdx,
+      chainIdx);
     if (result != 0) return result;
   }
 

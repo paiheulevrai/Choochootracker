@@ -41,10 +41,11 @@ extern "C" {
 //         get their chain REBUILT from the pattern's CURRENT bars, so
 //         simplified-side edits propagate. The chain holds EXACTLY the
 //         pattern's bar count as phrase
-//         rows (remaining rows empty). Bar k wants phrase number
-//         (pattern + k); if occupied, the closest free number is used
-//         (gaps allowed). Bars with identical baked content share one
-//         phrase. Transpose != 0 bars are baked into fresh clones.
+//         rows (remaining rows empty). Chain phrase slots are allocated
+//         LOWEST-FREE-FIRST (scanning upward from 000, same convention as
+//         findEmptyPhrase), so converted phrases pack compactly regardless
+//         of the pattern number. Bars with identical baked content share
+//         one phrase. Transpose != 0 bars are baked into fresh clones.
 //     - patterns[] content is never modified.
 //     - Sets p->viewMode = ViewMode::classic.
 //
