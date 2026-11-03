@@ -252,8 +252,10 @@ int viewModeIsEmpty(Project* p, int cellIdx) {
 //
 //   simplified → classic:
 //     Patterns are processed ascending (lowest number first). Mapped
-//     patterns (converted earlier, chain content untouched since) only get
-//     their song cells rewritten. Unmapped patterns allocate a chain with
+//     patterns still in sync with their chain (neither side edited since
+//     the last conversion) only get their song cells rewritten — the
+//     saved conversion state is restored. Patterns that changed (edited
+//     after the conversion) and unmapped ones allocate/rebuild a chain with
 //     EXACTLY their bar count as phrase rows (remaining rows empty —
 //     playback stops there, same as an empty pattern bar). Bar k wants
 //     phrase number (pattern + k); occupied → closest free phrase number
@@ -297,6 +299,88 @@ static int conversionBakeTranspose(Project* p, int src, int targetIdx,
 // must pass valid phrase indices.
 static int conversionPhraseContentEqual(Project* p, int a, int b) {
   return memcmp(&p->phrases[a], &p->phrases[b], sizeof(Phrase)) == 0;
+}
+
+// ── Post-conversion change detection ────────────────────────────────────────
+// A mapped chain/pattern pair is IN SYNC when the pattern bars still hold
+// exactly what the chain rows play — i.e. neither side was edited since the
+// last conversion (or ever, for the first one). In-sync pairs are left
+// untouched on conversion (the saved conversion state is restored);
+// out-of-sync (edited, or added after the conversion) pairs are rebuilt
+// from the leaving mode's current content.
+//
+// Equivalence rule: the pattern's bar count equals the chain's consecutive
+// non-empty row count, and every bar's phrase content equals the row's
+// phrase content shifted by the row's SIGNED transpose (that is exactly
+// what baking produces; untransposed rows shift by 0 = verbatim content).
+// Notes shifted out of range clamp at conversion time, so the baked side
+// already holds the clamped values — the comparison below applies the same
+// clamp to the source side.
+static int conversionPairInSync(Project* p, int chainIdx, int patternIdx) {
+  const Chain* ch = &p->chains[chainIdx];
+  const Pattern* pat = &p->patterns[patternIdx];
+
+  int chainLen = 0;
+  for (int r = 0; r < 16; r++) {
+    if (ch->rows[r].phrase == EMPTY_VALUE_16) break;
+    chainLen++;
+  }
+
+  int len = pat->length;
+  if (len < 1) len = 1;
+  if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+
+  if (chainLen == 0) {
+    // Empty chain: in sync only with a 1-bar pattern whose bar holds
+    // empty content (the fresh-phrase edge case conversion produces).
+    if (len != 1) return 0;
+    uint16_t barPhrase = pat->bars[0].phrase;
+    if (barPhrase == EMPTY_VALUE_16) return 1;  // empty bar ↔ empty chain
+    return phraseIsEmpty(p, barPhrase);
+  }
+
+  if (len != chainLen) return 0;  // bars added/removed after conversion
+
+  for (int r = 0; r < chainLen; r++) {
+    uint16_t rowPhrase = ch->rows[r].phrase;
+    uint16_t barPhrase = pat->bars[r].phrase;
+    if (rowPhrase == EMPTY_VALUE_16 || barPhrase == EMPTY_VALUE_16) return 0;
+    if (rowPhrase >= PROJECT_MAX_PHRASES || barPhrase >= PROJECT_MAX_PHRASES)
+      return 0;
+    const int transpose = (int8_t)ch->rows[r].transpose;
+    const Phrase* src = &p->phrases[rowPhrase];
+    const Phrase* baked = &p->phrases[barPhrase];
+    const uint8_t maxNote = conversionMaxNote(p);
+    for (int n = 0; n < 16; n++) {
+      uint8_t srcNote = src->rows[n].note;
+      uint8_t barNote = baked->rows[n].note;
+      if (transpose == 0) {
+        if (barNote != srcNote) return 0;
+        continue;
+      }
+      if (srcNote == EMPTY_VALUE_8 || srcNote == NOTE_OFF) {
+        if (barNote != srcNote) return 0;
+        continue;
+      }
+      int expected = (int)srcNote + transpose;
+      if (expected < 0) expected = 0;
+      if (expected > maxNote) expected = maxNote;
+      if (barNote != (uint8_t)expected) return 0;
+    }
+    // Non-note columns are never touched by baking: compare per row
+    // (note is the first member of each 16-byte row, so the rest of the
+    // row — instrument, volume, FX — is contiguous after it).
+    for (int n = 0; n < 16; n++) {
+      const uint8_t* srcRow = reinterpret_cast<const uint8_t*>(&src->rows[n]);
+      const uint8_t* bakRow = reinterpret_cast<const uint8_t*>(&baked->rows[n]);
+      // Skip row[0] (note): compare the remaining 15 bytes.
+      if (memcmp(srcRow + 1, bakRow + 1,
+                 sizeof(PhraseRow) - 1) != 0) {
+        return 0;
+      }
+    }
+  }
+  return 1;
 }
 
 // Phrase-slot state for allocation scans: referenced-by-anything and/or
@@ -459,8 +543,9 @@ int convertChainsToPatterns(Project* p) {
   for (int ci = 0; ci < count; ci++) {
     int chainIdx = cells[ci];
     uint16_t patternIdx = p->chainToPatternMap[chainIdx];
+    const int wasMapped = patternIdx != EMPTY_VALUE_16;
 
-    if (patternIdx == EMPTY_VALUE_16) {
+    if (!wasMapped) {
       // Pattern number = chain number when free, else closest free slot.
       if (patternIsEmpty(p, chainIdx) &&
           p->patternToChainMap[chainIdx] == EMPTY_VALUE_16) {
@@ -471,11 +556,16 @@ int convertChainsToPatterns(Project* p) {
       if (patternIdx == EMPTY_VALUE_16) return 1;  // patterns full
       p->chainToPatternMap[chainIdx] = patternIdx;
       p->patternToChainMap[patternIdx] = chainIdx;
+    } else if (conversionPairInSync(p, chainIdx, patternIdx)) {
+      // Mapped and still in sync with its chain (neither side edited since
+      // the last conversion): restore the saved conversion state — leave
+      // the pattern untouched. Newly allocated patterns always build.
+      continue;
     }
 
-    // Mapped or fresh: the pattern is REBUILT from the chain's current
-    // content (the leaving classic mode is the source of truth — classic
-    // edits must propagate).
+    // Fresh or mapped-and-dirty: the pattern is (RE)BUILT from the chain's
+    // current content (the leaving classic mode is the source of truth —
+    // classic edits must propagate).
     int result = conversionBuildPatternFromChain(p, chainIdx, patternIdx);
     if (result != 0) return result;
   }
@@ -595,17 +685,23 @@ int convertPatternsToChains(Project* p) {
   for (int pi = 0; pi < count; pi++) {
     int patternIdx = cells[pi];
     uint16_t chainIdx = p->patternToChainMap[patternIdx];
+    const int wasMapped = chainIdx != EMPTY_VALUE_16;
 
-    if (chainIdx == EMPTY_VALUE_16) {
+    if (!wasMapped) {
       // Unmapped pattern: allocate a chain (closest free slot).
       chainIdx = (uint16_t)findClosestEmptyChain(p, patternIdx);
       if (chainIdx == EMPTY_VALUE_16) return 1;  // chains full
       p->patternToChainMap[patternIdx] = chainIdx;
       p->chainToPatternMap[chainIdx] = patternIdx;
+    } else if (conversionPairInSync(p, chainIdx, patternIdx)) {
+      // Mapped and still in sync with its pattern (neither side edited
+      // since the last conversion): restore the saved conversion state —
+      // leave the chain untouched. Newly allocated chains always build.
+      continue;
     }
 
-    // Mapped or fresh: the chain is REBUILT from the pattern's current
-    // content (the leaving simplified mode is the source of truth —
+    // Fresh or mapped-and-dirty: the chain is (RE)BUILT from the pattern's
+    // current content (the leaving simplified mode is the source of truth —
     // simplified edits must propagate).
     int result = conversionBuildChainFromPattern(p, &st, patternIdx, chainIdx);
     if (result != 0) return result;
