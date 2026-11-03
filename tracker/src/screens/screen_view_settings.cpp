@@ -101,7 +101,10 @@ static const char* modeDescription(ViewMode mode) {
     : "Follows LSDJ-style song - chain - phrase structure";
 }
 
-#define VIEW_DESC_WIDTH (40)
+// Wrap width stops at x=34: the screen map owns columns 34..39 on rows
+// 14..19 and is redrawn every frame, so any text past x=33 gets wiped
+// mid-word (seen as cut-off letters in the helper area).
+#define VIEW_DESC_WIDTH (34)
 #define VIEW_DESC_ROWS (3)
 #define VIEW_DESC_TOP_Y (17)
 
@@ -136,9 +139,10 @@ static void drawDescriptionRow(void) {
   const int onModeRow = viewData.cursorRow == 0;
   if (!onModeRow) {
     if (lastDescVisible) {
-      // Cursor left the Mode row: wipe the description.
+      // Cursor left the Mode row: wipe the description (description area
+      // only — the screen map at x>=34 must not flicker).
       gfxSetBgColor(appSettings.colorScheme.background);
-      gfxClearRect(0, VIEW_DESC_TOP_Y, 40, VIEW_DESC_ROWS);
+      gfxClearRect(0, VIEW_DESC_TOP_Y, VIEW_DESC_WIDTH, VIEW_DESC_ROWS);
       lastDescVisible = 0;
     }
     return;
@@ -155,7 +159,7 @@ static void drawDescriptionRow(void) {
   }
   if (count < VIEW_DESC_ROWS) {
     gfxSetBgColor(appSettings.colorScheme.background);
-    gfxClearRect(0, VIEW_DESC_TOP_Y + count, 40,
+    gfxClearRect(0, VIEW_DESC_TOP_Y + count, VIEW_DESC_WIDTH,
       VIEW_DESC_ROWS - count);
   }
   lastDescVisible = 1;
