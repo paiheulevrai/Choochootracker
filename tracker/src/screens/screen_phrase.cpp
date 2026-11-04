@@ -160,6 +160,19 @@ static void setup(int input) {
           chipnomadQueueProjectRefresh(chipnomadState);
         }
       }
+      // Clone-on-write: a bar sharing its phrase with another bar (multiplied
+      // pattern) or any chain row gets its own copy BEFORE the user edits it,
+      // so typing notes into one bar never mutates its siblings or the
+      // classic view's phrases.
+      if (phraseIdx != EMPTY_VALUE_16) {
+        int exclusive = patternEnsureBarExclusive(p, NULL, currentPatternIdx,
+          bar);
+        if (exclusive != EMPTY_VALUE_16 && exclusive != phraseIdx) {
+          phraseIdx = exclusive;
+          projectModified = 1;
+          chipnomadQueueProjectRefresh(chipnomadState);
+        }
+      }
     } else {
       phraseIdx = EMPTY_VALUE_16;
     }

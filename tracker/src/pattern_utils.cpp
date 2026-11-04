@@ -443,6 +443,48 @@ static int conversionShiftedPairEqual(Project* p, int a, int aTranspose,
   return 1;
 }
 
+// Clone-on-write for simplified-mode bar editing: when the phrase bound to
+// `barIdx` of `patternIdx` is ALSO referenced anywhere else (another pattern
+// bar, or any chain row), copy it into a fresh lowest-free slot and point
+// only THIS bar at the copy — so editing one bar of a multiplied pattern
+// never mutates its siblings or the classic view's phrases. Returns the
+// (possibly new) phrase index, or EMPTY_VALUE_16 when the pool is exhausted.
+// The clone claims the slot in `st` when provided.
+int patternEnsureBarExclusive(Project* p, ConversionPhraseState* st,
+  int patternIdx, int barIdx) {
+  Pattern* pat = &p->patterns[patternIdx];
+  uint16_t phrase = pat->bars[barIdx].phrase;
+  if (phrase == EMPTY_VALUE_16 || phrase >= PROJECT_MAX_PHRASES) return phrase;
+
+  int otherRefs = 0;
+  for (int c = 0; c < PROJECT_MAX_CHAINS && otherRefs == 0; c++) {
+    if (chainIsEmpty(p, c)) continue;
+    for (int r = 0; r < 16; r++) {
+      if (p->chains[c].rows[r].phrase == phrase) { otherRefs = 1; break; }
+    }
+  }
+  for (int c = 0; c < PROJECT_MAX_PATTERNS && otherRefs == 0; c++) {
+    if (patternIsEmpty(p, c)) continue;
+    int len = p->patterns[c].length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+    for (int b = 0; b < len; b++) {
+      if (c == patternIdx && b == barIdx) continue;
+      if (p->patterns[c].bars[b].phrase == phrase) { otherRefs = 1; break; }
+    }
+  }
+  if (!otherRefs) return phrase;  // already exclusive
+
+  int fresh = st ? conversionAllocatePhraseSlot(p, st, 0, 0)
+                 : patternFindClosestEmptyPhrase(p, patternIdx);
+  if (fresh == EMPTY_VALUE_16) return EMPTY_VALUE_16;  // pool exhausted
+  p->phrases[fresh] = p->phrases[phrase];
+  if (st) conversionClaimSlot(st, fresh);
+  pat->bars[barIdx].phrase = (uint16_t)fresh;
+  pat->bars[barIdx].transpose = 0;
+  return fresh;
+}
+
 // Collect the unique cell indices referenced by the song grid into out[]
 // (ascending). Returns the count; out must hold PROJECT_MAX_CHAINS entries.
 // Used by both conversions to process each converted unit exactly once.
