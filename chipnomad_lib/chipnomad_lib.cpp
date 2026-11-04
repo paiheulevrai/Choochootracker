@@ -758,11 +758,60 @@ static PlaybackTrackState* voiceOwnerState(ChipNomadState* state, int owner) {
 }
 
 static int voiceOwnerLimit(const ChipNomadState* state) {
-  return PROJECT_MAX_TRACKS + state->audioProject.tracksCount * INSTRUMENT_LAYER_COUNT;
+  return state->voiceOwnerCount;
 }
 
 static bool voiceOwnerValid(const ChipNomadState* state, int owner) {
-  return owner >= PROJECT_MAX_TRACKS || owner < state->audioProject.tracksCount;
+  return owner < PROJECT_MAX_TRACKS ? owner < state->audioProject.tracksCount
+    : (state->layerVoiceTrackMask & (1u << voiceOwnerTrack(owner))) != 0;
+}
+
+static void updateVoiceOwnerCount(ChipNomadState* state) {
+  state->voiceOwnerCount = state->audioProject.tracksCount;
+  for (int track = state->audioProject.tracksCount - 1; track >= 0; --track)
+    if (state->layerVoiceTrackMask & (1u << track)) {
+      state->voiceOwnerCount = PROJECT_MAX_TRACKS + (track + 1) * INSTRUMENT_LAYER_COUNT;
+      break;
+    }
+}
+
+template <typename Voice>
+static bool ownerVoicesActive(Voice* const pool[][CHORD_MAX_VOICES], int owner) {
+  for (int slot = 0; slot < CHORD_MAX_VOICES; ++slot)
+    if (pool[owner][slot] && pool[owner][slot]->active()) return true;
+  return false;
+}
+
+static void retireLayerTracks(ChipNomadState* state) {
+  const uint8_t retiring = state->layerVoiceTrackMask & ~state->playbackState.layerTrackMask;
+  if (!retiring) return;
+  for (int track = 0; track < state->audioProject.tracksCount; ++track) {
+    if (!(retiring & (1u << track))) continue;
+    bool active = false;
+    for (int lane = 0; lane < INSTRUMENT_LAYER_COUNT && !active; ++lane) {
+      const int owner = PROJECT_MAX_TRACKS + track * INSTRUMENT_LAYER_COUNT + lane;
+      active = ownerVoicesActive(state->sampleVoices, owner) ||
+        ownerVoicesActive(state->soundbankVoices, owner) ||
+        ownerVoicesActive(state->braidsVoices, owner) ||
+        ownerVoicesActive(state->audioInputVoices, owner) ||
+        ownerVoicesActive(state->scwfVoices, owner) ||
+        ownerVoicesActive(state->plaitsVoices, owner) ||
+        ownerVoicesActive(state->plaitsAltVoices, owner) ||
+        ownerVoicesActive(state->achchidVoices, owner) ||
+        ownerVoicesActive(state->drumSynthVoices, owner) ||
+        ownerVoicesActive(state->mmeVoices, owner) ||
+        ownerVoicesActive(state->monkVoices, owner) ||
+        ownerVoicesActive(state->sinteredVoices, owner) ||
+        ownerVoicesActive(state->opllVoices, owner) ||
+        ownerVoicesActive(state->oplVoices, owner) ||
+        ownerVoicesActive(state->fourOpVoices, owner) ||
+        ownerVoicesActive(state->simpleChipVoices, owner) ||
+        ownerVoicesActive(state->sidVoices, owner) ||
+        (state->dx7Parts[owner] && state->dx7Parts[owner]->active());
+    }
+    if (!active) state->layerVoiceTrackMask &= ~(1u << track);
+  }
+  updateVoiceOwnerCount(state);
 }
 
 static int layerChildPan(ChipNomadState* state, int owner) {
@@ -997,6 +1046,7 @@ ChipNomadState* chipnomadCreate(void) {
   projectInit(&state->project);
   state->audioProject = state->project;
   playbackInit(&state->playbackState, &state->audioProject);
+  updateVoiceOwnerCount(state);
   state->mixVolume = 1.0f;
   state->aySampleDithering = 1; // Default: ON
   state->braidsBits = 6;
@@ -1311,6 +1361,8 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
   state->stopTransition = {};
   state->audioProject = state->project;
   state->playbackState.p = &state->audioProject;
+  state->layerVoiceTrackMask = 0;
+  updateVoiceOwnerCount(state);
   bool used[static_cast<int>(InstrumentType::totalCount)] = {};
   for (const auto& instrument : state->audioProject.instruments) {
     const int type = static_cast<int>(instrument.type);
@@ -1450,7 +1502,10 @@ static int audioRateModulationFrames(const ChipNomadState* state) {
       &state->playbackState.tracks[trackIdx],
       &state->playbackState.layerTracks[trackIdx][0], &state->playbackState.layerTracks[trackIdx][1],
       &state->playbackState.layerTracks[trackIdx][2]};
-    for (const PlaybackTrackState* track : tracks) {
+    const int count = state->playbackState.layerTrackMask & (1u << trackIdx)
+      ? 1 + INSTRUMENT_LAYER_COUNT : 1;
+    for (int lane = 0; lane < count; ++lane) {
+      const PlaybackTrackState* track = tracks[lane];
       for (int i = 0; i < 4; ++i) {
         const PlaybackModState* mod = &track->note.modulation[i];
         if (!mod->modulation || mod->modulation->type != ModulationType::FLFO ||
@@ -1589,9 +1644,13 @@ static void updateAudioRateModulations(ChipNomadState* state, int frames) {
       &state->playbackState.tracks[trackIdx],
       &state->playbackState.layerTracks[trackIdx][0], &state->playbackState.layerTracks[trackIdx][1],
       &state->playbackState.layerTracks[trackIdx][2]};
-    for (PlaybackTrackState* track : tracks)
+    const int count = state->playbackState.layerTrackMask & (1u << trackIdx)
+      ? 1 + INSTRUMENT_LAYER_COUNT : 1;
+    for (int lane = 0; lane < count; ++lane) {
+      PlaybackTrackState* track = tracks[lane];
       for (int i = 0; i < 4; ++i)
         playbackModNextAudioFrames(&track->note.modulation[i], (float)state->sampleRate, frames);
+    }
   }
   updateSoundbankVoices(state);
   updateSampleVoices(state); updateAudioInputVoices(state);
@@ -1655,6 +1714,8 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
   state->frameSampleCounter += state->sampleRate / state->audioProject.tickRate;
   int allTracksStopped = playbackNextFrame(state);
+  state->layerVoiceTrackMask |= state->playbackState.layerTrackMask;
+  updateVoiceOwnerCount(state);
   if (!wasPlaying && playbackIsPlaying(&state->playbackState) && state->masterInsertChain)
     state->masterInsertChain->reset();
   for (int t = 0; t < state->audioProject.tracksCount; ++t)
@@ -1687,6 +1748,7 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   updateSampleVoices(state); updateAudioInputVoices(state); updateSCWFVoices(state); updateBraidsVoices(state);
   updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); updateDrumSynthVoices(state);
   updateMMEVoices(state); updateMonkVoices(state); updateSinteredVoices(state); updateOPLLVoices(state); updateOPLVoices(state); updateFourOpVoices(state); updateSimpleChipVoices(state); updateSIDVoices(state); updateDX7Voices(state); applyVoiceEvents(state, dueMicros);
+  retireLayerTracks(state);
   for (int t = 0; t < state->audioProject.tracksCount; ++t) {
     PlaybackTrackState& track = state->playbackState.tracks[t];
     if (track.note.instrument < PROJECT_MAX_INSTRUMENTS &&
@@ -2111,8 +2173,8 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
     SIDVoice* sidPool[VOICE_OWNER_COUNT*CHORD_MAX_VOICES];int sidCount=0;
     // Order roots first across tracks; deterministic stealing retains new roots.
     if (state->sidVoices[0][0]) {
-      for(int slot=0;slot<CHORD_MAX_VOICES;++slot)for(int t=0;t<VOICE_OWNER_COUNT;++t)
-        if(state->sidVoices[t][slot])sidPool[sidCount++]=state->sidVoices[t][slot];
+      for(int slot=0;slot<CHORD_MAX_VOICES;++slot)for(int t=0;t<voiceOwnerLimit(state);++t)
+        if(voiceOwnerValid(state,t)&&state->sidVoices[t][slot])sidPool[sidCount++]=state->sidVoices[t][slot];
       limitSIDVoices(sidPool,sidCount,4);
     }
     renderMonoVoiceTracks(state,state->sidVoices,output,frames);

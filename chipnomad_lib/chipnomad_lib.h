@@ -96,6 +96,9 @@ struct ChipNomadState {
   SoundChip* chips[PROJECT_MAX_CHIPS];
   // Dedicated AY instances for Layer lanes. Normal owners remain null.
   SoundChip* layerAYChips[VOICE_OWNER_COUNT];
+  // Includes retiring children until their de-click/release voices finish.
+  uint8_t layerVoiceTrackMask;
+  int voiceOwnerCount;
   int sampleRate;
   float frameSampleCounter;
   StopTransition stopTransition;

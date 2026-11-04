@@ -1201,6 +1201,16 @@ static void syncLayerTracks(PlaybackState* state, int trackIdx) {
   PlaybackTrackState& parent = state->tracks[trackIdx];
   const Instrument* layer = parent.note.instrument < PROJECT_MAX_INSTRUMENTS
     ? &state->p->instruments[parent.note.instrument] : nullptr;
+  const bool isLayer = layer && layer->type == InstrumentType::Layer;
+  const uint8_t trackBit = (uint8_t)(1u << trackIdx);
+  if (!isLayer && !(state->layerTrackMask & trackBit)) {
+    for (int lane = 0; lane < INSTRUMENT_LAYER_COUNT; ++lane) {
+      parent.liveControls[liveSource1 + lane * 2] = 128;
+      parent.liveControls[liveSource2 + lane * 2] = 0;
+    }
+    return;
+  }
+  state->layerTrackMask &= ~trackBit;
   int layerVolume = layer ? layer->volume : 0;
   for (const auto& mod : parent.note.modulation) {
     if (!mod.modulation || mod.modulation->destination != 1) continue;
@@ -1211,24 +1221,8 @@ static void syncLayerTracks(PlaybackState* state, int trackIdx) {
   for (int lane = 0; lane < INSTRUMENT_LAYER_COUNT; ++lane) {
     PlaybackTrackState& child = state->layerTracks[trackIdx][lane];
     const uint8_t oldInstrument = child.note.instrument;
-    const PlaybackChipNoteState oldChip = child.note.chip;
-    const NativeFMValues oldNativeFM = child.note.nativeFM;
-    const NativeFMValues oldNativeFMCurrent = child.note.nativeFMCurrent;
-    const NativeFMValues oldNativeFMRemaining = child.note.nativeFMRemaining;
-    int16_t oldSlewCurrent[fxTotalCount], oldSlewTarget[fxTotalCount];
-    uint8_t oldSlewRemaining[fxTotalCount];
-    memcpy(oldSlewCurrent, child.slewCurrent, sizeof(oldSlewCurrent));
-    memcpy(oldSlewTarget, child.slewTarget, sizeof(oldSlewTarget));
-    memcpy(oldSlewRemaining, child.slewRemaining, sizeof(oldSlewRemaining));
-    PlaybackFXState oldFX[fxTotalCount];
-    memcpy(oldFX, child.note.fx, sizeof(oldFX));
-    PlaybackModState modulations[4];
-    memcpy(modulations, child.note.modulation, sizeof(modulations));
-    child = parent;
-    memcpy(child.note.modulation, modulations, sizeof(modulations));
-
     int cents = 0, volume = 0;
-    if (layer && layer->type == InstrumentType::Layer) {
+    if (isLayer) {
       const int centsFX = fxL1C + lane * 2, volumeFX = fxL1V + lane * 2;
       const uint8_t transpose = parent.note.fx[centsFX].isOn
         ? parent.note.fx[centsFX].fxValue : layer->chip.layer.entries[lane].transpose;
@@ -1249,17 +1243,36 @@ static void syncLayerTracks(PlaybackState* state, int trackIdx) {
     volume = clampInt(volume, 0, 255);
     parent.liveControls[liveSource1 + lane * 2] = (uint8_t)(((cents + 2400) * 255 + 2400) / 4800);
     parent.liveControls[liveSource2 + lane * 2] = (uint8_t)volume;
-
-    uint8_t slot = layer && layer->type == InstrumentType::Layer
-      ? layer->chip.layer.entries[lane].instrument : EMPTY_VALUE_8;
+    const uint8_t slot = isLayer ? layer->chip.layer.entries[lane].instrument : EMPTY_VALUE_8;
     if (slot >= PROJECT_MAX_INSTRUMENTS || state->p->instruments[slot].type == InstrumentType::none ||
         state->p->instruments[slot].type == InstrumentType::Layer) {
       child.note.instrument = EMPTY_VALUE_8;
+      child.liveInstrument = EMPTY_VALUE_8;
       child.note.noteTriggered = child.note.noteReleased = 0;
       child.note.noteKilled = oldInstrument != EMPTY_VALUE_8;
-      memset(child.note.modulation, 0, sizeof(child.note.modulation));
+      if (child.note.noteKilled) {
+        state->layerTrackMask |= trackBit;
+        memset(child.note.modulation, 0, sizeof(child.note.modulation));
+        memset(child.midiCCPending, 0, sizeof(child.midiCCPending));
+      }
       continue;
     }
+    state->layerTrackMask |= trackBit;
+    const PlaybackChipNoteState oldChip = child.note.chip;
+    const NativeFMValues oldNativeFM = child.note.nativeFM;
+    const NativeFMValues oldNativeFMCurrent = child.note.nativeFMCurrent;
+    const NativeFMValues oldNativeFMRemaining = child.note.nativeFMRemaining;
+    int16_t oldSlewCurrent[fxTotalCount], oldSlewTarget[fxTotalCount];
+    uint8_t oldSlewRemaining[fxTotalCount];
+    memcpy(oldSlewCurrent, child.slewCurrent, sizeof(oldSlewCurrent));
+    memcpy(oldSlewTarget, child.slewTarget, sizeof(oldSlewTarget));
+    memcpy(oldSlewRemaining, child.slewRemaining, sizeof(oldSlewRemaining));
+    PlaybackFXState oldFX[fxTotalCount];
+    memcpy(oldFX, child.note.fx, sizeof(oldFX));
+    PlaybackModState modulations[4];
+    memcpy(modulations, child.note.modulation, sizeof(modulations));
+    child = parent;
+    memcpy(child.note.modulation, modulations, sizeof(modulations));
 
     child.note.instrument = slot;
     if (oldInstrument == slot) {
@@ -1554,6 +1567,7 @@ static int skipZeroGrooveRows(PlaybackState* state, int trackIdx) {
 
 void playbackInit(PlaybackState* state, Project* project) {
   state->p = project;
+  state->layerTrackMask = 0;
   memset(state->liveStickAxes, 0, sizeof(state->liveStickAxes));
   resetLiveStickRate(state);
   state->liveStickWasPlaying = 0;
@@ -1566,7 +1580,8 @@ void playbackInit(PlaybackState* state, Project* project) {
 
   for (int c = 0; c < PROJECT_MAX_TRACKS; c++) {
     memset(state->layerTracks[c], 0, sizeof(state->layerTracks[c]));
-    for (auto& layer : state->layerTracks[c]) layer.note.instrument = EMPTY_VALUE_8;
+    for (auto& layer : state->layerTracks[c])
+      layer.note.instrument = layer.liveInstrument = EMPTY_VALUE_8;
     memset(&state->tracks[c].inserts, 0, sizeof(InsertAutomation));
     state->tracks[c].insertReset = 0;
     state->tracks[c].liveInstrument = EMPTY_VALUE_8;
@@ -1896,6 +1911,7 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
     outputRegistersAY(chipNomadState, chipIdx * projectGetChipTracks(p, chipIdx), chipIdx);
   }
   for (int trackIdx = 0; trackIdx < p->tracksCount; ++trackIdx) {
+    if (!(state->layerTrackMask & (1u << trackIdx))) continue;
     for (int lane = 0; lane < INSTRUMENT_LAYER_COUNT; ++lane) {
       const int owner = PROJECT_MAX_TRACKS + trackIdx * INSTRUMENT_LAYER_COUNT + lane;
       PlaybackTrackState& child = state->layerTracks[trackIdx][lane];

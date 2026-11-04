@@ -217,6 +217,7 @@ struct PlaybackState {
   Project* p;
   PlaybackTrackState tracks[PROJECT_MAX_TRACKS];
   PlaybackTrackState layerTracks[PROJECT_MAX_TRACKS][INSTRUMENT_LAYER_COUNT];
+  uint8_t layerTrackMask;
   PlaybackChipState chips[PROJECT_MAX_CHIPS];
   PlaybackChipState layerChips[PROJECT_MAX_VOICE_OWNERS];
   uint8_t trackEnabled[PROJECT_MAX_TRACKS];

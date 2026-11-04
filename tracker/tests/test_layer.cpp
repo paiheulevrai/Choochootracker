@@ -2,6 +2,11 @@
 #include "chipnomad_lib.h"
 #include "pitch_table_utils.h"
 #include "project_utils.h"
+#include "synth/sample_voice.h"
+#include "synth/soundbank_voice.h"
+#include "soundbank.h"
+#include "soundbank_runtime.h"
+#include "midi/midi_router.h"
 #include <cstdio>
 #include <cmath>
 #include <cstring>
@@ -9,6 +14,274 @@
 #include <memory>
 #include <sstream>
 #include <vector>
+#include <cstdlib>
+
+namespace {
+
+struct LayerPlayback {
+  std::unique_ptr<ChipNomadState, decltype(&chipnomadDestroy)> state{chipnomadCreate(), chipnomadDestroy};
+  float input[1920], output[1920]{};
+
+  explicit LayerPlayback(int tracks = 1) {
+    REQUIRE(state);
+    auto& p = state->project;
+    p.chipsCount = p.tracksCount = tracks;
+    p.tickRate = 50;
+    p.linearPitch = 1;
+    p.chipSetup.ay.clock = 1773400;
+    calculateLinearPitchTable12TET(&p);
+    getInstrumentFunctions(InstrumentType::Layer).init(&p.instruments[0]);
+    getInstrumentFunctions(InstrumentType::AudioIn).init(&p.instruments[1]);
+    p.instruments[0].chip.layer.entries[0] = {1, 0x80, 255};
+    p.instruments[0].volume = p.instruments[1].volume = 255;
+    for (int t = 0; t < tracks; ++t) p.trackVolume[t] = 100;
+    for (int i = 0; i < 1920; ++i) input[i] = i & 1 ? -.125f : .25f;
+  }
+
+  void init() {
+    chipnomadInitChips(state.get(), 48000, nullptr);
+    REQUIRE(chipnomadReserveRenderBuffers(state.get(), 960) == 0);
+  }
+
+  void note(int track, int instrument) {
+    REQUIRE(chipnomadQueuePlaybackPreviewNote(state.get(), track, 48, instrument));
+  }
+
+  void render(int frames = 960) {
+    REQUIRE(chipnomadRender(state.get(), output, frames, input) == frames);
+  }
+};
+
+} // namespace
+
+TEST_CASE("Unused Layer children are not copied or visited by the voice engine") {
+  LayerPlayback e;
+  SUBCASE("no Layer preset") {
+    getInstrumentFunctions(InstrumentType::none).init(&e.state->project.instruments[0]);
+  }
+  SUBCASE("an unused Layer preset is present") {}
+  e.init();
+  auto& playback = e.state->playbackState;
+  playback.layerTracks[0][0].slewCurrent[0] = 1234;
+  const auto* children = reinterpret_cast<const uint8_t*>(playback.layerTracks);
+  const std::vector<uint8_t> before(children, children + sizeof(playback.layerTracks));
+  e.note(0, 1);
+  for (int tick = 0; tick < 6; ++tick) e.render();
+  CHECK(playback.layerTrackMask == 0);
+  CHECK(e.state->layerVoiceTrackMask == 0);
+  CHECK(e.state->voiceOwnerCount == 1);
+  CHECK(std::memcmp(before.data(), playback.layerTracks, before.size()) == 0);
+  CHECK(e.output[400] > .01f);
+}
+
+TEST_CASE("Layer owner bounds follow previews, transitions and stops on the last track") {
+  LayerPlayback e(8);
+  e.init();
+  e.note(0, 1);
+  e.note(7, 0);
+  e.render();
+  CHECK(e.state->playbackState.layerTrackMask == 0x80);
+  CHECK(e.state->layerVoiceTrackMask == 0x80);
+  CHECK(e.state->voiceOwnerCount == VOICE_OWNER_COUNT);
+  CHECK(e.state->playbackState.layerTracks[7][0].note.instrument == 1);
+  e.note(7, 1);
+  e.render();
+  CHECK(e.state->playbackState.layerTracks[7][0].note.noteKilled);
+  e.render();
+  CHECK(e.state->playbackState.layerTrackMask == 0);
+  CHECK(e.state->layerVoiceTrackMask == 0);
+  CHECK(e.state->voiceOwnerCount == 8);
+  e.note(7, 0);
+  e.render();
+  CHECK(e.state->layerVoiceTrackMask == 0x80);
+  REQUIRE(chipnomadQueuePlaybackStopPreview(e.state.get(), 7));
+  e.render();
+  e.render();
+  CHECK(e.state->layerVoiceTrackMask == 0);
+  CHECK(e.state->voiceOwnerCount == 8);
+  const auto* status = chipnomadGetPlaybackStatus(e.state.get());
+  REQUIRE(status);
+  CHECK(status->layerTracks[7][0].instrument == EMPTY_VALUE_8);
+  CHECK(status->layerTracks[7][0].liveInstrument == EMPTY_VALUE_8);
+}
+
+TEST_CASE("Live project snapshots activate and retire Layer children without reinitializing") {
+  LayerPlayback e;
+  getInstrumentFunctions(InstrumentType::AudioIn).init(&e.state->project.instruments[0]);
+  e.init();
+  e.note(0, 0);
+  e.render();
+  CHECK(e.state->voiceOwnerCount == 1);
+
+  auto& instrument = e.state->project.instruments[0];
+  getInstrumentFunctions(InstrumentType::Layer).init(&instrument);
+  instrument.chip.layer.entries[0] = {1, 0x80, 255};
+  REQUIRE(chipnomadQueueProjectRefresh(e.state.get()));
+  e.render();
+  CHECK(e.state->playbackState.layerTracks[0][0].note.instrument == 1);
+  CHECK(e.state->layerVoiceTrackMask == 1);
+
+  SUBCASE("remove the child reference") {
+    instrument.chip.layer.entries[0].instrument = EMPTY_VALUE_8;
+  }
+  SUBCASE("replace the parent engine") {
+    getInstrumentFunctions(InstrumentType::AudioIn).init(&instrument);
+  }
+  REQUIRE(chipnomadQueueProjectRefresh(e.state.get()));
+  e.render();
+  e.render();
+  CHECK(e.state->layerVoiceTrackMask == 0);
+  CHECK(e.state->voiceOwnerCount == 1);
+}
+
+TEST_CASE("Empty and invalid Layer lanes keep controls without copying child states") {
+  LayerPlayback e;
+  auto& entries = e.state->project.instruments[0].chip.layer.entries;
+  entries[0] = {EMPTY_VALUE_8, 0xff, 42};
+  entries[1] = {0, 0x80, 43};
+  entries[2] = {127, 0x80, 44};
+  e.init();
+  e.state->playbackState.layerTracks[0][0].slewCurrent[0] = 1234;
+  e.note(0, 0);
+  e.render();
+  CHECK(e.state->layerVoiceTrackMask == 0);
+  CHECK(e.state->voiceOwnerCount == 1);
+  CHECK(e.state->playbackState.layerTracks[0][0].slewCurrent[0] == 1234);
+  CHECK(e.state->playbackState.tracks[0].liveControls[liveSource1] == 255);
+  CHECK(e.state->playbackState.tracks[0].liveControls[liveSource2] == 42);
+}
+
+TEST_CASE("Retiring Layer sample voices remain visited until their de-click tail ends") {
+  LayerPlayback e;
+  auto& p = e.state->project;
+  p.tickRate = 1000;
+  getInstrumentFunctions(InstrumentType::Sample).init(&p.instruments[2]);
+  auto& sample = p.instruments[2].chip.sample;
+  sample.frameCount = 4096;
+  sample.sampleRate = 48000;
+  sample.channels = 1;
+  sample.data = static_cast<int16_t*>(std::malloc(sample.frameCount * sizeof(int16_t)));
+  REQUIRE(sample.data);
+  for (uint32_t i = 0; i < sample.frameCount; ++i) sample.data[i] = 12000;
+  sample.start = 0;
+  sample.end = 255;
+  sample.speedPercent = 100;
+  sample.attack = sample.decay = 0;
+  sample.sustain = 255;
+  sample.filterEnabled = 0;
+  p.instruments[2].volume = 255;
+  p.instruments[0].chip.layer.entries[0].instrument = 2;
+  e.init();
+  e.note(0, 0);
+  e.render(48);
+  auto* voice = e.state->sampleVoices[PROJECT_MAX_TRACKS][0];
+  REQUIRE(voice);
+  REQUIRE(voice->active());
+  e.note(0, 1);
+  e.render(48);
+  CHECK(voice->active());
+  e.render(48);
+  CHECK(e.state->playbackState.layerTrackMask == 0);
+  CHECK(e.state->layerVoiceTrackMask == 1);
+  CHECK(voice->active());
+  for (int tick = 0; tick < 8; ++tick) e.render(48);
+  CHECK_FALSE(voice->active());
+  CHECK(e.state->layerVoiceTrackMask == 0);
+  CHECK(e.state->voiceOwnerCount == 1);
+}
+
+TEST_CASE("Retiring Layer SoundFont voices keep their output correction") {
+  LayerPlayback e;
+  auto& p = e.state->project;
+  p.tickRate = 1000;
+  getInstrumentFunctions(InstrumentType::SoundFont).init(&p.instruments[2]);
+  soundbank::SampleCache cache;
+  auto bank = soundbank::parseBank({"tests/fixtures/soundbanks/tone.wav", ""});
+  REQUIRE_FALSE(bank.presets.empty());
+  bank.presets[0].zones[0].loop = soundbank::Loop::continuous;
+  p.instruments[2].chip.soundfont.prepared = soundbank::publish(cache.prepare(bank, "sample"));
+  p.instruments[2].volume = 255;
+  p.instruments[0].chip.layer.entries[0].instrument = 2;
+  e.init();
+  e.note(0, 0);
+  for (int tick = 0; tick < 4; ++tick) e.render(48);
+  auto* voice = e.state->soundbankVoices[PROJECT_MAX_TRACKS][0];
+  REQUIRE(voice);
+  REQUIRE(voice->active());
+  e.note(0, 1);
+  e.render(48);
+  e.render(48);
+  CHECK(e.state->playbackState.layerTrackMask == 0);
+  CHECK(e.state->layerVoiceTrackMask == 1);
+  CHECK(voice->active());
+  for (int tick = 0; tick < 8; ++tick) e.render(48);
+  CHECK_FALSE(voice->active());
+  CHECK(e.state->layerVoiceTrackMask == 0);
+  CHECK(e.state->voiceOwnerCount == 1);
+  e.state.reset();
+  soundbank::collect([](uint32_t) { return false; });
+}
+
+TEST_CASE("Layer child FLFO advances only while the child is assigned") {
+  LayerPlayback e;
+  auto& mod = e.state->project.instruments[1].modulation[0];
+  mod.type = ModulationType::FLFO;
+  mod.destination = 1;
+  mod.amount = 32;
+  mod.p3 = 80;
+  e.init();
+  e.note(0, 0);
+  e.render();
+  auto& child = e.state->playbackState.layerTracks[0][0];
+  REQUIRE(child.note.modulation[0].modulation);
+  CHECK(child.note.modulation[0].phase > 0.0f);
+  const float firstPhase = child.note.modulation[0].phase;
+  e.render();
+  CHECK(child.note.modulation[0].phase != firstPhase);
+  e.note(0, 1);
+  e.render();
+  REQUIRE(child.note.modulation[0].modulation == nullptr);
+  const float retiredPhase = child.note.modulation[0].phase;
+  e.render();
+  CHECK(child.note.modulation[0].phase == retiredPhase);
+  CHECK(e.state->voiceOwnerCount == 1);
+}
+
+TEST_CASE("Layer child MIDI notes are released once before the owner is retired") {
+  struct MidiCapture {
+    std::vector<MidiEvent> events;
+    MidiBackend backend{};
+    MidiCapture() {
+      backend.userdata = this;
+      backend.hasOutput = 1;
+      backend.scheduleOutput = [](void* data, const MidiEvent* event, uint64_t) {
+        static_cast<MidiCapture*>(data)->events.push_back(*event);
+      };
+      midiRouterSetBackend(&backend);
+    }
+    ~MidiCapture() { midiRouterSetBackend(nullptr); }
+    int count(uint8_t type) const {
+      int total = 0;
+      for (const auto& event : events) if (event.type == type) ++total;
+      return total;
+    }
+  } midi;
+  LayerPlayback e;
+  getInstrumentFunctions(InstrumentType::Midi).init(&e.state->project.instruments[2]);
+  e.state->project.instruments[0].chip.layer.entries[0].instrument = 2;
+  e.init();
+  e.note(0, 0);
+  e.render();
+  REQUIRE(midi.count(0x90) == 1);
+  e.note(0, 1);
+  e.render();
+  CHECK(midi.count(0x80) == 1);
+  e.render();
+  e.render();
+  CHECK(midi.count(0x80) == 1);
+  CHECK(e.state->layerVoiceTrackMask == 0);
+  CHECK(e.state->voiceOwnerCount == 1);
+}
 
 TEST_CASE("Layer defaults and quadratic transpose are stable") {
   Instrument layer{};

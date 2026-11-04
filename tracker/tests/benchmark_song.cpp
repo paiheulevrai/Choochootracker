@@ -68,8 +68,23 @@ class LegacyOutputLimiter {
   float previousOutput_[2] = {};
 };
 
-void configureVariant(Project* project, const char* variant) {
-  if (!std::strcmp(variant, "no-effects")) {
+bool configureVariant(Project* project, const char* variant) {
+  if (!std::strcmp(variant, "layer")) {
+    int slot = PROJECT_MAX_INSTRUMENTS - 1;
+    while (slot > 0 && project->instruments[slot].type != InstrumentType::none) --slot;
+    if (slot == 0 || project->instruments[0].type == InstrumentType::none ||
+        project->instruments[0].type == InstrumentType::Layer) {
+      std::fprintf(stderr, "Layer benchmark needs instrument 00 and an empty instrument slot\n");
+      return false;
+    }
+    Instrument& layer = project->instruments[slot];
+    getInstrumentFunctions(InstrumentType::Layer).init(&layer);
+    layer.volume = 255;
+    layer.chip.layer.entries[0] = {0, 0x80, 255};
+    for (auto& phrase : project->phrases)
+      for (auto& row : phrase.rows)
+        if (row.instrument == 0) row.instrument = (uint8_t)slot;
+  } else if (!std::strcmp(variant, "no-effects")) {
     std::fill(project->trackReverbSend,
               project->trackReverbSend + PROJECT_MAX_TRACKS, 0);
     std::fill(project->trackDelaySend,
@@ -100,10 +115,12 @@ void configureVariant(Project* project, const char* variant) {
       for (auto& insert : inserts) insert.module = insertOff;
     for (auto& insert : project->masterInserts) insert.module = insertOff;
   }
+  return true;
 }
 
 double render(Project* project, int sampleRate, int seconds, const char* variant,
-              const char* pipeline, int startRow, volatile double* checksum) {
+              const char* pipeline, int startRow, volatile double* checksum,
+              FILE* capture = nullptr) {
   ChipNomadState* state = chipnomadCreate();
   if (!state) return -1.0;
   state->ownsProjectResources = 0;
@@ -135,6 +152,18 @@ double render(Project* project, int sampleRate, int seconds, const char* variant
       limiter.process(buffer.data(), output.data(), frames);
     else if (!std::strcmp(pipeline, "legacy"))
       legacyLimiter.process(buffer.data(), output.data(), scratch.data(), frames, sampleRate);
+    if (capture) {
+      const bool rawFloat = !std::strcmp(pipeline, "none");
+      const size_t count = (size_t)frames * 2;
+      const size_t written = rawFloat
+        ? std::fwrite(buffer.data(), sizeof(float), count, capture)
+        : std::fwrite(output.data(), sizeof(int16_t), count, capture);
+      if (written != count) {
+        std::perror("Cannot write benchmark audio");
+        chipnomadDestroy(state);
+        return -1.0;
+      }
+    }
     const int sample = (remaining / kBlockFrames) % (frames * 2);
     *checksum += !std::strcmp(pipeline, "none") ? buffer[sample] : output[sample];
     remaining -= frames;
@@ -179,7 +208,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "Cannot load %s: %s\n", path, projectFileError);
     return 1;
   }
-  const char* variants[] = {"full", "no-effects", "no-tilt", "no-drive", "no-inserts", "no-pan", "no-monitor"};
+  const char* variants[] = {"full", "layer", "no-effects", "no-tilt", "no-drive", "no-inserts", "no-pan", "no-monitor"};
   bool knownVariant = false;
   for (const char* candidate : variants) knownVariant |= !std::strcmp(candidate, variant);
   if (!knownVariant) {
@@ -191,7 +220,10 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "Output pipeline must be optimized, legacy or none\n");
     return 1;
   }
-  configureVariant(&project, variant);
+  if (!configureVariant(&project, variant)) {
+    projectFree(&project);
+    return 1;
+  }
   std::printf("variant: %s, output: %s, sample rate: %d, start row: %02X\n",
               variant, pipeline, sampleRate, startRow);
 
@@ -212,6 +244,25 @@ int main(int argc, char** argv) {
               median, median * 100.0 / kMeasuredSeconds,
               median * 1.0e9 / (kMeasuredSeconds * sampleRate),
               static_cast<double>(checksum));
+  // Optional final argument: capture a separate pass, outside timed rounds.
+  if (argc > 6) {
+    FILE* capture = std::fopen(argv[6], "wb");
+    if (!capture) {
+      std::perror("Cannot open benchmark audio");
+      projectFree(&project);
+      return 1;
+    }
+    const double captured = render(&project, sampleRate, kMeasuredSeconds, variant,
+                                   pipeline, startRow, &checksum, capture);
+    const int closeResult = std::fclose(capture);
+    if (closeResult) std::perror("Cannot close benchmark audio");
+    if (captured < 0.0 || closeResult) {
+      projectFree(&project);
+      return 1;
+    }
+    std::printf("Captured %d seconds of stereo %s audio to %s\n", kMeasuredSeconds,
+                !std::strcmp(pipeline, "none") ? "float32" : "int16", argv[6]);
+  }
   projectFree(&project);
   return 0;
 }

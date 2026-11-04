@@ -719,6 +719,8 @@ The Sampler can record an input while Audio in processes it. Select the Audio in
 
 Choose **Utility > Layer** to play as many as three other instrument slots from one tracker note. Each `L1`-`L3` row selects an instrument, adds a per-layer transpose and sets its level. Empty rows stay silent. A Layer cannot select another Layer.
 
+Unused Layer instruments do not activate child-voice processing. When switching back to a normal instrument, retiring child voices finish their de-click tails before that processing is disabled; no CPU-saving toggle is needed.
+
 The transpose control is finest around `0` cents. From `-100` or `+100` cents onward it locks to exact semitones, up to `-2400` or `+2400`. Audio in ignores transpose; MIDI Out rounds it to the nearest semitone. Each child keeps its own volume, pan, EQ and modulation. Its Layer level is applied next, then the Layer instrument's volume, pan and EQ process the combined sound. Instrument FX on the Layer's tracker row affect every selected child that supports that FX; track FX and inserts process the combined result once.
 
 The Layer modulation page offers `L1 Cents`/`L1 Vol` through `L3 Cents`/`L3 Vol`, so each child's tuning and level can move independently. `Volume` controls the whole Layer. When you open a referenced child's instrument page while the Layer plays, its scope and live control bars follow that child.
