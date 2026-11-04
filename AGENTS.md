@@ -21,6 +21,12 @@
 - Linux AppImage: run `make -j4 -f Makefile.linux appimage` from `tracker`.
   Writes `releases/ChooChooTracker-<date>-<version>-x86_64.AppImage`. See
   `docs/build-notes.md` for what it bundles and why.
+- macOS (experimental): on a Mac, from `tracker`, run
+  `bash platforms/macos/check-sdl2.sh --download`, then `make -j4 macOS-deploy`.
+  This builds a self-contained universal Intel/Apple Silicon `.app` ZIP in
+  `releases/`, ad-hoc signed but not notarized. `.github/workflows/macos.yml`
+  validates it on both architectures and publishes on release publication or
+  an explicit manual `release_tag`. See `docs/build-notes.md` for backfills.
 - Web: Emscripten is already installed at `.tmp/emsdk`. Use PowerShell, not
   MSYS2 Bash. The SDK requires its bundled Python:
 

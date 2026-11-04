@@ -88,7 +88,7 @@ foreach ($entry in @{
     'icon_256x256.png' = 256; 'icon_256x256@2x.png' = 512; 'icon_512x512.png' = 512
     'icon_512x512@2x.png' = 1024
 }.GetEnumerator()) {
-    Save-Png "tracker/packaging/macos/ChipNomad.iconset/$($entry.Key)" $entry.Value
+    Save-Png "tracker/packaging/macos/ChooChooTracker.iconset/$($entry.Key)" $entry.Value
 }
 $windowsImage = New-IconBitmap 256
 $pngStream = [System.IO.MemoryStream]::new()

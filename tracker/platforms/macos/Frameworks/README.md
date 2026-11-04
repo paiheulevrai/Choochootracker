@@ -1,17 +1,17 @@
-# Frameworks for macOS Build
+# SDL2 framework for macOS
 
-## Setup Instructions
+From `tracker` on a Mac:
 
-1. Download SDL2.framework from https://github.com/libsdl-org/SDL/releases
-   - Download the macOS `.dmg` file (e.g., `SDL2-2.30.0.dmg`)
-   - Open the DMG and copy `SDL2.framework` to this directory
+```sh
+bash platforms/macos/check-sdl2.sh --download
+make -j4 macOS-deploy
+```
 
-2. Your directory structure should look like:
-   ```
-   platforms/macos/Frameworks/
-   └── SDL2.framework/
-       ├── Headers/
-       ├── Resources/
-       ├── SDL2
-       └── Versions/
-   ```
+The installer downloads the official **SDL2 2.32.10** DMG, verifies its pinned
+SHA-256, and copies the universal framework here. It refuses to overwrite an
+existing installation. Run without `--download` to check an installed framework.
+The framework is a local build dependency, not a checked-in file.
+
+The release embeds it inside `ChooChooTracker.app/Contents/Frameworks`; users
+do not need to install SDL2 or Homebrew. See [build notes](../../../../docs/build-notes.md#macos-experimental)
+for packaging and CI validation.

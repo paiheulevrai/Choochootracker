@@ -1,0 +1,134 @@
+name: macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Attach the validated package to this existing release (optional; must match appVersion)
+        required: false
+        type: string
+  release:
+    types: [published]
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install pinned universal SDL2 framework
+        working-directory: tracker
+        run: bash platforms/macos/check-sdl2.sh --download
+      - name: Build universal application package
+        run: |
+          make -C tracker -j4 macOS-deploy
+          unzip -t releases/*-macOS-universal.zip
+      - name: Record source provenance and checksum
+        env:
+          BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SOURCE_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          archive, = Path("releases").glob("*-macOS-universal.zip")
+          prefix = archive.name.removesuffix("-universal.zip")
+          info = {
+              "archive": archive.name,
+              "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+              "source_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "source_ref": os.environ["SOURCE_REF"],
+              "build_url": os.environ["BUILD_URL"],
+              "architectures": ["arm64", "x86_64"],
+              "minimum_macos_target": "11.0",
+              "distribution": "experimental, ad-hoc signed, not notarized",
+          }
+          (archive.parent / f"{prefix}-build-info.json").write_text(json.dumps(info, indent=2) + "\n")
+          (archive.parent / f"{prefix}-SHA256SUMS.txt").write_text(f'{info["sha256"]}  {archive.name}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: choochootracker-macos
+          path: releases/*-macOS-*
+          if-no-files-found: error
+
+  validate:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: choochootracker-macos
+          path: releases
+      - name: Verify native runner and extract package
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          cd releases
+          shasum -a 256 -c *-macOS-SHA256SUMS.txt
+          unzip -q *-macOS-universal.zip -d extracted
+      - name: Test workspace initialization
+        env:
+          SDL2_FRAMEWORK_PARENT: ${{ github.workspace }}/releases/extracted/ChooChooTracker.app/Contents/Frameworks
+        run: python3 -m unittest discover -s tracker/tests -p 'test_macos_*.py' -v
+      - name: Validate bundle and native startup
+        run: python3 scripts/validate_macos.py releases/extracted/ChooChooTracker.app
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-validation-${{ matrix.arch }}
+          path: tracker/build/macos-validation/
+          if-no-files-found: ignore
+
+  publish:
+    if: github.event_name == 'release' || inputs.release_tag != ''
+    needs: [build, validate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: macos-release-${{ inputs.release_tag || github.event.release.tag_name }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: choochootracker-macos
+          path: releases
+      - name: Attach validated macOS package to existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9][A-Za-z0-9._-]*$ ]]
+          archive="releases/ChooChooTracker-${RELEASE_TAG}-macOS-universal.zip"
+          test -f "$archive"
+          gh release view "$RELEASE_TAG" --json tagName --jq .tagName
+          gh release upload "$RELEASE_TAG" "$archive" \
+            "releases/ChooChooTracker-${RELEASE_TAG}-macOS-build-info.json" \
+            "releases/ChooChooTracker-${RELEASE_TAG}-macOS-SHA256SUMS.txt" --clobber

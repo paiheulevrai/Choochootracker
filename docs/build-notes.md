@@ -26,6 +26,76 @@ make -j4 choochooplayer
 Its self-contained package is written to `choochooplayer/build/windows/`.
 Run `launch-alf-dance.bat` there to preview the bundled `alf dance.cct` project.
 
+## macOS (experimental)
+
+The release is a universal **Apple Silicon + Intel** application targeting
+macOS 11.0 or later. CI validates startup on newer macOS; this is not a claim
+that every older version or physical audio/MIDI device has been tested.
+
+On a Mac with Xcode Command Line Tools installed, from `tracker`:
+
+```sh
+bash platforms/macos/check-sdl2.sh --download
+make -j4 macOS-deploy
+```
+
+The installer checks the pinned SHA-256 of the official SDL2 2.32.10 DMG and
+requires both architectures. It refuses to overwrite an existing framework;
+run without `--download` to validate one already installed.
+
+The result is `releases/ChooChooTracker-v<version>-macOS-universal.zip`.
+It contains `ChooChooTracker.app` and installation instructions. The bundle
+includes SDL2, all `packaging/common` assets, the manual and licenses. No
+Homebrew or external SDL installation is required on the user's Mac.
+
+The application uses `~/Library/Application Support/ChooChooTracker` for
+settings, autosave and writable assets. Before loading settings or fonts, a
+bundled build copies missing resources there and switches to that workspace.
+Existing files are never overwritten, including when restoring an interrupted
+initialization. The application bundle itself is not modified at runtime.
+Unbundled development executables retain their caller's asset directory.
+
+The bundle and framework have **ad-hoc signatures**, not Apple Developer
+signatures or notarization. Gatekeeper can still block downloaded packages:
+after trying to open a trusted package, authorize it in System Settings >
+Privacy & Security > Open Anyway. Do not disable Gatekeeper globally.
+
+`.github/workflows/macos.yml` builds on `macos-15` and validates the extracted
+ZIP natively on `macos-15` (arm64) and `macos-15-intel` (x86_64). Checks cover
+Mach-O architectures/minimum OS/dependencies, plist, signatures, resource
+completeness, non-destructive workspace initialization and bounded startup to
+the first rendered title frame with dummy SDL video/audio. Logs are retained as
+validation artifacts. Local macOS checks against a built/extracted bundle:
+
+```sh
+SDL2_FRAMEWORK_PARENT="$PWD/build/macos/ChooChooTracker.app/Contents/Frameworks" \
+  python3 -m unittest discover -s tests -p 'test_macos_*.py' -v
+python3 ../scripts/validate_macos.py build/macos/ChooChooTracker.app
+```
+
+PRs, `main`, `v*` tags and manual runs produce the `choochootracker-macos`
+Actions artifact. Only a published release or a manual run with `release_tag`
+attaches files to an existing GitHub release, after both native validations
+pass. Tags alone do not create or publish a release.
+
+To add macOS to the current release after the workflow has been pushed:
+
+```sh
+gh workflow run macos.yml --repo paiheulevrai/Choochootracker \
+  --ref main -f release_tag=v1.0.23-alpha
+```
+
+Choose a source ref whose `appVersion` matches the requested release tag.
+Manual backfills build that selected ref, not necessarily the old tag commit.
+The uploaded `*-macOS-build-info.json` records the exact source SHA, ref and
+Actions URL. A dedicated `*-macOS-SHA256SUMS.txt` covers the ZIP without racing
+other platform workflows updating the shared checksum manifest.
+
+Before removing experimental status, community testers must check Finder
+launch/Gatekeeper, Retina/resizing, keyboard/gamepad, real audio playback and
+recording (including microphone permission), MIDI and Ableton Link on Intel
+and Apple Silicon. CI does not replace these hardware checks.
+
 ## Developer UI screenshots
 
 The developer-only offscreen SDL harness lives in

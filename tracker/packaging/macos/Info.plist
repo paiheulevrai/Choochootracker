@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleExecutable</key>
-	<string>chipnomad</string>
+	<string>choochootracker</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.megus.chipnomad</string>
+	<string>org.choochootracker.ChooChooTracker</string>
 	<key>CFBundleName</key>
-	<string>ChipNomad</string>
+	<string>ChooChooTracker</string>
 	<key>CFBundleDisplayName</key>
-	<string>ChipNomad</string>
+	<string>ChooChooTracker</string>
 	<key>CFBundleVersion</key>
 	<string>VERSION_PLACEHOLDER</string>
 	<key>CFBundleShortVersionString</key>
@@ -19,29 +19,14 @@
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>14.0</string>
+	<string>11.0</string>
 	<key>CFBundleIconFile</key>
-	<string>ChipNomad</string>
+	<string>ChooChooTracker</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.music</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ChooChooTracker records audio input to capture samples for the sampler instrument.</string>
-	<key>CFBundleDocumentTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeExtensions</key>
-			<array>
-				<string>cnm</string>
-			</array>
-			<key>CFBundleTypeName</key>
-			<string>ChipNomad Project</string>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>LSHandlerRank</key>
-			<string>Owner</string>
-		</dict>
-	</array>
 </dict>
 </plist>

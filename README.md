@@ -108,6 +108,11 @@ contents into `Tools/tg5040/ChooChooTracker.pak` on the SD card.
 
 Native Windows builds and appImage are available for desktop use, development and testing.
 
+**macOS (experimental):** universal Apple Silicon + Intel packages target
+macOS 11+. SDL2 and runtime assets are included. Packages are ad-hoc signed,
+not notarized; see the [installation notes](docs/USER_MANUAL.md#macos-experimental)
+for Gatekeeper and user-file locations. Availability can vary between releases.
+
 ### 📱 Android
 
 Android builds are available through Google Play beta testing.

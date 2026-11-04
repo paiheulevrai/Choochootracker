@@ -253,7 +253,9 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 #endif
 
   // Initialize bundled assets
+#ifndef MACOS_BUILD
   assetsInit();
+#endif
 
 #ifdef TOUCH_INPUT
   struct FingerButton {

@@ -1,45 +1,40 @@
 #!/bin/bash
-# Check if SDL2.framework is properly set up for macOS builds
+set -euo pipefail
 
-FRAMEWORK_PATH="platforms/macos/Frameworks/SDL2.framework"
+# Run from tracker. The official framework contains both desktop architectures.
+framework="platforms/macos/Frameworks/SDL2.framework"
+version=2.32.10
+digest=4a7ac31640d70214e848f994be8a12849c0f97918a7e6c2e27a40036166d1a7f
 
-echo "Checking SDL2.framework setup..."
-echo
-
-if [ ! -d "$FRAMEWORK_PATH" ]; then
-    echo "❌ SDL2.framework not found!"
-    echo
-    echo "Please download SDL2.framework:"
-    echo "  1. Visit https://github.com/libsdl-org/SDL/releases"
-    echo "  2. Download the macOS .dmg file (e.g., SDL2-2.30.0.dmg)"
-    echo "  3. Open the DMG and copy SDL2.framework to:"
-    echo "     $FRAMEWORK_PATH"
-    echo
-    echo "See platforms/macos/Frameworks/README.md for detailed instructions."
+if [[ "${1:-}" == --download ]]; then
+    temp=$(mktemp -d)
+    mounted=0
+    cleanup() {
+        if [[ "$mounted" == 1 ]]; then hdiutil detach "$temp/mount" -quiet; fi
+        rm -f "$temp/SDL2.dmg"
+        if [[ -d "$temp/mount" ]]; then rmdir "$temp/mount"; fi
+        rmdir "$temp"
+    }
+    trap cleanup EXIT
+    curl --fail --location --retry 3 \
+        "https://github.com/libsdl-org/SDL/releases/download/release-$version/SDL2-$version.dmg" \
+        -o "$temp/SDL2.dmg"
+    printf '%s  %s\n' "$digest" "$temp/SDL2.dmg" | shasum -a 256 -c -
+    mkdir "$temp/mount"
+    hdiutil attach "$temp/SDL2.dmg" -readonly -nobrowse -mountpoint "$temp/mount" -quiet
+    mounted=1
+    if [[ -e "$framework" ]]; then
+        echo "Refusing to overwrite $framework; remove it explicitly to reinstall." >&2
+        exit 1
+    fi
+    cp -R "$temp/mount/SDL2.framework" "$framework"
+elif [[ $# != 0 ]]; then
+    echo "Usage: bash platforms/macos/check-sdl2.sh [--download]" >&2
     exit 1
 fi
 
-if [ ! -f "$FRAMEWORK_PATH/SDL2" ]; then
-    echo "❌ SDL2.framework appears to be incomplete (missing SDL2 binary)"
-    exit 1
-fi
-
-if [ ! -d "$FRAMEWORK_PATH/Headers" ]; then
-    echo "❌ SDL2.framework appears to be incomplete (missing Headers)"
-    exit 1
-fi
-
-echo "✅ SDL2.framework is properly installed"
-echo
-
-# Show framework info
-SDL2_VERSION=$(otool -L "$FRAMEWORK_PATH/SDL2" 2>/dev/null | grep "SDL2.framework" | awk '{print $1}')
-echo "Framework path: $SDL2_VERSION"
-
-# Check architectures
-echo
-echo "Supported architectures:"
-lipo -info "$FRAMEWORK_PATH/SDL2" 2>/dev/null || echo "  (Unable to check architectures)"
-
-echo
-echo "✅ Ready to build for macOS!"
+test -f "$framework/SDL2"
+test -d "$framework/Headers"
+lipo "$framework/SDL2" -verify_arch arm64 x86_64
+otool -L "$framework/SDL2"
+echo "SDL2 universal framework ready."

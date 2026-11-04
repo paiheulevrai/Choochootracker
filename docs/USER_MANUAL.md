@@ -65,6 +65,28 @@ Run `choochootracker.exe` with `SDL2.dll` and `libwinpthread-1.dll` in the same 
 Press **ALT + ENTER** to toggle fullscreen. The window is resizable; the image
 scales while keeping its original aspect ratio.
 
+### macOS (experimental)
+
+Download the universal macOS ZIP for Apple Silicon and Intel from GitHub
+Releases. Extract it and move **ChooChooTracker.app** to Applications. SDL2 and
+all runtime assets are included; Homebrew is not required. The build targets
+macOS 11 or later, but automated checks run on newer macOS only.
+
+The application is ad-hoc signed, **not Apple Developer signed or notarized**.
+If macOS blocks a trusted release package, try opening it, then use
+**System Settings > Privacy & Security > Open Anyway** and confirm. Do not
+disable Gatekeeper globally.
+
+Settings, autosave, projects and bundled resources are stored in
+`~/Library/Application Support/ChooChooTracker`. Missing resources are copied
+there at launch without replacing existing files. Back up this directory;
+replacing the application does not delete it. Open `.cct` files from the app's
+Load browser, not by double-clicking them in Finder.
+
+Allow microphone access when using sampler audio recording. This platform
+remains experimental pending community testing of Finder, Retina, real audio
+and recording, MIDI and Ableton Link on both Mac architectures.
+
 ### Web
 
 The browser version refreshes its display at about 30 FPS and uses a fixed

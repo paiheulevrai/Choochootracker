@@ -6,11 +6,14 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
+#ifdef MACOS_BUILD
+#include <errno.h>
+#endif
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
-#ifndef ANDROID_BUILD
+#if !defined(ANDROID_BUILD) && !defined(MACOS_BUILD)
 // Helper: Create directory recursively
 static void createDirectoryRecursive(const char* path) {
   char tmp[4096];
@@ -38,7 +41,7 @@ static void createDirectoryRecursive(const char* path) {
   mkdir(tmp, 0755);
   #endif
 }
-#endif // !ANDROID_BUILD
+#endif
 
 // Windows and Linux desktop builds are meant to be portable (see
 // docs/build-notes.md: a Windows release ships as the exe alongside its
@@ -138,11 +141,18 @@ int fileGetDefaultDirectory(char* buffer, int bufferSize) {
   return androidGetWorkspacePath(buffer, bufferSize);
 #elif defined(MACOS_BUILD)
   const char* home = getenv("HOME");
-  if (home) {
-    snprintf(buffer, bufferSize, "%s/Library/Application Support/ChipNomad", home);
-    createDirectoryRecursive(buffer);
-  } else {
-    snprintf(buffer, bufferSize, ".");
+  if (!home || home[0] != '/' || !buffer || bufferSize <= 0) {
+    fprintf(stderr, "macOS workspace: an absolute HOME and a valid output buffer are required\n");
+    return -1;
+  }
+  int length = snprintf(buffer, bufferSize, "%s/Library/Application Support/ChooChooTracker", home);
+  if (length < 0 || length >= bufferSize) {
+    fprintf(stderr, "macOS workspace path is too long\n");
+    return -1;
+  }
+  if (fileCreateDirectoryRecursive(buffer) != 0) {
+    fprintf(stderr, "Cannot create macOS workspace '%s': %s\n", buffer, strerror(errno));
+    return -1;
   }
   return 0;
 #else

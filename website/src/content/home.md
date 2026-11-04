@@ -2,7 +2,7 @@
 eyebrow: A Multiengine tracker for handheld consoles
 title: ChooChooTracker
 tagline: Don't miss your stop.
-description: Free, open-source multiengine tracker for handhelds, Android, Linux, Windows and web. 120+ sound engines, Braids and Plaits models, soundfonts, and advanced sampling.
+description: Free, open-source multiengine tracker for handhelds, Android, Linux, Windows, macOS (experimental) and web. 120+ sound engines, Braids and Plaits models, soundfonts, and advanced sampling.
 openingScreens:
   - position: left
     image: engine-achchid.png
