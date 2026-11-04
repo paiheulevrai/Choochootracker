@@ -66,6 +66,16 @@ extern "C" {
 int convertChainsToPatterns(Project* p);
 int convertPatternsToChains(Project* p);
 
+// Clone-on-write for simplified-mode bar editing: when the phrase bound to
+// `barIdx` of `patternIdx` is also referenced elsewhere (another pattern
+// bar or any chain row), copy it into a fresh lowest-free slot and point
+// only THIS bar at the copy — editing one bar of a multiplied pattern never
+// mutates its siblings or the classic view's phrases. Returns the (possibly
+// new) phrase index, or EMPTY_VALUE_16 when the phrase pool is exhausted.
+// `st` (optional) claims the clone in a conversion allocator state.
+int patternEnsureBarExclusive(Project* p, struct ConversionPhraseState* st,
+  int patternIdx, int barIdx);
+
 // Find the closest unallocated phrase index to `patternIdx`, scanning
 // outward from `patternIdx`. Returns EMPTY_VALUE_16 if phrases are full.
 // "Unallocated" means the phrase is empty AND not referenced by any chain

@@ -478,6 +478,58 @@ TEST_CASE_FIXTURE(PatternFixture, "conversion: repeated edit cycles leave untouc
   CHECK(project->phrases[project->chains[2].rows[0].phrase].rows[0].note == 77);
 }
 
+TEST_CASE_FIXTURE(PatternFixture, "patternEnsureBarExclusive: multiplied bars isolate on edit") {
+  // User flow: chain rows 001,002,001,002 → pattern bars 1,2,1,2 (shared).
+  // Editing bar 2 must clone the phrase for bar 2 only; bars 0/2 keep the
+  // original, so converting back to classic leaves phrase 1/2 untouched.
+  project->chains[1].rows[0].phrase = 1;
+  project->chains[1].rows[1].phrase = 2;
+  project->chains[1].rows[2].phrase = 1;
+  project->chains[1].rows[3].phrase = 2;
+  project->phrases[1].rows[0].note = 48;
+  project->phrases[2].rows[0].note = 50;
+  project->song[0][0] = 1;
+
+  REQUIRE(convertChainsToPatterns(project.get()) == 0);
+  Pattern* pat = &project->patterns[1];
+  REQUIRE(pat->length == 4);
+  CHECK(pat->bars[0].phrase == 1);
+  CHECK(pat->bars[1].phrase == 2);
+  CHECK(pat->bars[2].phrase == 1);
+  CHECK(pat->bars[3].phrase == 2);
+
+  // Edit bar 1 (the second 002): clone-on-write isolates it.
+  int edited = patternEnsureBarExclusive(project.get(), NULL, 1, 1);
+  REQUIRE(edited != EMPTY_VALUE_16);
+  CHECK(edited != 2);                       // new slot
+  CHECK(pat->bars[1].phrase == edited);
+  CHECK(pat->bars[3].phrase == 2);          // sibling untouched
+  CHECK(project->chains[1].rows[1].phrase == 2);  // classic view untouched
+  // The clone starts identical; the user's edit lands only in it.
+  project->phrases[edited].rows[1].note = 60;
+  CHECK(project->phrases[2].rows[1].note == EMPTY_VALUE_8);
+  CHECK(project->phrases[edited].rows[1].note == 60);
+
+  // Exclusive phrase: a second call is a no-op.
+  CHECK(patternEnsureBarExclusive(project.get(), NULL, 1, 1) == edited);
+
+  // Converting back: the chain keeps the original phrases; only the edited
+  // row rebuilds from the pattern.
+  REQUIRE(convertPatternsToChains(project.get()) == 0);
+  Chain* ch = &project->chains[1];
+  CHECK(ch->rows[0].phrase == 1);           // original preserved
+  CHECK(project->phrases[1].rows[0].note == 48);
+  CHECK(ch->rows[2].phrase == 1);
+  CHECK(ch->rows[1].phrase != 2);           // edited row rebuilt
+  CHECK(project->phrases[ch->rows[1].phrase].rows[1].note == 60);
+  CHECK(project->phrases[ch->rows[1].phrase].rows[0].note == 50);
+  // Bar 3 is unchanged: restored VERBATIM (reconcile keeps saved slots
+  // for every row that plays the same music).
+  CHECK(ch->rows[3].phrase == 2);
+  CHECK(project->phrases[ch->rows[3].phrase].rows[0].note == 50);
+  CHECK(ch->rows[3].transpose == 0);
+}
+
 TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: pattern number = chain number, occupied falls back") {
   // Chain 9 converts while pattern 9 is already occupied by an unrelated
   // pattern → the pattern takes the closest free slot instead.
