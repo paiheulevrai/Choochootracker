@@ -14,6 +14,25 @@ ChooChooTracker is a handheld tracker based on ChipNomad. It combines AY/YM synt
 
 The first PortMaster build targets aarch64 devices such as the Anbernic RG353V. Audio runs at 96 kHz.
 
+## ROCKNIX
+
+PortMaster must be fully installed in the active ROMs location. With two SD
+cards, a copy on the internal card alone is not sufficient if Ports uses the
+external card. Missing `control.txt` prevents the tracker from starting.
+
+The launcher uses PortMaster's bundled `gptokeyb2` on ROCKNIX, with the same
+controls and Guide hotkey. InputPlumber can emit Select and Guide together;
+the older mapper can then leave Shift held after Select is released.
+Other firmware continues to use `gptokeyb`.
+
+Validated on an RG353V with ROCKNIX 20261101: both panfrost and libmali
+started from Ports, displayed correctly, released Select/Shift normally,
+played DNB with audio, and supported normal exit and relaunch with the
+same tracker executable. This is a functional check, not an endurance test.
+
+Launcher regression test (from the repository root, with Python 3 and Bash):
+`python3 tracker/tests/test_portmaster_launcher.py`.
+
 ## Ableton Link
 
 Ableton Link tempo sync requires Wi-Fi: it only works when the device is on a network with other Link participants (e.g. a phone running LinkHut or a computer running Ableton Live). Enable it on the Project screen (Clock source → Ableton Link, then Connect). Beat alignment is best-effort within roughly 10-15 ms on PortMaster; tempo sync itself is exact.

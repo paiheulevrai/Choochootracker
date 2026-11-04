@@ -20,6 +20,12 @@ It follows the classic LSDj workflow and navigation system, with several sound d
 Install `choochootracker.zip` through PortMaster, or copy the extracted package to the console's `ports` directory. Start **ChooChooTracker** from the Ports menu.
 On the RG353V with ArkOS, use the console's **+ / -** buttons to adjust output volume during playback.
 
+On ROCKNIX, install PortMaster completely on the active ROMs card, including
+when the tracker is on a second SD card. The launcher uses PortMaster's
+`gptokeyb2` to prevent Select/Shift from sticking, without changing the
+configured hotkey. Both panfrost and libmali were functionally validated on
+the RG353V with ROCKNIX 20261101.
+
 ### TrimUI Brick / Smart Pro (NextUI)
 
 Install **ChooChooTracker** from Pak Store's **Media** category, then start it

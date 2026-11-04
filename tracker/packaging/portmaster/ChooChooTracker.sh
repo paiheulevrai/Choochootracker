@@ -36,7 +36,12 @@ fi
 
 bind_directories ~/.choochootracker "$CONFDIR/.choochootracker"
 
-$GPTOKEYB "choochootracker.${DEVICE_ARCH}" -c "./choochootracker.gptk" &
+# ROCKNIX can emit Select and Guide together; the old mapper loses Shift-up.
+if [ "$CFW_NAME" = "ROCKNIX" ]; then
+  $GPTOKEYB2 "choochootracker.${DEVICE_ARCH}" -c "./choochootracker.gptk" &
+else
+  $GPTOKEYB "choochootracker.${DEVICE_ARCH}" -c "./choochootracker.gptk" &
+fi
 pm_platform_helper "$GAMEDIR/choochootracker.${DEVICE_ARCH}"
 "./choochootracker.${DEVICE_ARCH}"
 
