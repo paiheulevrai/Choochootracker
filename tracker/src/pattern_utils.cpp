@@ -443,6 +443,30 @@ static int conversionShiftedPairEqual(Project* p, int a, int aTranspose,
   return 1;
 }
 
+// Append ALL of `srcIdx`'s bars to the end of `targetIdx`'s bars.
+// Returns the new target length, or -1 when the merged length would exceed
+// PROJECT_MAX_PATTERN_LENGTH (no changes made in that case) or src is empty.
+// Bars are copied as references (phrase + hidden transpose).
+int patternAppendPattern(Project* p, int targetIdx, int srcIdx) {
+  Pattern* target = &p->patterns[targetIdx];
+  const Pattern* src = &p->patterns[srcIdx];
+  int tLen = target->length;
+  if (tLen < 1) tLen = 1;
+  if (tLen > PROJECT_MAX_PATTERN_LENGTH) tLen = PROJECT_MAX_PATTERN_LENGTH;
+  int sLen = src->length;
+  if (sLen < 1) sLen = 1;
+  if (sLen > PROJECT_MAX_PATTERN_LENGTH) sLen = PROJECT_MAX_PATTERN_LENGTH;
+  // An empty source contributes nothing.
+  if (patternIsEmpty(p, srcIdx)) return -1;
+  int merged = tLen + sLen;
+  if (merged > PROJECT_MAX_PATTERN_LENGTH) return -1;  // would overflow
+  for (int b = 0; b < sLen; b++) {
+    target->bars[tLen + b] = src->bars[b];
+  }
+  target->length = (uint8_t)merged;
+  return merged;
+}
+
 // Clone-on-write for simplified-mode bar editing: when the phrase bound to
 // `barIdx` of `patternIdx` is ALSO referenced anywhere else (another pattern
 // bar, or any chain row), copy it into a fresh lowest-free slot and point

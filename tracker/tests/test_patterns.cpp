@@ -530,6 +530,37 @@ TEST_CASE_FIXTURE(PatternFixture, "patternEnsureBarExclusive: multiplied bars is
   CHECK(ch->rows[3].transpose == 0);
 }
 
+TEST_CASE_FIXTURE(PatternFixture, "patternAppendPattern: merges and refuses overflow") {
+  // Two 2-bar patterns merge into a 4-bar one; a third 2-bar one would
+  // make 6 (fits), but a 14-bar + 3-bar source refuses (17 > 16).
+  project->patterns[1].length = 2;
+  project->patterns[1].bars[0].phrase = 10;
+  project->patterns[1].bars[1].phrase = 11;
+  project->patterns[2].length = 2;
+  project->patterns[2].bars[0].phrase = 12;
+  project->patterns[2].bars[1].phrase = 13;
+  project->phrases[10].rows[0].note = 40;
+  project->phrases[11].rows[0].note = 41;
+  project->phrases[12].rows[0].note = 42;
+  project->phrases[13].rows[0].note = 43;
+
+  CHECK(patternAppendPattern(project.get(), 1, 2) == 4);
+  CHECK(project->patterns[1].length == 4);
+  CHECK(project->patterns[1].bars[2].phrase == 12);
+  CHECK(project->patterns[1].bars[3].phrase == 13);
+  // Source untouched by append (caller clears it).
+  CHECK(project->patterns[2].bars[0].phrase == 12);
+
+  // Overflow refusal: 14-bar target + 3-bar source > 16, no change.
+  project->patterns[3].length = 14;
+  project->patterns[4].length = 3;
+  CHECK(patternAppendPattern(project.get(), 3, 4) == -1);
+  CHECK(project->patterns[3].length == 14);
+
+  // Empty source refuses.
+  CHECK(patternAppendPattern(project.get(), 1, 5) == -1);
+}
+
 TEST_CASE_FIXTURE(PatternFixture, "convertChainsToPatterns: pattern number = chain number, occupied falls back") {
   // Chain 9 converts while pattern 9 is already occupied by an unrelated
   // pattern → the pattern takes the closest free slot instead.
