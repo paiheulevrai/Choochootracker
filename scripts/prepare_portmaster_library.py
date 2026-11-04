@@ -44,7 +44,9 @@ def pr_body(tag, source_sha, run_url, digest):
     return f"""## Game Information
 - **New Port for**: ChooChooTracker
 - **URL**: https://github.com/paiheulevrai/Choochootracker
-- Testing Thread URL: private PortMaster Discord thread; maintainer can provide access.
+- Testing Thread URL: https://discord.com/channels/1122861252088172575/1561823001669013595
+
+The testing thread requires access to the PortMaster Discord server.
 
 Ready-to-run native ARM64 music tracker. No additional game data or runtime.
 

@@ -88,6 +88,8 @@ class LibraryTest(unittest.TestCase):
         provenance = json.loads((self.output / "provenance.json").read_text())
         self.assertEqual(provenance["source_sha"], "a" * 40)
         self.assertIn("not certification", (self.output / "PR_BODY.md").read_text())
+        self.assertIn("https://discord.com/channels/1122861252088172575/1561823001669013595",
+                      (self.output / "PR_BODY.md").read_text())
 
     def test_checksum_mismatch_leaves_no_output(self):
         self.write_package()
