@@ -24,7 +24,7 @@ class PortMasterLauncherTest(unittest.TestCase):
             mapper.chmod(0o755)
             binary = game / "choochootracker.aarch64"
             binary.write_text('#!/bin/bash\nprintf "app\\n" >> "$CCT_CALLS"\n')
-            binary.chmod(0o755)
+            binary.chmod(0o644)
             (control / "control.txt").write_text(
                 'directory="${CCT_ROOT#/}"\n'
                 'DEVICE_ARCH=aarch64\n'

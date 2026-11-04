@@ -2,6 +2,13 @@ name: PortMaster
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Replace the PortMaster ZIP and checksum in this existing release (optional)
+        required: false
+        type: string
+  release:
+    types: [published]
   pull_request:
     branches:
       - main
@@ -21,6 +28,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - name: Test PortMaster packaging and launcher
+        run: |
+          python3 -m unittest discover -s tracker/tests -p 'test_portmaster_*.py'
       - name: Build PortMaster package
         run: |
           image=ghcr.io/monkeyx-net/portmaster-build-templates/portmaster-builder:aarch64-latest
@@ -54,12 +64,36 @@ jobs:
             grep -Fxq "choochootracker/instruments/USER/$engine/README.txt" releases/package-files.txt
           done
           grep -Fxq 'choochootracker/licenses/miniz.txt' releases/package-files.txt
+          binary=tracker/build/portmaster/choochootracker.aarch64
+          readelf -h "$binary" | grep -q AArch64
+          glibc=$(readelf -V "$binary" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)
+          test "$(printf '%s\n' "$glibc" GLIBC_2.29 | sort -V | tail -1)" = GLIBC_2.29
           unzip -Z1 releases/ChooChooTracker.pak.zip > releases/nextui-package-files.txt
           grep -Fxq 'launch.sh' releases/nextui-package-files.txt
           grep -Fxq 'pak.json' releases/nextui-package-files.txt
           grep -Fxq 'choochootracker.aarch64' releases/nextui-package-files.txt
           grep -Fxq 'instruments/FACTORY/catalog.tsv' releases/nextui-package-files.txt
           test "$(unzip -p releases/ChooChooTracker.pak.zip pak.json)" = "$(cat pak.json)"
+      - name: Prepare PortMaster Library sources
+        env:
+          PACKAGE_TAG: ${{ inputs.release_tag || github.event.release.tag_name || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || 'preview' }}
+        run: |
+          [[ "$PACKAGE_TAG" =~ ^[A-Za-z0-9._-]+$ ]]
+          mkdir -p "$RUNNER_TEMP/library-input"
+          archive="$RUNNER_TEMP/library-input/ChooChooTracker-${PACKAGE_TAG}-PortMaster.zip"
+          cp releases/choochootracker.zip "$archive"
+          (cd "$RUNNER_TEMP/library-input" && sha256sum *.zip > SHA256SUMS.txt)
+          python3 scripts/prepare_portmaster_library.py prepare \
+            --archive "$archive" \
+            --checksums "$RUNNER_TEMP/library-input/SHA256SUMS.txt" \
+            --output "$RUNNER_TEMP/portmaster-library" \
+            --tag "$PACKAGE_TAG" --source-sha "$(git rev-parse HEAD)" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: choochootracker-portmaster-library
+          path: ${{ runner.temp }}/portmaster-library/
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: choochootracker-portmaster
@@ -86,3 +120,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$GITHUB_REF_NAME" releases/ChooChooTracker.pak.zip --repo "$GITHUB_REPOSITORY" --clobber
+
+  publish-portmaster:
+    if: github.event_name == 'release' || inputs.release_tag != ''
+    needs: portmaster
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-asset-manifest
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: choochootracker-portmaster
+          path: releases
+      - name: Replace PortMaster archive and its checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[A-Za-z0-9._-]+$ ]]
+          archive="releases/ChooChooTracker-${RELEASE_TAG}-PortMaster.zip"
+          mv releases/choochootracker.zip "$archive"
+          mkdir -p "$RUNNER_TEMP/release-checksums"
+          gh release download "$RELEASE_TAG" --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP/release-checksums"
+          sums="$RUNNER_TEMP/release-checksums/SHA256SUMS.txt"
+          python3 scripts/prepare_portmaster_library.py update-checksum \
+            --archive "$archive" --checksums "$sums"
+          gh release upload "$RELEASE_TAG" "$archive" --clobber
+          gh release upload "$RELEASE_TAG" "$sums" --clobber
+          mkdir -p "$RUNNER_TEMP/release-verify"
+          gh release download "$RELEASE_TAG" --pattern "$(basename "$archive")" \
+            --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP/release-verify"
+          cmp "$archive" "$RUNNER_TEMP/release-verify/$(basename "$archive")"
+          cmp "$sums" "$RUNNER_TEMP/release-verify/SHA256SUMS.txt"

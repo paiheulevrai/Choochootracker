@@ -47,4 +47,23 @@ Mixer provides per-track level, mute/solo, Clouds Reverb send and tick-synchroni
 
 Instrument FX use the existing FX columns and remain active until the next note trigger.
 
-ChipNomad is by Megus. Braids, Plaits, Clouds and stmlib are by Emilie Gillet / Mutable Instruments.
+## Credits
+
+Thanks to Megus for creating ChipNomad, and to Emilie Gillet / Mutable
+Instruments for Braids, Plaits, Clouds and stmlib. Thanks to the PortMaster
+team and community testers for their help with handheld compatibility.
+
+## Compile
+
+Source: https://github.com/paiheulevrai/Choochootracker
+
+Use the native ARM64 PortMaster build container from the repository's
+`.github/workflows/portmaster.yml`, or the ARM64 toolchain documented in
+`docs/build-notes.md`:
+
+```sh
+git clone --recurse-submodules https://github.com/paiheulevrai/Choochootracker.git
+cd Choochootracker/tracker
+make -j4 -f Makefile.portmaster PortMaster-deploy \
+  COMMON_CFLAGS='-std=c++17 -Wall -g -Os -DTEST'
+```

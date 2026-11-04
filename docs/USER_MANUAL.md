@@ -26,6 +26,11 @@ when the tracker is on a second SD card. The launcher uses PortMaster's
 configured hotkey. Both panfrost and libmali were functionally validated on
 the RG353V with ROCKNIX 20261101.
 
+Keep the complete package when installing or updating: the executable needs
+its bundled presets, samples, fonts and other assets. Back up your projects
+before replacing an existing installation. The PortMaster Library submission
+and its review are separate from the downloadable GitHub release.
+
 ### TrimUI Brick / Smart Pro (NextUI)
 
 Install **ChooChooTracker** from Pak Store's **Media** category, then start it

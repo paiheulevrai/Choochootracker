@@ -206,6 +206,74 @@ uploading it:
 & 'C:\Program Files\7-Zip\7z.exe' t releases\choochootracker.zip
 ```
 
+### PortMaster Library submission and weekly updates
+
+The `PortMaster` GitHub Actions workflow produces the normal installable ZIP
+and a `choochootracker-portmaster-library` artifact. The latter contains
+`ports/choochootracker/`, `PR_BODY.md` and `provenance.json`. Metadata is moved
+to the Library source root; component/font licenses are flattened without
+changing their contents. All runtime assets are retained.
+
+Publishing a GitHub release triggers preparation automatically. Its source
+is the release tag. The workflow replaces that release's versioned PortMaster
+ZIP and only its existing entry in `SHA256SUMS.txt`; other checksum lines are
+preserved. The release must already contain a valid checksum entry. If assets
+are still being uploaded when the workflow runs, it fails explicitly: rerun
+after publication is complete. PortMaster and Miyoo release-manifest writers
+share a concurrency group.
+
+To rebuild an existing release from a corrected source revision, dispatch the
+workflow on that branch with `release_tag` set explicitly, for example:
+
+```powershell
+gh workflow run portmaster.yml --ref main -f release_tag=v1.0.23-alpha
+```
+
+This deliberately replaces the public ZIP and its checksum without moving the
+tag. Back up both existing assets first, record the run/source SHA, and check
+the rebuilt package on hardware. Omitting `release_tag` only produces build
+artifacts on a manual branch run; it does not replace public release assets.
+
+Create a GitHub fork of `PortsMaster/PortMaster-New`, then use a partial,
+shallow sparse clone in a separate directory, not this source worktree:
+
+```powershell
+git clone --filter=blob:none --depth=1 --single-branch --no-checkout https://github.com/YOUR_USERNAME/PortMaster-New.git C:\path\PortMaster-New
+git -C C:\path\PortMaster-New sparse-checkout set --no-cone /AGENTS.md /SOURCE_SETUP.txt /ports/choochootracker/
+git -C C:\path\PortMaster-New switch -c add-choochootracker
+```
+
+Download a successful run's Library artifact and import it into that branch:
+
+```powershell
+gh run download RUN_ID --name choochootracker-portmaster-library --dir C:\path\library-artifact
+python scripts\prepare_portmaster_library.py import --prepared C:\path\library-artifact --repository C:\path\PortMaster-New
+git -C C:\path\PortMaster-New diff --stat
+git -C C:\path\PortMaster-New status --short
+```
+
+The importer replaces only a clean `ports/choochootracker/` tree. It refuses
+local or ignored changes there; it does not commit, push or open a PR. On
+updates, reuse the existing submission branch/PR and import the next release's
+artifact after reviewing its source and hardware results.
+
+For an already published ZIP, run `prepare` with `--archive`, `--checksums`,
+`--output` (an empty directory), `--tag`, `--source-sha` and `--run-url` to
+produce the same artifact locally. The ZIP must match its exact checksum entry.
+Python 3.8+ and Git are required; no third-party Python packages are needed.
+
+Review `PR_BODY.md` before submission. Its historical test reports are not
+automatic certification of new builds; check only the tests actually performed
+and personally confirm the authorship/AI-assistance declaration. The testing
+thread is private: do not invent a public link. No cross-repository token,
+automatic fork push or PR creation is configured.
+
+Focused checks, from the repository root with Python and Bash:
+
+```sh
+python3 -m unittest discover -s tracker/tests -p 'test_portmaster_*.py'
+```
+
 ## NextUI Pak Store (TrimUI tg5040)
 
 The NextUI package reuses the same ARM64 executable as PortMaster:

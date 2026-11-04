@@ -36,6 +36,8 @@ fi
 
 bind_directories ~/.choochootracker "$CONFDIR/.choochootracker"
 
+$ESUDO chmod +x "./choochootracker.${DEVICE_ARCH}" || exit 1
+
 # ROCKNIX can emit Select and Guide together; the old mapper loses Shift-up.
 if [ "$CFW_NAME" = "ROCKNIX" ]; then
   $GPTOKEYB2 "choochootracker.${DEVICE_ARCH}" -c "./choochootracker.gptk" &
