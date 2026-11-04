@@ -1441,6 +1441,8 @@ The Project screen provides **Load**, **Save**, **New**, **Export**, **Manage**,
 
 ### Export location
 
+WAV master exports, stems and selection bounces support slow project tempos, including 10 BPM; slow tempos must not produce header-only (44-byte) WAV files.
+
 Exports, stems and bounces are written to a per-project folder inside the app's preexisting samples directory:
 
 - **Default**: `<app folder>/samples/Exports/<project name>/`. While the project is unnamed, the folder is `current-project`.
