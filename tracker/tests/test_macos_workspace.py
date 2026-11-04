@@ -70,12 +70,14 @@ class MacOSWorkspaceTest(unittest.TestCase):
         project = self.workspace / "projects/example.cct"
         self.assertEqual(project.read_bytes(), b"bundled project")
         project.write_bytes(b"user edits")
+        project.chmod(0o444)
         (self.workspace / "settings.txt").write_bytes(b"user settings")
         (self.workspace / "autosave.cct").write_bytes(b"user autosave")
         (self.workspace / "themes/example.cth").unlink()
         result = self.run_app()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(project.read_bytes(), b"user edits")
+        self.assertEqual(project.stat().st_mode & 0o222, 0)
         self.assertEqual((self.workspace / "settings.txt").read_bytes(), b"user settings")
         self.assertEqual((self.workspace / "autosave.cct").read_bytes(), b"user autosave")
         self.assertEqual((self.workspace / "themes/example.cth").read_bytes(), b"bundled theme")
@@ -89,7 +91,8 @@ class MacOSWorkspaceTest(unittest.TestCase):
                 path.chmod(modes[path] & ~0o222)
             result = self.run_app()
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue((self.workspace / "projects/example.cct").is_file())
+            (self.workspace / "projects/example.cct").write_bytes(b"edited project")
+            (self.workspace / "projects/new.cct").write_bytes(b"new project")
         finally:
             for path in paths:
                 path.chmod(modes[path])

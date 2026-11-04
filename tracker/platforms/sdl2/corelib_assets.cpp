@@ -25,8 +25,21 @@ int assetsInit(void) {
     char workspace[4096];
     if (fileGetDefaultDirectory(workspace, sizeof(workspace)) != 0) return 1;
     std::error_code error;
-    fs::copy(resources / "common", workspace,
-             fs::copy_options::recursive | fs::copy_options::skip_existing, error);
+    const fs::path source = resources / "common";
+    fs::recursive_directory_iterator entry(source, error), end;
+    while (!error && entry != end) {
+        const fs::path target = fs::path(workspace) / entry->path().lexically_relative(source);
+        // New workspace content must not inherit a read-only bundle's permissions.
+        if (entry->is_directory(error)) {
+            if (fs::create_directory(target, error)) {
+                fs::permissions(target, fs::perms::owner_all, fs::perm_options::add, error);
+            }
+        } else if (!error && fs::copy_file(entry->path(), target, fs::copy_options::skip_existing, error)) {
+            fs::permissions(target, fs::perms::owner_read | fs::perms::owner_write,
+                            fs::perm_options::add, error);
+        }
+        if (!error) entry.increment(error);
+    }
     if (error) {
         fprintf(stderr, "Cannot seed macOS resources into '%s': %s\n", workspace, error.message().c_str());
         return 1;
