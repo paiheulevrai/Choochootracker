@@ -498,8 +498,9 @@ static void songMergeSelectedPatternsUp(void) {
         continue;
       }
       patternClear(&p->patterns[src]);
-      // Any selected row above the source keeps pointing at the (now
-      // empty) pattern — empty patterns are harmless in the song grid.
+      // The merged source's row is emptied — the pattern is gone from the
+      // song grid.
+      p->song[rows[i]][col] = EMPTY_VALUE_16;
     }
     // If the topmost selected row was empty, point it at the merged
     // pattern so the result is visible at the top of the selection.
@@ -515,6 +516,7 @@ static void songMergeSelectedPatternsUp(void) {
   projectModified = 1;
   chipnomadQueueProjectRefresh(chipnomadState);
   screenFullRedraw(&screen);
+  screenMessage(MESSAGE_TIME, "Patterns merged");
 }
 
 static void drawMergeRefusal(void) {
@@ -523,15 +525,22 @@ static void drawMergeRefusal(void) {
   static const char* text = MERGE_REFUSAL_TEXT;
   const int textLen = (int)strlen(text);
   const int window = 40;
-  const int period = textLen + 3;  // wrap-around gap
+  // Same pacing as the View window's playhead marquee: 1 s hold, 180 ms
+  // per character, 1 s hold at the end (frame-counted at 60 FPS).
+  const int travel = (textLen - window) * 180 / (1000 / 60);  // frames
+  const int holdFrames = 1000 / (1000 / 60);                  // 1 s
+  const int period = holdFrames + travel + holdFrames;
+  const int frame = (MERGE_REFUSAL_FRAMES - mergeRefusalFrames) % period;
   int offset;
   if (textLen <= window) {
     offset = 0;
+  } else if (frame < holdFrames) {
+    offset = 0;
+  } else if (frame < holdFrames + travel) {
+    offset = (frame - holdFrames) * 1000 / 60 / 180;
+    if (offset > textLen - window) offset = textLen - window;
   } else {
-    const int frameInPeriod = (MERGE_REFUSAL_FRAMES - mergeRefusalFrames) % (period * 2);
-    offset = frameInPeriod < period ? frameInPeriod : period * 2 - 1 - frameInPeriod - 1;
-    if (offset < 0) offset = 0;
-    if (offset > textLen) offset = textLen;
+    offset = textLen - window;
   }
   char win[41];
   for (int i = 0; i < 40; i++) {
