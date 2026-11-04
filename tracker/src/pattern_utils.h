@@ -66,6 +66,12 @@ extern "C" {
 int convertChainsToPatterns(Project* p);
 int convertPatternsToChains(Project* p);
 
+// Append ALL of `srcIdx`'s bars to the end of `targetIdx`'s bars (phrase
+// references + hidden transposes copied). Returns the new target length,
+// or -1 when the merged length would exceed 16 bars or src has no bars
+// (no changes made). Used by the Song screen's merge-up (OPT+UP).
+int patternAppendPattern(Project* p, int targetIdx, int srcIdx);
+
 // Clone-on-write for simplified-mode bar editing: when the phrase bound to
 // `barIdx` of `patternIdx` is also referenced elsewhere (another pattern
 // bar or any chain row), copy it into a fresh lowest-free slot and point

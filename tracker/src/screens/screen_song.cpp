@@ -16,6 +16,11 @@
 // Screen state variables
 static uint16_t lastChainValue = 0;
 
+// Defined below (before onInput): merge-up machinery.
+static void songMergeSelectedPatternsUp(void);
+static void drawMergeRefusal(void);
+
+
 // Track mute/solo state machine
 typedef enum {
   MUTE_SOLO_EMPTY,
@@ -183,7 +188,9 @@ static void drawField(int col, int row, CellState state) {
   if (row < screen.topRow || row >= (screen.topRow + screenVisibleRows())) return; // Don't draw outside of the viewing area
 
   int chain = chipnomadState->project.song[row][col];
-  int isHighlighted = chipnomadState->project.songHighlight[row][col];
+ 
+
+ int isHighlighted = chipnomadState->project.songHighlight[row][col];
 
   if (isHighlighted) {
     gfxSetFgColor(appSettings.colorScheme.textTitles);
@@ -235,6 +242,9 @@ static void draw(void) {
   ++songFrame;
   if (liveTogglePending && ((int32_t)(songFrame - liveToggleFrame) >= 0 || !appTapSequenceOpen(keyOpt)))
     applyPendingLiveToggle();
+
+  // Merge-refusal marquee owns the helper row while active.
+  drawMergeRefusal();
 
   for (int c = 0; c < chipnomadState->project.tracksCount; c++) {
     gfxClearRect(2 + c * 3, 3, 1, screenVisibleRows());
@@ -436,8 +446,114 @@ static int onEdit(int col, int row, CellEditAction action) {
   return 0;
 }
 
+// ── Merge-up (simplified view, selection active, OPT+UP) ───────────────────
+// All selected patterns merge upward: lower rows' bars append to the
+// topmost selected pattern (per column, top-to-bottom), sources are
+// cleared. Refused (animated helper text) when the merged pattern would
+// exceed 16 bars.
+#define MERGE_REFUSAL_TEXT "Pattern longer than 16 bars: unable to merge"
+#define MERGE_REFUSAL_FRAMES (60 * 5)  // ~5 s at 60 FPS
+static int mergeRefusalFrames = 0;
+
+static void songMergeSelectedPatternsUp(void) {
+  Project* p = &chipnomadState->project;
+  if (p->viewMode != ViewMode::simplified) return;
+  if (screen.selectMode != 1) return;
+
+  int startCol, startRow, endCol, endRow;
+  getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
+
+  // Per-column merge into that column's topmost selected pattern.
+  for (int col = startCol; col <= endCol; col++) {
+    // Collect the column's selected rows (ascending) with non-empty cells.
+    int rows[PROJECT_MAX_LENGTH];
+    int count = 0;
+    for (int r = startRow; r <= endRow; r++) {
+      uint16_t cell = p->song[r][col];
+      if (cell == EMPTY_VALUE_16 || cell >= PROJECT_MAX_PATTERNS) continue;
+      rows[count++] = r;
+    }
+    if (count < 1) continue;
+
+    // Length check BEFORE mutating: sum of all selected patterns ≤ 16.
+    int total = 0;
+    for (int i = 0; i < count; i++) {
+      Pattern* pat = &p->patterns[p->song[rows[i]][col]];
+      int len = pat->length;
+      if (len < 1) len = 1;
+      total += len;
+    }
+    if (total > PROJECT_MAX_PATTERN_LENGTH) {
+      mergeRefusalFrames = MERGE_REFUSAL_FRAMES;
+      continue;  // refuse this column (animated text shows once)
+    }
+
+    // Merge ascending into the first selected pattern; clear the sources.
+    int target = p->song[rows[0]][col];
+    for (int i = 1; i < count; i++) {
+      int src = p->song[rows[i]][col];
+      if (patternAppendPattern(p, target, src) < 0) {
+        // Cannot happen after the length check; guard anyway.
+        mergeRefusalFrames = MERGE_REFUSAL_FRAMES;
+        continue;
+      }
+      patternClear(&p->patterns[src]);
+      // Any selected row above the source keeps pointing at the (now
+      // empty) pattern — empty patterns are harmless in the song grid.
+    }
+    // If the topmost selected row was empty, point it at the merged
+    // pattern so the result is visible at the top of the selection.
+    for (int r = startRow; r <= endRow; r++) {
+      if (p->song[r][col] == target) break;
+      if (p->song[r][col] == EMPTY_VALUE_16) {
+        p->song[r][col] = (uint16_t)target;
+        break;
+      }
+    }
+  }
+
+  projectModified = 1;
+  chipnomadQueueProjectRefresh(chipnomadState);
+  screenFullRedraw(&screen);
+}
+
+static void drawMergeRefusal(void) {
+  if (mergeRefusalFrames <= 0) return;
+  mergeRefusalFrames--;
+  static const char* text = MERGE_REFUSAL_TEXT;
+  const int textLen = (int)strlen(text);
+  const int window = 40;
+  const int period = textLen + 3;  // wrap-around gap
+  int offset;
+  if (textLen <= window) {
+    offset = 0;
+  } else {
+    const int frameInPeriod = (MERGE_REFUSAL_FRAMES - mergeRefusalFrames) % (period * 2);
+    offset = frameInPeriod < period ? frameInPeriod : period * 2 - 1 - frameInPeriod - 1;
+    if (offset < 0) offset = 0;
+    if (offset > textLen) offset = textLen;
+  }
+  char win[41];
+  for (int i = 0; i < 40; i++) {
+    int pos = offset + i;
+    win[i] = pos < textLen ? text[pos] : ' ';
+  }
+  win[40] = '\0';
+  gfxSetFgColor(appSettings.colorScheme.textValue);
+  gfxClearRect(0, 19, 40, 1);
+  gfxPrint(0, 19, win);
+}
 static int onInput(int isKeyDown, int keys, int tapCount) {
   int handled = 0;
+
+  // Merge-up: OPT+UP with an active selection in simplified view. OPT+UP
+  // has no other binding on the Song screen (mute/solo machine does not
+  // consume it), so this is a free chord.
+  if (isKeyDown && keys == (keyOpt | keyUp) && screen.selectMode == 1 &&
+      chipnomadState->project.viewMode == ViewMode::simplified) {
+    songMergeSelectedPatternsUp();
+    return 1;
+  }
 
   if (isKeyDown) {
     int thirdOptTap = keys == keyOpt && tapCount == 3;
