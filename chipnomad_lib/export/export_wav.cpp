@@ -54,6 +54,7 @@ ExporterWAV::ExporterWAV(const char* path, Project* project, int startRow, int s
   channels = 2;
   totalSamples = 0;
   currentTrack = 0;
+  renderBuffersReady = false;
   strncpy(this->basePath, path, sizeof(this->basePath) - 1);
   this->basePath[sizeof(this->basePath) - 1] = 0;
 
@@ -83,6 +84,11 @@ ExporterWAV::ExporterWAV(const char* path, Project* project, int startRow, int s
   chipnomadInitChips(chipnomadState, sampleRate, NULL);
   chipnomadSetQuality(chipnomadState, ChipNomadQuality::best);
   chipnomadState->mixVolume = mixVolume;
+  int renderFrames = sampleRate;
+  if (chipnomadState->audioProject.tickRate > 1.0f) {
+    renderFrames = (int)(sampleRate / chipnomadState->audioProject.tickRate) + 1;
+  }
+  renderBuffersReady = chipnomadReserveRenderBuffers(chipnomadState, renderFrames) == 0;
 
   if (stems) {
     for (int t = 0; t < PROJECT_MAX_TRACKS; t++) {
@@ -92,6 +98,7 @@ ExporterWAV::ExporterWAV(const char* path, Project* project, int startRow, int s
 }
 
 int ExporterWAV::next() {
+  if (!renderBuffersReady) return -1;
   int samplesRendered = chipnomadRender(chipnomadState, renderBuffer, sampleRate);
 
   if (samplesRendered > 0 && files[currentTrack]) {
@@ -118,6 +125,10 @@ int ExporterWAV::next() {
 }
 
 int ExporterWAV::finish() {
+  if (!renderBuffersReady) {
+    cancel();
+    return -1;
+  }
   for (int i = 0; i < fileCount; i++) {
     if (files[i]) {
       int dataSize = totalSamples * channels * (bitDepth / 8);

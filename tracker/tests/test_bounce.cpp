@@ -72,6 +72,46 @@ static void buildNoteRows(BounceFixture& f, int rows) {
   f.state->project.song[0][0] = 0;
 }
 
+static long wavFileSize(const char* path) {
+  FILE* file = std::fopen(path, "rb");
+  if (!file) return -1;
+  std::fseek(file, 0, SEEK_END);
+  long size = std::ftell(file);
+  std::fclose(file);
+  return size;
+}
+
+TEST_CASE_FIXTURE(BounceFixture, "WAV export renders low-tick-rate projects for master and stems") {
+  buildNoteRows(*this, 16);
+  state->project.tickRate = 5.0f;
+
+  const char* masterPath = "build/tests/test_export_low_tick.wav";
+  std::remove(masterPath);
+  {
+    ExporterWAV exporter(masterPath, &state->project, 0, 44100, 16, 1.0f);
+    CHECK(exporter.next() == 1);
+    CHECK(exporter.finish() == 0);
+  }
+  CHECK(wavFileSize(masterPath) > 44);
+  std::remove(masterPath);
+
+  const char* stemsPath = "build/tests/test_export_low_tick_stems";
+  char firstStemPath[128];
+  std::snprintf(firstStemPath, sizeof(firstStemPath), "%s-%02d.wav", stemsPath, 1);
+  std::remove(firstStemPath);
+  {
+    ExporterWAV exporter(stemsPath, &state->project, 0, 44100, 16, 1.0f, true);
+    CHECK(exporter.next() == 1);
+    CHECK(exporter.finish() == 0);
+  }
+  CHECK(wavFileSize(firstStemPath) > 44);
+  for (int i = 0; i < state->project.tracksCount; i++) {
+    char stemPath[128];
+    std::snprintf(stemPath, sizeof(stemPath), "%s-%02d.wav", stemsPath, i + 1);
+    std::remove(stemPath);
+  }
+}
+
 TEST_CASE_FIXTURE(BounceFixture, "stopRange phrase level stops the track at the boundary") {
   buildNoteRows(*this, 16);
 

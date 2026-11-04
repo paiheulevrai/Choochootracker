@@ -48,6 +48,7 @@ class ExporterWAV : public Exporter {
     int bitDepth;
     int totalSamples;
     bool stems;           // false = single mixed file, true = one file per track
+    bool renderBuffersReady;
     char basePath[1024]; // Base path for file naming
     float* renderBuffer;
 
