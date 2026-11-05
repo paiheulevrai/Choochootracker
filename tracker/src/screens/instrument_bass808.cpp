@@ -302,7 +302,7 @@ static int onInput(int isKeyDown, int keys, int) {
 }
 
 ScreenData screenInstrumentBass808 = {
-  .rows = 11, .cursorRow = 0, .cursorCol = 0, .topRow = 0, .selectMode = -1,
+  .rows = 10, .cursorRow = 0, .cursorCol = 0, .topRow = 0, .selectMode = -1,
   .selectStartRow = 0, .selectStartCol = 0, .selectAnchorRow = 0, .selectAnchorCol = 0,
   .playbackLevel = ScreenPlaybackLevel::none, .getColumnCount = columns,
   .drawStatic = drawStatic, .drawCursor = drawCursor, .drawSelection = NULL,

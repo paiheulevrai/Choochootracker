@@ -150,6 +150,13 @@ void Bass808Voice::noteOn() {
   // fresh trigger; a noteOn while still active is a legato retrigger.
   if (!active_) { phaseMain_ = 0.0f; phaseSub_ = 0.0f; }
   active_ = true;
+  // Restart the envelope from zero on EVERY trigger (SampleVoice's exact
+  // pattern: "post_.kill(); // Restart sample attack; the output ramp
+  // bridges the previous waveform"). Resuming from the running level made
+  // the attack parameter inaudible — with sustain=FF the level never drops
+  // between notes, so the attack ramp started at ~1 and had nothing to do.
+  // The 2 ms output ramp armed above covers the amplitude step instead.
+  post_.kill();
   post_.noteOn(true);
 }
 
