@@ -61,7 +61,7 @@ Vita: $(TARGET)
 # -Wl,-q keeps the relocations vita-elf-create needs.
 $(TARGET): $(OBJECTS)
 	mkdir -p $(BUILD)
-	$(CXX) $(VITA_CFLAGS) $(OBJECTS) $(SDL_LIBS) -lScePower_stub -lm -Wl,-q -o $@
+	$(CXX) $(VITA_CFLAGS) $(OBJECTS) $(SDL_LIBS) -lScePower_stub -lpthread -lm -Wl,-q -o $@
 
 # --- VPK ---------------------------------------------------------------------
 VITA_TITLE ?= ChooChooTracker
