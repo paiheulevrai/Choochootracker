@@ -556,6 +556,7 @@ static int loadInstrumentBass808(FILE* file, Instrument* instrument) {
     else if (strncmp(line, "- Sub level: ", 13) == 0) sscanf(line, "- Sub level: %hhu", &b->subLevel);
     else if (strncmp(line, "- Drive: ", 9) == 0) sscanf(line, "- Drive: %hhu", &b->drive);
     else if (strncmp(line, "- Glide: ", 9) == 0) sscanf(line, "- Glide: %hhu", &b->glide);
+    else if (strncmp(line, "- Envelope mode: ", 17) == 0) sscanf(line, "- Envelope mode: %hhu", &b->envelopeMode);
     else loadVoicePostSetting(line, b);
     consumeLine(file);
   }
@@ -825,6 +826,11 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
   } else if (instrument->type == InstrumentType::Bass808) {
     InstrumentBass808* b = &instrument->chip.bass808;
     if ((uint8_t)b->waveform >= (uint8_t)Bass808Waveform::totalCount) b->waveform = (uint8_t)Bass808Waveform::sine;
+    if (b->subWaveform > 4) b->subWaveform = 0;
+    // Legacy instruments saved before the EnvMode row load as VCA (same
+    // convention as plaits: 1 is a legacy alias for the ADSR mode).
+    if (b->envelopeMode == 1) b->envelopeMode = 2;
+    if (b->envelopeMode > 2) b->envelopeMode = 2;
     if (b->subWaveform > 4) b->subWaveform = 0;
     if (b->filterCutoffHz > FILTER_CUTOFF_MAX_HZ) b->filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
   } else if (instrument->type == InstrumentType::MME) {
@@ -1103,6 +1109,8 @@ static int saveInstrumentBass808(FILE* file, Instrument* instrument) {
   fprintf(file, "- Sub level: %hhu\n", b->subLevel);
   fprintf(file, "- Drive: %hhu\n", b->drive);
   fprintf(file, "- Glide: %hhu\n", b->glide);
+  fprintf(file, "- Envelope mode: %hhu\n", b->envelopeMode);
+  fprintf(file, "- Envelope mode: %hhu\n", b->envelopeMode);
   saveVoicePostSettings(file, b); return 0;
 }
 

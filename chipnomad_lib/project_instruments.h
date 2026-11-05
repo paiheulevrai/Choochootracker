@@ -343,6 +343,7 @@ struct InstrumentBass808 : InstrumentVoicePostSettings {
   uint8_t subLevel;     // 0..255 sub-oscillator mix level
   uint8_t drive;        // 0..255 tanh waveshaper drive
   uint8_t glide;        // 0..255 default portamento time (per-row override via fxGLD)
+  uint8_t envelopeMode; // 0: TRIG (fixed shape per note), 2: VCA ADSR (1 loads as legacy VCA)
 };
 
 // Multi Modulation Engine: two internal oscillators coupled by a selectable

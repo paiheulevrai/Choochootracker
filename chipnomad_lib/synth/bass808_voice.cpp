@@ -69,6 +69,14 @@ void Bass808Voice::init(float sampleRate) {
   currentCents_ = kReferenceCents;
   glideCents_   = kReferenceCents;
   glideAlpha_   = 0.0f;
+  envelopeMode_ = 2;
+  lastOutput_ = 0.0f;
+  rampFrom_ = 0.0f;
+  rampRemaining_ = 0;
+  // 2 ms de-click ramp, at least 2 frames so the linear weight never
+  // divides by zero (same constant as SampleVoice's de-click).
+  rampFrames_ = sampleRate_ > 500.0f ? (uint32_t)(sampleRate_ * 0.002f) : 2;
+  if (rampFrames_ < 2) rampFrames_ = 2;
   post_.init(sampleRate_);
 }
 
@@ -92,10 +100,10 @@ void Bass808Voice::configure(const InstrumentBass808* instrument, float pitchCen
   // into VoicePostProcessor::setEnvelope via the shared helper).  Use the
   // same quadratic-ish time mapping the codebase's other instruments use
   // for a musical, full-range response without a hard-coded dead band.
-  // (Lookup happens via the same byte semantics as the other synth voices;
-  // the time constants below mirror how Sintered/DrumSynth scale their
-  // byte parameters when calling post_.setEnvelope.)
-  post_.setEnvelope(true,
+  // Envelope mode 0 (TRIG) keeps the VCA wide open — like plaits' TRIG/LPG
+  // mode the note shape comes from the note length, not the ADSR — while
+  // mode 2 (VCA) drives the gain with the ADSR.
+  post_.setEnvelope(instrument->envelopeMode != 0,
                     instrument->attack  / 255.0f * 4.0f,   // up to 4 s attack
                     instrument->decay   / 255.0f * 4.0f,   // up to 4 s decay
                     instrument->sustain / 255.0f,          // 0..1 sustain level
@@ -106,10 +114,17 @@ void Bass808Voice::configure(const InstrumentBass808* instrument, float pitchCen
   // mid-glide the new coefficient takes effect without resetting the
   // running target.  (We only reset on noteOn to allow a fresh legato.)
   glideAlpha_ = glideCoefficient(glideValue);
+  envelopeMode_ = instrument->envelopeMode == 0 ? 0 : 2;
 }
 
 void Bass808Voice::noteOn() {
   if (!instrument_) return;
+  // De-click: arm the ramp from the previous output (a retrigger while the
+  // voice is still audible must not step) or from zero for an idle voice.
+  // The VCA envelope also restarts from zero (post_.noteOn), so without the
+  // ramp the oscillator restart would click.
+  rampFrom_ = active_ ? lastOutput_ : 0.0f;
+  rampRemaining_ = rampFrames_;
   // On a fresh trigger with glide enabled, glideCents_ continues from its
   // previous value (legato).  When the voice was idle we snap to target so
   // the first sample doesn't slew in from a stale pitch.
@@ -191,10 +206,20 @@ void Bass808Voice::render(float* output, size_t frames) {
     // 808 bass.  Filter and ADSR run in VoicePostProcessor::process().
     sample = audioTanh(sample * drive) * inverseDriveSaturation;
 
-    output[i] = post_.process(sample * calibration);
+    sample = post_.process(sample * calibration);
+    // De-click ramp: blend from the pre-trigger output into this note over
+    // rampFrames_ frames (linear, like SampleVoice's finishFrame ramp).
+    if (rampRemaining_) {
+      const float blend = (float)(rampFrames_ - rampRemaining_ + 1) / (float)rampFrames_;
+      sample = rampFrom_ + (sample - rampFrom_) * blend;
+      --rampRemaining_;
+    }
+    lastOutput_ = sample;
+    output[i] = sample;
   }
 
   // If the post envelope has gone fully idle, retire the voice so the
-  // engine skips us on the next render pass.
-  if (!post_.envelopeActive()) active_ = false;
+  // engine skips us on the next render pass.  In TRIG mode there is no
+  // VCA envelope: the note ends when the transport cuts it (kill()).
+  if (envelopeMode_ != 0 && !post_.envelopeActive()) active_ = false;
 }

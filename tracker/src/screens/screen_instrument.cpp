@@ -69,7 +69,7 @@ static SelectionItem instrumentTypeSynth[] = {
   {NULL, (int)InstrumentType::Plaits, NULL, 0},
   {NULL, (int)InstrumentType::PlaitsAlt, NULL, 0},
   {NULL, (int)InstrumentType::MME, NULL, 0},
-  {"808 Bass", (int)InstrumentType::Bass808, NULL, 0},
+  {"Fatty", (int)InstrumentType::Bass808, NULL, 0},
 };
 static SelectionItem instrumentTypeDrums[] = {
   {NULL, (int)InstrumentType::DrumSynth, NULL, 0},

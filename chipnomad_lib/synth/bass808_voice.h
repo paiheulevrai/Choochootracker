@@ -70,6 +70,17 @@ class Bass808Voice {
   float glideCents_   = 6900.0f;  // instantaneous pitch (post-glide)
   float glideAlpha_   = 0.0f;     // one-pole coefficient, 0 = snap, ~1 = slow
   bool  active_ = false;
+  uint8_t envelopeMode_ = 2;   // 0: TRIG (fixed shape per note), 2: VCA ADSR
+
+  // De-click: a short linear ramp on every fresh trigger, from the previous
+  // output (or zero for an idle voice) up to the new note. Same pattern as
+  // SampleVoice's de-click (upstream 72da8e2 / 153ce91): the oscillator
+  // restarts at an arbitrary phase point, so the raw first sample can be far
+  // from the previous output and click.
+  float lastOutput_ = 0.0f;
+  float rampFrom_ = 0.0f;
+  uint32_t rampRemaining_ = 0;
+  uint32_t rampFrames_ = 1;
 };
 
 #endif  // CHOOCHOO_BASS808_VOICE_H
