@@ -238,12 +238,11 @@ static int onEdit(int col, int row, CellEditAction action) {
     // OSC waveform: cycle 0..3, hold for popup.
     ok = edit8noLast(action, &b->waveform, 1, 0, (int)Bass808Waveform::totalCount - 1);
   } else if (row == 8) {
-    // EnvMode cycles ONLY on EDIT+direction (tap does nothing) and clamps
-    // at the ends — no wrap-around past the last option.
-    if (action == CellEditAction::increase) {
-      if (b->envelopeMode != 2) { b->envelopeMode = 2; ok = 1; }
-    } else if (action == CellEditAction::decrease) {
-      if (b->envelopeMode != 0) { b->envelopeMode = 0; ok = 1; }
+    // EnvMode cycles ONLY on EDIT+direction (tap does nothing) and WRAPS
+    // around (TRIG -> VCA -> TRIG) so the user never has to travel back.
+    if (action == CellEditAction::increase || action == CellEditAction::decrease) {
+      b->envelopeMode = b->envelopeMode == 0 ? 2 : 0;
+      ok = 1;
     }
     if (ok) {
       projectModified = 1;

@@ -251,11 +251,13 @@ void Bass808Voice::render(float* output, size_t frames) {
     lastOutput_ = sample;
     output[i] = sample;
     // Retire the voice through the de-click tail when its sound is done:
-    // VCA — the envelope went fully idle (release finished); TRIG — the
-    // one-shot pluck decayed to the sustain stage (level 0 there; the
-    // envelope never goes idle on its own in this mode).
+    // VCA — the envelope went fully idle (release finished). TRIG — the
+    // one-shot pluck finished when the DECAY completed (the envelope then
+    // sits in the sustain stage at level 0 and never goes idle on its own).
+    // Level-based checks can't be used: the level is exactly 0 on the first
+    // attack sample, which would retire the pluck before it starts.
     const bool done = envelopeMode_ == 0
-      ? !post_.envelopeActive() || post_.envelopeLevel() <= 0.0f
+      ? post_.envelopeStage() == decltype(post_.envelopeStage())::sustain
       : !post_.envelopeActive();
     if (done) {
       active_ = false;
