@@ -146,12 +146,19 @@ void Bass808Voice::configure(const InstrumentBass808* instrument, float pitchCen
 
 void Bass808Voice::noteOn() {
   if (!instrument_) return;
-  // De-click: arm the ramp from the previous output (a retrigger while the
-  // voice is still audible must not step) or from zero for an idle voice.
-  // The VCA envelope also restarts from zero (post_.noteOn), so without the
-  // ramp the oscillator restart would click.
-  rampFrom_ = active_ ? lastOutput_ : 0.0f;
+  // De-click: arm the ramp from the previous output. This must consider the
+  // KILLED-THEN-RETRIGGERED path too: the engine calls kill() (which clears
+  // active_ and arms the fade tail) and immediately noteOn() on the same
+  // tick. Gating on active_ alone made rampFrom_ zero there, so the output
+  // stepped from the ringing level to silence in one sample — the click.
+  // Any audible recent output (still active, a pending tail, or simply the
+  // last rendered sample) bridges the new note.
+  const bool wasAudible = active_ || transitionFrames_ > 0 || lastOutput_ != 0.0f;
+  rampFrom_ = wasAudible ? lastOutput_ : 0.0f;
   rampRemaining_ = rampFrames_;
+  // The new note owns the buffer: a pending kill fade is superseded by the
+  // ramp above (SampleVoice clears its transition the same way).
+  transitionFrames_ = 0;
   // On a fresh trigger with glide enabled, glideCents_ continues from its
   // previous value (legato).  When the voice was idle we snap to target so
   // the first sample doesn't slew in from a stale pitch.
