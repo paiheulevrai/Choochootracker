@@ -69,6 +69,7 @@ static SelectionItem instrumentTypeSynth[] = {
   {NULL, (int)InstrumentType::Plaits, NULL, 0},
   {NULL, (int)InstrumentType::PlaitsAlt, NULL, 0},
   {NULL, (int)InstrumentType::MME, NULL, 0},
+  {"808 Bass", (int)InstrumentType::Bass808, NULL, 0},
 };
 static SelectionItem instrumentTypeDrums[] = {
   {NULL, (int)InstrumentType::DrumSynth, NULL, 0},
@@ -583,6 +584,7 @@ static ScreenData* instrumentScreen(void) {
     &screenInstrumentDrumSynth, &screenInstrumentMME,
     &screenInstrumentSintered,
     &screenInstrumentMidi, &screenInstrumentOPLL, &screenInstrumentOPL, &screenInstrumentSimpleChip, &screenInstrumentOPL, &screenInstrumentSoundFont, &screenInstrumentMonk, &screenInstrumentAudioIn, &screenInstrumentLayer,
+    &screenInstrumentBass808,
   };
   InstrumentScreenKind kind = getInstrumentDefinition(chipnomadState->project.instruments[cInstrument].type)->screen;
   ScreenData* data = screens[(int)kind];

@@ -1,0 +1,200 @@
+#include "bass808_voice.h"
+#include "audio_math.h"
+
+#include <math.h>
+#include <string.h>
+
+namespace {
+constexpr float kPi = 3.14159265358979323846f;
+// 440 Hz at A4 (MIDI note 69), cents 6900.  Used so the rest of the codebase
+// can pass its standard (note+12)*100 cents feed without any per-instrument
+// pitch-table remapping.
+constexpr float kReferenceCents = 6900.0f;
+constexpr float kReferenceHz    = 440.0f;
+
+// Tuned so the FX value 00 = ~5 ms glide (almost instant) and FF = ~1.05 s.
+// The mapping is exponential over the byte range, which feels musical:
+// small values are still snappy, large values stretch out smoothly.
+constexpr float kGlideMinSeconds = 0.005f;
+constexpr float kGlideMaxSeconds = 1.05f;
+
+inline float centsToHz(float cents) {
+  return kReferenceHz * exp2f((cents - kReferenceCents) / 1200.0f);
+}
+
+// Exponential one-pole coefficient for a target time constant.  Returns the
+// per-sample 'a' such that y[n] = a*y[n-1] + (1-a)*x[n].  Clamped so a very
+// large time constant never produces a coefficient >= 1 (which would latch
+// the previous sample forever) and a very small one returns 0 (snap).
+inline float onePoleAlpha(float sampleRate, float timeConstantSeconds) {
+  if (timeConstantSeconds <= 0.0f) return 0.0f;
+  // expf(-1 / (sr * tc)) is the standard z-plane one-pole; rc = sr*tc samples.
+  float rc = sampleRate * timeConstantSeconds;
+  if (rc > 1.0e6f) return 0.999999f;  // effectively frozen
+  return 1.0f - expf(-1.0f / rc);
+}
+}  // namespace
+
+float Bass808Voice::waveform(float& phase, float phaseInc, int shape) {
+  phase += phaseInc;
+  phase -= floorf(phase);
+  const float p = phase;
+  switch (shape) {
+    case 1:  // triangle, ramps -1..+1 across the period
+      return 1.0f - 4.0f * fabsf(p - 0.5f);
+    case 2:  // saw, ramps -1..+1
+      return 2.0f * p - 1.0f;
+    case 3:  // square, 50% duty
+      return p < 0.5f ? 1.0f : -1.0f;
+    case 0:  // sine, the default for 808 sub-bass
+    default:
+      return sinf(2.0f * kPi * p);
+  }
+}
+
+float Bass808Voice::glideCoefficient(uint8_t glideValue) const {
+  // Exponential 0..255 -> seconds. Linear in log-space feels musical.
+  const float t = glideValue / 255.0f;
+  const float seconds = kGlideMinSeconds *
+                        powf(kGlideMaxSeconds / kGlideMinSeconds, t);
+  return onePoleAlpha(sampleRate_, seconds);
+}
+
+void Bass808Voice::init(float sampleRate) {
+  sampleRate_ = sampleRate > 0.0f ? sampleRate : 48000.0f;
+  instrument_ = nullptr;
+  active_ = false;
+  phaseMain_ = 0.0f;
+  phaseSub_  = 0.0f;
+  currentCents_ = kReferenceCents;
+  glideCents_   = kReferenceCents;
+  glideAlpha_   = 0.0f;
+  post_.init(sampleRate_);
+}
+
+void Bass808Voice::configure(const InstrumentBass808* instrument, float pitchCents,
+                              float gain, uint16_t cutoffHz, uint8_t resonance,
+                              uint8_t glideValue) {
+  if (instrument) parameters_ = *instrument;
+  instrument_ = instrument ? &parameters_ : nullptr;
+  currentCents_ = pitchCents;
+  post_.setGain(gain);
+  if (!instrument_) return;
+
+  // The shared post-processor handles the filter + ADSR + VCA.  The same
+  // byte layout is shared by every voice-post instrument, so we just hand
+  // the inherited InstrumentVoicePostSettings bytes straight through.
+  post_.setFilter(instrument->filterEnabled != 0, instrument->filterCharacter,
+                  instrument->filterMode, instrument->filterSlope24dB != 0,
+                  cutoffHz, resonance / 255.0f, instrument->filterColor);
+  // ADSR bytes 0..255 are rescaled to seconds the same way DrumSynth/
+  // Sintered do (their updateXxxVoices helpers pass the raw byte straight
+  // into VoicePostProcessor::setEnvelope via the shared helper).  Use the
+  // same quadratic-ish time mapping the codebase's other instruments use
+  // for a musical, full-range response without a hard-coded dead band.
+  // (Lookup happens via the same byte semantics as the other synth voices;
+  // the time constants below mirror how Sintered/DrumSynth scale their
+  // byte parameters when calling post_.setEnvelope.)
+  post_.setEnvelope(true,
+                    instrument->attack  / 255.0f * 4.0f,   // up to 4 s attack
+                    instrument->decay   / 255.0f * 4.0f,   // up to 4 s decay
+                    instrument->sustain / 255.0f,          // 0..1 sustain level
+                    instrument->release / 255.0f * 4.0f,   // up to 4 s release
+                    instrument->envelopeShape);
+
+  // Glide coefficient is updated every block; if the FX value changes
+  // mid-glide the new coefficient takes effect without resetting the
+  // running target.  (We only reset on noteOn to allow a fresh legato.)
+  glideAlpha_ = glideCoefficient(glideValue);
+}
+
+void Bass808Voice::noteOn() {
+  if (!instrument_) return;
+  // On a fresh trigger with glide enabled, glideCents_ continues from its
+  // previous value (legato).  When the voice was idle we snap to target so
+  // the first sample doesn't slew in from a stale pitch.
+  if (!active_) glideCents_ = currentCents_;
+  // Reset oscillator phases only on a fresh trigger (not legato), so a
+  // retriggered note restarts the waveform but a legato slide keeps the
+  // phase continuous (no click).  We treat the active_ check above as the
+  // legato discriminator: kill() clears active_ so the next noteOn is a
+  // fresh trigger; a noteOn while still active is a legato retrigger.
+  if (!active_) { phaseMain_ = 0.0f; phaseSub_ = 0.0f; }
+  active_ = true;
+  post_.noteOn(true);
+}
+
+void Bass808Voice::noteOff() { post_.noteOff(); }
+
+void Bass808Voice::kill() {
+  active_ = false;
+  post_.kill();
+}
+
+void Bass808Voice::render(float* output, size_t frames) {
+  if (!output) return;
+  if (!active_ || !instrument_) {
+    memset(output, 0, frames * sizeof(float));
+    return;
+  }
+
+  const int wave = (int)instrument_->waveform;
+  // Sub-oscillator: 0 = off, otherwise a 1-based index into the same
+  // waveform table (1=sine, 2=tri, 3=saw, 4=square).  Same source waveform
+  // table lets the UI share the picker and lets the player dial in any
+  // sub timbre - default off keeps the bass clean.
+  const int subWave = (int)instrument_->subWaveform;
+  const bool subOn = subWave > 0;
+  const int subShape = subOn ? (subWave - 1) : 0;
+  const float subLevel = instrument_->subLevel / 255.0f;
+
+  // Drive curve: tanh waveshaper, normalized to unity at drive=0 so the
+  // post-filter cutoff tracking doesn't shift when drive is bumped. Same
+  // pattern DrumSynth uses (drive = 1 + byte/255 * 5.5).
+  const float drive = 1.0f + instrument_->drive / 255.0f * 5.5f;
+  const float inverseDriveSaturation = 1.0f / audioTanh(drive);
+
+  // A small static gain so the dry oscillator (~ +/-1) lands in roughly the
+  // same loudness band as Braids/DrumSynth after the post stage.  0.7 leaves
+  // headroom for the sub osc and for the drive stage's harmonics.
+  constexpr float calibration = 0.70f;
+
+  for (size_t i = 0; i < frames; ++i) {
+    // Update the pitch glide.  When glideAlpha_ == 0 (no glide) the
+    // assignment is a direct snap; otherwise a one-pole exponential
+    // approach.  Doing this per-sample (rather than per-block) keeps the
+    // glide smooth even at the tracker's slowest tick rates.
+    if (glideAlpha_ <= 0.0f) {
+      glideCents_ = currentCents_;
+    } else {
+      glideCents_ += (currentCents_ - glideCents_) * glideAlpha_;
+    }
+    const float freqHz = centsToHz(glideCents_);
+
+    // Main oscillator phase increment in cycles/sample.
+    const float mainInc = freqHz / sampleRate_;
+    const float main = waveform(phaseMain_, mainInc, wave);
+
+    // Sub oscillator: one octave down.  A separate phase accumulator keeps
+    // its phase continuous across glides (instead of halving mainInc which
+    // would lose 1 octave of resolution at high pitches).
+    float sample = main;
+    if (subOn) {
+      const float subInc = (freqHz * 0.5f) / sampleRate_;
+      const float sub = waveform(phaseSub_, subInc, subShape);
+      sample += sub * subLevel;
+    }
+
+    // Saturation stage: tanh waveshaper, normalized for unity at drive=0.
+    // At low drive this is essentially linear; at high drive it adds the
+    // odd-harmonic content that turns a clean sine into a grinding modern
+    // 808 bass.  Filter and ADSR run in VoicePostProcessor::process().
+    sample = audioTanh(sample * drive) * inverseDriveSaturation;
+
+    output[i] = post_.process(sample * calibration);
+  }
+
+  // If the post envelope has gone fully idle, retire the voice so the
+  // engine skips us on the next render pass.
+  if (!post_.envelopeActive()) active_ = false;
+}

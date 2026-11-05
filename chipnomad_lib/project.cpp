@@ -96,6 +96,7 @@ FXGroup fxGroups[] = {
   {"SoundFont FX", NULL, 0, 8, InstrumentType::SoundFont},
   {"Audio in FX", NULL, 0, 8, InstrumentType::AudioIn},
   {"Layer FX", NULL, 0, 8, InstrumentType::Layer},
+  {"Bass808 FX", NULL, 0, 8, InstrumentType::Bass808},
 };
 int fxGroupCount = sizeof(fxGroups) / sizeof(FXGroup);
 
@@ -141,6 +142,13 @@ void fillFXNames() {
     const InstrumentDefinition* definition = getInstrumentDefinition(InstrumentType::Sintered);
     FXName* names = instrumentGroupNames[(int)InstrumentType::Sintered];
     fxGroups[25].fxList = names; fxGroups[25].count = definition->fxCount;
+    for (int i = 0; i < definition->fxCount; ++i) { names[i].fx = (FX)definition->fxList[i].fx; strcpy(names[i].name, definition->fxList[i].name); }
+  }
+  // Bass808 FX group is appended last; materialize from its InstrumentDefinition.
+  {
+    const InstrumentDefinition* definition = getInstrumentDefinition(InstrumentType::Bass808);
+    FXName* names = instrumentGroupNames[(int)InstrumentType::Bass808];
+    fxGroups[fxGroupCount - 1].fxList = names; fxGroups[fxGroupCount - 1].count = definition->fxCount;
     for (int i = 0; i < definition->fxCount; ++i) { names[i].fx = (FX)definition->fxList[i].fx; strcpy(names[i].name, definition->fxList[i].name); }
   }
   for (int group = 28; group < 29; ++group) {

@@ -404,6 +404,39 @@ static int initSinteredInstrument(Instrument* instrument) {
 }
 static int freeSinteredInstrument(Instrument* instrument) { freeCommon(instrument); return 0; }
 
+// Bass808 - modern sustained 808 bass synth (NOT a TR-808 kick recreation).
+static const char* modNameBass808(int modIndex) {
+  static const char* names[] = {"Off", "Volume", "Pitch", "Wave", "SubWave", "SubLvl", "Drive", "Glide", "Cutoff", "Reso"};
+  return modIndex >= 0 && modIndex < 10 ? names[modIndex] : "Off";
+}
+static int initBass808Instrument(Instrument* instrument) {
+  initCommon(instrument); instrument->type = InstrumentType::Bass808;
+  InstrumentBass808* b = &instrument->chip.bass808;
+  b->waveform = (uint8_t)Bass808Waveform::sine;
+  b->subWaveform = 0;            // sub off by default
+  b->subLevel = 0;
+  b->drive = 24;                  // light saturation
+  b->glide = 0;                   // no portamento by default
+  initVoicePostSettings(b);
+  // Sensible defaults for a sustained sub-bass: short attack, long
+  // sustain, medium release; the inherited InstrumentVoicePostSettings
+  // init zeroes these so override only what we need.
+  b->attack = 0;
+  b->decay = 32;
+  b->sustain = 255;
+  b->release = 64;
+  b->envelopeShape = 0x80;
+  // Default filter: warm LP, slight resonance, ~ 1.2 kHz cutoff.
+  b->filterEnabled = 1;
+  b->filterCharacter = 2;          // classic
+  b->filterMode = 0;               // low-pass
+  b->filterSlope24dB = 1;
+  b->filterCutoffHz = 1200;
+  b->filterResonance = 32;
+  return 0;
+}
+static int freeBass808Instrument(Instrument* instrument) { freeCommon(instrument); return 0; }
+
 static const char* modNameMidi(int modIndex) {
   return "Off";
 }
@@ -465,6 +498,7 @@ static const InstrumentModDestination destDrumSynth[] = {N,D("Volume",instrument
 static const InstrumentModDestination destMonk[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Vowel",fxMWV,255,InstrumentMotionValue::raw),D("Voice",fxMIN,255,InstrumentMotionValue::raw),D("Breath",fxMAM,255,InstrumentMotionValue::raw),D("Glide",fxMFL,255,InstrumentMotionValue::raw),D("Vibrato",fxMFB,255,InstrumentMotionValue::raw),D("Vib rate",fxMSH,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destMME[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Waves",fxMWV,255,InstrumentMotionValue::raw),D("Interval",fxMIN,255,InstrumentMotionValue::raw),D("Amount",fxMAM,255,InstrumentMotionValue::raw),D("Flow",fxMFL,255,InstrumentMotionValue::raw),D("Feedback",fxMFB,255,InstrumentMotionValue::raw),D("Shaper",fxMSH,255,InstrumentMotionValue::raw),D("Cutoff",fxMCF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxMRS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destSintered[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Decay",fxSDC,255,InstrumentMotionValue::raw),D("Mod",fxSMD,255,InstrumentMotionValue::raw),D("A",fxSA,255,InstrumentMotionValue::raw),D("B",fxSB,255,InstrumentMotionValue::raw),D("Motion",fxSMO,255,InstrumentMotionValue::raw),D("C",fxSC,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF3,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxSRS3,255,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destBass808[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Wave",fxBWF,3,InstrumentMotionValue::raw),D("SubWave",fxBSW,4,InstrumentMotionValue::raw),D("SubLvl",fxBSL,255,InstrumentMotionValue::raw),D("Drive",fxBDR,255,InstrumentMotionValue::raw),D("Glide",fxGLD,255,InstrumentMotionValue::raw),D("Cutoff",fxB80CF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxB80RS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destMidi[] = {N};
 static const InstrumentModDestination destOPLL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw)};
 #undef N
@@ -485,6 +519,7 @@ static const InstrumentFX fxMonk[]={F(fxMWV,"MWV"),F(fxMIN,"MIN"),F(fxMAM,"MAM")
 static const InstrumentFX fxMME[]={F(fxMMD,"MMD"),F(fxMWV,"MWV"),F(fxMIN,"MIN"),F(fxMAM,"MAM"),F(fxMFL,"MFL"),F(fxMFB,"MFB"),F(fxMSH,"MSH"),F(fxMCF,"MCF"),F(fxMRS,"MRS")};
 static const InstrumentFX fxSoundFont[]={F(fxFPT,"FPT"),F(fxFCF,"FCF"),F(fxFRS,"FRS"),F(fxFAT,"FAT"),F(fxFHD,"FHD"),F(fxFDC,"FDC"),F(fxFSU,"FSU"),F(fxFRL,"FRL")};
 static const InstrumentFX fxSintered[]={F(fxSMDL,"SMD"),F(fxSDC,"SDC"),F(fxSMD,"SMP"),F(fxSA,"SMA"),F(fxSB,"SMB"),F(fxSMO,"SMO"),F(fxSC,"SMC"),F(fxSCF3,"SCF"),F(fxSRS3,"SRS")};
+static const InstrumentFX fxBass808[]={F(fxBWF,"BWF"),F(fxBSW,"BSW"),F(fxBSL,"BSL"),F(fxBDR,"BDR"),F(fxGLD,"GLD"),F(fxB80CF,"BCF"),F(fxB80RS,"BRS")};
 static const InstrumentFX fxMidi[]={F(fxMC1,"MC1"),F(fxMC2,"MC2"),F(fxMC3,"MC3"),F(fxMC4,"MC4")};
 #undef F
 #define COUNT(a) (uint8_t)(sizeof(a) / sizeof((a)[0]))
@@ -522,6 +557,7 @@ static const InstrumentDefinition instrumentDefinitions[] = {
   {"MonkSynth",InstrumentCategory::synth,InstrumentScreenKind::monk,destMonk,COUNT(destMonk),fxMonk,COUNT(fxMonk),{8,modNameMonk,initMonkInstrument,freeNoneInstrument,1,0}},
   {"Audio in",InstrumentCategory::utility,InstrumentScreenKind::audioIn,destAudioIn,COUNT(destAudioIn),fxAudioIn,COUNT(fxAudioIn),{3,modNameAudioIn,initAudioInInstrument,freeNoneInstrument,1,0}},
   {"Layer",InstrumentCategory::utility,InstrumentScreenKind::layer,destLayer,COUNT(destLayer),fxLayer,COUNT(fxLayer),{7,modNameNone,initLayerInstrument,freeNoneInstrument,0,0}},
+  {"808 Bass",InstrumentCategory::synth,InstrumentScreenKind::bass808,destBass808,COUNT(destBass808),fxBass808,COUNT(fxBass808),{9,modNameBass808,initBass808Instrument,freeBass808Instrument,1,0}},
 };
 #undef COUNT
 
