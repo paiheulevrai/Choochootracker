@@ -46,7 +46,10 @@ class Bass808Voice {
 
   void render(float* output, size_t frames);
 
-  bool active() const { return active_; }
+  // The voice stays 'active' while the de-click tail is pending, so the
+  // mixer keeps calling render() and the hard-cut fade actually plays
+  // (SampleVoice does the same via transitionPending_/transitionFrames_).
+  bool active() const { return active_ || transitionFrames_ > 0; }
   float envelopeLevel() const { return post_.envelopeLevel(); }
 
  private:

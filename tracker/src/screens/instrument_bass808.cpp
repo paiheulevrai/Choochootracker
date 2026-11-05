@@ -103,13 +103,14 @@ static void openSubWaveSelection() {
 
 static int columns(int row) {
   // Mirrors DrumSynth/Plaits: 3 header rows, 1 column for the OSC picker,
-  // 2 columns for the macro + voice-post rows, 1 for EnvMode (row 8),
-  // 5 columns on the ADSR row (row 9).
+  // 2 columns for the macro + voice-post rows, 1 for EnvMode (row 8).
+  // The bottom row is the ADSR (5 columns) in VCA mode or the LPG D/C
+  // pair (2 columns) in TRIG mode.
   return row < 3 ? instrumentCommonColumnCount(row)
        : row == 3 ? 1
        : row <= 7 ? 2
        : row == 8 ? 1
-       : 5;
+       : chipnomadState->project.instruments[cInstrument].chip.bass808.envelopeMode == 0 ? 2 : 5;
 }
 
 static void drawStatic(void) {
@@ -186,11 +187,12 @@ static void drawField(int col, int row, CellState state) {
 
   if (row == 9) {
     // TRIG mode bottom row: LPG-style D (decay) / C (colour) — the exact
-    // layout plaits uses. No ADSR preview in this mode.
+    // layout plaits uses (2 columns only). No ADSR preview in this mode.
+    if (b->envelopeMode != 0 || col >= 2) return;
     uint8_t values[2] = {b->decay, b->sustain};
-    if (col < 2) fieldDrawLabel(col ? 11 : 6, 14, col ? "C" : "D", state);
+    fieldDrawLabel(col ? 11 : 6, 14, col ? "C" : "D", state);
     gfxSetFgColor(fieldValueColor(state));
-    gfxPrint(7 + col * 5, 14, byteToHex(col < 2 ? values[col] : 0));
+    gfxPrint(7 + col * 5, 14, byteToHex(values[col]));
     return;
   }
 
@@ -252,7 +254,7 @@ static int onEdit(int col, int row, CellEditAction action) {
     // TRIG mode bottom row: LPG-style D (decay) / C (colour), the same
     // byte slots plaits' TRIG mode drives (decay / sustain).
     uint8_t* values[2] = {&b->decay, &b->sustain};
-    if (col < 2) ok = edit8noLast(action, values[col], 16, 0, 255);
+    if (b->envelopeMode == 0 && col < 2) ok = edit8noLast(action, values[col], 16, 0, 255);
   } else if (uint8_t* value = macro(b, row)) {
     if (row == 4) {
       // Sub waveform: cycle 0..4.
