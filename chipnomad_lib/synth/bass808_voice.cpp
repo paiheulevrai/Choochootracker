@@ -243,9 +243,14 @@ void Bass808Voice::render(float* output, size_t frames) {
     }
     lastOutput_ = sample;
     output[i] = sample;
-    // Envelope finished (release done / TRIG pluck decayed): retire the
-    // voice through the de-click tail instead of stepping to silence.
-    if (!post_.envelopeActive()) {
+    // Retire the voice through the de-click tail when its sound is done:
+    // VCA — the envelope went fully idle (release finished); TRIG — the
+    // one-shot pluck decayed to the sustain stage (level 0 there; the
+    // envelope never goes idle on its own in this mode).
+    const bool done = envelopeMode_ == 0
+      ? !post_.envelopeActive() || post_.envelopeLevel() <= 0.0f
+      : !post_.envelopeActive();
+    if (done) {
       active_ = false;
       if (lastOutput_ != 0.0f) {
         tailFrom_ = lastOutput_;
@@ -255,13 +260,16 @@ void Bass808Voice::render(float* output, size_t frames) {
   }
 
   // De-click tail: fade from the captured end/cut output down to silence
-  // (same 3 ms linear fade as SampleVoice's kill transition).
-  for (i = 0; i < frames && transitionFrames_; ++i) {
-    const float weight = float(transitionFrames_ - 1) / float(transitionLength_ - 1);
-    lastOutput_ = tailFrom_ * weight;
-    output[i] = lastOutput_;
-    --transitionFrames_;
+  // (same 3 ms linear fade as SampleVoice's kill transition). Continue
+  // from where the main loop stopped; never restart the buffer at 0.
+  if (i < frames) {
+    size_t tail = 0;
+    for (; tail < frames - i && transitionFrames_; ++tail) {
+      const float weight = float(transitionFrames_ - 1) / float(transitionLength_ - 1);
+      lastOutput_ = tailFrom_ * weight;
+      output[i + tail] = lastOutput_;
+      --transitionFrames_;
+    }
+    if (tail < frames - i) memset(output + i + tail, 0, (frames - i - tail) * sizeof(float));
   }
-
-  if (i < frames) memset(output + i, 0, (frames - i) * sizeof(float));
 }
