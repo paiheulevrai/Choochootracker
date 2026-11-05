@@ -38,7 +38,8 @@ endif
 # hard-float, as VitaSDK's own toolchain file uses.
 VITA_CFLAGS = $(filter-out -flto -Os -g,$(COMMON_CFLAGS)) -O2 -g0 \
 	-march=armv7-a -mtune=cortex-a9 -mfpu=neon -mfloat-abi=hard
-CFLAGS = $(VITA_CFLAGS) $(INCLUDES) $(SDL_CFLAGS) -DVITA_BUILD -DGAMEPAD_SUPPORT -Wno-multichar
+# _GNU_SOURCE: newlib hides POSIX calls (fileno, fsync, ...) under a strict -std=c++17.
+CFLAGS = $(VITA_CFLAGS) $(INCLUDES) $(SDL_CFLAGS) -D_GNU_SOURCE -DVITA_BUILD -DGAMEPAD_SUPPORT -Wno-multichar
 TARGET = $(BUILD)/choochootracker.elf
 
 object_for = $(BUILD)/obj/$(subst ../,up/,$(basename $(1))).o

@@ -38,7 +38,16 @@ jobs:
         run: yes | vdpm install sdl2
       - name: Build VPK
         working-directory: tracker
-        run: make -j"$(nproc)" -f Makefile.vita Vita-deploy
+        run: |
+          set +e
+          make -k -j"$(nproc)" -f Makefile.vita Vita-deploy > build.log 2>&1
+          status=$?
+          echo "make exit code: $status"
+          echo "---- errors ----"
+          grep -E "error|\*\*\*|undefined reference|cannot find|not found" build.log | head -80
+          echo "---- last lines ----"
+          tail -15 build.log
+          exit $status
       - name: Check VPK
         run: |
           vpk="$(ls releases/ChooChooTracker-*-Vita.vpk)"
