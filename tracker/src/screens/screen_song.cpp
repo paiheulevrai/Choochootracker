@@ -18,7 +18,6 @@ static uint16_t lastChainValue = 0;
 
 // Defined below (before onInput): merge-up machinery.
 static void songMergeSelectedPatternsUp(void);
-static void drawMergeRefusal(void);
 
 
 // Track mute/solo state machine
@@ -243,8 +242,6 @@ static void draw(void) {
   if (liveTogglePending && ((int32_t)(songFrame - liveToggleFrame) >= 0 || !appTapSequenceOpen(keyOpt)))
     applyPendingLiveToggle();
 
-  // Merge-refusal marquee owns the helper row while active.
-  drawMergeRefusal();
 
   for (int c = 0; c < chipnomadState->project.tracksCount; c++) {
     gfxClearRect(2 + c * 3, 3, 1, screenVisibleRows());
@@ -451,14 +448,13 @@ static int onEdit(int col, int row, CellEditAction action) {
 // topmost selected pattern (per column, top-to-bottom), sources are
 // cleared. Refused (animated helper text) when the merged pattern would
 // exceed 16 bars.
-#define MERGE_REFUSAL_TEXT "Pattern longer than 16 bars: unable to merge"
-#define MERGE_REFUSAL_FRAMES (60 * 5)  // ~5 s at 60 FPS
-static int mergeRefusalFrames = 0;
+#define MERGE_REFUSAL_TEXT "Pattern too long to merge"
 
 static void songMergeSelectedPatternsUp(void) {
   Project* p = &chipnomadState->project;
   if (p->viewMode != ViewMode::simplified) return;
   if (screen.selectMode != 1) return;
+  int merged = 0, refused = 0;
 
   int startCol, startRow, endCol, endRow;
   getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
@@ -484,8 +480,8 @@ static void songMergeSelectedPatternsUp(void) {
       total += len;
     }
     if (total > PROJECT_MAX_PATTERN_LENGTH) {
-      mergeRefusalFrames = MERGE_REFUSAL_FRAMES;
-      continue;  // refuse this column (animated text shows once)
+      refused = 1;
+      continue;  // refuse this column
     }
 
     // Merge ascending into the first selected pattern; clear the sources.
@@ -494,7 +490,7 @@ static void songMergeSelectedPatternsUp(void) {
       int src = p->song[rows[i]][col];
       if (patternAppendPattern(p, target, src) < 0) {
         // Cannot happen after the length check; guard anyway.
-        mergeRefusalFrames = MERGE_REFUSAL_FRAMES;
+        refused = 1;
         continue;
       }
       patternClear(&p->patterns[src]);
@@ -511,47 +507,16 @@ static void songMergeSelectedPatternsUp(void) {
         break;
       }
     }
+    merged = 1;
   }
 
   projectModified = 1;
   chipnomadQueueProjectRefresh(chipnomadState);
   screenFullRedraw(&screen);
-  screenMessage(MESSAGE_TIME, "Patterns merged");
+  if (merged) screenMessage(MESSAGE_TIME, "Patterns merged");
+  else if (refused) screenMessage(MESSAGE_TIME, MERGE_REFUSAL_TEXT);
 }
 
-static void drawMergeRefusal(void) {
-  if (mergeRefusalFrames <= 0) return;
-  mergeRefusalFrames--;
-  static const char* text = MERGE_REFUSAL_TEXT;
-  const int textLen = (int)strlen(text);
-  const int window = 40;
-  // Same pacing as the View window's playhead marquee: 1 s hold, 180 ms
-  // per character, 1 s hold at the end (frame-counted at 60 FPS).
-  const int travel = (textLen - window) * 180 / (1000 / 60);  // frames
-  const int holdFrames = 1000 / (1000 / 60);                  // 1 s
-  const int period = holdFrames + travel + holdFrames;
-  const int frame = (MERGE_REFUSAL_FRAMES - mergeRefusalFrames) % period;
-  int offset;
-  if (textLen <= window) {
-    offset = 0;
-  } else if (frame < holdFrames) {
-    offset = 0;
-  } else if (frame < holdFrames + travel) {
-    offset = (frame - holdFrames) * 1000 / 60 / 180;
-    if (offset > textLen - window) offset = textLen - window;
-  } else {
-    offset = textLen - window;
-  }
-  char win[41];
-  for (int i = 0; i < 40; i++) {
-    int pos = offset + i;
-    win[i] = pos < textLen ? text[pos] : ' ';
-  }
-  win[40] = '\0';
-  gfxSetFgColor(appSettings.colorScheme.textValue);
-  gfxClearRect(0, 19, 40, 1);
-  gfxPrint(0, 19, win);
-}
 static int onInput(int isKeyDown, int keys, int tapCount) {
   int handled = 0;
 
