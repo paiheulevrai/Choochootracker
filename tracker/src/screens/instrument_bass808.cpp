@@ -123,17 +123,31 @@ static void drawStatic(void) {
   gfxPrint(0, 9, macroLabel(5));
   gfxPrint(0, 10, macroLabel(6));
   gfxPrint(0, 11, macroLabel(7));
-  // The shared filter block lives in the right column; the ADSR row is
-  // shown only in VCA mode (in TRIG mode the ADSR doesn't shape the sound —
-  // same convention as plaits' TRIG/LPG mode).
+  // The shared filter block lives in the right column.  The bottom row
+  // mirrors plaits: VCA mode shows the ADSR, TRIG mode shows the LPG-style
+  // D (decay) / C (colour) controls driven by the same helper.
   instrumentCommonDrawVoicePostStatic(b->envelopeMode != 0);
+  if (b->envelopeMode == 0) {
+    gfxSetFgColor(appSettings.colorScheme.textTitles);
+    gfxPrint(0, 14, "LPG");
+    gfxSetFgColor(appSettings.colorScheme.textLabel);
+    gfxPrint(6, 14, "D");
+    gfxPrint(11, 14, "C");
+  }
 }
 
 static void drawCursor(int col, int row) {
   if (row < 3) { instrumentCommonDrawCursor(col, row); return; }
   InstrumentBass808* b = &chipnomadState->project.instruments[cInstrument].chip.bass808;
+  // VCA mode: the common helpers own the filter columns AND the ADSR row.
+  // TRIG mode: the common helpers own only the filter columns; the bottom
+  // row is the LPG D/C pair handled below (plaits-exact).
+  if (b->envelopeMode != 0 && instrumentCommonDrawVoicePostCursor(col, row)) return;
+  if (row == 9) {
+    if (b->envelopeMode == 0) gfxCursor(7 + col * 5, 14, 2);
+    return;
+  }
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostCursor(col, row); return; }
-  if (row == 9) return;  // handled by the common cursor (VCA mode only)
   // The picker row spans its full label width so the popup affordance reads.
   if (row == 3) gfxCursor(kColumnValueX[0], 6, 3 + strlen(waveName(b->waveform)));
   else if (row == 8) gfxCursor(kColumnValueX[0], 12, b->envelopeMode == 0 ? 4 : 3);
@@ -143,12 +157,8 @@ static void drawCursor(int col, int row) {
 static void drawField(int col, int row, CellState state) {
   if (row < 3) { instrumentCommonDrawField(col, row, state); return; }
   InstrumentBass808* b = &chipnomadState->project.instruments[cInstrument].chip.bass808;
-  // The ADSR row (9) is fully common in VCA mode; TRIG mode leaves it hidden.
-  if (row == 9) {
-    if (b->envelopeMode != 0) instrumentCommonDrawVoicePostField(col, row, state, b);
-    return;
-  }
-  if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostField(col, row, state, b); return; }
+  // VCA mode: common helpers own the filter columns AND the ADSR row.
+  if (b->envelopeMode != 0 && instrumentCommonDrawVoicePostField(col, row, state, b)) return;
 
   gfxSetFgColor(fieldValueColor(state));
   const int x = kColumnValueX[0];
@@ -166,13 +176,21 @@ static void drawField(int col, int row, CellState state) {
   }
 
   if (row == 8) {
-    // EnvMode: TRIG (fixed shape per note) / VCA (ADSR drives the gain).
-    // Mirrors plaits: editing writes 0 or 2; the screen re-enters so the
-    // ADSR row appears/disappears.
+    // EnvMode: TRIG (one-shot pluck) / VCA (ADSR drives the gain).
     fieldDrawLabel(0, 12, "EnvMode", state);
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textInfo);
     gfxClearRect(x, 12, 6, 1);
     gfxPrint(x, 12, b->envelopeMode == 0 ? "TRIG" : "VCA");
+    return;
+  }
+
+  if (row == 9) {
+    // TRIG mode bottom row: LPG-style D (decay) / C (colour) — the exact
+    // layout plaits uses. No ADSR preview in this mode.
+    uint8_t values[2] = {b->decay, b->sustain};
+    if (col < 2) fieldDrawLabel(col ? 11 : 6, 14, col ? "C" : "D", state);
+    gfxSetFgColor(fieldValueColor(state));
+    gfxPrint(7 + col * 5, 14, byteToHex(col < 2 ? values[col] : 0));
     return;
   }
 
@@ -207,7 +225,8 @@ bool instrumentBass808LiveCell(int control, int* col, int* row) {
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);
   InstrumentBass808* b = &chipnomadState->project.instruments[cInstrument].chip.bass808;
-  if ((b->envelopeMode != 0 && row == 9) || (col && row >= 4 && row <= 8)) {
+  // VCA mode: the common helpers own the filter columns AND the ADSR row.
+  if (b->envelopeMode != 0 && ((row == 9) || (col && row >= 4 && row <= 8))) {
     int ok = instrumentCommonOnEditVoicePost(col, row, action, b);
     if (ok) projectModified = 1;
     return ok;
@@ -217,15 +236,23 @@ static int onEdit(int col, int row, CellEditAction action) {
     // OSC waveform: cycle 0..3, hold for popup.
     ok = edit8noLast(action, &b->waveform, 1, 0, (int)Bass808Waveform::totalCount - 1);
   } else if (row == 8) {
-    // EnvMode: 0 = TRIG, 2 = VCA (1 is a legacy alias, never stored).
-    uint8_t mode = b->envelopeMode == 0 ? 0 : 1;
-    ok = edit8noLast(action, &mode, 1, 0, 1);
+    // EnvMode cycles ONLY on EDIT+direction (tap does nothing) and clamps
+    // at the ends — no wrap-around past the last option.
+    if (action == CellEditAction::increase) {
+      if (b->envelopeMode != 2) { b->envelopeMode = 2; ok = 1; }
+    } else if (action == CellEditAction::decrease) {
+      if (b->envelopeMode != 0) { b->envelopeMode = 0; ok = 1; }
+    }
     if (ok) {
-      b->envelopeMode = mode == 0 ? 0 : 2;
       projectModified = 1;
       screenSetup(&screenInstrument, cInstrument);
     }
     return ok;
+  } else if (row == 9) {
+    // TRIG mode bottom row: LPG-style D (decay) / C (colour), the same
+    // byte slots plaits' TRIG mode drives (decay / sustain).
+    uint8_t* values[2] = {&b->decay, &b->sustain};
+    if (col < 2) ok = edit8noLast(action, values[col], 16, 0, 255);
   } else if (uint8_t* value = macro(b, row)) {
     if (row == 4) {
       // Sub waveform: cycle 0..4.

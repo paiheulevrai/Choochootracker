@@ -418,7 +418,6 @@ static int initBass808Instrument(Instrument* instrument) {
   b->drive = 24;                  // light saturation
   b->glide = 0;                   // no portamento by default
   b->envelopeMode = 2;            // VCA ADSR by default (TRIG = 0)
-  b->envelopeMode = 2;            // VCA ADSR by default (TRIG = 0)
   initVoicePostSettings(b);
   // Sensible defaults for a sustained sub-bass: short attack, long
   // sustain, medium release; the inherited InstrumentVoicePostSettings
@@ -428,12 +427,14 @@ static int initBass808Instrument(Instrument* instrument) {
   b->sustain = 255;
   b->release = 64;
   b->envelopeShape = 0x80;
-  // Default filter: warm LP, slight resonance, ~ 1.2 kHz cutoff.
+  // Default filter: warm LP with slight resonance and a wide-open cutoff,
+  // so a new instrument is audible immediately (the 1.2 kHz default
+  // muffled sub-bass notes).
   b->filterEnabled = 1;
   b->filterCharacter = 2;          // classic
   b->filterMode = 0;               // low-pass
   b->filterSlope24dB = 1;
-  b->filterCutoffHz = 1200;
+  b->filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
   b->filterResonance = 32;
   return 0;
 }

@@ -81,6 +81,12 @@ class Bass808Voice {
   float rampFrom_ = 0.0f;
   uint32_t rampRemaining_ = 0;
   uint32_t rampFrames_ = 1;
+  // De-click tail: after the note ends (envelope finished or a hard kill)
+  // the voice keeps rendering a short linear fade from the captured output
+  // down to silence, so the cut never clicks (same as SampleVoice).
+  float tailFrom_ = 0.0f;
+  uint32_t transitionFrames_ = 0;
+  uint32_t transitionLength_ = 144;
 };
 
 #endif  // CHOOCHOO_BASS808_VOICE_H

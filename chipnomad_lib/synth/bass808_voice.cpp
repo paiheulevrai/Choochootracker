@@ -77,6 +77,12 @@ void Bass808Voice::init(float sampleRate) {
   // divides by zero (same constant as SampleVoice's de-click).
   rampFrames_ = sampleRate_ > 500.0f ? (uint32_t)(sampleRate_ * 0.002f) : 2;
   if (rampFrames_ < 2) rampFrames_ = 2;
+  tailFrom_ = 0.0f;
+  transitionFrames_ = 0;
+  // 3 ms de-click tail, at least 2 frames so the linear weight never
+  // divides by zero (same constant as SampleVoice's).
+  transitionLength_ = sampleRate_ > 500.0f ? (uint32_t)(sampleRate_ * 0.003f) : 2;
+  if (transitionLength_ < 2) transitionLength_ = 2;
   post_.init(sampleRate_);
 }
 
@@ -95,20 +101,28 @@ void Bass808Voice::configure(const InstrumentBass808* instrument, float pitchCen
   post_.setFilter(instrument->filterEnabled != 0, instrument->filterCharacter,
                   instrument->filterMode, instrument->filterSlope24dB != 0,
                   cutoffHz, resonance / 255.0f, instrument->filterColor);
-  // ADSR bytes 0..255 are rescaled to seconds the same way DrumSynth/
-  // Sintered do (their updateXxxVoices helpers pass the raw byte straight
-  // into VoicePostProcessor::setEnvelope via the shared helper).  Use the
-  // same quadratic-ish time mapping the codebase's other instruments use
-  // for a musical, full-range response without a hard-coded dead band.
-  // Envelope mode 0 (TRIG) keeps the VCA wide open — like plaits' TRIG/LPG
-  // mode the note shape comes from the note length, not the ADSR — while
-  // mode 2 (VCA) drives the gain with the ADSR.
-  post_.setEnvelope(instrument->envelopeMode != 0,
-                    instrument->attack  / 255.0f * 4.0f,   // up to 4 s attack
-                    instrument->decay   / 255.0f * 4.0f,   // up to 4 s decay
-                    instrument->sustain / 255.0f,          // 0..1 sustain level
-                    instrument->release / 255.0f * 4.0f,   // up to 4 s release
-                    instrument->envelopeShape);
+  // Envelope per mode, mirroring the plaits TRIG/LPG convention:
+  // TRIG (0): one-shot pluck — D byte = decay time, C byte (the sustain
+  //   slot) = attack softness/colour. The note decays to silence on its
+  //   own; gate-off and the sustain/release stages are unused.
+  // VCA (2): the ADSR drives the gain. A 3 ms release floor keeps the
+  //   envelope from stepping to zero when Release = 00 (de-click).
+  if (instrument->envelopeMode == 0) {
+    post_.setEnvelope(true,
+                      0.001f + instrument->sustain / 255.0f * 0.05f,  // C: softness
+                      instrument->decay / 255.0f * 4.0f,              // D: decay
+                      0.0f, 0.0f, instrument->envelopeShape);
+  } else {
+    float release = instrument->release / 255.0f * 4.0f;
+    if (release < 0.003f) release = 0.003f;  // de-click floor
+    post_.setEnvelope(true,
+                      instrument->attack  / 255.0f * 4.0f,   // up to 4 s attack
+                      instrument->decay   / 255.0f * 4.0f,   // up to 4 s decay
+                      instrument->sustain / 255.0f,          // 0..1 sustain level
+                      release,
+                      instrument->envelopeShape);
+  }
+  envelopeMode_ = instrument->envelopeMode == 0 ? 0 : 2;
 
   // Glide coefficient is updated every block; if the FX value changes
   // mid-glide the new coefficient takes effect without resetting the
@@ -139,20 +153,32 @@ void Bass808Voice::noteOn() {
   post_.noteOn(true);
 }
 
-void Bass808Voice::noteOff() { post_.noteOff(); }
+void Bass808Voice::noteOff() {
+  // TRIG is one-shot: the pluck decays on its own and gate-off is ignored
+  // (same as plaits' TRIG/LPG mode where the internal decay runs free).
+  if (envelopeMode_ != 0) post_.noteOff();
+}
 
 void Bass808Voice::kill() {
+  // De-click: a hard cut fades out over the tail instead of stepping to
+  // zero (same as SampleVoice's kill transition).
+  if (active_ && lastOutput_ != 0.0f) {
+    tailFrom_ = lastOutput_;
+    transitionFrames_ = transitionLength_;
+  }
   active_ = false;
+  rampRemaining_ = 0;
   post_.kill();
 }
 
 void Bass808Voice::render(float* output, size_t frames) {
   if (!output) return;
-  if (!active_ || !instrument_) {
+  if (!instrument_) {
     memset(output, 0, frames * sizeof(float));
     return;
   }
 
+  size_t i = 0;
   const int wave = (int)instrument_->waveform;
   // Sub-oscillator: 0 = off, otherwise a 1-based index into the same
   // waveform table (1=sine, 2=tri, 3=saw, 4=square).  Same source waveform
@@ -174,7 +200,8 @@ void Bass808Voice::render(float* output, size_t frames) {
   // headroom for the sub osc and for the drive stage's harmonics.
   constexpr float calibration = 0.70f;
 
-  for (size_t i = 0; i < frames; ++i) {
+  for (i = 0; i < frames; ++i) {
+    if (!active_) break;
     // Update the pitch glide.  When glideAlpha_ == 0 (no glide) the
     // assignment is a direct snap; otherwise a one-pole exponential
     // approach.  Doing this per-sample (rather than per-block) keeps the
@@ -216,10 +243,25 @@ void Bass808Voice::render(float* output, size_t frames) {
     }
     lastOutput_ = sample;
     output[i] = sample;
+    // Envelope finished (release done / TRIG pluck decayed): retire the
+    // voice through the de-click tail instead of stepping to silence.
+    if (!post_.envelopeActive()) {
+      active_ = false;
+      if (lastOutput_ != 0.0f) {
+        tailFrom_ = lastOutput_;
+        transitionFrames_ = transitionLength_;
+      }
+    }
   }
 
-  // If the post envelope has gone fully idle, retire the voice so the
-  // engine skips us on the next render pass.  In TRIG mode there is no
-  // VCA envelope: the note ends when the transport cuts it (kill()).
-  if (envelopeMode_ != 0 && !post_.envelopeActive()) active_ = false;
+  // De-click tail: fade from the captured end/cut output down to silence
+  // (same 3 ms linear fade as SampleVoice's kill transition).
+  for (i = 0; i < frames && transitionFrames_; ++i) {
+    const float weight = float(transitionFrames_ - 1) / float(transitionLength_ - 1);
+    lastOutput_ = tailFrom_ * weight;
+    output[i] = lastOutput_;
+    --transitionFrames_;
+  }
+
+  if (i < frames) memset(output + i, 0, (frames - i) * sizeof(float));
 }
