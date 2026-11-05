@@ -73,8 +73,7 @@ void Bass808Voice::init(float sampleRate) {
   lastOutput_ = 0.0f;
   rampFrom_ = 0.0f;
   rampRemaining_ = 0;
-  // 2 ms de-click ramp, at least 2 frames so the linear weight never
-  // divides by zero (same constant as SampleVoice's de-click).
+  // Baseline de-click ramp (2 ms); configure() re-lengths it per pitch.
   rampFrames_ = sampleRate_ > 500.0f ? (uint32_t)(sampleRate_ * 0.002f) : 2;
   if (rampFrames_ < 2) rampFrames_ = 2;
   tailFrom_ = 0.0f;
@@ -129,6 +128,20 @@ void Bass808Voice::configure(const InstrumentBass808* instrument, float pitchCen
   // running target.  (We only reset on noteOn to allow a fresh legato.)
   glideAlpha_ = glideCoefficient(glideValue);
   envelopeMode_ = instrument->envelopeMode == 0 ? 0 : 2;
+
+  // De-click ramp length scales with pitch: 2 ms is only ~10% of a 50 Hz
+  // waveform, which still clicks. Ramp for at least 3/4 of one period of
+  // the current note (12 ms cap) so the crossfade genuinely bridges the
+  // waveform change. Recomputed every block — pitch changes re-length it.
+  const float freqHz = centsToHz(currentCents_);
+  if (freqHz > 1.0f) {
+    const float periodSeconds = 1.0f / freqHz;
+    float rampSeconds = periodSeconds * 0.75f;
+    if (rampSeconds < 0.002f) rampSeconds = 0.002f;
+    if (rampSeconds > 0.012f) rampSeconds = 0.012f;
+    rampFrames_ = (uint32_t)(sampleRate_ * rampSeconds);
+    if (rampFrames_ < 2) rampFrames_ = 2;
+  }
 }
 
 void Bass808Voice::noteOn() {
