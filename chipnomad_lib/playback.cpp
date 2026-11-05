@@ -63,6 +63,7 @@ static void resetNoteFX(PlaybackState* state, int trackIdx) {
     track->note.fx[i].isOn = 0;
     track->note.fx[i].counter = 0;
     track->note.fx[i].acc = 0;
+    track->note.fx[i].tableSource = 0;
   }
 }
 
@@ -125,6 +126,7 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   track->note.auxTable.tableIdx = EMPTY_VALUE_8;
   track->mode = PlaybackMode::stopped;
   track->queue.liveAction = LiveQueueAction::none;
+  track->queue.liveReference = -1;
   track->sliceBypass = 0;
   track->rnsSeeded = 0;
   track->rnsSlice = 0;
@@ -159,6 +161,7 @@ int playbackSequenceBypasses(const PlaybackTrackState* track, SequenceSource sou
 void tableInit(PlaybackState* state, int trackIdx, struct PlaybackTableState* table, int tableIdx, int row, int speed) {
   table->tableIdx = tableIdx;
   table->baseSpeed = speed;
+  memset(table->heldFX, 0, sizeof(table->heldFX));
   if (tableIdx == EMPTY_VALUE_8) return;
 
   Project* p = state->p;
@@ -194,12 +197,40 @@ void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* 
 
   int tableRow = table->rows[fxIdx];
   FXId fxType = p->tables[tableIdx].rows[tableRow].fx[fxIdx].command;
+  table->heldFX[fxIdx].isOn = 0;
   if (fxType == fxTBL) {
     tableInit(state, trackIdx, &state->tracks[trackIdx].note.instrumentTable, p->tables[tableIdx].rows[tableRow].fx[fxIdx][1], 0, 1);
   } else if (fxType == fxTBX) {
     tableInit(state, trackIdx, &state->tracks[trackIdx].note.auxTable, p->tables[tableIdx].rows[tableRow].fx[fxIdx][1], 0, 1);
   } else {
     initFX(state, trackIdx, &p->tables[tableIdx].rows[tableRow].fx[fxIdx], table, fxIdx);
+    if (fxType == fxSTA) fxType = fxSST;
+    if (fxType >= fxTotalCount || fxType == fxRET || fxType == fxDEL ||
+        fxType == fxOFF || fxType == fxKIL || (fxType >= fxMC1 && fxType <= fxMC4)) return;
+    table->heldCommand[fxIdx] = fxType;
+    auto& held = table->heldFX[fxIdx];
+    if (fxType >= fxOAR && fxType <= fxLEN) {
+      held = {};
+      held.isOn = 1;
+      held.fxValue = p->tables[tableIdx].rows[tableRow].fx[fxIdx].value;
+    } else {
+      held = state->tracks[trackIdx].note.fx[fxType];
+    }
+  }
+}
+
+static void restoreHeldTableFX(PlaybackState* state, int trackIdx, PlaybackTableState* table) {
+  if (table->tableIdx == EMPTY_VALUE_8) return;
+  for (int lane = 0; lane < 4; ++lane) {
+    const auto& held = table->heldFX[lane];
+    if (!held.isOn) continue;
+    const FXId command = table->heldCommand[lane];
+    if (command >= fxOAR && command <= fxLEN) {
+      const FXCell cell{command, held.fxValue};
+      initFX(state, trackIdx, &cell, table, lane);
+    } else {
+      state->tracks[trackIdx].note.fx[command] = held;
+    }
   }
 }
 
@@ -628,6 +659,11 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     tableInit(state, trackIdx, &track->note.auxTable, auxTable, auxTableRow, 1);
   } else if (auxTableRow != EMPTY_VALUE_8) {
     hopToTableRow(state, trackIdx, &track->note.auxTable, auxTableRow);
+  }
+
+  if (instrument != EMPTY_VALUE_8 || note != EMPTY_VALUE_8) {
+    restoreHeldTableFX(state, trackIdx, &track->note.instrumentTable);
+    restoreHeldTableFX(state, trackIdx, &track->note.auxTable);
   }
 
   // Read new FX
@@ -1380,6 +1416,15 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
   if (track->phraseRow >= 16) {
     track->phraseRow = 0;
     enteredPhrase = 1;
+    state->phraseBoundaryMask |= 1u << trackIdx;
+    int currentChain = track->songRow == EMPTY_VALUE_16 ? EMPTY_VALUE_16 : p->song[track->songRow][trackIdx];
+    if (track->mode == PlaybackMode::phrase || currentChain == EMPTY_VALUE_16 ||
+        track->chainRow == 15 ||
+        p->chains[currentChain].rows[track->chainRow + 1].phrase == EMPTY_VALUE_16 ||
+        (state->loopRange.enabled && state->loopRange.level == 1 && track->loop &&
+         track->songRow == state->loopRange.endSongRow &&
+         track->chainRow == state->loopRange.endChainRow))
+      state->chainBoundaryMask |= 1u << trackIdx;
 
     if (track->queue.liveAction == LiveQueueAction::urgent ||
         track->queue.liveAction == LiveQueueAction::stopUrgent) {
@@ -1568,6 +1613,7 @@ static int skipZeroGrooveRows(PlaybackState* state, int trackIdx) {
 void playbackInit(PlaybackState* state, Project* project) {
   state->p = project;
   state->layerTrackMask = 0;
+  state->phraseBoundaryMask = state->chainBoundaryMask = 0;
   memset(state->liveStickAxes, 0, sizeof(state->liveStickAxes));
   resetLiveStickRate(state);
   state->liveStickWasPlaying = 0;
@@ -1611,7 +1657,11 @@ int playbackIsPlaying(PlaybackState* state) {
 void playbackSetLoopRange(PlaybackState* state, LoopRange range) {
   state->loopRange = range;
   if (range.enabled)
-    for (int i = 0; i < PROJECT_MAX_TRACKS; ++i) state->tracks[i].queue.liveAction = LiveQueueAction::none;
+    for (auto& track : state->tracks) {
+      if (track.mode == PlaybackMode::stopped && track.queue.liveAction != LiveQueueAction::none)
+        track.queue.mode = PlaybackMode::none;
+      track.queue.liveAction = LiveQueueAction::none;
+    }
 }
 
 void playbackSetStopRange(PlaybackState* state, StopRange range) {
@@ -1737,6 +1787,15 @@ float playbackVolumeGain(const PlaybackState* state, const PlaybackTrackState* t
   return gain;
 }
 
+static int firstActiveLiveReference(const PlaybackState* state) {
+  for (int i = 0; i < state->p->tracksCount; ++i) {
+    const auto mode = state->tracks[i].mode;
+    if (mode == PlaybackMode::song || mode == PlaybackMode::chain ||
+        mode == PlaybackMode::phrase || mode == PlaybackMode::live) return i;
+  }
+  return -1;
+}
+
 void playbackStartLiveChain(PlaybackState* state, int trackIdx, int songRow) {
   if (!liveChainValid(state, trackIdx, songRow)) return;
   PlaybackTrackState* track = &state->tracks[trackIdx];
@@ -1748,14 +1807,22 @@ void playbackStartLiveChain(PlaybackState* state, int trackIdx, int songRow) {
   track->queue.chainRow = 0;
   track->queue.phraseRow = 0;
   track->queue.loop = 1;
-  track->queue.liveAction = LiveQueueAction::none;
+  track->queue.liveReference = firstActiveLiveReference(state);
+  track->queue.liveAction = track->queue.liveReference < 0 ? LiveQueueAction::none : LiveQueueAction::normal;
 }
 
 void playbackQueueLiveChain(PlaybackState* state, int trackIdx, int songRow, int urgent) {
   if (trackIdx < 0 || trackIdx >= state->p->tracksCount || state->loopRange.enabled) return;
   PlaybackTrackState* track = &state->tracks[trackIdx];
   if (track->mode == PlaybackMode::stopped) {
-    if (songRow >= 0) playbackStartLiveChain(state, trackIdx, songRow);
+    if (songRow >= 0) {
+      playbackStartLiveChain(state, trackIdx, songRow);
+      if (urgent && track->queue.liveAction != LiveQueueAction::none)
+        track->queue.liveAction = LiveQueueAction::urgent;
+    } else {
+      track->queue.mode = PlaybackMode::none;
+      track->queue.liveAction = LiveQueueAction::none;
+    }
     return;
   }
   int stop = songRow < 0 || state->p->song[songRow][trackIdx] == EMPTY_VALUE_16;
@@ -1813,6 +1880,12 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
   Project* p = &chipNomadState->project;
   int hasActiveTracks = 0;
   state->scaleFXCommandSeen = 0;
+  state->phraseBoundaryMask = state->chainBoundaryMask = 0;
+  uint8_t waitingTracks = 0;
+  for (int i = 0; i < state->p->tracksCount; ++i)
+    if (state->tracks[i].mode == PlaybackMode::stopped &&
+        state->tracks[i].queue.liveAction != LiveQueueAction::none)
+      waitingTracks |= 1u << i;
 
   int chipIdx = 0;
   int chipTracksCount = projectGetChipTracks(p, chipIdx);
@@ -1830,7 +1903,8 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
     PlaybackTrackState* track = &state->tracks[trackIdx];
 
     // Check queued play event for stopped track or when a track is in phrase row playback mode
-    if ((track->mode == PlaybackMode::stopped && track->queue.mode != PlaybackMode::none) ||
+    if ((track->mode == PlaybackMode::stopped && track->queue.mode != PlaybackMode::none &&
+         !(waitingTracks & (1u << trackIdx))) ||
     (track->mode == PlaybackMode::phraseRow && track->queue.mode == PlaybackMode::phraseRow)) {
       track->mode = track->queue.mode;
       track->songRow = track->queue.songRow;
@@ -1848,7 +1922,7 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
       readPhraseRow(state, trackIdx, 0);
     }
     // Advance further in the track
-    else {
+    else if (!(waitingTracks & (1u << trackIdx))) {
       tableProgress(state, trackIdx, &track->note.instrumentTable);
       tableProgress(state, trackIdx, &track->note.auxTable);
 
@@ -1904,6 +1978,37 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
     } else {
       hasActiveTracks = 1;
     }
+  }
+
+  // Service waiting launches after every clock track has advanced, so track
+  // order cannot shift a grouped launch by one tick.
+  uint8_t readyTracks = 0;
+  for (int trackIdx = 0; trackIdx < state->p->tracksCount; ++trackIdx) {
+    if (!(waitingTracks & (1u << trackIdx))) continue;
+    auto& track = state->tracks[trackIdx];
+    int reference = track.queue.liveReference;
+    const uint8_t boundary = track.queue.liveAction == LiveQueueAction::urgent
+      ? state->phraseBoundaryMask : state->chainBoundaryMask;
+    if (reference < 0 || reference >= state->p->tracksCount ||
+        (state->tracks[reference].mode == PlaybackMode::stopped &&
+         !(boundary & (1u << reference))))
+      reference = firstActiveLiveReference(state);
+    track.queue.liveReference = reference;
+    if (reference >= 0 && !(boundary & (1u << reference))) continue;
+    readyTracks |= 1u << trackIdx;
+  }
+  for (int trackIdx = 0; trackIdx < state->p->tracksCount; ++trackIdx) {
+    if (!(readyTracks & (1u << trackIdx))) continue;
+    applyLiveQueue(state, trackIdx);
+    restartStructuralLFOs(state, trackIdx, 1, 1);
+    skipZeroGrooveRows(state, trackIdx);
+    readPhraseRow(state, trackIdx, 0);
+    int ownerChip = 0, end = projectGetChipTracks(p, 0);
+    while (trackIdx >= end && ownerChip + 1 < p->chipsCount)
+      end += projectGetChipTracks(p, ++ownerChip);
+    nextFrame(state, trackIdx, ownerChip);
+    syncLayerTracks(state, trackIdx);
+    hasActiveTracks = 1;
   }
 
   // Output registers for all chips

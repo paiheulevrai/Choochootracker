@@ -301,6 +301,43 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+  if(argc==3 && !strcmp(argv[2],"--live-queue-only")) {
+    auto& p = chipnomadState->project;
+    projectFree(&p); projectInitAY(&p);
+    p.tracksCount = 3; p.tickRate = 100;
+    for(auto& speed:p.grooves[0].speed) speed = 1;
+    p.chains[0].rows[0].phrase = p.chains[0].rows[1].phrase = 0;
+    for(int t=0;t<3;++t) p.song[0][t] = 0;
+    chipnomadInitChips(chipnomadState,48000,nullptr);
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit(); backgroundInit();
+    screenSetup(&screenSong,-1);
+    screenSong.onInput(1,keyOpt,1); screenSong.onInput(0,0,1);
+    screenSong.onInput(1,keyOpt,2); screenSong.onInput(0,0,2);
+    screenSong.onInput(1,keyPlay,1); screenSong.onInput(0,0,1);
+    std::vector<float> audio(480*2);
+    chipnomadRender(chipnomadState,audio.data(),480);
+    require(chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode==PlaybackMode::live,"first live launch");
+    *pSongTrack=1;
+    screenSong.onInput(1,keyPlay,1); screenSong.onInput(0,0,1);
+    chipnomadRender(chipnomadState,audio.data(),480);
+    auto& playback=chipnomadState->playbackState;
+    require(playback.tracks[1].mode==PlaybackMode::stopped &&
+      playback.tracks[1].queue.liveAction==LiveQueueAction::normal,"real Song PLAY queues stopped track");
+    playback.tracks[0].phraseRow=15; playback.tracks[0].chainRow=1;
+    chipnomadRender(chipnomadState,audio.data(),480);
+    require(playback.tracks[1].mode==PlaybackMode::live && playback.tracks[1].phraseRow==0,"live launch at chain boundary");
+    *pSongTrack=2;
+    screenSong.onInput(1,keyPlay,1); screenSong.onInput(0,0,1);
+    chipnomadRender(chipnomadState,audio.data(),480);
+    screenSong.onInput(1,keyPlay,2); screenSong.onInput(0,0,2);
+    playback.tracks[0].phraseRow=15; playback.tracks[0].chainRow=0;
+    chipnomadRender(chipnomadState,audio.data(),480);
+    require(playback.tracks[2].mode==PlaybackMode::live && playback.tracks[2].phraseRow==0,"real Song urgent launch at phrase boundary");
+    capture("live-queued-launch");
+    chipnomadDestroy(chipnomadState); chipnomadState=nullptr; gfxCleanup();
+    printf("Live Song input: stopped-track queue, chain launch and urgent phrase launch passed\n");
+    return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--eq-presets-only")) {
     screensInitAll();waveformDisplayInit();monitorDisplayInit();backgroundInit();
     projectCreateNewFromScreen(&screenSong);appDraw();

@@ -36,6 +36,8 @@ struct PlaybackTableState {
   uint8_t counters[4];
   uint8_t speed[4];
   uint8_t fxAuxState[16][4]; // Used for stateful effects like HOP
+  FXId heldCommand[4];
+  PlaybackFXState heldFX[4];
 };
 
 struct PlaybackNoteState {
@@ -78,6 +80,7 @@ struct PlaybackTrackQueue {
   int phraseRow;
   int loop;
   LiveQueueAction liveAction;
+  int8_t liveReference;
 };
 
 // Sound controls an engine reports back after applying commands and
@@ -229,6 +232,8 @@ struct PlaybackState {
   uint8_t scaleRoot;
   ScalePreset scalePreset;
   uint8_t scaleFXCommandSeen;
+  uint8_t phraseBoundaryMask;
+  uint8_t chainBoundaryMask;
   MidiCCRuntime midiCC[PROJECT_MAX_INSTRUMENTS][16];
 };
 

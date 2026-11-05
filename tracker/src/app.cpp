@@ -17,6 +17,7 @@
 #include "waveform_display.h"
 #include "piano_display.h"
 #include "monitor_display.h"
+#include "scope_display.h"
 #include "background.h"
 #include "audio_monitor.h"
 #include "corelib_input.h"
@@ -923,6 +924,7 @@ void appDraw(void) {
 
   if (!chipnomadState) return;
 
+  scopeDisplayDraw();
   pianoDisplayDraw();
   waveformDisplayRefresh();
 

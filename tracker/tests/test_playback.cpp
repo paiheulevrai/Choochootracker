@@ -2,12 +2,16 @@
 #include "chipnomad_lib.h"
 #include "playback_internal.h"
 #include "pitch_table_utils.h"
+#include "project_utils.h"
 #include "midi/midi_router.h"
+#include "midi_io.h"
 
 #include <cstring>
 #include <cstdio>
 #include <cmath>
 #include <vector>
+#include <chrono>
+#include <thread>
 
 namespace {
 // Minimal fake MidiBackend for the two MIDI Out integration tests below:
@@ -39,6 +43,32 @@ const MidiBackend kFakeMidiBackend = {
 }
 
 TEST_SUITE("playback") {
+
+TEST_CASE("MIDI-disabled transport clock advances across render callbacks") {
+  midiRouterSetBackend(nullptr);
+  const uint64_t before = midiIoNowMicros();
+  REQUIRE(before > 0);
+  const uint64_t routerBefore = midiRouterNowMicros();
+  REQUIRE(routerBefore >= before);
+  auto* state = chipnomadCreate();
+  REQUIRE(state);
+  projectInitAY(&state->project);
+  state->project.tickRate = 50;
+  state->project.song[0][0] = 0;
+  state->project.chains[0].rows[0].phrase = 0;
+  chipnomadInitChips(state, 48000, nullptr);
+  chipnomadQueuePlaybackStartSong(state, 0, 0, 1);
+  std::vector<float> audio(2048 * 2);
+  chipnomadRender(state, audio.data(), 2048);
+  const uint64_t first = chipnomadGetPlaybackStatus(state)->linkPhaseTickMicros;
+  std::this_thread::sleep_for(std::chrono::milliseconds(60));
+  chipnomadRender(state, audio.data(), 2048);
+  const auto* status = chipnomadGetPlaybackStatus(state);
+  CHECK(first >= routerBefore);
+  CHECK(status->linkPhaseTickMicros > first);
+  CHECK(status->linkPhaseTicks > 0);
+  chipnomadDestroy(state);
+}
 
 // Mock AY chip — only stores register writes
 
@@ -256,6 +286,101 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Live chains loop and switch at the requested
   CHECK(state->playbackState.tracks[0].chainRow == 0);
 }
 
+TEST_CASE_FIXTURE(PlaybackFixture, "Live stopped tracks wait for the first active track independent of track order") {
+  Project* p = &state->project;
+  p->tracksCount = 3;
+  for (int reference : {0, 2}) {
+    playbackStop(&state->playbackState);
+    for (int i = 0; i < 16; ++i) p->grooves[0].speed[i] = 1;
+    p->chains[0].rows[0].phrase = 0;
+    p->chains[0].rows[1].phrase = 0;
+    p->chains[1].rows[0].phrase = 0;
+    for (int t = 0; t < p->tracksCount; ++t) {
+      p->song[0][t] = 0;
+      p->song[1][t] = 1;
+    }
+    playbackStartLiveChain(&state->playbackState, reference, 0);
+    playbackNextFrame(state);
+    auto& clock = state->playbackState.tracks[reference];
+    for (int t = 0; t < p->tracksCount; ++t)
+      if (t != reference) playbackStartLiveChain(&state->playbackState, t, 1);
+    playbackNextFrame(state);
+    for (int t = 0; t < p->tracksCount; ++t) {
+      if (t == reference) continue;
+      CHECK(state->playbackState.tracks[t].mode == PlaybackMode::stopped);
+      CHECK(state->playbackState.tracks[t].queue.liveAction == LiveQueueAction::normal);
+    }
+    clock.phraseRow = 15;
+    playbackNextFrame(state);
+    for (int t = 0; t < p->tracksCount; ++t)
+      if (t != reference) CHECK(state->playbackState.tracks[t].mode == PlaybackMode::stopped);
+    clock.phraseRow = 15;
+    playbackNextFrame(state);
+    for (int t = 0; t < p->tracksCount; ++t) {
+      if (t == reference) continue;
+      const auto& launched = state->playbackState.tracks[t];
+      CHECK(launched.mode == PlaybackMode::live);
+      CHECK(launched.songRow == 1);
+      CHECK(launched.phraseRow == 0);
+      CHECK(launched.queue.liveAction == LiveQueueAction::none);
+    }
+  }
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Live waiting launch supports urgent escalation replacement and cancellation") {
+  Project* p = &state->project;
+  p->tracksCount = 3;
+  for (int i = 0; i < 16; ++i) p->grooves[0].speed[i] = 1;
+  p->chains[0].rows[0].phrase = 0;
+  p->chains[0].rows[1].phrase = 0;
+  p->chains[1].rows[0].phrase = 0;
+  p->song[0][1] = 0;
+  p->song[1][0] = 1;
+  p->song[2][0] = 1;
+  playbackStartLiveChain(&state->playbackState, 1, 0);
+  playbackNextFrame(state);
+  playbackQueueLiveChain(&state->playbackState, 0, 1, 0);
+  playbackQueueLiveChain(&state->playbackState, 0, 2, 1);
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::stopped);
+  state->playbackState.tracks[1].phraseRow = 15;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].songRow == 2);
+  CHECK(state->playbackState.tracks[0].phraseRow == 0);
+  playbackStop(&state->playbackState);
+  playbackNextFrame(state);
+  CHECK_FALSE(playbackIsPlaying(&state->playbackState));
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Live waiting groups survive a lost reference and cancel on empty cells or loops") {
+  auto* p = &state->project;
+  p->tracksCount = 3;
+  for (auto& speed : p->grooves[0].speed) speed = 1;
+  p->chains[0].rows[0].phrase = 0;
+  for (int t = 0; t < 3; ++t) p->song[0][t] = 0;
+  playbackStartLiveChain(&state->playbackState, 1, 0);
+  playbackNextFrame(state);
+  playbackStartLiveChain(&state->playbackState, 0, 0);
+  playbackStartLiveChain(&state->playbackState, 2, 0);
+  state->playbackState.tracks[1].mode = PlaybackMode::stopped;
+  state->playbackState.tracks[1].songRow = EMPTY_VALUE_16;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::live);
+  CHECK(state->playbackState.tracks[2].mode == PlaybackMode::live);
+  CHECK(state->playbackState.tracks[0].phraseRow == 0);
+  CHECK(state->playbackState.tracks[2].phraseRow == 0);
+  playbackQueueLiveChain(&state->playbackState, 1, 0, 0);
+  playbackQueueLiveChain(&state->playbackState, 1, -1, 0);
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[1].queue.mode == PlaybackMode::none);
+  CHECK(state->playbackState.tracks[1].mode == PlaybackMode::stopped);
+  playbackStartLiveChain(&state->playbackState, 1, 0);
+  playbackSetLoopRange(&state->playbackState, LoopRange{1});
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[1].queue.mode == PlaybackMode::none);
+  CHECK(state->playbackState.tracks[1].mode == PlaybackMode::stopped);
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "table volume and VOL apply to the shared voice gain") {
   PlaybackTrackState* track = &state->playbackState.tracks[0];
   track->note.volume = PHRASE_VOLUME_MAX;
@@ -403,6 +528,120 @@ TEST_CASE_FIXTURE(PlaybackFixture, "instrument FX holds until the next note trig
   nextTrig.note = 49;
   readPhraseRowDirect(&state->playbackState, 0, &nextTrig, 0);
   CHECK(state->playbackState.tracks[0].note.fx[fxBTM].isOn == 0);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Slow table modifiers survive faster phrase triggers without repeating MIDI actions") {
+  auto* p = &state->project;
+  getInstrumentFunctions(InstrumentType::Braids).init(&p->instruments[0]);
+  p->instruments[0].tableSpeed = 128;
+  p->tables[0].retriggerMode = TableRetriggerMode::free;
+  p->tables[0].rows[0].fx[0] = {fxPIT, 3};
+  p->tables[0].rows[0].fx[1] = {fxBTM, 42};
+  p->tables[0].rows[0].fx[2] = {fxMC1, 77};
+  p->song[0][0] = 0;
+  p->chains[0].rows[0].phrase = 0;
+  for (int i = 0; i < 16; ++i) {
+    p->grooves[0].speed[i] = 1;
+    auto& row = p->phrases[0].rows[i];
+    memset(&row, EMPTY_VALUE_8, sizeof(row));
+    row.note = 48;
+    row.instrument = 0;
+    row.fx[0] = {fxFIN, 2};
+  }
+  playbackStartLiveChain(&state->playbackState, 0, 0);
+  playbackNextFrame(state);
+  auto& track = state->playbackState.tracks[0];
+  CHECK(track.midiCCPending[0] == 1);
+  track.midiCCPending[0] = 0;
+  for (int tick = 1; tick < 40; ++tick) {
+    playbackNextFrame(state);
+    CHECK(track.note.pitchFinal == 51);
+    CHECK(track.note.fineOffset == 2);
+    CHECK(track.note.fx[fxBTM].isOn == 1);
+    CHECK(track.note.fx[fxBTM].fxValue == 42);
+    CHECK(track.note.instrumentTable.counters[0] == tick);
+    CHECK(track.midiCCPending[0] == 0);
+  }
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Slow table engine modifier returns after a phrase lock and stops with its table") {
+  auto* p = &state->project;
+  getInstrumentFunctions(InstrumentType::Braids).init(&p->instruments[0]);
+  p->instruments[0].tableSpeed = 128;
+  p->tables[0].retriggerMode = TableRetriggerMode::free;
+  p->tables[0].rows[0].fx[0] = {fxBTM, 42};
+  auto& track = state->playbackState.tracks[0];
+  track.mode = PlaybackMode::phraseRow;
+  track.songRow = 0;
+  p->song[0][0] = 0;
+  p->chains[0].rows[0].phrase = 0;
+  PhraseRow row;
+  memset(&row, EMPTY_VALUE_8, sizeof(row));
+  row.note = 48;
+  row.instrument = 0;
+  readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+  row.fx[0] = {fxBTM, 13};
+  readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+  CHECK(track.note.fx[fxBTM].fxValue == 13);
+  row.fx[0] = {FX_ID_EMPTY, 0};
+  readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+  CHECK(track.note.fx[fxBTM].isOn == 1);
+  CHECK(track.note.fx[fxBTM].fxValue == 42);
+  tableInit(&state->playbackState, 0, &track.note.instrumentTable, EMPTY_VALUE_8, 0, 1);
+  row.instrument = EMPTY_VALUE_8;
+  readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+  CHECK(track.note.fx[fxBTM].isOn == 0);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Slow auxiliary modifiers and arpeggio phase survive independent lane speeds") {
+  auto* p = &state->project;
+  getInstrumentFunctions(InstrumentType::Braids).init(&p->instruments[0]);
+  p->instruments[0].tableSpeed = 100;
+  p->tables[0].retriggerMode = p->tables[1].retriggerMode = TableRetriggerMode::free;
+  p->tables[0].rows[0].fx[0] = {fxARP, 0x37};
+  p->tables[1].rows[0].fx[0] = {fxPIT, 2};
+  p->tables[1].rows[0].fx[1] = {fxBTM, 63};
+  p->tables[1].rows[15].fx[0] = {fxTIC, 120};
+  p->tables[1].rows[15].fx[1] = {fxTIC, 80};
+  auto& track = state->playbackState.tracks[0];
+  track.mode = PlaybackMode::phraseRow;
+  track.songRow = 0;
+  p->song[0][0] = 0;
+  p->chains[0].rows[0].phrase = 0;
+  PhraseRow row;
+  memset(&row, EMPTY_VALUE_8, sizeof(row));
+  row.note = 48;
+  row.instrument = 0;
+  row.fx[0] = {fxTBX, 1};
+  readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+  row.fx[0] = {fxFIN, 2};
+  for (int i = 0; i < 30; ++i) {
+    readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+    playbackNextFrame(state);
+    CHECK(track.note.fx[fxARP].counter == i + 1);
+    CHECK(track.note.fx[fxPIT].acc == 2);
+    CHECK(track.note.fx[fxBTM].fxValue == 63);
+    CHECK(track.note.fx[fxBTM].isOn == 1);
+    CHECK(track.note.auxTable.counters[0] == i + 1);
+    CHECK(track.note.auxTable.counters[1] == i + 1);
+  }
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Slow table direct FM controls survive note resets") {
+  auto* p = &state->project;
+  getInstrumentFunctions(InstrumentType::OPL2).init(&p->instruments[0]);
+  p->tables[0].retriggerMode = TableRetriggerMode::free;
+  p->tables[0].rows[0].fx[0] = {fxOAR, 7};
+  auto& track = state->playbackState.tracks[0];
+  track.mode = PlaybackMode::phraseRow;
+  PhraseRow row;
+  memset(&row, EMPTY_VALUE_8, sizeof(row));
+  row.note = 48;
+  row.instrument = 0;
+  for (int i = 0; i < 4; ++i) {
+    readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+    CHECK(track.note.nativeFM.operators[0][0] == 8);
+  }
 }
 
 static void setupAChChidGatePattern(PlaybackFixture& fixture) {

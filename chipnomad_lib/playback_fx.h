@@ -43,6 +43,7 @@ struct PlaybackFXData_Retrigger {
 struct PlaybackFXState {
   uint8_t isOn;
   uint8_t fxValue;
+  uint8_t tableSource; // 0: phrase, 1-4: instrument lanes, 5-8: auxiliary lanes.
   int counter;
   int acc;
   union {

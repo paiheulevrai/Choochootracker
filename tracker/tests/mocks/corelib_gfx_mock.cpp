@@ -11,6 +11,7 @@ char mockGfxCells[20][40];
 int mockTextRight, mockTextBottom;
 int mockCursorX, mockCursorY, mockCursorWidth;
 int mockBitmapDrawCount, mockBitmapDrawRow;
+std::vector<uint8_t> mockScopePixels;
 
 int gfxSetup(int *screenWidth, int* screenHeight) { return 0; }
 void gfxCleanup(void) {}
@@ -64,6 +65,8 @@ void gfxBitmapFree(Bitmap* bitmap) { if (bitmap) { free(bitmap->data); free(bitm
 void gfxDrawBitmap(Bitmap* bitmap, int col, int row) {
   ++mockBitmapDrawCount;
   mockBitmapDrawRow = row;
+  if (col == 0 && row == 0 && bitmap->widthChars == 40 && bitmap->heightChars == 2)
+    mockScopePixels.assign(bitmap->data, bitmap->data + bitmap->widthPixels * bitmap->heightPixels);
 }
 int gfxGetCharWidth(void) { return 8; }
 int gfxGetCharHeight(void) { return 16; }

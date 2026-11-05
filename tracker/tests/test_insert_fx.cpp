@@ -64,6 +64,65 @@ void write(const char* path, const std::string& text) {
 }
 }  // namespace
 TEST_SUITE("track inserts") {
+  TEST_CASE("outgoing Trance Gate keeps its parameters while browsing inserts backwards") {
+    InsertConfig config[2]{}, referenceConfig[2]{};
+    InsertAutomation automation{}, referenceAutomation{};
+    InsertChain chain(48000), reference(48000);
+    insertSelect(&config[0], insertTranceGate);
+    config[0].values[3] = 255;
+    config[0].values[6] = 0;
+    referenceConfig[0] = config[0];
+    chain.sync(config, &automation);
+    reference.sync(referenceConfig, &referenceAutomation);
+    uint8_t effective[2][8], referenceValues[2][8];
+    values(config, effective);
+    values(referenceConfig, referenceValues);
+    std::vector<float> warm(1024 * 2, 0.25f), referenceWarm = warm;
+    chain.process(warm.data(), 1024, effective);
+    reference.process(referenceWarm.data(), 1024, referenceValues);
+
+    insertSelect(&config[0], insertParametricEQ);
+    referenceConfig[0] = config[0];
+    memcpy(referenceConfig[0].values, referenceValues[0], 8);
+    // Both paths fade the same old module, regardless of the incoming values.
+    config[0].values[0] = 0;
+    config[0].values[2] = 0;
+    config[0].values[3] = 0;
+    chain.sync(config, &automation);
+    reference.sync(referenceConfig, &referenceAutomation);
+    values(config, effective);
+    values(referenceConfig, referenceValues);
+    std::vector<float> output(64 * 2, 0.25f), expected = output;
+    chain.process(output.data(), 64, effective);
+    reference.process(expected.data(), 64, referenceValues);
+    CHECK(output == expected);
+  }
+
+  TEST_CASE("insert transitions bound raw parameters for both slots and partial blocks") {
+    InsertConfig config[2]{};
+    InsertAutomation automation{};
+    InsertChain chain(48000);
+    uint8_t effective[2][8];
+    for (int slot = 0; slot < 2; ++slot) {
+      insertSelect(&config[slot], insertTranceGate);
+      chain.sync(config, &automation);
+      values(config, effective);
+      auto audio = signal(1024);
+      chain.process(audio.data(), 1024, effective);
+      for (int module : {insertParametricEQ, insertTranceGate, insertDestruction,
+                         insertTranceGate, insertOff}) {
+        insertSelect(&config[slot], module);
+        chain.sync(config, &automation);
+        memset(effective, 255, sizeof(effective));
+        for (int frames : {1, 63, 128, 257, 1024}) {
+          audio = signal(frames);
+          chain.process(audio.data(), frames, effective);
+          CHECK(std::all_of(audio.begin(), audio.end(), [](float x) { return std::isfinite(x); }));
+        }
+      }
+    }
+  }
+
   TEST_CASE("Compressor Detect keeps legacy choices and names eight sidechain tracks") {
     CHECK(insertParameterMaximum(insertCompressor, 5) == 10);
     char label[32];

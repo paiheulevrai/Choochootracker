@@ -543,6 +543,37 @@ TEST_CASE("Layer lane FX override cents and volume") {
   CHECK(child.note.volume1 == 0);
 }
 
+TEST_CASE("Layer child controls retain slow table modifiers between phrase triggers") {
+  auto state = std::unique_ptr<ChipNomadState, decltype(&chipnomadDestroy)>(chipnomadCreate(), chipnomadDestroy);
+  auto& project = state->project;
+  project.chipsCount = project.tracksCount = 1;
+  project.tickRate = 50;
+  project.linearPitch = 1;
+  calculateLinearPitchTable12TET(&project);
+  getInstrumentFunctions(InstrumentType::Layer).init(&project.instruments[0]);
+  getInstrumentFunctions(InstrumentType::Braids).init(&project.instruments[1]);
+  project.instruments[0].chip.layer.entries[0] = {1, 0x80, 255};
+  project.instruments[0].tableSpeed = 100;
+  project.tables[0].retriggerMode = TableRetriggerMode::free;
+  project.tables[0].rows[0].fx[0] = {fxBTM, 63};
+  project.song[0][0] = 0;
+  project.chains[0].rows[0].phrase = 0;
+  for (int i = 0; i < 16; ++i) {
+    project.grooves[0].speed[i] = 1;
+    project.phrases[0].rows[i].note = 48;
+    project.phrases[0].rows[i].instrument = 0;
+  }
+  chipnomadInitChips(state.get(), 48000, nullptr);
+  REQUIRE(chipnomadQueuePlaybackStartSong(state.get(), 0, 0, 1));
+  float audio[1920]{};
+  for (int tick = 0; tick < 35; ++tick) {
+    REQUIRE(chipnomadRender(state.get(), audio, 960) == 960);
+    const auto& child = state->playbackState.layerTracks[0][0];
+    CHECK(child.note.fx[fxBTM].isOn == 1);
+    CHECK(child.note.fx[fxBTM].fxValue == 63);
+  }
+}
+
 TEST_CASE("Layer gives legacy AY children a virtual chip and honors zero lane volume") {
   auto state = std::unique_ptr<ChipNomadState, decltype(&chipnomadDestroy)>(chipnomadCreate(), chipnomadDestroy);
   Project& project = state->project;

@@ -619,7 +619,7 @@ struct InsertChain::Impl {
     memcpy(s.previous, v, 8);
     s.dirty = false;
   }
-  void process(Slot& s, float* data, int frames, const uint8_t* values, const float* sidechain) {
+  void process(Slot& s, float* data, int frames, const uint8_t* incomingValues, const float* sidechain) {
     float increment = 1.0f / std::max(1.0f, rate * 0.005f);
     for (int offset = 0; offset < frames;) {
       if (s.switching && s.wet <= 0) {
@@ -642,10 +642,13 @@ struct InsertChain::Impl {
         l[i] = std::max(-32.0f, std::min(32.0f, l[i]));
         r[i] = std::max(-32.0f, std::min(32.0f, r[i]));
       }
-      parameters(s, s.switching ? s.previous : values);
+      uint8_t values[8];
+      for (int i = 0; i < 8; ++i)
+        values[i] = insertClamp(s.module, i, s.switching ? s.previous[i] : incomingValues[i]);
+      parameters(s, values);
       float p[8];
       for (int i = 0; i < 8; ++i)
-        p[i] = insertMap(s.module, i, s.switching ? s.previous[i] : values[i]);
+        p[i] = insertMap(s.module, i, values[i]);
       float* channels[] = {l, r};
       switch (s.module) {
         case insertFormant:

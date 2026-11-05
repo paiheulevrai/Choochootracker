@@ -13,6 +13,7 @@ extern const char* mockBrowserExtension;
 extern int mockLastInputKeys;
 extern int mockEnvelopePreviewCount;
 extern int mockBitmapDrawCount, mockBitmapDrawRow;
+extern std::vector<uint8_t> mockScopePixels;
 extern int mockAudioReconfigureResult, mockAudioReconfigureCalls, mockAudioReconfigureRate, mockAudioReconfigureSize, mockAudioCpuLoad;
 extern int mockAudioRestartResult, mockAudioRestartCalls;
 extern std::vector<std::string> mockAudioOutputNames, mockAudioOutputAttempts;

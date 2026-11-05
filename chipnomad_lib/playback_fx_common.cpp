@@ -420,6 +420,9 @@ void initFX(PlaybackState* state, int trackIdx, const FXCell* fx, PlaybackTableS
   const bool layerAccepts = track->note.instrument != EMPTY_VALUE_8 &&
     state->p->instruments[track->note.instrument].type == InstrumentType::Layer &&
     instrumentFXAvailableInProject(state->p, track->note.instrument, fx->command);
+  const FXId runtimeCommand = fx->command == fxSTA ? fxSST : fx->command;
+  track->note.fx[runtimeCommand].tableSource = tableState
+    ? 1 + tableFXColumn + (tableState == &track->note.auxTable ? 4 : 0) : 0;
   if (fx->command >= fxF11 && fx->command <= fxF28) {
     int address = fx->command - fxF11, slot = address / 8, parameter = address % 8;
     int module = state->p->trackInserts[trackIdx][slot].module;
@@ -521,9 +524,17 @@ int handleFX(PlaybackState* state, int trackIdx, int chipIdx) {
 
   // All FX on this note
   for (int i = 0; i < fxTotalCount; i++) {
-    if (track->note.fx[i].isOn && fxHandlers[i].handle) {
+    if (!track->note.fx[i].isOn) continue;
+    if (fxHandlers[i].handle) {
       fxHandlers[i].handle(state, track, trackIdx, chipIdx, &track->note.fx[i]);
       track->note.fx[i].counter++;
+      const int source = track->note.fx[i].tableSource;
+      if (source >= 1 && source <= 8) {
+        auto& table = source <= 4 ? track->note.instrumentTable : track->note.auxTable;
+        const int lane = (source - 1) & 3;
+        if (table.tableIdx != EMPTY_VALUE_8 && table.heldCommand[lane] == i)
+          table.heldFX[lane] = track->note.fx[i];
+      }
     }
   }
 

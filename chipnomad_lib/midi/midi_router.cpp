@@ -1,4 +1,5 @@
 #include "midi_router.h"
+#include "../midi_io.h"
 #include <string.h>
 #include <atomic>
 
@@ -100,7 +101,7 @@ unsigned int midiRouterGetDroppedCount(void) {
   return (g_backend && g_backend->droppedCount) ? g_backend->droppedCount(g_backend->userdata) : 0;
 }
 uint64_t midiRouterNowMicros(void) {
-  return (g_backend && g_backend->nowMicros) ? g_backend->nowMicros(g_backend->userdata) : 0;
+  return (g_backend && g_backend->nowMicros) ? g_backend->nowMicros(g_backend->userdata) : midiIoNowMicros();
 }
 void midiRouterRequestAccess(void) {
   if (g_backend && g_backend->requestAccess) g_backend->requestAccess(g_backend->userdata);

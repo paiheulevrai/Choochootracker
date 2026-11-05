@@ -1,4 +1,10 @@
 #include "midi_io.h"
+#include <chrono>
+
+uint64_t midiIoNowMicros(void) {
+  return (uint64_t)std::chrono::duration_cast<std::chrono::microseconds>(
+    std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 #if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
 
@@ -7,7 +13,6 @@
 #include <string.h>
 #include <vector>
 #include <atomic>
-#include <chrono>
 #include <thread>
 
 static RtMidiIn* g_midiIn = NULL;
@@ -21,11 +26,6 @@ static int channelMessageLength(uint8_t status) {
   if (status >= 0xf8) return 1;
   uint8_t type = status & 0xf0;
   return (type == 0xC0 || type == 0xD0) ? 2 : 3;
-}
-
-uint64_t midiIoNowMicros(void) {
-  return (uint64_t)std::chrono::duration_cast<std::chrono::microseconds>(
-    std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 // See midi_io.h's midiIoScheduleMessage for why this queue+thread exist.
@@ -281,7 +281,6 @@ int midiIoOpenOutput(int) { return -1; }
 void midiIoCloseOutput(void) {}
 int midiIoIsOutputOpen(void) { return 0; }
 void midiIoSendMessage(uint8_t, uint8_t, uint8_t) {}
-uint64_t midiIoNowMicros(void) { return 0; }
 void midiIoScheduleMessage(uint8_t, uint8_t, uint8_t, uint64_t) {}
 void midiIoFlushOutputQueue(void) {}
 unsigned int midiIoGetDroppedCount(void) { return 0; }
