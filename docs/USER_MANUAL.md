@@ -1537,7 +1537,9 @@ interpreted:
 - **Default mode** is the view new projects start in (a global setting,
   remembered in `settings.txt`).
 - **Default length** (visible in Simplified mode) is the length of newly
-  created patterns.
+  created patterns. It applies when you type a pattern number onto an
+  empty Song row (the pattern starts that long) and when clearing the
+  Length field on the Phrase screen header.
 - **Playhead** (visible in Simplified mode) chooses between looping the bar
   the cursor views and playing the whole pattern.
 

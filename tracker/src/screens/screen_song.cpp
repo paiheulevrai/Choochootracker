@@ -327,6 +327,11 @@ static int editCell(int col, int row, CellEditAction action) {
       if (nextEmpty != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = nextEmpty;
         lastChainValue = nextEmpty;
+        if (patternMaterializeIfPristine(&chipnomadState->project, nextEmpty,
+          row, col)) {
+          projectModified = 1;
+          chipnomadQueueProjectRefresh(chipnomadState);
+        }
       } else {
         screenMessage(MESSAGE_TIME, "No free chains");
       }
@@ -848,6 +853,13 @@ int songKeyJazzHandleRawKey(InputCode input, int isDown) {
     lastChainValue = (uint16_t)value;
     keyJazzEditRow = row;
     keyJazzEditCol = col;
+    // Simplified view: typing a pattern number onto a previously-empty row
+    // materializes it at the app's default length (View window setting).
+    if (current == EMPTY_VALUE_16 &&
+        patternMaterializeIfPristine(&chipnomadState->project, value, row, col)) {
+      projectModified = 1;
+      chipnomadQueueProjectRefresh(chipnomadState);
+    }
     drawField(col, row, CellState::normal);
   }
   return 1;

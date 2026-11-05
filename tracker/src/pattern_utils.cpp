@@ -1,5 +1,6 @@
 #include "pattern_utils.h"
 #include "project_utils.h"
+#include "common.h"
 #include <string.h>
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -213,6 +214,25 @@ int viewModeFindEmpty(Project* p, int startIdx) {
 // Keeping them separate lets pattern_utils.cpp link without copy_paste.cpp,
 // which is required by the beads_lifetime / measure / factory test targets
 // that exclude copy_paste.cpp from their source list.
+
+int patternMaterializeIfPristine(Project* p, int patternIdx, int excludeRow,
+  int excludeTrack) {
+  if (p->viewMode != ViewMode::simplified) return 0;
+  if (patternIdx < 0 || patternIdx >= PROJECT_MAX_PATTERNS) return 0;
+  // Pristine = empty content, not referenced by any OTHER song cell, and not
+  // part of a conversion mapping (patternToChainMap[idx] != empty means the
+  // classic-view chain it was converted from still lives — don't reset it).
+  if (!patternIsEmpty(p, patternIdx)) return 0;
+  if (viewModeIsUsedElsewhere(p, patternIdx, excludeTrack, excludeRow)) return 0;
+  if (p->patternToChainMap[patternIdx] != EMPTY_VALUE_16) return 0;
+  uint8_t target = appSettings.defaultPatternLength
+    ? appSettings.defaultPatternLength : 1;
+  if (target > PROJECT_MAX_PATTERN_LENGTH) target = PROJECT_MAX_PATTERN_LENGTH;
+  if (p->patterns[patternIdx].length == target) return 0;
+  patternClear(&p->patterns[patternIdx]);
+  p->patterns[patternIdx].length = target;
+  return 1;
+}
 
 int viewModeIsUsedElsewhere(Project* p, int cellIdx, int excludeTrack, int excludeRow) {
   if (p->viewMode == ViewMode::simplified) {
