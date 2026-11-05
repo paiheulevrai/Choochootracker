@@ -16,6 +16,7 @@
 #include "pattern_utils.h"
 #include "project_utils.h"
 #include "pitch_table_utils.h"
+#include "common.h"
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -55,6 +56,79 @@ TEST_CASE_FIXTURE(PatternFixture, "patternClear sets length=1 with empty bar") {
     CHECK(pat.bars[b].phrase == EMPTY_VALUE_16);
     CHECK(pat.bars[b].transpose == 0);
   }
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "patternMaterializeIfPristine: pristine pattern adopts defaultPatternLength") {
+  // User flow: type pattern 002 onto an empty song row in simplified view —
+  // it must start at the View window's Default length, not the 1-bar
+  // factory default.
+  project->viewMode = ViewMode::simplified;
+  appSettings.defaultPatternLength = 4;
+  project->song[0][0] = 2;
+  CHECK(patternMaterializeIfPristine(project.get(), 2, 0, 0) == 1);
+  CHECK(project->patterns[2].length == 4);
+  for (int b = 0; b < 4; b++) {
+    CHECK(project->patterns[2].bars[b].phrase == EMPTY_VALUE_16);
+  }
+  // Second call: already at target, no-op.
+  CHECK(patternMaterializeIfPristine(project.get(), 2, 0, 0) == 0);
+
+  // Non-default length 1 also works: length already 1 means no-op.
+  appSettings.defaultPatternLength = 1;
+  CHECK(patternMaterializeIfPristine(project.get(), 3, -1, -1) == 0);
+  CHECK(project->patterns[3].length == 1);
+
+  // Setting 0 (unset) falls back to 1.
+  appSettings.defaultPatternLength = 0;
+  project->patterns[4].length = 8;
+  CHECK(patternMaterializeIfPristine(project.get(), 4, -1, -1) == 1);
+  CHECK(project->patterns[4].length == 1);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "patternMaterializeIfPristine: skips non-pristine patterns") {
+  project->viewMode = ViewMode::simplified;
+  appSettings.defaultPatternLength = 4;
+
+  // Pattern with content is never touched.
+  project->patterns[5].bars[0].phrase = 1;
+  project->phrases[1].rows[0].note = 48;
+  CHECK(patternMaterializeIfPristine(project.get(), 5, -1, -1) == 0);
+  CHECK(project->patterns[5].length == 1);
+
+  // Pattern referenced by another song cell is never touched (e.g. the
+  // user typed 007 twice — second entry must not reset the first).
+  project->song[0][0] = 6;
+  project->song[1][0] = 6;
+  CHECK(patternMaterializeIfPristine(project.get(), 6, 1, 0) == 0);
+
+  // Pattern mapped by a conversion is protected.
+  project->chainToPatternMap[7] = 8;
+  project->patternToChainMap[8] = 7;
+  CHECK(patternMaterializeIfPristine(project.get(), 8, -1, -1) == 0);
+
+  // Classic view: always a no-op.
+  project->viewMode = ViewMode::classic;
+  CHECK(patternMaterializeIfPristine(project.get(), 2, 0, 0) == 0);
+
+  // Out-of-range index is safe.
+  project->viewMode = ViewMode::simplified;
+  CHECK(patternMaterializeIfPristine(project.get(), -1, -1, -1) == 0);
+  CHECK(patternMaterializeIfPristine(project.get(), PROJECT_MAX_PATTERNS, -1, -1) == 0);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "patternMaterializeIfPristine: once materialized, later entries don't reset") {
+  // Type 002, then edit its first bar's phrase, then re-enter 002 —
+  // content must survive.
+  project->viewMode = ViewMode::simplified;
+  appSettings.defaultPatternLength = 4;
+  project->song[0][0] = 2;
+  REQUIRE(patternMaterializeIfPristine(project.get(), 2, 0, 0) == 1);
+  project->patterns[2].bars[0].phrase = 1;
+  project->phrases[1].rows[0].note = 48;
+  // No longer pristine → no reset.
+  CHECK(patternMaterializeIfPristine(project.get(), 2, 0, 0) == 0);
+  CHECK(project->patterns[2].length == 4);
+  CHECK(project->patterns[2].bars[0].phrase == 1);
 }
 
 TEST_CASE_FIXTURE(PatternFixture, "patternIsEmpty: fresh pattern is empty") {

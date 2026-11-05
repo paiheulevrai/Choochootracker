@@ -96,6 +96,17 @@ int findClosestEmptyPattern(Project* p, int startIdx);
 // Returns EMPTY_VALUE_16 if chains are full.
 int findClosestEmptyChain(Project* p, int startIdx);
 
+// Simplified view: when `patternIdx` is PRISTINE (empty, unreferenced, and not
+// mapped to any chain by a previous conversion), reset it to
+// appSettings.defaultPatternLength bars so a pattern the user just typed onto
+// a song row starts at the configured length instead of the 1-bar factory
+// default (projectInit's patternClear). (excludeRow, excludeTrack) is the song
+// cell being entered — its fresh reference doesn't count as "used elsewhere".
+// Returns 1 when the pattern was re-materialized, 0 when left untouched.
+// Never runs in classic view.
+int patternMaterializeIfPristine(Project* p, int patternIdx, int excludeRow,
+  int excludeTrack);
+
 // Multiply a pattern's length by 2 by duplicating its existing bars.
 // Returns 1 if successful, 0 if doubling would exceed PROJECT_MAX_PATTERN_LENGTH.
 // Bars beyond the original length are filled with copies of the existing bars
