@@ -1,0 +1,39 @@
+name: PS Vita
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tracker/Makefile.vita'
+      - 'tracker/platforms/vita/**'
+      - 'tracker/platforms/sdl2/**'
+      - '.github/workflows/vita.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  vita:
+    runs-on: ubuntu-24.04
+    container: vitasdk/vitasdk:latest
+    steps:
+      - name: Install build tools
+        run: apk add --no-cache bash git make zip unzip
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install SDL2 for the Vita
+        run: yes | vdpm install sdl2
+      - name: Build VPK
+        working-directory: tracker
+        run: make -j"$(nproc)" -f Makefile.vita Vita-deploy
+      - name: Check VPK
+        run: |
+          vpk="$(ls releases/ChooChooTracker-*-Vita.vpk)"
+          unzip -tq "$vpk"
+          unzip -l "$vpk" | grep -E 'eboot\.bin|sce_sys/param\.sfo|sce_sys/icon0\.png'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChooChooTracker-Vita
+          path: releases/ChooChooTracker-*-Vita.vpk
+          if-no-files-found: error

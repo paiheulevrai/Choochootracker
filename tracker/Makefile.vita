@@ -1,0 +1,89 @@
+# PlayStation Vita (VitaSDK) build.
+#
+# Requires the VitaSDK toolchain (https://vitasdk.org) with the SDL2 port
+# installed (`vdpm sdl2`, or the vitasdk/vitasdk Docker image), and the
+# VITASDK environment variable pointing at it.
+#
+#   make -j4 -f Makefile.vita Vita          # build.vita/choochootracker.elf
+#   make -j4 -f Makefile.vita Vita-deploy   # ../releases/ChooChooTracker-<version>-Vita.vpk
+#
+# The Vita has no MIDI or Ableton Link support, so the stub backends are used
+# (they are compiled whenever DESKTOP/PORTMASTER/ANDROID_BUILD are undefined).
+
+PLATFORM = vita
+include Makefile.common
+NATIVE_CHIP_OPT_FLAGS ?= -O3
+include Makefile.native-chip-flags
+
+ifndef VITASDK
+$(error VITASDK is not set. Install VitaSDK and export VITASDK=/path/to/vitasdk)
+endif
+
+PREFIX = $(VITASDK)/bin/arm-vita-eabi
+CXX = $(PREFIX)-g++
+STRIP = $(PREFIX)-strip
+PKG_CONFIG ?= $(PREFIX)-pkg-config
+
+# No rtmidi on the Vita.
+LIBS = $(COMMON_LIBS) platforms/sdl2 platforms/vita
+
+SDL_CFLAGS := $(shell $(PKG_CONFIG) --cflags sdl2 2>/dev/null)
+SDL_LIBS := $(shell $(PKG_CONFIG) --libs --static sdl2 2>/dev/null)
+ifeq ($(strip $(SDL_LIBS)),)
+$(error SDL2 for the Vita was not found by $(PKG_CONFIG). Run `vdpm sdl2`)
+endif
+
+# -flto is dropped: it multiplies link time and memory for ~600 translation
+# units, and the hot DSP sources get -O3 below anyway. Cortex-A9 + NEON,
+# hard-float, as VitaSDK's own toolchain file uses.
+VITA_CFLAGS = $(filter-out -flto -Os -g,$(COMMON_CFLAGS)) -O2 -g0 \
+	-march=armv7-a -mtune=cortex-a9 -mfpu=neon -mfloat-abi=hard
+CFLAGS = $(VITA_CFLAGS) $(INCLUDES) $(SDL_CFLAGS) -DVITA_BUILD -DGAMEPAD_SUPPORT -Wno-multichar
+TARGET = $(BUILD)/choochootracker.elf
+
+object_for = $(BUILD)/obj/$(subst ../,up/,$(basename $(1))).o
+OBJECTS := $(foreach source,$(SOURCES),$(call object_for,$(source)))
+DEPS := $(OBJECTS:.o=.d)
+
+define compile_source
+$(call object_for,$(1)): $(1) Makefile.vita Makefile.common Makefile.native-chip-flags
+	@mkdir -p $$(dir $$@)
+	@$(CXX) $(CFLAGS) $(call native_chip_opt_flags,$(1)) -MMD -MP -c $$< -o $$@
+endef
+
+$(foreach source,$(SOURCES),$(eval $(call compile_source,$(source))))
+-include $(DEPS)
+
+.PHONY: Vita
+Vita: $(TARGET)
+
+# -Wl,-q keeps the relocations vita-elf-create needs.
+$(TARGET): $(OBJECTS)
+	mkdir -p $(BUILD)
+	$(CXX) $(VITA_CFLAGS) $(OBJECTS) $(SDL_LIBS) -lScePower_stub -lm -Wl,-q -o $@
+
+# --- VPK ---------------------------------------------------------------------
+VITA_TITLE ?= ChooChooTracker
+VITA_TITLEID ?= CHOO00001
+VITA_APP_VER ?= 01.00
+VITA_PACKAGE = $(BUILD)/package
+VPK = $(abspath ../releases)/ChooChooTracker-$(VERSION)-Vita.vpk
+
+.PHONY: Vita-deploy
+Vita-deploy: $(TARGET)
+	rm -rf $(VITA_PACKAGE)
+	mkdir -p $(VITA_PACKAGE)/common/licenses ../releases
+	$(VITASDK)/bin/vita-elf-create $(TARGET) $(VITA_PACKAGE)/choochootracker.velf
+	$(VITASDK)/bin/vita-make-fself -s $(VITA_PACKAGE)/choochootracker.velf $(VITA_PACKAGE)/eboot.bin
+	$(VITASDK)/bin/vita-mksfoex -s TITLE_ID=$(VITA_TITLEID) -s APP_VER=$(VITA_APP_VER) "$(VITA_TITLE)" $(VITA_PACKAGE)/param.sfo
+	cp -r packaging/common/. $(VITA_PACKAGE)/common/
+	cp ../LICENSE $(VITA_PACKAGE)/common/licenses/LICENSE.choochootracker.md
+	cp ../chipnomad_lib/external/insert_fx/LICENSE-JM-Formant $(VITA_PACKAGE)/common/licenses/
+	cp packaging/portmaster/license/* $(VITA_PACKAGE)/common/licenses/
+	cp ../docs/USER_MANUAL.md $(VITA_PACKAGE)/common/
+	rm -f $(VPK)
+	$(VITASDK)/bin/vita-pack-vpk -s $(VITA_PACKAGE)/param.sfo -b $(VITA_PACKAGE)/eboot.bin \
+		--add packaging/vita/sce_sys/icon0.png=sce_sys/icon0.png \
+		--add $(VITA_PACKAGE)/common=common \
+		$(VPK)
+	@echo "Vita package created: $(VPK)"

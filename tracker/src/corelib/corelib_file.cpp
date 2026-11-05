@@ -136,7 +136,15 @@ int fileRename(const char* oldPath, const char* newPath) {
 }
 
 int fileGetDefaultDirectory(char* buffer, int bufferSize) {
-#ifdef ANDROID_BUILD
+#ifdef VITA_BUILD
+  // app0: (the VPK) is read-only; projects, settings and the seeded assets
+  // live in the app's data folder on the memory card.
+  if (!buffer || bufferSize <= 0) return -1;
+  int length = snprintf(buffer, bufferSize, "ux0:data/ChooChooTracker");
+  if (length < 0 || length >= bufferSize) return -1;
+  createDirectoryRecursive(buffer);
+  return 0;
+#elif defined(ANDROID_BUILD)
   extern int androidGetWorkspacePath(char*, int);
   return androidGetWorkspacePath(buffer, bufferSize);
 #elif defined(MACOS_BUILD)

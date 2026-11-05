@@ -34,6 +34,8 @@ static const char* supportPlatformName(void) {
   return "PortMaster";
 #elif defined(MIYOOPORTS_BUILD)
   return "MiyooPorts";
+#elif defined(VITA_BUILD)
+  return "PS Vita";
 #elif defined(MACOS_BUILD)
   return "macOS";
 #elif defined(_WIN32)

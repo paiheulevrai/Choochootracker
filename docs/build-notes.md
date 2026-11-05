@@ -344,6 +344,37 @@ Focused checks, from the repository root with Python and Bash:
 python3 -m unittest discover -s tracker/tests -p 'test_portmaster_*.py'
 ```
 
+## PlayStation Vita (experimental, untested on hardware)
+
+Built with [VitaSDK](https://vitasdk.org) on top of the shared SDL2 platform
+layer (`platforms/sdl2`) plus `platforms/vita` (CPU clocks, heap size and the
+first-run copy of the bundled assets). The target define is `VITA_BUILD`.
+
+```sh
+export VITASDK=/usr/local/vitasdk      # or the vitasdk/vitasdk Docker image
+vdpm install sdl2                      # the SDL2 port for the Vita
+cd tracker
+make -j4 -f Makefile.vita Vita-deploy  # writes releases/ChooChooTracker-<version>-Vita.vpk
+```
+
+`.github/workflows/vita.yml` runs the same build in the `vitasdk/vitasdk`
+container and uploads the VPK as a workflow artifact.
+
+Notes:
+
+- Install the VPK with VitaShell. On first launch the assets bundled in the VPK
+  (`app0:common`) are copied to `ux0:data/ChooChooTracker`, which is also where
+  settings, autosave and projects live. Existing files are never overwritten.
+- No MIDI and no Ableton Link (the stub backends are used). The touch screen is
+  not used.
+- Controller defaults: Cross = edit, Circle = option, Start = play,
+  Select = shift, L = live motion, Square = record motion, Triangle = erase
+  motion. Everything is remappable in Settings > Controls.
+- The default synth quality is `low` and the CPU runs at 444 MHz; the heavier
+  Plaits/Braids/FM engines may still not keep up on the Vita's Cortex-A9.
+- Audio uses SDL's Vita driver. Keep the sample rate at 48000 Hz: lower rates
+  are routed to the system "BGM" port.
+
 ## NextUI Pak Store (TrimUI tg5040)
 
 The NextUI package reuses the same ARM64 executable as PortMaster:

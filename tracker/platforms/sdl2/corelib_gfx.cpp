@@ -593,7 +593,7 @@ static void createFontTexture(void) {
 
 // Some PortMaster SDL2 builds omit haptic and sensor support (including
 // TrimUI Brick's NextUI build), so SDL_INIT_EVERYTHING would fail.
-#if defined(PORTMASTER_BUILD)
+#if defined(PORTMASTER_BUILD) || defined(VITA_BUILD)
 #define SDL_INIT_FLAGS (SDL_INIT_EVERYTHING & ~SDL_INIT_HAPTIC & ~SDL_INIT_SENSOR)
 #elif defined(WEB_BUILD)
 #define SDL_INIT_FLAGS (SDL_INIT_EVERYTHING & ~SDL_INIT_HAPTIC)
