@@ -42,6 +42,7 @@ enum class InstrumentType : uint8_t {
   Monk = 29,
   AudioIn = 30,
   Layer = 31,
+  Bass808 = 32,           // Modern 808 sustained bass synth (NOT a TR-808 kick recreation)
   totalCount,
 };
 
@@ -328,6 +329,23 @@ struct InstrumentDrumSynth : InstrumentVoicePostSettings {
   uint8_t drive;
 };
 
+// Modern "808" sustained bass synthesizer.  Not a TR-808 kick-drum
+// recreation: this is a tuned sub-bass synth voice in the spirit of
+// modern trap / hip-hop 808 bass (sustained, pitch-tracking, glideable).
+// Inherits InstrumentVoicePostSettings so the same multimode filter +
+// ADSR + envelope-shape bytes that every other synth instrument uses
+// drive the shared VoicePostProcessor the editor already knows how to
+// render.  Voice: Bass808Voice in synth/bass808_voice.h.
+enum class Bass808Waveform : uint8_t { sine = 0, triangle = 1, saw = 2, square = 3, totalCount };
+struct InstrumentBass808 : InstrumentVoicePostSettings {
+  uint8_t waveform;     // Bass808Waveform: 0=sine, 1=tri, 2=saw, 3=square
+  uint8_t subWaveform;   // 0 = off, 1..4 picker (1=sine, 2=tri, 3=saw, 4=square)
+  uint8_t subLevel;     // 0..255 sub-oscillator mix level
+  uint8_t drive;        // 0..255 tanh waveshaper drive
+  uint8_t glide;        // 0..255 default portamento time (per-row override via fxGLD)
+  uint8_t envelopeMode; // 0: TRIG (fixed shape per note), 2: VCA ADSR (1 loads as legacy VCA)
+};
+
 // Multi Modulation Engine: two internal oscillators coupled by a selectable
 // cross-modulation algorithm.  The six controls deliberately have a stable
 // position in the UI even though their musical interpretation varies by model.
@@ -585,6 +603,7 @@ union InstrumentChipData {
   InstrumentMidi midi;
   InstrumentVoicePostSettings audioIn;
   InstrumentLayer layer;
+  InstrumentBass808 bass808;
 };
 
 // A project has a pool of three-band EQs, and an instrument can use one of
@@ -632,7 +651,7 @@ struct InstrumentFunctions {
 // This is metadata, not an audio abstraction: renderers keep their typed
 // paths while screens, validation and motion routing share this one catalogue.
 enum class InstrumentCategory : uint8_t { none, chip, sample, synth, drums, utility, fm };
-enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme, sintered, midi, opll, opl, simpleChip, dx7, soundfont, monk, audioIn, layer };
+enum class InstrumentScreenKind : uint8_t { none, ay1, ay2, aySample, braids, sample, scwf, byowtbl, plaits, achchid, drumSynth, mme, sintered, midi, opll, opl, simpleChip, dx7, soundfont, monk, audioIn, layer, bass808 };
 enum class InstrumentMotionValue : uint8_t { raw, speed, cutoff };
 
 static constexpr FXId instrumentNoFX = FX_ID_EMPTY;

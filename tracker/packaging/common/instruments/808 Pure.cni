@@ -1,0 +1,32 @@
+# ChipNomad Instrument
+
+### Instrument 0
+
+- Name: 808 Pure
+- Type: 32
+- Table speed: 1
+- Volume: 255
+- Transpose: 1
+- Modulation:
+- Mod1: 0,0,0,0,0,0,0,0
+- Mod2: 1,0,0,0,0,0,0,0
+- Mod3: 2,0,0,0,0,0,0,0
+- Mod4: 2,0,0,0,0,0,0,0
+- Chip data:
+- Waveform: 0
+- Sub waveform: 0
+- Sub level: 0
+- Drive: 16
+- Glide: 0
+- Filter enabled: 1
+- Filter character: 2
+- Filter mode: 0
+- Filter slope: 1
+- Filter cutoff: 4000
+- Filter resonance: 24
+- Filter color: 128
+- Attack: 0
+- Decay: 16
+- Sustain: 255
+- Release: 32
+- Envelope shape: 128

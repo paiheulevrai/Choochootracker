@@ -246,6 +246,19 @@ enum FX : FXId {
   // Layer lane tuning and level. Appended to preserve project FX IDs.
   fxL1C, fxL1V, fxL2C, fxL2V, fxL3C, fxL3V,
 
+  // Bass808 FX.  Appended to preserve project FX IDs.
+  // NOTE: filter cutoff/resonance use the B80 prefix because the
+  // shorter B-prefixed names are already taken by Braids (fxBCF,
+  // fxBRS).  Their 3-character display labels can still be "BCF"/
+  // "BRS" because each InstrumentType's FX list is its own group.
+  fxBWF, // Bass808 main waveform
+  fxBSW, // Bass808 sub waveform (0=off, 1..4 picker)
+  fxBSL, // Bass808 sub level
+  fxBDR, // Bass808 drive
+  fxGLD, // Bass808 glide time (per-row portamento)
+  fxB80CF, // Bass808 filter cutoff
+  fxB80RS, // Bass808 filter resonance
+
   // Total count - must be last
   fxTotalCount
 };

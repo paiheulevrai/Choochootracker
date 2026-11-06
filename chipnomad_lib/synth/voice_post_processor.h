@@ -59,6 +59,9 @@ class VoicePostProcessor {
   }
   bool envelopeActive() const { return !envelopeEnabled_ || envelope_.active(); }
   float envelopeLevel() const { return envelopeEnabled_ ? envelope_.level() : 1.0f; }
+  // TRIG/one-shot voices need to detect "decay finished" (the sustain stage
+  // traps at level 0 instead of going idle).
+  auto envelopeStage() const { return envelope_.stage(); }
 
  private:
   MultimodeFilter filter_;

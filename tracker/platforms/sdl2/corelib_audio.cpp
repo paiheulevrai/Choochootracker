@@ -41,6 +41,39 @@ void audioOutputSelect(const char* name) {
 #include <jni.h>
 #include <android/log.h>
 #include <math.h>
+#endif
+#include "../android/audio_diagnostics.h"
+#include <math.h>
+#ifdef CCT_AUDIO_DIAG
+#include <atomic>
+namespace {
+// Desktop copy of the counter/printer state (independent of the Android ones).
+static SDL_Thread* diagThread;
+static SDL_atomic_t diagStop;
+static std::atomic<uint32_t> cbCount{0}, maxRenderUsD{0}, maxGapUsD{0};
+static std::atomic<uint32_t> lastFramesD{0}, overBudgetD{0};
+static Uint64 prevCb, diagFreq;
+static int diagRate;
+static bool diagToneOn;
+static double tonePhaseD;
+static Uint64 nowUs(void) { return SDL_GetPerformanceCounter(); }
+static void recordMaximumD(std::atomic<uint32_t>& m, uint32_t v) {
+  uint32_t old = m.load(std::memory_order_relaxed);
+  while (old < v && !m.compare_exchange_weak(old, v, std::memory_order_relaxed)) {}
+}
+static int reportDiagThread(void*) {
+  while (!SDL_AtomicGet(&diagStop)) {
+    SDL_Delay(100);
+    printf("DIAG callbacks=%u frames=%u render_max_us=%u gap_max_us=%u over_budget=%u\n",
+      cbCount.load(std::memory_order_relaxed), lastFramesD.load(std::memory_order_relaxed),
+      maxRenderUsD.exchange(0, std::memory_order_relaxed),
+      maxGapUsD.exchange(0, std::memory_order_relaxed),
+      overBudgetD.load(std::memory_order_relaxed));
+    fflush(stdout);
+  }
+  return 0;
+}
+}
 
 static SDL_Thread* diagnosticThread;
 static SDL_atomic_t diagnosticStop;
@@ -73,9 +106,37 @@ static int reportAudioDiagnostics(void*) {
 }
 #endif
 
+#ifdef CCT_AUDIO_DIAG
+static bool cctDiagTone(void) { return diagToneOn; }
+#endif
+
 static void sdlAudioCallback(void* userdata, uint8_t* buffer, int bufferBytes) {
   AudioCallback* callback = (AudioCallback *)userdata;
-#ifdef ANDROID_BUILD
+#ifdef CCT_AUDIO_DIAG
+  if (audioDiagnostics::enabled) {
+    const Uint64 started = nowUs();
+    if (prevCb) recordMaximumD(maxGapUsD, (uint32_t)((started - prevCb) * 1000000 / diagFreq));
+    prevCb = started;
+    const int frames = bufferBytes / (int)sizeof(int16_t) / 2;
+    if (cctDiagTone()) {
+      int16_t* samples = (int16_t*)buffer;
+      const double step = 6.283185307179586 * 440.0 / diagRate;
+      for (int i = 0; i < frames; ++i) {
+        samples[2*i] = samples[2*i+1] = (int16_t)(sin(tonePhaseD) * 2048.0);
+        tonePhaseD += step; if (tonePhaseD >= 6.283185307179586) tonePhaseD -= 6.283185307179586;
+      }
+    } else {
+      callback((int16_t*)buffer, frames);
+    }
+    const Uint64 elapsed = nowUs() - started;
+    recordMaximumD(maxRenderUsD, (uint32_t)(elapsed * 1000000 / diagFreq));
+    if (elapsed * diagRate > (Uint64)frames * diagFreq) overBudgetD.fetch_add(1);
+    lastFramesD.store(frames, std::memory_order_relaxed);
+    cbCount.fetch_add(1, std::memory_order_relaxed);
+    return;
+  }
+#endif
+#ifdef CCT_AUDIO_DIAG
   if (audioDiagnostics::enabled) {
     const Uint64 started = SDL_GetPerformanceCounter();
     if (previousCallback)
@@ -106,9 +167,19 @@ static void sdlAudioCallback(void* userdata, uint8_t* buffer, int bufferBytes) {
 }
 
 int audioSetup(AudioCallback* audioCallback, int sampleRate, int bufferSize) {
-#ifdef ANDROID_BUILD
+#ifdef CCT_AUDIO_DIAG
   const char* diagnostic = SDL_getenv("CCT_AUDIO_DIAG");
   audioDiagnostics::enabled = diagnostic && SDL_strcmp(diagnostic, "1") == 0;
+  if (audioDiagnostics::enabled) {
+    const char* tone = SDL_getenv("CCT_AUDIO_TONE");
+    diagToneOn = tone && SDL_strcmp(tone, "1") == 0;
+    diagRate = sampleRate;
+    diagFreq = SDL_GetPerformanceFrequency();
+    prevCb = 0; tonePhaseD = 0;
+    cbCount = maxRenderUsD = maxGapUsD = lastFramesD = overBudgetD = 0;
+    diagStop = 0;
+    diagThread = SDL_CreateThread(reportDiagThread, "CCTAudioDiag", nullptr);
+  }
   if (audioDiagnostics::enabled) {
     const char* tone = SDL_getenv("CCT_AUDIO_TONE");
     diagnosticTone = tone && SDL_strcmp(tone, "1") == 0;
@@ -117,7 +188,6 @@ int audioSetup(AudioCallback* audioCallback, int sampleRate, int bufferSize) {
     previousCallback = 0;
     tonePhase = 0;
     callbackCount = maxRenderUs = maxGapUs = lastFrames = overBudget = 0;
-    audioDiagnostics::invalidBuffers = audioDiagnostics::renderFailures = 0;
   }
 #endif
   SDL_AudioSpec spec;

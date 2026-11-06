@@ -1,0 +1,32 @@
+# ChipNomad Instrument
+
+### Instrument 0
+
+- Name: 808 Saw Bass
+- Type: 32
+- Table speed: 1
+- Volume: 255
+- Transpose: 1
+- Modulation:
+- Mod1: 0,0,0,0,0,0,0,0
+- Mod2: 1,0,0,0,0,0,0,0
+- Mod3: 2,0,0,0,0,0,0,0
+- Mod4: 2,0,0,0,0,0,0,0
+- Chip data:
+- Waveform: 2
+- Sub waveform: 0
+- Sub level: 0
+- Drive: 48
+- Glide: 0
+- Filter enabled: 1
+- Filter character: 4
+- Filter mode: 0
+- Filter slope: 1
+- Filter cutoff: 1200
+- Filter resonance: 96
+- Filter color: 128
+- Attack: 0
+- Decay: 40
+- Sustain: 200
+- Release: 100
+- Envelope shape: 128
