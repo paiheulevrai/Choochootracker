@@ -59,8 +59,8 @@ $(foreach source,$(SOURCES),$(eval $(call compile_source,$(source))))
 Vita: $(TARGET)
 
 # -Wl,-q keeps the relocations vita-elf-create needs. The --wrap options route
-# path-taking libc calls through platforms/vita/vita_fs_wrap.cpp.
-VITA_WRAPS = fopen fclose open opendir stat lstat mkdir rename remove unlink rmdir access tmpfile
+# tmpfile() (which needs a /tmp the Vita lacks) to platforms/vita/vita_fs_wrap.cpp.
+VITA_WRAPS = tmpfile
 VITA_WRAP_FLAGS = $(foreach name,$(VITA_WRAPS),-Wl,--wrap=$(name))
 
 $(TARGET): $(OBJECTS)
