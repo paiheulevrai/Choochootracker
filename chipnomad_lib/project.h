@@ -393,6 +393,51 @@ struct Chain {
   ChainRow rows[16];
 };
 
+// ── Simplified view ("patterns") ────────────────────────────────────────────
+// A pattern is a sequence of 1..PROJECT_MAX_PATTERN_LENGTH bars; each bar
+// references a phrase plus a hidden transpose. There is deliberately no
+// per-bar table override: tables stay controlled by the instrument default
+// and phrase fxTBL, as in classic mode.
+//
+// `length` is the active bar count (1..PROJECT_MAX_PATTERN_LENGTH). Bars
+// beyond `length` are not played but stay in the struct for editing undo.
+//
+// `transpose` is preserved across mode switching (a hidden field, not
+// editable in the simplified UI per decision #1).
+
+struct PatternBar {
+  uint16_t phrase;          // 0..PROJECT_MAX_PHRASES-1, or EMPTY_VALUE_16
+  uint8_t  transpose;        // hidden; preserved from classic chain row
+};
+
+struct Pattern {
+  uint8_t     length;        // 1..PROJECT_MAX_PATTERN_LENGTH
+  PatternBar  bars[PROJECT_MAX_PATTERN_LENGTH];
+};
+
+enum class ViewMode : uint8_t {
+  classic    = 0,
+  simplified = 1,
+};
+
+// PlayheadMode controls how the playhead behaves in simplified view:
+//   loopActiveBar — playback loops on the bar the cursor is currently
+//                   viewing (mimics classic phrase-view playback on the
+//                   actively viewed bar). Header shows "Loop: BAR".
+//   followPattern — playback runs through the entire pattern from bar 0
+//                   to the pattern's last bar, then loops back to bar 0
+//                   (like a chain screen playing from its first phrase).
+//                   Header shows "Loop: PAT".
+//
+// Only applies when viewMode == simplified. In classic mode the field is
+// ignored (classic chains always advance row by row). Edited from the
+// pattern header's "Loop" control and the View window — both write the
+// same project field.
+enum class PlayheadMode : uint8_t {
+  loopActiveBar = 0,
+  followPattern = 1,
+};
+
 // Project
 
 struct PitchTable {
@@ -481,6 +526,25 @@ struct Project {
   Instrument instruments[PROJECT_MAX_INSTRUMENTS];
   Table tables[PROJECT_MAX_TABLES];
 
+  // ── Simplified-view data ────────────────────────────────────────────────
+  // viewMode controls how song[row][track] is interpreted:
+  //   classic    → cell is a chain index (chains[])
+  //   simplified → cell is a pattern index (patterns[])
+  // The view mode is chosen when the project is created and is immutable
+  // afterwards (conversion between modes is deferred).
+  //
+  // chainToPatternMap[c] / patternToChainMap[p] record a bidirectional
+  // mapping (used by the deferred conversion machinery). EMPTY_VALUE_16 in
+  // either map means "no counterpart yet".
+  ViewMode viewMode;
+  Pattern patterns[PROJECT_MAX_PATTERNS];
+  uint16_t chainToPatternMap[PROJECT_MAX_CHAINS];
+  uint16_t patternToChainMap[PROJECT_MAX_PATTERNS];
+  // Per-project playhead behaviour in simplified view ("Loop: BAR/PAT" in
+  // the pattern header; same setting in the View window). Saved in the
+  // project file's header. See PlayheadMode above.
+  PlayheadMode playheadMode;
+
   // Additional data for different chips
   uint8_t ayWavetables[256][32]; // 256 wavetables with 32 4-bit values each (AY chip)
 
@@ -518,6 +582,8 @@ int8_t tableIsEmpty(Project* p, int table);
 int8_t grooveIsEmpty(Project* p, int groove);
 // Is wavetable empty?
 int8_t wavetableIsEmpty(Project* p, int wavetable);
+// Is pattern empty? (all bars within length have empty phrases)
+int8_t patternIsEmpty(Project* p, int pattern);
 // Note name in phrase
 const char* noteName(Project* p, uint8_t note);
 // Get number of tracks for a chip at index
@@ -532,5 +598,7 @@ void chainClear(Chain* chain);
 void instrumentClear(Instrument* instrument);
 // Clear a single table with proper initialization
 void tableClear(Table* table);
+// Clear a single pattern with proper initialization
+void patternClear(Pattern* pattern);
 
 #endif // __CHIPNOMAD_LIB__PROJECT_H__

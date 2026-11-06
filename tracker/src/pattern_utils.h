@@ -1,0 +1,164 @@
+#ifndef __PATTERN_UTILS_H__
+#define __PATTERN_UTILS_H__
+
+#include "chipnomad_lib.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// ── Pattern / chain conversion ──────────────────────────────────────────────
+// These functions implement the bidirectional classic <-> simplified conversion
+// (interchange feature; supersedes the original patterns-spec decisions #1,
+// #5, #8 wording).
+//
+// Behaviour contract:
+//
+//   convertChainsToPatterns(p):
+//     - Collects the unique chains used in the song (ascending) and converts
+//       each: pattern number = chain number when that pattern slot is free,
+//       else the closest free pattern slot.
+//     - Length = consecutive non-empty chain rows (playback stops at the
+//       first empty row; the pattern must reproduce that exactly).
+//     - Bars reference the chain rows' phrases in order. A chain-row
+//       transpose != 0 is BAKED into the notes: the phrase is cloned into a
+//       fresh slot (clamped to the pitch table range) and the bar points at
+//       the clone; transpose == 0 bars reference the original phrase.
+//     - MAPPED pairs still IN SYNC with their chain (neither side edited
+//       since the last conversion — content-equivalence check) are left
+//       untouched: the saved conversion state is restored.
+//     - MAPPED pairs that changed (chain edited in classic) and fresh
+//       allocations are rebuilt from the chain's CURRENT content, so
+//       classic-side edits propagate into the pattern.
+//     - chains[] content is never modified by this direction.
+//     - Sets p->viewMode = ViewMode::simplified.
+//
+//   convertPatternsToChains(p):
+//     - Collects the unique patterns used in the song (ascending, lowest
+//       number first) and converts each:
+//       * Mapped patterns still IN SYNC with their chain are left
+//         untouched (saved conversion state restored); edited/added ones
+//         get their chain REBUILT from the pattern's CURRENT bars, so
+//         simplified-side edits propagate. The chain holds EXACTLY the
+//         pattern's bar count as phrase
+//         rows (remaining rows empty). Chain phrase slots are allocated
+//         LOWEST-FREE-FIRST (scanning upward from 000, same convention as
+//         findEmptyPhrase), so converted phrases pack compactly regardless
+//         of the pattern number. Bars with identical baked content share
+//         one phrase. Transpose != 0 bars are baked into fresh clones.
+//     - patterns[] content is never modified.
+//     - Sets p->viewMode = ViewMode::classic.
+//
+//   Both functions return 0 on success, non-zero on a fatal error (out of
+//   pattern, chain or phrase slots). On failure the project is left in an
+//   indeterminate state - caller should reload from disk. viewMode flips
+//   only on success.
+//
+// Edge cases (decision #8):
+//   - An empty chain (all rows have EMPTY_VALUE_16 phrase) is converted to a
+//     1-bar pattern whose single bar references a freshly-allocated empty
+//     phrase. The empty phrase gets the closest unallocated phrase number to
+//     the pattern number (see findClosestEmptyPhrase()).
+//   - Pattern bar allocation when bars are added (handled by the UI's
+//     EDIT+Right): the new bar gets the closest unallocated phrase number to
+//     the pattern number. See patternAllocateEmptyPhrase().
+
+int convertChainsToPatterns(Project* p);
+int convertPatternsToChains(Project* p);
+
+// Append ALL of `srcIdx`'s bars to the end of `targetIdx`'s bars (phrase
+// references + hidden transposes copied). Returns the new target length,
+// or -1 when the merged length would exceed 16 bars or src has no bars
+// (no changes made). Used by the Song screen's merge-up (OPT+UP).
+int patternAppendPattern(Project* p, int targetIdx, int srcIdx);
+
+// Clone-on-write for simplified-mode bar editing: when the phrase bound to
+// `barIdx` of `patternIdx` is also referenced elsewhere (another pattern
+// bar or any chain row), copy it into a fresh lowest-free slot and point
+// only THIS bar at the copy — editing one bar of a multiplied pattern never
+// mutates its siblings or the classic view's phrases. Returns the (possibly
+// new) phrase index, or EMPTY_VALUE_16 when the phrase pool is exhausted.
+// `st` (optional) claims the clone in a conversion allocator state.
+int patternEnsureBarExclusive(Project* p, struct ConversionPhraseState* st,
+  int patternIdx, int barIdx);
+
+// Find the closest unallocated phrase index to `patternIdx`, scanning
+// outward from `patternIdx`. Returns EMPTY_VALUE_16 if phrases are full.
+// "Unallocated" means the phrase is empty AND not referenced by any chain
+// or pattern bar in the project.
+int patternFindClosestEmptyPhrase(Project* p, int patternIdx);
+
+// Find the closest unallocated pattern index to `startIdx`, scanning outward.
+// Returns EMPTY_VALUE_16 if patterns are full.
+int findClosestEmptyPattern(Project* p, int startIdx);
+
+// Find the closest unallocated chain index to `startIdx`, scanning outward.
+// Returns EMPTY_VALUE_16 if chains are full.
+int findClosestEmptyChain(Project* p, int startIdx);
+
+// Simplified view: when `patternIdx` is PRISTINE (empty, unreferenced, and not
+// mapped to any chain by a previous conversion), reset it to
+// appSettings.defaultPatternLength bars so a pattern the user just typed onto
+// a song row starts at the configured length instead of the 1-bar factory
+// default (projectInit's patternClear). (excludeRow, excludeTrack) is the song
+// cell being entered — its fresh reference doesn't count as "used elsewhere".
+// Returns 1 when the pattern was re-materialized, 0 when left untouched.
+// Never runs in classic view.
+int patternMaterializeIfPristine(Project* p, int patternIdx, int excludeRow,
+  int excludeTrack);
+
+// Multiply a pattern's length by 2 by duplicating its existing bars.
+// Returns 1 if successful, 0 if doubling would exceed PROJECT_MAX_PATTERN_LENGTH.
+// Bars beyond the original length are filled with copies of the existing bars
+// (1-bar A → 2-bar A,A; 2-bar A,B → 4-bar A,B,A,B; per decision #4).
+int patternMultiplyLengthByTwo(Project* p, int patternIdx);
+
+// Halve a pattern's length by 2 by dropping the second half.
+// Returns 1 if successful, 0 if the current length is odd or already 1.
+// Bars are not zeroed — only `length` is changed, so the dropped bars survive
+// for an undo (a future ×2 will restore them).
+int patternHalveLengthByTwo(Project* p, int patternIdx);
+
+// Add one empty bar to the end of a pattern. The new bar references a freshly
+// allocated empty phrase (closest unallocated to the pattern index).
+// Returns 1 if successful, 0 if the pattern is already at max length.
+int patternAddEmptyBar(Project* p, int patternIdx);
+
+// Remove the last bar from a pattern. The phrase that was in the last bar is
+// NOT freed (it might be referenced elsewhere). Only `length` decreases.
+// Returns 1 if successful, 0 if the pattern is already at length 1.
+int patternRemoveLastBar(Project* p, int patternIdx);
+
+// ── ViewMode-aware wrappers (for screen_song.cpp / screen_phrase.cpp) ────────
+// These wrap the chain equivalents (chainHasNotes, cloneChainToNext, etc.)
+// and dispatch based on p->viewMode. The screen code can use these without
+// branching on view mode everywhere.
+//
+// The pure wrappers (no copy_paste dependency) live here:
+//   viewModeIsSimplified(p)              — quick check
+//   viewModeHasNotes(p, cellIdx)         — chainHasNotes or patternHasNotes
+//   viewModeFindEmpty(p, startIdx)      — findEmptyChain or findEmptyPattern
+//   viewModeIsUsedElsewhere(p, cellIdx, excludeTrack, excludeRow)
+//                                        — isChainUsedElsewhere or pattern equiv
+//   viewModeIsEmpty(p, cellIdx)          — chainIsEmpty or patternIsEmpty
+//
+// The clone wrappers (viewModeCloneToNext / viewModeDeepClone) depend on
+// copy_paste.cpp's cloneChainToNext / deepCloneChain, so they live in
+// pattern_clone_utils.h to keep pattern_utils.cpp linkable without
+// copy_paste (needed by beads_lifetime / measure / factory test targets
+// that exclude copy_paste.cpp).
+
+int viewModeIsSimplified(Project* p);
+int8_t viewModeHasNotes(Project* p, int cellIdx);
+int viewModeFindEmpty(Project* p, int startIdx);
+int viewModeIsUsedElsewhere(Project* p, int cellIdx, int excludeTrack, int excludeRow);
+
+// Returns 1 if the song cell (chain or pattern) is empty (no phrases in any
+// row/bar). Wraps chainIsEmpty / patternIsEmpty.
+int viewModeIsEmpty(Project* p, int cellIdx);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __PATTERN_UTILS_H__

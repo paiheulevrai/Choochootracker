@@ -8,6 +8,10 @@ extern "C" {
 #endif
 
 void projectInitAY(Project* p);
+// Seed a simplified-mode project with one default-length pattern + phrase
+// per track at song row 0. No-op when the project is in classic mode.
+// Call AFTER setting project->viewMode (projectInit resets it to classic).
+void projectUtilsSeedSimplifiedPatterns(Project* p);
 // Does chain have notes?
 int8_t chainHasNotes(Project* p, int chain);
 // Does phrase have notes?

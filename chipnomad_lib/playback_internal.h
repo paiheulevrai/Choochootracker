@@ -3,6 +3,17 @@
 
 #include "chipnomad_lib.h"
 
+// ── Pattern-aware song cell access (simplified view) ─────────────────────────
+// In classic mode these read from chains[]; in simplified mode from
+// patterns[]. chainRow is the chain row (classic) or bar index (simplified).
+
+// Phrase index at the given song cell + row/bar, or EMPTY_VALUE_16.
+uint16_t playbackResolvePhraseAt(Project* p, int songRow, int trackIdx, int chainRow);
+// Hidden transpose at the given song cell + row/bar (0 in classic gaps).
+uint8_t playbackResolveTransposeAt(Project* p, int songRow, int trackIdx, int chainRow);
+// Active row/bar count of the song cell (16 for classic chains).
+int playbackResolveLengthAt(Project* p, int songRow, int trackIdx);
+
 void handleNoteOff(PlaybackState* state, int trackIdx);
 void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck);
 void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRow, int skipDelCheck);

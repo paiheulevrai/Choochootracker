@@ -12,6 +12,77 @@
 
 static int moveToNextPhraseRow(PlaybackState* state, int trackIdx);
 
+// ── Pattern-aware song cell access ───────────────────────────────────────────
+// Resolves a song cell (chain or pattern) into its phrase / transpose /
+// length, based on p->viewMode. The walker and reader use these so the rest
+// of the engine stays view-agnostic.
+//
+//   classic     → cell is chain index; chain has 16 rows
+//   simplified  → cell is pattern index; pattern has variable length (1..16)
+//
+// `chainRow` in PlaybackTrackState is reused as the bar index in simplified
+// mode — both are 0..15 and use the same groove-advance logic.
+
+uint16_t playbackResolvePhraseAt(Project* p, int songRow, int trackIdx, int chainRow) {
+  if (songRow < 0 || songRow >= PROJECT_MAX_LENGTH) return EMPTY_VALUE_16;
+  if (trackIdx < 0 || trackIdx >= PROJECT_MAX_TRACKS) return EMPTY_VALUE_16;
+  uint16_t cell = p->song[songRow][trackIdx];
+  if (cell == EMPTY_VALUE_16) return EMPTY_VALUE_16;
+
+  if (p->viewMode == ViewMode::simplified) {
+    if (cell >= PROJECT_MAX_PATTERNS) return EMPTY_VALUE_16;
+    Pattern* pat = &p->patterns[cell];
+    int len = pat->length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+    if (chainRow < 0 || chainRow >= len) return EMPTY_VALUE_16;
+    return pat->bars[chainRow].phrase;
+  } else {
+    if (cell >= PROJECT_MAX_CHAINS) return EMPTY_VALUE_16;
+    if (chainRow < 0 || chainRow >= 16) return EMPTY_VALUE_16;
+    return p->chains[cell].rows[chainRow].phrase;
+  }
+}
+
+uint8_t playbackResolveTransposeAt(Project* p, int songRow, int trackIdx, int chainRow) {
+  if (songRow < 0 || songRow >= PROJECT_MAX_LENGTH) return 0;
+  if (trackIdx < 0 || trackIdx >= PROJECT_MAX_TRACKS) return 0;
+  uint16_t cell = p->song[songRow][trackIdx];
+  if (cell == EMPTY_VALUE_16) return 0;
+
+  if (p->viewMode == ViewMode::simplified) {
+    if (cell >= PROJECT_MAX_PATTERNS) return 0;
+    Pattern* pat = &p->patterns[cell];
+    int len = pat->length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+    if (chainRow < 0 || chainRow >= len) return 0;
+    // Transpose is preserved as a hidden field (decision #1) — still applied
+    // at playback, just not editable in the simplified UI.
+    return pat->bars[chainRow].transpose;
+  } else {
+    if (cell >= PROJECT_MAX_CHAINS) return 0;
+    if (chainRow < 0 || chainRow >= 16) return 0;
+    return p->chains[cell].rows[chainRow].transpose;
+  }
+}
+
+int playbackResolveLengthAt(Project* p, int songRow, int trackIdx) {
+  if (songRow < 0 || songRow >= PROJECT_MAX_LENGTH) return 16;
+  if (trackIdx < 0 || trackIdx >= PROJECT_MAX_TRACKS) return 16;
+  uint16_t cell = p->song[songRow][trackIdx];
+  if (cell == EMPTY_VALUE_16) return 16;
+
+  if (p->viewMode == ViewMode::simplified) {
+    if (cell >= PROJECT_MAX_PATTERNS) return 16;
+    int len = p->patterns[cell].length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+    return len;
+  }
+  return 16;  // classic chains are always 16 rows
+}
+
 static const uint8_t speedNumerator[17] = {
   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 4, 8, 3, 5, 6, 7
 };
@@ -466,7 +537,7 @@ static PhraseRow* phraseRowAt(Project* p, int trackIdx, int songRow, int chainRo
     return NULL;
   uint16_t chain = p->song[songRow][trackIdx];
   if (chain == EMPTY_VALUE_16) return NULL;
-  uint16_t phrase = p->chains[chain].rows[chainRow].phrase;
+  uint16_t phrase = playbackResolvePhraseAt(p, songRow, trackIdx, chainRow);
   return phrase == EMPTY_VALUE_16 ? NULL : &p->phrases[phrase].rows[phraseRow];
 }
 
@@ -745,7 +816,7 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
   if (note != EMPTY_VALUE_8 && note != NOTE_OFF && track->mode != PlaybackMode::phraseRow) {
     uint16_t chainIdx = p->song[track->songRow][trackIdx];
     if (chainIdx != EMPTY_VALUE_16) {
-      int8_t transpose = p->chains[chainIdx].rows[track->chainRow].transpose;
+      int8_t transpose = playbackResolveTransposeAt(p, track->songRow, trackIdx, track->chainRow);
       if (p->instruments[track->note.instrument].transposeEnabled) {
         track->note.pitchBase += transpose;
       }
@@ -825,7 +896,7 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
 
   uint16_t chainIdx = p->song[track->songRow][trackIdx];
   if (chainIdx != EMPTY_VALUE_16) {
-    uint16_t phraseIdx = p->chains[chainIdx].rows[track->chainRow].phrase;
+    uint16_t phraseIdx = playbackResolvePhraseAt(p, track->songRow, trackIdx, track->chainRow);
     if (phraseIdx != EMPTY_VALUE_16) {
       if (track->conditionPhrase != phraseIdx) {
         track->conditionPhrase = phraseIdx;
@@ -854,7 +925,7 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
             if (newSongRow >= 0 && newSongRow < PROJECT_MAX_LENGTH) {
               uint16_t targetChainIdx = p->song[newSongRow][trackIdx];
               if (targetChainIdx != EMPTY_VALUE_16) {
-                uint16_t targetPhraseIdx = p->chains[targetChainIdx].rows[0].phrase;
+                uint16_t targetPhraseIdx = playbackResolvePhraseAt(p, newSongRow, trackIdx, 0);
                 if (targetPhraseIdx != EMPTY_VALUE_16) {
                   // Bounce: SNG jump landing past the end of the selected song
                   // region stops the track instead of playing outside it
@@ -1458,7 +1529,8 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
         track->queue.liveAction == LiveQueueAction::stopNormal) {
       int chain = track->songRow == EMPTY_VALUE_16 ? EMPTY_VALUE_16 : p->song[track->songRow][trackIdx];
       int next = track->chainRow + 1;
-      if (chain == EMPTY_VALUE_16 || next >= 16 || p->chains[chain].rows[next].phrase == EMPTY_VALUE_16) {
+      if (chain == EMPTY_VALUE_16 || next >= playbackResolveLengthAt(p, track->songRow, trackIdx) ||
+          playbackResolvePhraseAt(p, track->songRow, trackIdx, next) == EMPTY_VALUE_16) {
         stopped = applyLiveQueue(state, trackIdx);
         resetTrackFXAuxState(state, trackIdx);
         if (!stopped) restartStructuralLFOs(state, trackIdx, 1, 1);
@@ -1469,11 +1541,12 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
     // Play mode logic:
     // Song playback
     if (track->mode == PlaybackMode::song) {
-      // Next chain row
+      // Next chain row (or pattern bar in simplified view)
       int chain = p->song[track->songRow][trackIdx];
       if (chain != EMPTY_VALUE_16) {
         int chainRow = track->chainRow + 1;
-        if (chainRow >= 16 || p->chains[chain].rows[chainRow].phrase == EMPTY_VALUE_16) {
+        if (chainRow >= playbackResolveLengthAt(p, track->songRow, trackIdx) ||
+            playbackResolvePhraseAt(p, track->songRow, trackIdx, chainRow) == EMPTY_VALUE_16) {
           // Check song-level loop before advancing song row
           if (state->loopRange.enabled && state->loopRange.level == 0 && track->loop &&
               track->songRow == state->loopRange.endSongRow) {
@@ -1541,19 +1614,59 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
         resetTrack(state, trackIdx);
       }
     }
-    // Chain playback
+    // Chain playback (in simplified view this is "pattern playback").
+    // PlayheadMode (Loop: BAR/PAT) applies ONLY in simplified view; classic
+    // mode is byte-for-byte unchanged.
     else if (track->mode == PlaybackMode::chain) {
       int chain = p->song[track->songRow][trackIdx];
-      int chainRow = track->chainRow + 1;
-      if (chainRow >= 16 || p->chains[chain].rows[chainRow].phrase == EMPTY_VALUE_16) {
-        chainRow = track->loop ? 0 : -1;
-      }
-      if (chainRow < 0 || p->chains[chain].rows[chainRow].phrase == EMPTY_VALUE_16) {
-        resetTrack(state, trackIdx);
-        stopped = 1;
+      if (p->viewMode == ViewMode::simplified) {
+        // Simplified: walk the pattern's bars. PlayheadMode decides the loop
+        // target once the end of the play range is reached:
+        //   loopActiveBar ("Loop: BAR") — the play range is ONLY the queued
+        //     bar (mimics classic phrase-view playback on the viewed bar);
+        //     it never advances past queue.chainRow.
+        //   followPattern ("Loop: PAT") — the play range is the whole
+        //     pattern; when its end is reached it loops back to bar 0
+        //     (like a chain screen playing from its first phrase).
+        int len = playbackResolveLengthAt(p, track->songRow, trackIdx);
+        if (p->playheadMode == PlayheadMode::loopActiveBar) {
+          int loopBar = track->queue.chainRow;
+          if (loopBar < 0 || loopBar >= len) loopBar = 0;
+          // One bar is queue.bar..queue.bar+15 phrase rows; at overflow the
+          // playhead returns to the queued bar (or stops without loop).
+          if (!track->loop) {
+            resetTrack(state, trackIdx);
+            stopped = 1;
+          } else {
+            track->chainRow = loopBar;
+          }
+        } else {
+          int chainRow = track->chainRow + 1;
+          if (chainRow >= len ||
+              playbackResolvePhraseAt(p, track->songRow, trackIdx, chainRow) == EMPTY_VALUE_16) {
+            chainRow = track->loop ? 0 : -1;
+          }
+          if (chainRow < 0 || chainRow >= 16 ||
+              playbackResolvePhraseAt(p, track->songRow, trackIdx, chainRow) == EMPTY_VALUE_16) {
+            resetTrack(state, trackIdx);
+            stopped = 1;
+          } else {
+            track->chainRow = chainRow;
+          }
+        }
       } else {
-        track->chainRow = chainRow;
-        enteredChain = chainRow == 0;
+        // Classic: unchanged chain logic.
+        int chainRow = track->chainRow + 1;
+        if (chainRow >= 16 || p->chains[chain].rows[chainRow].phrase == EMPTY_VALUE_16) {
+          chainRow = track->loop ? 0 : -1;
+        }
+        if (chainRow < 0 || p->chains[chain].rows[chainRow].phrase == EMPTY_VALUE_16) {
+          resetTrack(state, trackIdx);
+          stopped = 1;
+        } else {
+          track->chainRow = chainRow;
+          enteredChain = chainRow == 0;
+        }
       }
     }
     // Phrase playback
@@ -1568,7 +1681,9 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
     else if (track->mode == PlaybackMode::live) {
       int chain = p->song[track->songRow][trackIdx];
       int chainRow = track->chainRow + 1;
-      if (chainRow >= 16 || p->chains[chain].rows[chainRow].phrase == EMPTY_VALUE_16) {
+      int liveLen = playbackResolveLengthAt(p, track->songRow, trackIdx);
+      if (chainRow >= liveLen ||
+          playbackResolvePhraseAt(p, track->songRow, trackIdx, chainRow) == EMPTY_VALUE_16) {
         track->chainRow = 0;
         enteredChain = 1;
       } else {
@@ -1687,7 +1802,8 @@ void playbackStartSong(PlaybackState* state, int songRow, int chainRow, int loop
   for (int trackIdx = 0; trackIdx < p->tracksCount; trackIdx++) {
     PlaybackTrackState* track = &state->tracks[trackIdx];
 
-    if (p->song[songRow][trackIdx] != EMPTY_VALUE_16 && p->chains[p->song[songRow][trackIdx]].rows[chainRow].phrase != EMPTY_VALUE_16) {
+    if (p->song[songRow][trackIdx] != EMPTY_VALUE_16 &&
+        playbackResolvePhraseAt(p, songRow, trackIdx, chainRow) != EMPTY_VALUE_16) {
       track->queue.mode = PlaybackMode::song;
       track->queue.songRow = songRow;
       track->queue.chainRow = chainRow;
@@ -1710,7 +1826,9 @@ void playbackStartChain(PlaybackState* state, int trackIdx, int songRow, int cha
   Project* p = state->p;
   PlaybackTrackState* track = &state->tracks[trackIdx];
 
-  if (p->chains[p->song[songRow][trackIdx]].rows[chainRow].phrase != EMPTY_VALUE_16) {
+  // In simplified view the song cell is a pattern and chainRow is the bar
+  // index; in classic it is a chain and chainRow the chain row.
+  if (playbackResolvePhraseAt(p, songRow, trackIdx, chainRow) != EMPTY_VALUE_16) {
     track->queue.mode = PlaybackMode::chain;
     track->queue.songRow = songRow;
     track->queue.chainRow = chainRow;
@@ -1771,8 +1889,9 @@ void playbackQueuePhrase(PlaybackState* state, int trackIdx, int songRow, int ch
 
 static int liveChainValid(const PlaybackState* state, int trackIdx, int songRow) {
   if (trackIdx < 0 || trackIdx >= state->p->tracksCount || songRow < 0 || songRow >= PROJECT_MAX_LENGTH) return 0;
-  int chain = state->p->song[songRow][trackIdx];
-  return chain != EMPTY_VALUE_16 && state->p->chains[chain].rows[0].phrase != EMPTY_VALUE_16;
+  if (state->p->song[songRow][trackIdx] == EMPTY_VALUE_16) return 0;
+  // const-cast-free: resolvers only read the project.
+  return playbackResolvePhraseAt(const_cast<Project*>(state->p), songRow, trackIdx, 0) != EMPTY_VALUE_16;
 }
 
 float playbackVolumeGain(const PlaybackState* state, const PlaybackTrackState* track) {

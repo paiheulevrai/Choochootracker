@@ -85,6 +85,8 @@ TRACKER_SRC_SOURCES = src/screens/instrument_monk.cpp src/soundbank_library.cpp 
                       src/screens/screen_settings.cpp \
                       src/screens/screen_settings_submenus.cpp \
                       src/screens/screen_chain.cpp \
+                      src/screens/screen_view_settings.cpp \
+                      src/screens/screen_view_convert.cpp \
                       src/screens/screen_midi.cpp \
                       src/screens/screen_midi_channel_map.cpp \
                       src/screens/screen_midi_cc.cpp \
@@ -94,6 +96,8 @@ TRACKER_SRC_SOURCES = src/screens/instrument_monk.cpp src/soundbank_library.cpp 
                       src/common.cpp \
                       src/export_path.cpp \
                       src/copy_paste.cpp \
+                      src/pattern_utils.cpp \
+                      src/pattern_clone_utils.cpp \
                       src/project_utils.cpp \
                       src/pitch_table_utils.cpp \
                       src/ay_wavetable_io.cpp \
@@ -120,7 +124,7 @@ COMMON_SOURCES = $(CHIPNOMAD_LIB_SOURCES) $(TRACKER_SRC_SOURCES)
 
 # All sources
 ALL_SOURCES = $(TEST_SOURCES) $(COMMON_SOURCES) $(MOCK_SOURCES)
-MEASURE_SOURCES = tests/render_engine_measurements.cpp $(COMMON_SOURCES) $(MOCK_SOURCES)
+MEASURE_SOURCES = tests/render_engine_measurements.cpp $(filter-out src/pattern_clone_utils.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES)
 BENCHMARK_SOURCES = tests/benchmark_song.cpp $(COMMON_SOURCES) $(MOCK_SOURCES)
 ALL_COMPILE_SOURCES = $(sort $(ALL_SOURCES) $(MEASURE_SOURCES) $(BENCHMARK_SOURCES))
 ALL_COMPILE_SOURCES += tests/beads_lifetime.cpp
@@ -131,7 +135,7 @@ object_for = $(BUILD_DIR)/obj/$(subst ../,up/,$(basename $(1))).o
 OBJECTS := $(foreach source,$(ALL_SOURCES),$(call object_for,$(source)))
 MEASURE_OBJECTS := $(foreach source,$(MEASURE_SOURCES),$(call object_for,$(source)))
 BENCHMARK_OBJECTS := $(foreach source,$(BENCHMARK_SOURCES),$(call object_for,$(source)))
-BEADS_LIFETIME_OBJECTS := $(foreach source,tests/beads_lifetime.cpp $(COMMON_SOURCES) $(MOCK_SOURCES),$(call object_for,$(source)))
+BEADS_LIFETIME_OBJECTS := $(foreach source,tests/beads_lifetime.cpp $(filter-out src/pattern_clone_utils.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
 DEPS := $(sort $(OBJECTS:.o=.d) $(MEASURE_OBJECTS:.o=.d) $(BENCHMARK_OBJECTS:.o=.d) $(BEADS_LIFETIME_OBJECTS:.o=.d))
 
 define compile_source
@@ -255,21 +259,21 @@ help:
 .PHONY: all build clean help debug measurements test-tsan test-asan
 
 # Offline factory conversion uses the same canonical writer/readers as the app.
-FACTORY_OBJECTS = $(foreach source,tests/chip_factory.cpp $(filter-out src/copy_paste.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
+FACTORY_OBJECTS = $(foreach source,tests/chip_factory.cpp $(filter-out src/pattern_clone_utils.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
 $(eval $(call compile_source,tests/chip_factory.cpp))
 $(BUILD_DIR)/chip_factory: $(FACTORY_OBJECTS)
 	@$(CXX) $(FACTORY_OBJECTS) $(LDFLAGS) -o $@
 .PHONY: chip-factory
 chip-factory: $(BUILD_DIR)/chip_factory
 
-CHIP_BENCH_OBJECTS = $(foreach source,tests/benchmark_native_chips.cpp $(filter-out src/copy_paste.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
+CHIP_BENCH_OBJECTS = $(foreach source,tests/benchmark_native_chips.cpp $(filter-out src/pattern_clone_utils.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
 $(eval $(call compile_source,tests/benchmark_native_chips.cpp))
 $(BUILD_DIR)/benchmark_native_chips: $(CHIP_BENCH_OBJECTS)
 	@$(CXX) $(CHIP_BENCH_OBJECTS) $(LDFLAGS) -o $@
 .PHONY: benchmark-native-chips
 benchmark-native-chips: $(BUILD_DIR)/benchmark_native_chips
 
-CHIP_AUDITION_OBJECTS = $(foreach source,tests/chip_auditions.cpp $(filter-out src/copy_paste.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
+CHIP_AUDITION_OBJECTS = $(foreach source,tests/chip_auditions.cpp $(filter-out src/pattern_clone_utils.cpp,$(COMMON_SOURCES)) $(MOCK_SOURCES),$(call object_for,$(source)))
 $(eval $(call compile_source,tests/chip_auditions.cpp))
 $(BUILD_DIR)/chip_auditions: $(CHIP_AUDITION_OBJECTS)
 	@$(CXX) $(CHIP_AUDITION_OBJECTS) $(LDFLAGS) -o $@

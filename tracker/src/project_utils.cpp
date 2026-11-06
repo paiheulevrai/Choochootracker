@@ -1,6 +1,17 @@
 #include "project_utils.h"
 #include "pitch_table_utils.h"
+#include "playback_internal.h"
+#include "common.h"
 #include <string.h>
+
+void projectUtilsSeedSimplifiedPatterns(Project* project) {
+  // A new simplified-mode project starts with EMPTY song rows in both
+  // views — the user places patterns (allocated lazily by the phrase
+  // screen) wherever they want. This hook stays as the designated place
+  // for any future post-NEW setup of simplified projects; today it only
+  // validates the mode.
+  (void)project;
+}
 
 void projectInitAY(Project* project) {
   projectInit(project);
@@ -469,9 +480,9 @@ uint8_t lookupInstrument(Project* p, int songRow, int chainRow, int phraseRow, i
   int pr = phraseRow;
 
   do {
-    // Get current chain
-    uint16_t chainIdx = p->song[sr][track];
-    if (chainIdx == EMPTY_VALUE_16) {
+    // Get current cell (chain in classic, pattern in simplified view).
+    uint16_t cellIdx = p->song[sr][track];
+    if (cellIdx == EMPTY_VALUE_16) {
       // Move to previous song row
       if (--sr < 0) return EMPTY_VALUE_8;
       cr = 15;
@@ -479,8 +490,10 @@ uint8_t lookupInstrument(Project* p, int songRow, int chainRow, int phraseRow, i
       continue;
     }
 
-    // Get current phrase
-    uint16_t phraseIdx = p->chains[chainIdx].rows[cr].phrase;
+    // Get current phrase via the viewMode-aware resolver. In classic this
+    // reads p->chains[cellIdx].rows[cr].phrase; in simplified it reads
+    // p->patterns[cellIdx].bars[cr].phrase.
+    uint16_t phraseIdx = playbackResolvePhraseAt(p, sr, track, cr);
     if (phraseIdx == EMPTY_VALUE_16) {
       // Move to previous chain row
       if (--cr < 0) {

@@ -3,7 +3,9 @@
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "chipnomad_lib.h"
+#include "playback_internal.h"
 #include "project_utils.h"
+#include "pattern_utils.h"
 #include "copy_paste.h"
 #include "help.h"
 #include "synth/sample_voice.h"
@@ -12,6 +14,29 @@
 static int phraseIdx = 0;
 static PhraseRow *phraseRows = NULL;
 static int isFxEdit = 0;
+
+// Empty-phrase safety: when there's no phrase at the current cursor (the
+// classic-mode chain row is EMPTY_VALUE_16, or the simplified-mode pattern
+// bar has no phrase assigned), `phraseRows` points at this scratch buffer
+// instead of a wild address. Reads return empty values, writes are silently
+// discarded (the scratch is reset on every setup()).
+static PhraseRow scratchPhraseRows[16];
+static int hasPhrase = 0;  // 1 when phraseRows points at a real phrase
+
+// Pattern-mode state (simplified view). When in simplified mode, row 0 of
+// this screen shows the pattern header (Pattern / Length / Loop) and edits
+// the active pattern. `patternHeaderField` tracks which header field the
+// cursor is on (or 0 if it's on the phrase grid):
+//   0 = phrase grid (normal phrase row editing)
+//   1 = Length value
+//   2 = Loop (BAR / PAT — the project's playheadMode)
+// The header is reachable from any bar via SHIFT+UP (first press → header,
+// second press → Groove screen). LEFT/RIGHT cycle the fields; UP/DOWN exit
+// back to the phrase grid.
+static int patternHeaderField = 0;
+// Pattern this screen edits in simplified mode (mirrors
+// song[*pSongRow][*pSongTrack] but cached so we can detect when it changes).
+static int currentPatternIdx = -1;
 
 // Mutate reference state (defined below; reset from init/setup and
 // re-captured from draw() when selection mode closes).
@@ -108,10 +133,88 @@ static void init(void) {
 }
 
 static void setup(int input) {
-  phraseIdx = chipnomadState->project.chains[chipnomadState->project.song[*pSongRow][*pSongTrack]].rows[*pChainRow].phrase;
-  phraseRows = chipnomadState->project.phrases[phraseIdx].rows;
+  Project* p = &chipnomadState->project;
+  if (p->viewMode == ViewMode::simplified) {
+    // Resolve the phrase from the current pattern bar.
+    currentPatternIdx = p->song[*pSongRow][*pSongTrack];
+    if (currentPatternIdx != EMPTY_VALUE_16 && currentPatternIdx < PROJECT_MAX_PATTERNS) {
+      Pattern* pat = &p->patterns[currentPatternIdx];
+      int bar = *pChainRow;
+      int len = pat->length;
+      if (len < 1) len = 1;
+      if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+      if (bar < 0) bar = 0;
+      if (bar >= len) bar = len - 1;
+      *pChainRow = bar;  // clamp
+      phraseIdx = pat->bars[bar].phrase;
+      // Lazy allocation: new projects start with empty song rows, so a bar
+      // may have no phrase yet. Allocate one on the fly so notes entered
+      // here stick (and survive scrolling away and back).
+      if (phraseIdx == EMPTY_VALUE_16) {
+        int fresh = patternFindClosestEmptyPhrase(p, currentPatternIdx);
+        if (fresh != EMPTY_VALUE_16) {
+          phraseClear(&p->phrases[fresh]);
+          pat->bars[bar].phrase = (uint16_t)fresh;
+          phraseIdx = fresh;
+          projectModified = 1;
+          chipnomadQueueProjectRefresh(chipnomadState);
+        }
+      }
+      // Clone-on-write: a bar sharing its phrase with another bar (multiplied
+      // pattern) or any chain row gets its own copy BEFORE the user edits it,
+      // so typing notes into one bar never mutates its siblings or the
+      // classic view's phrases.
+      if (phraseIdx != EMPTY_VALUE_16) {
+        int exclusive = patternEnsureBarExclusive(p, NULL, currentPatternIdx,
+          bar);
+        if (exclusive != EMPTY_VALUE_16 && exclusive != phraseIdx) {
+          phraseIdx = exclusive;
+          projectModified = 1;
+          chipnomadQueueProjectRefresh(chipnomadState);
+        }
+      }
+    } else {
+      phraseIdx = EMPTY_VALUE_16;
+    }
+  } else {
+    currentPatternIdx = -1;
+    // Classic mode: song cell is a chain index. Guard against out-of-range
+    // chainRow (the caller should clamp, but be defensive).
+    int chainIdx = p->song[*pSongRow][*pSongTrack];
+    if (chainIdx != EMPTY_VALUE_16 && chainIdx < PROJECT_MAX_CHAINS &&
+        *pChainRow >= 0 && *pChainRow < 16) {
+      phraseIdx = p->chains[chainIdx].rows[*pChainRow].phrase;
+    } else {
+      phraseIdx = EMPTY_VALUE_16;
+    }
+  }
+
+  // Always reset the scratch so any stale data from a previous "no phrase"
+  // session is cleared. If we end up with no real phrase, reads return these
+  // empty values and writes go nowhere.
+  for (int i = 0; i < 16; i++) {
+    scratchPhraseRows[i].note = EMPTY_VALUE_8;
+    scratchPhraseRows[i].instrument = EMPTY_VALUE_8;
+    scratchPhraseRows[i].volume = EMPTY_VALUE_16;
+    for (int f = 0; f < 3; f++) {
+      scratchPhraseRows[i].fx[f] = {FX_ID_EMPTY, 0};
+    }
+  }
+
+  if (phraseIdx != EMPTY_VALUE_16 && phraseIdx < PROJECT_MAX_PHRASES) {
+    phraseRows = p->phrases[phraseIdx].rows;
+    hasPhrase = 1;
+  } else {
+    // No phrase at this cursor (classic chain row empty, or simplified
+    // pattern bar has no phrase). Point at the scratch buffer so all
+    // dereferences are safe; writes go to scratch and are discarded on
+    // the next setup().
+    phraseRows = scratchPhraseRows;
+    hasPhrase = 0;
+  }
   screen.selectMode = 0;
   isFxEdit = 0;
+  patternHeaderField = 0;
   fillCycleIndex = 0;
   mutateCycleIndex = 0;
   mutateReferenceValid = 0;
@@ -131,7 +234,27 @@ static int getColumnCount(int row) {
 
 static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
-  gfxPrintf(0, 0, "PHRASE %03X%c", phraseIdx, isPhraseUsedElsewhere(&chipnomadState->project, phraseIdx, chipnomadState->project.song[*pSongRow][*pSongTrack], *pChainRow) ? '*' : ' ');
+  Project* p = &chipnomadState->project;
+  if (p->viewMode == ViewMode::simplified && currentPatternIdx >= 0 &&
+      currentPatternIdx < PROJECT_MAX_PATTERNS) {
+    // Pattern header: "Pattern 05*       Length 04   Loop BAR"
+    // Codebase style: lowercase labels, no brackets, value right after the
+    // label. A wide gap separates the Pattern group from the Length/Loop
+    // group so the header doesn't look cramped. Positions:
+    //   Pattern: x=0..10 ("Pattern %02X" + reuse mark at x=10)
+    //   Length:  label x=20, value x=27..28
+    //   Loop:    label x=31, value x=36..38 ("BAR" / "PAT")
+    Pattern* pat = &p->patterns[currentPatternIdx];
+    int len = pat->length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+    gfxPrintf(0, 0, "Pattern %02X", currentPatternIdx);
+    gfxPrintf(20, 0, "Length %02d", len);
+    gfxPrintf(31, 0, "Loop %s",
+      p->playheadMode == PlayheadMode::loopActiveBar ? "BAR" : "PAT");
+  } else {
+    gfxPrintf(0, 0, "PHRASE %03X%c", phraseIdx, isPhraseUsedElsewhere(&chipnomadState->project, phraseIdx, chipnomadState->project.song[*pSongRow][*pSongTrack], *pChainRow) ? '*' : ' ');
+  }
 }
 
 static void fullRedraw(void) {
@@ -169,7 +292,11 @@ static void drawField(int col, int row, CellState state) {
 static void drawRowHeader(int row, CellState state) {
   if (row < screen.topRow || row >= screen.topRow + screenVisibleRows()) return;
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : ((row & 3) == 0 ? cs.textValue : cs.textInfo));
+  // Classic codebase striping in BOTH views: rows 0/4/8/C use the titles
+  // color, the rest the info color (the pattern-view bar shading was
+  // removed — the classic look applies everywhere).
+  gfxSetFgColor((state == CellState::focus) ? cs.textDefault
+                : ((row & 3) == 0 ? cs.textTitles : cs.textInfo));
   gfxPrintf(1, 3 + row - screen.topRow, "%X", row);
 }
 
@@ -253,6 +380,22 @@ static void selectionUpdateHint(void) {
 static void draw(void) {
   if (isFxEdit) return;
 
+  // ── Pattern header cursor (simplified view only) ─────────────────────────
+  // When the cursor is on the pattern header (patternHeaderField != 0), draw
+  // an underline cursor at the active header field's value. Header layout:
+  //   "Pattern 05*       Length 04   Loop BAR"
+  //    0      5  7-8      20     27-28  31     36-38
+  //   patternHeaderField == 1 (Length value): cursor at x=27, width=2
+  //   patternHeaderField == 2 (Loop value):   cursor at x=36, width=3
+  if (patternHeaderField != 0 &&
+      chipnomadState->project.viewMode == ViewMode::simplified &&
+      currentPatternIdx >= 0 && currentPatternIdx < PROJECT_MAX_PATTERNS) {
+    int x = 27, width = 2;
+    if (patternHeaderField == 2) { x = 36; width = 3; }
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxCursor(x, 0, width);
+  }
+
   // Rotating combo hints while a selection is active: only when no other
   // message (action feedback, error) is showing. The selectMode 1->0
   // transition also re-captures the mutate reference, so the next
@@ -276,15 +419,15 @@ static void draw(void) {
   gfxClearRect(2, 3, 1, screenVisibleRows());
   const PlaybackTrackState* track = &chipnomadGetPlaybackStatus(chipnomadState)->tracks[*pSongTrack];
   if (track->mode != PlaybackMode::stopped && track->mode != PlaybackMode::phraseRow && track->songRow != EMPTY_VALUE_16) {
-    // Chain row
+    // Chain row (or pattern bar in simplified view).
     if (*pSongRow == track->songRow && track->chainRow >= screen.topRow &&
         track->chainRow < screen.topRow + screenVisibleRows()) {
       gfxSetFgColor(appSettings.colorScheme.playMarkers);
       gfxPrint(0, 3 + track->chainRow - screen.topRow, "<");
     }
 
-    // Phrase row
-    int playingPhrase = chipnomadState->project.chains[chipnomadState->project.song[track->songRow][*pSongTrack]].rows[track->chainRow].phrase;
+    // Phrase row — viewMode-aware lookup.
+    int playingPhrase = playbackResolvePhraseAt(&chipnomadState->project, track->songRow, *pSongTrack, track->chainRow);
     if (playingPhrase == phraseIdx) {
       int row = track->phraseRow;
       if (row >= screen.topRow && row < screen.topRow + screenVisibleRows()) {
@@ -1033,6 +1176,97 @@ static int editCell(int col, int row, CellEditAction action) {
 static int onEdit(int col, int row, CellEditAction action) {
   int handled = 0;
 
+  // ── Pattern header field editing (simplified view only) ──────────────────
+  // Length ops fire ONLY when the cursor is on the Length box
+  // (patternHeaderField == 1) — never from the phrase grid.
+  if (patternHeaderField != 0 &&
+      chipnomadState->project.viewMode == ViewMode::simplified &&
+      currentPatternIdx >= 0 && currentPatternIdx < PROJECT_MAX_PATTERNS) {
+    Project* p = &chipnomadState->project;
+    Pattern* pat = &p->patterns[currentPatternIdx];
+    int len = pat->length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+
+    if (patternHeaderField == 1) {
+      // Length: 1..PROJECT_MAX_PATTERN_LENGTH. Length ops live here and
+      // nowhere else: tap = +1 bar (allocating a phrase via
+      // patternAddEmptyBar), EDIT+Down-style decrease via edit8noLast shrinks
+      // (patternRemoveLastBar), clear resets to the app default length.
+      // ×2/÷2 shortcuts: increaseBig/decreaseBig.
+      if (action == CellEditAction::clear) {
+        uint8_t target = appSettings.defaultPatternLength ? appSettings.defaultPatternLength : 1;
+        // Step towards the target length bar by bar so phrases are
+        // allocated/removed consistently.
+        while (pat->length > target) {
+          if (!patternRemoveLastBar(p, currentPatternIdx)) break;
+        }
+        while (pat->length < target) {
+          if (!patternAddEmptyBar(p, currentPatternIdx)) break;
+        }
+        handled = 1;
+      } else if (action == CellEditAction::increaseBig) {
+        // ×2: duplicate the existing bars (decision #4).
+        handled = patternMultiplyLengthByTwo(p, currentPatternIdx);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't double");
+      } else if (action == CellEditAction::decreaseBig) {
+        handled = patternHalveLengthByTwo(p, currentPatternIdx);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't halve");
+      } else if (action == CellEditAction::increase) {
+        handled = patternAddEmptyBar(p, currentPatternIdx);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at max length");
+      } else if (action == CellEditAction::decrease) {
+        handled = patternRemoveLastBar(p, currentPatternIdx);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at min length");
+      }
+
+      if (handled) {
+        // Clamp the viewed bar to the new length; keep the same position when
+        // possible (adding bars must not move the viewed bar).
+        len = pat->length;
+        if (len < 1) len = 1;
+        if (*pChainRow >= len) *pChainRow = len - 1;
+        if (*pChainRow < 0) *pChainRow = 0;
+        projectModified = 1;
+        chipnomadQueueProjectRefresh(chipnomadState);
+        // Refresh the phrase pointer for the current bar WITHOUT resetting
+        // the header cursor — the pointer must stay on the Length box while
+        // the user keeps editing (setup() clears patternHeaderField).
+        phraseIdx = pat->bars[*pChainRow].phrase;
+        if (phraseIdx != EMPTY_VALUE_16 && phraseIdx < PROJECT_MAX_PHRASES) {
+          phraseRows = p->phrases[phraseIdx].rows;
+          hasPhrase = 1;
+        } else {
+          phraseRows = scratchPhraseRows;
+          hasPhrase = 0;
+        }
+        fullRedraw();
+      }
+      return handled;
+    } else if (patternHeaderField == 2) {
+      // Loop: BAR (loopActiveBar) / PAT (followPattern). Tap/increase flips;
+      // clear restores the app-neutral default (followPattern). Sandbox-gated:
+      // the engine ignores this in classic view.
+      if (action == CellEditAction::tap || action == CellEditAction::doubleTap ||
+          action == CellEditAction::increase || action == CellEditAction::decrease) {
+        p->playheadMode = (p->playheadMode == PlayheadMode::loopActiveBar)
+          ? PlayheadMode::followPattern : PlayheadMode::loopActiveBar;
+        handled = 1;
+      } else if (action == CellEditAction::clear) {
+        p->playheadMode = PlayheadMode::followPattern;
+        handled = 1;
+      }
+      if (handled) {
+        projectModified = 1;
+        chipnomadQueueProjectRefresh(chipnomadState);
+        fullRedraw();
+        screenMessage(MESSAGE_TIME, "Loop %s",
+          p->playheadMode == PlayheadMode::loopActiveBar ? "BAR" : "PAT");
+      }
+      return handled;
+    }
+  }
+
   int startCol, startRow, endCol, endRow;
   getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
 
@@ -1125,10 +1359,25 @@ static int inputScreenNavigation(int keys, int tapCount) {
     }
     return 1;
   } else if (keys == (keyLeft | keyShift)) {
-    // To Chain screen
-    screenSetup(&screenChain, -1);
+    // To Chain screen (classic) or back to Song screen (simplified — there
+    // is no Chain screen in the simplified view).
+    if (viewModeIsSimplified(&chipnomadState->project)) {
+      screenSetup(&screenSong, 0);
+    } else {
+      screenSetup(&screenChain, -1);
+    }
     return 1;
   } else if (keys == (keyUp | keyShift)) {
+    // In simplified view: the first SHIFT+UP from the phrase grid moves the
+    // cursor to the pattern header (row 0: Pattern / Length / Loop), from any
+    // bar. Pressing SHIFT+UP again from the header goes to the Groove screen
+    // (existing behaviour). In classic view: SHIFT+UP always goes to Groove.
+    if (viewModeIsSimplified(&chipnomadState->project) && patternHeaderField == 0) {
+      patternHeaderField = 1;  // move to the Length field
+      fullRedraw();
+      screenMessage(MESSAGE_TIME, "SHIFT+UP again for Groove");
+      return 1;
+    }
     // To Groove screen
     int groove = 0;
     if (screen.cursorCol > 2) {
@@ -1144,10 +1393,11 @@ static int inputScreenNavigation(int keys, int tapCount) {
   } else if (keys == (keyLeft | keyOpt)) {
     // Previous track
     if (*pSongTrack == 0) return 1;
-    uint16_t chain = chipnomadState->project.song[*pSongRow][*pSongTrack - 1];
-    if (chain != EMPTY_VALUE_16 && !chainIsEmpty(&chipnomadState->project, chain)) {
+    uint16_t cell = chipnomadState->project.song[*pSongRow][*pSongTrack - 1];
+    if (cell != EMPTY_VALUE_16 && !viewModeIsEmpty(&chipnomadState->project, cell)) {
       *pSongTrack -= 1;
-      while (chipnomadState->project.chains[chain].rows[*pChainRow].phrase == EMPTY_VALUE_16) {
+      // Walk back to the last non-empty bar/row in this track's cell.
+      while (playbackResolvePhraseAt(&chipnomadState->project, *pSongRow, *pSongTrack, *pChainRow) == EMPTY_VALUE_16) {
         *pChainRow -= 1;
         if (*pChainRow == 0) break;
       }
@@ -1158,10 +1408,10 @@ static int inputScreenNavigation(int keys, int tapCount) {
   } else if (keys == (keyRight | keyOpt)) {
     // Next track
     if (*pSongTrack == chipnomadState->project.tracksCount - 1) return 1;
-    uint16_t chain = chipnomadState->project.song[*pSongRow][*pSongTrack + 1];
-    if (chain != EMPTY_VALUE_16 && !chainIsEmpty(&chipnomadState->project, chain)) {
+    uint16_t cell = chipnomadState->project.song[*pSongRow][*pSongTrack + 1];
+    if (cell != EMPTY_VALUE_16 && !viewModeIsEmpty(&chipnomadState->project, cell)) {
       *pSongTrack += 1;
-      while (chipnomadState->project.chains[chain].rows[*pChainRow].phrase == EMPTY_VALUE_16) {
+      while (playbackResolvePhraseAt(&chipnomadState->project, *pSongRow, *pSongTrack, *pChainRow) == EMPTY_VALUE_16) {
         *pChainRow -= 1;
         if (*pChainRow == 0) break;
       }
@@ -1170,9 +1420,9 @@ static int inputScreenNavigation(int keys, int tapCount) {
     }
     return 1;
   } else if ((keys == (keyUp | keyOpt)) || (keys == keyUp && screen.cursorRow == 0)) {
-    // Previous phrase in the chain
+    // Previous phrase (classic) or previous bar (simplified).
     if (*pChainRow == 0) return 1;
-    if (chipnomadState->project.chains[chipnomadState->project.song[*pSongRow][*pSongTrack]].rows[*pChainRow - 1].phrase != EMPTY_VALUE_16) {
+    if (playbackResolvePhraseAt(&chipnomadState->project, *pSongRow, *pSongTrack, *pChainRow - 1) != EMPTY_VALUE_16) {
       *pChainRow -= 1;
       if (keys == keyUp) screen.cursorRow = 15;
       setup(-1);
@@ -1181,9 +1431,10 @@ static int inputScreenNavigation(int keys, int tapCount) {
     }
     return 1;
   } else if (keys == (keyDown | keyOpt) || (keys == keyDown && screen.cursorRow == 15)) {
-    // Next phrase in the chain
-    if (*pChainRow == 15) return 1;
-    if (chipnomadState->project.chains[chipnomadState->project.song[*pSongRow][*pSongTrack]].rows[*pChainRow + 1].phrase != EMPTY_VALUE_16) {
+    // Next phrase (classic) or next bar (simplified).
+    int maxRow = playbackResolveLengthAt(&chipnomadState->project, *pSongRow, *pSongTrack) - 1;
+    if (*pChainRow >= maxRow) return 1;
+    if (playbackResolvePhraseAt(&chipnomadState->project, *pSongRow, *pSongTrack, *pChainRow + 1) != EMPTY_VALUE_16) {
       *pChainRow += 1;
       if (keys == keyDown) screen.cursorRow = 0;
       setup(-1);
@@ -1196,6 +1447,41 @@ static int inputScreenNavigation(int keys, int tapCount) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  // ── Pattern header navigation (simplified view only) ──────────────────────
+  // When the cursor is on the pattern header (patternHeaderField != 0),
+  // LEFT/RIGHT move between the Length / Loop fields and UP/DOWN exit the
+  // header back to the phrase grid. SHIFT+UP from the header goes to the
+  // Groove screen (handled by inputScreenNavigation above).
+  if (isKeyDown && !isFxEdit &&
+      chipnomadState->project.viewMode == ViewMode::simplified &&
+      patternHeaderField != 0 &&
+      currentPatternIdx >= 0 && currentPatternIdx < PROJECT_MAX_PATTERNS) {
+    if (keys == keyLeft) {
+      // Move left through the header fields: 2 (Loop) → 1 (Length) → 2 (wrap).
+      patternHeaderField--;
+      if (patternHeaderField < 1) patternHeaderField = 2;
+      fullRedraw();
+      return 1;
+    } else if (keys == keyRight) {
+      // Move right through the header fields: 1 → 2 → 1 (wrap).
+      patternHeaderField++;
+      if (patternHeaderField > 2) patternHeaderField = 1;
+      fullRedraw();
+      return 1;
+    } else if (keys == keyUp || keys == keyDown) {
+      // Exit the header back to the phrase grid. UP keeps the cursor on
+      // the current phrase row; DOWN advances one row down (matching what
+      // a user expects when scrolling "past" the header). Either way, the
+      // header field loses focus.
+      patternHeaderField = 0;
+      if (keys == keyDown && screen.cursorRow < 15) screen.cursorRow++;
+      fullRedraw();
+      return 1;
+    }
+    // Other keys fall through to the EDIT+arrow / fill / navigation
+    // handlers below.
+  }
+
   if (isFxEdit) {
     int fxIdx = (screen.cursorCol - 3) / 2;
     int result = fxEditInput(keys, tapCount, &phraseRows[screen.cursorRow].fx[fxIdx], &lastFX);
