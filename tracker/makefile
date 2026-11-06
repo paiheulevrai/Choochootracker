@@ -66,6 +66,11 @@ NextUI NextUI-deploy:
 MiyooPorts MiyooPorts-deploy:
 	$(MAKE) -f Makefile.miyooports $@
 
+# PlayStation Vita (needs VitaSDK, see Makefile.vita)
+.PHONY: Vita Vita-deploy
+Vita Vita-deploy:
+	$(MAKE) -f Makefile.vita $@
+
 # RG35xx
 .PHONY: RG35xx RG35xx-deploy
 RG35xx RG35xx-deploy:

@@ -253,7 +253,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 #endif
 
   // Initialize bundled assets
-#ifndef MACOS_BUILD
+#if !defined(MACOS_BUILD) && !defined(VITA_BUILD)
   assetsInit();
 #endif
 

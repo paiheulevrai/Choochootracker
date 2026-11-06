@@ -51,7 +51,7 @@ int assetsInit(void) {
     }
     return 0;
 }
-#elif !defined(ANDROID_BUILD)
+#elif !defined(ANDROID_BUILD) && !defined(VITA_BUILD)
 int assetsInit(void) {
     return 0;
 }

@@ -1,3 +1,4 @@
+#include <memory>
 #include "soundbank_library.h"
 #include <string.h>
 #include <stdio.h>
@@ -769,7 +770,9 @@ int appHasProject(void) { return projectActive; }
 int appContinueProject(void) {
   StartupTiming timing("continue including engine activation");
   if (projectActive) return 0;
-  Project replacement;
+  // Project is ~525 KB: keep it off the stack (the Vita's main thread stack is far smaller).
+  std::unique_ptr<Project> replacementHolder(new Project);
+  Project& replacement = *replacementHolder;
   projectInit(&replacement);
   // Restore only after CONTINUE. Never autosave a placeholder from the title.
   int projectLoaded = 0;

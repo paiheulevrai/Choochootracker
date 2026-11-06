@@ -1,3 +1,4 @@
+#include <memory>
 #include "field_style.h"
 #include "screen_project.h"
 #include "common.h"
@@ -92,7 +93,9 @@ int projectLoadFromPath(const char* path) {
 #ifdef PROJECT_IMPORT_FUR
   int furImported = 0;
 #endif
-  Project replacement;
+  // Project is ~525 KB: keep it off the stack (the Vita's main thread stack is far smaller).
+  std::unique_ptr<Project> replacementHolder(new Project);
+  Project& replacement = *replacementHolder;
   projectInitAY(&replacement);
 
   if (ext != NULL) {
@@ -238,7 +241,9 @@ static void doLoadProject(void) {
 }
 
 static void doNewProject(void) {
-  Project replacement;
+  // Project is ~525 KB: keep it off the stack (the Vita's main thread stack is far smaller).
+  std::unique_ptr<Project> replacementHolder(new Project);
+  Project& replacement = *replacementHolder;
   projectInitAY(&replacement);
   instrumentEQInitPresets(&replacement);
   audioManager.replaceProject(&replacement);
