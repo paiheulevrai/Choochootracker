@@ -132,15 +132,20 @@ void Bass808Voice::configure(const InstrumentBass808* instrument, float pitchCen
   // De-click ramp length scales with pitch: 2 ms is only ~10% of a 50 Hz
   // waveform, which still clicks. Ramp for at least 3/4 of one period of
   // the current note (12 ms cap) so the crossfade genuinely bridges the
-  // waveform change. Recomputed every block — pitch changes re-length it.
-  const float freqHz = centsToHz(currentCents_);
-  if (freqHz > 1.0f) {
-    const float periodSeconds = 1.0f / freqHz;
-    float rampSeconds = periodSeconds * 0.75f;
-    if (rampSeconds < 0.002f) rampSeconds = 0.002f;
-    if (rampSeconds > 0.012f) rampSeconds = 0.012f;
-    rampFrames_ = (uint32_t)(sampleRate_ * rampSeconds);
-    if (rampFrames_ < 2) rampFrames_ = 2;
+  // waveform change. ONLY re-length while no ramp is in flight: the blend
+  // math uses rampFrames_ as its denominator, so shrinking it mid-ramp
+  // jumps the blend factor — an audible gain step that became obvious at
+  // higher pitches (short ramps, frequent configure() updates).
+  if (rampRemaining_ == 0) {
+    const float freqHz = centsToHz(currentCents_);
+    if (freqHz > 1.0f) {
+      const float periodSeconds = 1.0f / freqHz;
+      float rampSeconds = periodSeconds * 0.75f;
+      if (rampSeconds < 0.002f) rampSeconds = 0.002f;
+      if (rampSeconds > 0.012f) rampSeconds = 0.012f;
+      rampFrames_ = (uint32_t)(sampleRate_ * rampSeconds);
+      if (rampFrames_ < 2) rampFrames_ = 2;
+    }
   }
 }
 
