@@ -278,6 +278,20 @@ uploading it:
 
 ### PortMaster Library submission and weekly updates
 
+Both the release ZIP and Library submission carry the bundled assets in
+`choochootracker/data.tar.gz`. The launcher extracts to a temporary directory
+on the same filesystem, then moves only missing files into the port directory.
+Existing projects, samples, presets and other user edits are never replaced.
+The archive is removed only after success; errors stop launch and retain it for
+a retry. Legacy installations with extracted factory catalogs still launch.
+NextUI packaging is unchanged and continues to ship extracted assets.
+
+Run the focused packaging/launcher checks from the repository root:
+
+```sh
+python3 -m unittest discover -s tracker/tests -p 'test_portmaster_*.py'
+```
+
 The `PortMaster` GitHub Actions workflow produces the normal installable ZIP
 and a `choochootracker-portmaster-library` artifact. The latter contains
 `ports/choochootracker/`, `PR_BODY.md` and `provenance.json`. Metadata is moved

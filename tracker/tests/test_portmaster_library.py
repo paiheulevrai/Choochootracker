@@ -1,9 +1,11 @@
 import hashlib
+import io
 import json
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import tarfile
 import unittest
 import zipfile
 
@@ -42,14 +44,24 @@ class LibraryTest(unittest.TestCase):
             ),
             "choochootracker/cover.png": b"cover",
             "choochootracker/licenses/engine/LICENSE": b"engine license",
-            "choochootracker/fonts/Pixel/licenses/font.txt": b"font license",
-            "choochootracker/instruments/FACTORY/catalog.tsv": b"catalog",
-            "choochootracker/instruments/FACTORY/builtins.tsv": b"builtins",
-            "choochootracker/instruments/FACTORY/banks.zip": b"bank",
-            "choochootracker/projects/DNB.cct": b"song",
+        }
+        self.assets = {
+            "fonts/Pixel/licenses/font.txt": b"font license",
+            "instruments/FACTORY/catalog.tsv": b"catalog",
+            "instruments/FACTORY/builtins.tsv": b"builtins",
+            "instruments/FACTORY/banks.zip": b"bank",
+            "projects/DNB.cct": b"song",
         }
 
-    def write_package(self):
+    def write_package(self, data_override=None):
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode="w:gz") as archive:
+            for name, contents in self.assets.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(contents)
+                archive.addfile(info, io.BytesIO(contents))
+        self.files["choochootracker/data.tar.gz"] = (
+            data.getvalue() if data_override is None else data_override)
         with zipfile.ZipFile(self.archive, "w") as archive:
             for name, data in self.files.items():
                 info = zipfile.ZipInfo(name)
@@ -76,8 +88,10 @@ class LibraryTest(unittest.TestCase):
             *library.METADATA, "ChooChooTracker.sh", "choochootracker",
         })
         runtime = port / "choochootracker"
-        self.assertEqual((runtime / "projects" / "DNB.cct").read_bytes(), b"song")
-        self.assertEqual((runtime / "instruments/FACTORY/banks.zip").read_bytes(), b"bank")
+        self.assertEqual((runtime / "data.tar.gz").read_bytes(),
+                         self.files["choochootracker/data.tar.gz"])
+        self.assertFalse((runtime / "projects").exists())
+        self.assertFalse((runtime / "instruments").exists())
         licenses = list((runtime / "licenses").iterdir())
         self.assertEqual({p.read_bytes() for p in licenses},
                          {b"engine license", b"font license"})
@@ -127,6 +141,32 @@ class LibraryTest(unittest.TestCase):
         self.prepare()
         with self.assertRaisesRegex(ValueError, "Output must be empty"):
             self.prepare()
+
+    def test_rejects_unsafe_or_missing_archived_data(self):
+        for name in ("../escape", "/absolute", "libs/libSDL2.so"):
+            with self.subTest(name=name):
+                self.assets[name] = b"bad"
+                with self.assertRaises(ValueError):
+                    self.prepare()
+                self.assertFalse(self.output.exists())
+                del self.assets[name]
+        del self.assets["instruments/FACTORY/catalog.tsv"]
+        with self.assertRaisesRegex(ValueError, "Missing data archive file"):
+            self.prepare()
+        self.assertFalse(self.output.exists())
+
+    def test_corrupt_data_archive_reports_explicit_cli_error(self):
+        self.write_package(data_override=b"broken archive")
+        result = subprocess.run([
+            sys.executable, library.__file__, "prepare",
+            "--archive", str(self.archive), "--checksums", str(self.manifest),
+            "--output", str(self.output), "--tag", "test",
+            "--source-sha", "test", "--run-url", "test",
+        ], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("PortMaster preparation failed:", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse(self.output.exists())
 
     def test_updates_only_exact_checksum_entry(self):
         self.write_package()
