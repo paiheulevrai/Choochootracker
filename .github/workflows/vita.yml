@@ -58,3 +58,8 @@ jobs:
           name: ChooChooTracker-Vita
           path: releases/ChooChooTracker-*-Vita.vpk
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChooChooTracker-Vita-elf
+          path: tracker/build/vita/choochootracker.elf
+          if-no-files-found: warn
