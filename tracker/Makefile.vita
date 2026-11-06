@@ -58,10 +58,14 @@ $(foreach source,$(SOURCES),$(eval $(call compile_source,$(source))))
 .PHONY: Vita
 Vita: $(TARGET)
 
-# -Wl,-q keeps the relocations vita-elf-create needs.
+# -Wl,-q keeps the relocations vita-elf-create needs. The --wrap options route
+# path-taking libc calls through platforms/vita/vita_fs_wrap.cpp.
+VITA_WRAPS = fopen fclose open opendir stat lstat mkdir rename remove unlink rmdir access tmpfile
+VITA_WRAP_FLAGS = $(foreach name,$(VITA_WRAPS),-Wl,--wrap=$(name))
+
 $(TARGET): $(OBJECTS)
 	mkdir -p $(BUILD)
-	$(CXX) $(VITA_CFLAGS) $(OBJECTS) $(SDL_LIBS) -lScePower_stub -lpthread -lm -Wl,-q -o $@
+	$(CXX) $(VITA_CFLAGS) $(OBJECTS) $(SDL_LIBS) -lScePower_stub -lpthread -lm -Wl,-q $(VITA_WRAP_FLAGS) -o $@
 
 # --- VPK ---------------------------------------------------------------------
 VITA_TITLE ?= ChooChooTracker

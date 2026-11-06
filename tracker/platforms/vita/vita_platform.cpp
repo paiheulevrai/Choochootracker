@@ -106,6 +106,56 @@ int copyTreeIfMissing(const char* source, const char* target) {
   return failures;
 }
 
+// Number of entries in a directory, or -1 if it cannot be opened.
+int countEntries(const char* path) {
+  DIR* dir = opendir(path);
+  if (!dir) return -1;
+  int count = 0;
+  while (struct dirent* entry = readdir(dir))
+    if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) count++;
+  closedir(dir);
+  return count;
+}
+
+// Remove leftovers of temporary files a crashed session could not delete.
+void clearDirectory(const char* path) {
+  DIR* dir = opendir(path);
+  if (!dir) return;
+  while (struct dirent* entry = readdir(dir)) {
+    if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+    char file[PATH_LENGTH_VITA];
+    if (snprintf(file, sizeof(file), "%s/%s", path, entry->d_name) < (int)sizeof(file)) remove(file);
+  }
+  closedir(dir);
+}
+
+// Writes <data folder>/vita_log.txt: a few facts about the file system that
+// explain "files not found" problems without a debugger.
+void writeDiagnostics(const char* workspace, int copyFailures, int chdirResult, int chdirErrno) {
+  char path[PATH_LENGTH_VITA];
+  snprintf(path, sizeof(path), "%s/vita_log.txt", workspace);
+  FILE* log = fopen(path, "w");
+  if (!log) return;
+  char cwd[PATH_LENGTH_VITA] = "?";
+  if (!getcwd(cwd, sizeof(cwd))) snprintf(cwd, sizeof(cwd), "(getcwd failed: %s)", strerror(errno));
+  fprintf(log, "workspace: %s\n", workspace);
+  fprintf(log, "bundled assets present: %d, copy failures: %d\n", isDirectory(kBundledAssets) ? 1 : 0, copyFailures);
+  fprintf(log, "chdir(workspace): %d (errno %d)\n", chdirResult, chdirErrno);
+  fprintf(log, "cwd: %s\n", cwd);
+  const char* const folders[] = {"projects", "instruments", "instruments/dx7", "themes", "fonts", "samples",
+                                 "pitch-tables", "title", "AY_wavetables", "waveforms", "SR_wavetables"};
+  for (const char* folder : folders) {
+    char full[PATH_LENGTH_VITA];
+    snprintf(full, sizeof(full), "%s/%s", workspace, folder);
+    struct stat st;
+    const int statResult = stat(full, &st);
+    fprintf(log, "%-18s stat=%d mode=0x%x isdir=%d entries=%d relative_entries=%d\n", folder, statResult,
+            statResult == 0 ? (unsigned)st.st_mode : 0u, statResult == 0 && S_ISDIR(st.st_mode) ? 1 : 0,
+            countEntries(full), countEntries(folder));
+  }
+  fclose(log);
+}
+
 }  // namespace
 
 int assetsInit(void) {
@@ -115,16 +165,28 @@ int assetsInit(void) {
     return 1;
   }
 
+  int failures = 0;
   if (isDirectory(kBundledAssets)) {
-    const int failures = copyTreeIfMissing(kBundledAssets, workspace);
+    failures = copyTreeIfMissing(kBundledAssets, workspace);
     if (failures)
       fprintf(stderr, "Vita: %d bundled asset(s) could not be copied to %s\n", failures, workspace);
   }
 
-  // Relative paths in settings.txt (themes, fonts, ...) resolve from here.
-  // A failure is not fatal: the absolute workspace path is used elsewhere.
-  if (chdir(workspace) != 0)
-    fprintf(stderr, "Vita: cannot enter %s: %s\n", workspace, strerror(errno));
+  // Temporary files (tmpfile() is redirected here, see vita_fs_wrap.cpp).
+  char tempFolder[PATH_LENGTH_VITA];
+  snprintf(tempFolder, sizeof(tempFolder), "%s/tmp", workspace);
+  makeDirectory(tempFolder);
+  clearDirectory(tempFolder);
+  setenv("TMPDIR", tempFolder, 1);
+
+  // Relative paths are also resolved by the wrappers in vita_fs_wrap.cpp, so a
+  // failing chdir is not fatal.
+  const int chdirResult = chdir(workspace);
+  const int chdirErrno = chdirResult != 0 ? errno : 0;
+  if (chdirResult != 0)
+    fprintf(stderr, "Vita: cannot enter %s: %s\n", workspace, strerror(chdirErrno));
+
+  writeDiagnostics(workspace, failures, chdirResult, chdirErrno);
   return 0;
 }
 
