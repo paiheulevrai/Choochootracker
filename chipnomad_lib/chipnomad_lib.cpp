@@ -1450,6 +1450,13 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
   syncVoicePool(state->oplVoices, has(InstrumentType::OPL2) || has(InstrumentType::OPL3), inLayer(InstrumentType::OPL2), rate);
   syncVoicePool(state->opllVoices, has(InstrumentType::OPLL) || has(InstrumentType::VRC7), inLayer(InstrumentType::OPLL), rate);
   syncVoicePool(state->sinteredVoices, has(InstrumentType::Sintered), inLayer(InstrumentType::Sintered), rate);
+  // The Bass808 handoff added the instrument type and its on-demand
+  // ensureInstrumentVoices path, but never registered the pool here — any
+  // FRESH state (offline exporter/bounce, chip reinit) had a NULL voice
+  // pool, and applyVoiceEvents dereferenced it on the first note (segfault
+  // when bouncing a Fatty project, or stressing parameters that force a
+  // chip reinit).
+  syncVoicePool(state->bass808Voices, has(InstrumentType::Bass808), inLayer(InstrumentType::Bass808), rate);
   const bool directDX7 = has(InstrumentType::DX7), layerDX7 = inLayer(InstrumentType::DX7);
   for (int i = 0; i < VOICE_OWNER_COUNT; ++i) {
     const bool needed = i < PROJECT_MAX_TRACKS ? directDX7 : layerDX7;
@@ -2346,6 +2353,10 @@ static void applyVoiceEvents(ChipNomadState* state, uint64_t dueMicros) {
         applyEvent(state->sinteredVoices[trackIdx]);
         break;
       case InstrumentType::Bass808:
+        // Defense in depth: skip when the pool was never installed (e.g. a
+        // voice missing from chipnomadInitChips' sync list) instead of
+        // dereferencing NULL.
+        if (!state->bass808Voices[trackIdx][0]) break;
         applyEvent(state->bass808Voices[trackIdx]);
         break;
       case InstrumentType::Midi: {
