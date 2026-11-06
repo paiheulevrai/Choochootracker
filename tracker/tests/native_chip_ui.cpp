@@ -47,6 +47,19 @@
 #include <cctype>
 extern SDL_Renderer* renderer;
 static const char* output;
+#ifdef BMP_STREAM_TEST
+static const char* virtualBMPPath = "/ChooChooTracker/__bmp_stream_test__.bmp";
+static std::string virtualBMPBacking;
+static int virtualBMPOpens;
+extern "C" FILE* __real_fopen(const char*, const char*);
+extern "C" FILE* __wrap_fopen(const char* path, const char* mode) {
+  if (!virtualBMPBacking.empty() && !strcmp(path, virtualBMPPath)) {
+    ++virtualBMPOpens;
+    return __real_fopen(virtualBMPBacking.c_str(), mode);
+  }
+  return __real_fopen(path, mode);
+}
+#endif
 static void require(bool condition,const char* why){if(!condition){fprintf(stderr,"FAIL: %s\n",why);exit(2);}}
 static std::vector<uint32_t> framePixels(){std::vector<uint32_t> pixels(640*480);require(SDL_RenderReadPixels(renderer,nullptr,SDL_PIXELFORMAT_ARGB8888,pixels.data(),640*4)==0,"frame pixels");return pixels;}
 static size_t trackerInkPixels(const std::vector<uint32_t>& pixels){size_t count=0;for(uint32_t p:pixels){int r=(p>>16)&255,g=(p>>8)&255,b=p&255;int hi=std::max(r,std::max(g,b)),lo=std::min(r,std::min(g,b));if(hi-lo>40||lo>120)++count;}return count;}
@@ -278,6 +291,49 @@ static void captureHomepage() {
 int main(int argc,char** argv){
   if(argc!=2&&argc!=3) return 1;
   output=argv[1];initDefaultAppSettings();appSettings.screenWidth=640;appSettings.screenHeight=480;fontSetCurrent(fontGetDefault());require(!gfxSetup(&appSettings.screenWidth,&appSettings.screenHeight),"SDL dummy setup");
+#ifdef BMP_STREAM_TEST
+  if(argc==3 && !strcmp(argv[2],"--bmp-stream-only")) {
+    const std::string bmp = (std::filesystem::path(output) / "bmp-stream-valid.bmp").string();
+    const std::string invalid = (std::filesystem::path(output) / "bmp-stream-invalid.bmp").string();
+    SDL_Surface* fixture = SDL_CreateRGBSurfaceWithFormat(0, 2, 2, 32, SDL_PIXELFORMAT_ARGB8888);
+    require(fixture != nullptr, "BMP fixture surface");
+    require(SDL_FillRect(fixture, nullptr, 0xff123456) == 0, "BMP fixture pixels");
+    require(SDL_SaveBMP(fixture, bmp.c_str()) == 0, "BMP fixture saved");
+    SDL_FreeSurface(fixture);
+    FILE* bad = fopen(invalid.c_str(), "wb");
+    require(bad != nullptr, "invalid BMP fixture opened");
+    require(fwrite("not a BMP", 1, 9, bad) == 9, "invalid BMP fixture written");
+    require(fclose(bad) == 0, "invalid BMP fixture closed");
+    virtualBMPBacking = bmp;
+    SDL_Surface* bypass = SDL_LoadBMP(virtualBMPPath);
+    require(bypass == nullptr && virtualBMPOpens == 0, "SDL bypass cannot resolve virtual path");
+    for (const char* path : {bmp.c_str(), virtualBMPPath}) {
+      GfxImage* image = gfxImageLoadBMP(path);
+      require(image != nullptr, "title BMP loaded through application stream");
+      require(gfxImageWidth(image) == 2 && gfxImageHeight(image) == 2, "BMP dimensions preserved");
+      gfxImageFree(image);
+      for (int layout = 0; layout <= 1; ++layout)
+        require(gfxBackgroundLoadBMP(path, layout, (int)BackgroundTint::original, 100) == 1,
+          "background BMP loaded for stretch and tile");
+    }
+    require(virtualBMPOpens == 3, "both BMP entry points use application fopen");
+    virtualBMPBacking = invalid;
+    require(gfxImageLoadBMP(virtualBMPPath) == nullptr, "invalid virtual title BMP rejected");
+    require(gfxBackgroundLoadBMP(virtualBMPPath, 0, 0, 100) == 0, "invalid virtual background rejected");
+    virtualBMPBacking = bmp + ".missing";
+    require(gfxImageLoadBMP(virtualBMPPath) == nullptr, "missing virtual title BMP rejected");
+    require(strstr(SDL_GetError(), "Could not open BMP") != nullptr, "open failure reports SDL error");
+    require(gfxBackgroundLoadBMP(virtualBMPPath, 0, 0, 100) == 0, "missing virtual background rejected");
+    require(gfxBackgroundLoadBMP("", 0, 0, 100) == 0, "empty BMP path rejected");
+    require(gfxImageLoadBMP(nullptr) == nullptr, "null BMP path rejected");
+    virtualBMPBacking.clear();
+    require(std::filesystem::remove(bmp), "BMP fixture removed");
+    require(std::filesystem::remove(invalid), "invalid BMP fixture removed");
+    gfxCleanup(); SDL_Quit();
+    printf("BMP stream paths passed: normal, virtual, tile/stretch, invalid, missing, empty\n");
+    return 0;
+  }
+#endif
   if(argc==3 && !strcmp(argv[2],"--startup-smoke")) {
     require(!std::filesystem::exists(getAutosavePath()), "run startup smoke in an isolated package without autosave");
     appSetup(); appDraw();

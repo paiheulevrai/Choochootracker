@@ -474,6 +474,15 @@ picked folder wins when both have a path, writes always go to it. Add a libc
 call used by the engine to `SAF_WRAP` in `Makefile.android` and to
 `saf_storage.cpp` together.
 
+On Android, BMP backgrounds and title images open through application `fopen`, then use
+`SDL_RWFromFP` and `SDL_LoadBMP_RW`. Do not replace this with
+`SDL_LoadBMP(path)`: file opens inside the shared SDL library bypass the
+application's SAF wrappers and cannot resolve the virtual working folder.
+Other platforms retain SDL's normal path handling. The Windows offscreen
+harness compiles a separate graphics object with the Android BMP stream path;
+its `--bmp-stream-only` check intercepts `fopen` to exercise a virtual BMP
+path, normal paths and decode/open failures without changing the shipped app.
+
 The flavor only changes `src/<flavor>/` (the `direct_storage` bool read by
 `ChooChooTrackerActivity`). Install the signed
 direct APK (`app/build/outputs/apk/direct/release/app-direct-release.apk`)

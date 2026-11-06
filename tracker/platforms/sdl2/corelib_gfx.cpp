@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <math.h>
+#include <errno.h>
 
 #ifdef TOUCH_INPUT
 #include "button_icons.h"
@@ -318,8 +319,31 @@ static void layoutVirtualPad(void) {
 }
 #endif
 
+static SDL_Surface* loadBMP(const char* path) {
+  if (!path || !path[0]) {
+    SDL_SetError("No BMP path");
+    return NULL;
+  }
+#if defined(ANDROID_BUILD) || defined(BMP_STREAM_TEST)
+  // Open in the application so Android's SAF fopen wrapper handles virtual paths.
+  FILE* file = fopen(path, "rb");
+  if (!file) {
+    SDL_SetError("Could not open BMP '%s': %s", path, strerror(errno));
+    return NULL;
+  }
+  SDL_RWops* stream = SDL_RWFromFP(file, SDL_TRUE);
+  if (!stream) {
+    fclose(file);
+    return NULL;
+  }
+  return SDL_LoadBMP_RW(stream, 1);
+#else
+  return SDL_LoadBMP(path);
+#endif
+}
+
 GfxImage* gfxImageLoadBMP(const char* path) {
-  SDL_Surface* surface = SDL_LoadBMP(path);
+  SDL_Surface* surface = loadBMP(path);
   if (!surface) return NULL;
   const int width = surface->w;
   const int height = surface->h;
@@ -852,7 +876,7 @@ void gfxBackgroundSetSolid(void) {
 }
 
 int gfxBackgroundLoadBMP(const char* path, int layout, int tint, int intensity) {
-  SDL_Surface* loaded = path && path[0] ? SDL_LoadBMP(path) : NULL;
+  SDL_Surface* loaded = loadBMP(path);
   if (!loaded) return 0;
   SDL_Surface* converted = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_ARGB8888, 0);
   SDL_FreeSurface(loaded);
