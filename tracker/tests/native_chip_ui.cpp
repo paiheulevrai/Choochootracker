@@ -1298,6 +1298,10 @@ int main(int argc,char** argv){
         screenPhrase.init(); screenSetup(&screenPhrase, -1); appDraw();
         appChord(keyEdit, keyRight);
         require(!memcmp(original.get(), &p, sizeof(Project)), "shared canonical note edit does not silently alter other occurrences");
+        require(currentScreen == &screenSelectionPopup, "shared Simple C edit offers independence on release");
+        appChord(0, keyOpt);
+        require(currentScreen == &screenPhrase && !memcmp(original.get(), &p, sizeof(Project)),
+          "Simple C popup cancellation preserves project and returns to pattern");
         appChord(keyShift, keyLeft);
         appChord(keyShift, keyOpt);
         appResetInputState();
@@ -1318,6 +1322,16 @@ int main(int argc,char** argv){
             require(!memcmp(&p.phrases[src], &original->phrases[src], sizeof(Phrase)),
               "explicit copy preserves every original shared phrase");
         }
+        require(!projectLoad(&p, path.c_str()), "reload shared source for popup confirmation");
+        *pSongRow = *pSongTrack = *pChainRow = 0;
+        screenSetup(&screenPhrase, -1); appDraw();
+        appChord(keyEdit, keyRight);
+        require(currentScreen == &screenSelectionPopup, "shared popup can be reopened");
+        appChord(0, keyEdit);
+        require(currentScreen == &screenPhrase && !grooveboxCellShared(&p, 0, 0, 0),
+          "Simple C popup confirms independence without leaving pattern workflow");
+        require(!memcmp(&p.chains[sourceChain], &original->chains[sourceChain], sizeof(Chain)),
+          "popup independence preserves source chain");
       }
 
       require(!projectLoad(&p, path.c_str()), "reload source for original Reip comparison");

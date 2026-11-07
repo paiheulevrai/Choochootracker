@@ -27,6 +27,11 @@
   `releases/`, ad-hoc signed but not notarized. `.github/workflows/macos.yml`
   validates it on both architectures and publishes on release publication or
   an explicit manual `release_tag`. See `docs/build-notes.md` for backfills.
+- Linux tar.gz package: ALWAYS build with `make -j4 -f Makefile.linux
+  linux-package` from `tracker` (not the bare `linux` target). It builds the
+  app and packs `build/linux/ChooChooTracker-<date>-<version>-Linux-<arch>.tar.gz`
+  with the launcher script, README, USER_MANUAL and licenses. The bare
+  `make linux` target is for quick compile checks only.
 - Web: Emscripten is already installed at `.tmp/emsdk`. Use PowerShell, not
   MSYS2 Bash. The SDK requires its bundled Python:
 

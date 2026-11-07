@@ -11,6 +11,7 @@
 #include "synth/sample_voice.h"
 #include "screen_groovebox.h"
 #include "field_style.h"
+#include "selection_popup.h"
 #include <climits>
 #include <algorithm>
 
@@ -41,6 +42,7 @@ static int patternHeaderField = 0;
 // song[*pSongRow][*pSongTrack] but cached so we can detect when it changes).
 static int currentPatternIdx = -1;
 static uint8_t lastBarTranspose = 0;
+static bool canonicalSharedPending = false;
 
 // Mutate reference state (defined below; reset from init/setup and
 // re-captured from draw() when selection mode closes).
@@ -138,6 +140,7 @@ static void init(void) {
 }
 
 static void setup(int input) {
+  canonicalSharedPending = false;
   Project* p = &chipnomadState->project;
   if (p->viewMode == ViewMode::simplified) {
     // Resolve the phrase from the current pattern bar.
@@ -1140,12 +1143,28 @@ static bool canonicalCanExtend() {
   return true;
 }
 
-static bool canonicalWritable() {
-  if (!canonicalSimplifiedActive || chipnomadState->project.viewMode != ViewMode::classic) return true;
+static void canonicalIndependentCancel() {
+  screenSetup(&screenPhrase, -1);
+}
+
+static void canonicalIndependentChoice(int value) {
+  if (value == 0 && grooveboxAction(GrooveboxAction::makeIndependent, *pSongRow, *pSongTrack))
+    screenMessage(MESSAGE_TIME, "Independent: edit this pattern again");
+  canonicalIndependentCancel();
+}
+
+static bool canonicalSharingAllowed() {
   if (grooveboxCellShared(&chipnomadState->project, *pSongRow, *pSongTrack, *pChainRow)) {
-    screenMessage(MESSAGE_TIME_ERROR, "Used elsewhere: clone in Song or Classic");
+    screenMessage(MESSAGE_TIME_ERROR, "Used elsewhere: make independent?");
+    canonicalSharedPending = true;
     return false;
   }
+  return true;
+}
+
+static bool canonicalWritable() {
+  if (!canonicalSimplifiedActive || chipnomadState->project.viewMode != ViewMode::classic) return true;
+  if (!canonicalSharingAllowed()) return false;
   if (!hasPhrase) {
     if (!canonicalCanExtend()) return false;
     if (!grooveboxAction(GrooveboxAction::resetLength, *pSongRow, *pSongTrack)) return false;
@@ -1253,6 +1272,7 @@ static int onEdit(int col, int row, CellEditAction action) {
         }
         operation = GrooveboxAction::shorten;
       } else return 0;
+      if (!canonicalSharingAllowed()) return 1;
       int length = grooveboxTrackLength(p, *pSongRow, *pSongTrack);
       if ((operation == GrooveboxAction::emptyBar || operation == GrooveboxAction::doubleLength ||
           (operation == GrooveboxAction::resetLength && appSettings.defaultPatternLength > length)) &&
@@ -1289,6 +1309,97 @@ static int onEdit(int col, int row, CellEditAction action) {
   }
   if (canonicalSimplifiedActive && action != CellEditAction::copy &&
       action != CellEditAction::switchSelection && !canonicalWritable()) return 1;
+
+  // ── Pattern header field editing (simplified view only) ──────────────────
+  // Length ops fire ONLY when the cursor is on the Length box
+  // (patternHeaderField == 1) — never from the phrase grid.
+  if (patternHeaderField != 0 &&
+      chipnomadState->project.viewMode == ViewMode::simplified &&
+      currentPatternIdx >= 0 && currentPatternIdx < PROJECT_MAX_PATTERNS) {
+    Project* p = &chipnomadState->project;
+    Pattern* pat = &p->patterns[currentPatternIdx];
+    int len = pat->length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+
+    if (patternHeaderField == 1) {
+      // Length: 1..PROJECT_MAX_PATTERN_LENGTH. Length ops live here and
+      // nowhere else: tap = +1 bar (allocating a phrase via
+      // patternAddEmptyBar), EDIT+Down-style decrease via edit8noLast shrinks
+      // (patternRemoveLastBar), clear resets to the app default length.
+      // ×2/÷2 shortcuts: increaseBig/decreaseBig.
+      if (action == CellEditAction::clear) {
+        uint8_t target = appSettings.defaultPatternLength ? appSettings.defaultPatternLength : 1;
+        // Step towards the target length bar by bar so phrases are
+        // allocated/removed consistently.
+        while (pat->length > target) {
+          if (!patternRemoveLastBar(p, currentPatternIdx)) break;
+        }
+        while (pat->length < target) {
+          if (!patternAddEmptyBar(p, currentPatternIdx)) break;
+        }
+        handled = 1;
+      } else if (action == CellEditAction::increaseBig) {
+        // ×2: duplicate the existing bars (decision #4).
+        handled = patternMultiplyLengthByTwo(p, currentPatternIdx);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't double");
+      } else if (action == CellEditAction::decreaseBig) {
+        handled = patternHalveLengthByTwo(p, currentPatternIdx);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't halve");
+      } else if (action == CellEditAction::increase) {
+        handled = patternAddEmptyBar(p, currentPatternIdx);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at max length");
+      } else if (action == CellEditAction::decrease) {
+        handled = patternRemoveLastBar(p, currentPatternIdx);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at min length");
+      }
+
+      if (handled) {
+        // Clamp the viewed bar to the new length; keep the same position when
+        // possible (adding bars must not move the viewed bar).
+        len = pat->length;
+        if (len < 1) len = 1;
+        if (*pChainRow >= len) *pChainRow = len - 1;
+        if (*pChainRow < 0) *pChainRow = 0;
+        projectModified = 1;
+        chipnomadQueueProjectRefresh(chipnomadState);
+        // Refresh the phrase pointer for the current bar WITHOUT resetting
+        // the header cursor — the pointer must stay on the Length box while
+        // the user keeps editing (setup() clears patternHeaderField).
+        phraseIdx = pat->bars[*pChainRow].phrase;
+        if (phraseIdx != EMPTY_VALUE_16 && phraseIdx < PROJECT_MAX_PHRASES) {
+          phraseRows = p->phrases[phraseIdx].rows;
+          hasPhrase = 1;
+        } else {
+          phraseRows = scratchPhraseRows;
+          hasPhrase = 0;
+        }
+        fullRedraw();
+      }
+      return handled;
+    } else if (patternHeaderField == 2) {
+      // Loop: BAR (loopActiveBar) / PAT (followPattern). Tap/increase flips;
+      // clear restores the app-neutral default (followPattern). Sandbox-gated:
+      // the engine ignores this in classic view.
+      if (action == CellEditAction::tap || action == CellEditAction::doubleTap ||
+          action == CellEditAction::increase || action == CellEditAction::decrease) {
+        p->playheadMode = (p->playheadMode == PlayheadMode::loopActiveBar)
+          ? PlayheadMode::followPattern : PlayheadMode::loopActiveBar;
+        handled = 1;
+      } else if (action == CellEditAction::clear) {
+        p->playheadMode = PlayheadMode::followPattern;
+        handled = 1;
+      }
+      if (handled) {
+        projectModified = 1;
+        chipnomadQueueProjectRefresh(chipnomadState);
+        fullRedraw();
+        screenMessage(MESSAGE_TIME, "Loop %s",
+          p->playheadMode == PlayheadMode::loopActiveBar ? "BAR" : "PAT");
+      }
+      return handled;
+    }
+  }
 
   // ── Pattern header field editing (simplified view only) ──────────────────
   // Length ops fire ONLY when the cursor is on the Length box
@@ -1567,6 +1678,17 @@ static int inputScreenNavigation(int keys, int tapCount) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  if (!isKeyDown && keys == 0 && canonicalSharedPending) {
+    canonicalSharedPending = false;
+    static const SelectionItem choices[] = {
+      {"Make pattern independent", 0, nullptr, 0, "Clone this chain and its bars. Other occurrences stay unchanged. New IDs may affect conditional FX. Repeat the edit after confirmation."},
+      {"Cancel", 1, nullptr, 0, "Keep shared references and all content unchanged."},
+    };
+    selectionPopupSetup("SHARED PATTERN", choices, 2, 0,
+      canonicalIndependentChoice, canonicalIndependentCancel, true);
+    screenSetup(&screenSelectionPopup, 0);
+    return 1;
+  }
   // ── Pattern header navigation (simplified view only) ──────────────────────
   // When the cursor is on the pattern header (patternHeaderField != 0),
   // LEFT/RIGHT move between the Length / Loop fields and UP/DOWN exit the

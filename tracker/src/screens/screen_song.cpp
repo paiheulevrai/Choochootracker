@@ -23,6 +23,11 @@ static int sceneEditTaps = 1;
 static void songMergeSelectedPatternsUp(void);
 
 
+// Defined below (before onInput): merge-up machinery.
+static void songMergeSelectedPatternsUp(void);
+static void songMergeSelectedChainsUp(void);
+
+
 // Track mute/solo state machine
 typedef enum {
   MUTE_SOLO_EMPTY,
@@ -559,6 +564,86 @@ static void songMergeCanonicalUp() {
     screenFullRedraw(&screen);
 }
 
+// ── Merge-up (classic view, selection active, OPT+UP) ──────────────────────
+// The chains of all selected rows merge into the topmost selected chain
+// (per column): each lower chain's phrase rows (phrase + transpose) append
+// to the target's first empty row onward, up to 16 rows total; source
+// chains are cleared and their song cells emptied. Refused when the merged
+// chain would exceed 16 phrase rows.
+#define CHAIN_MERGE_REFUSAL_TEXT "Chain too long to merge"
+
+static void songMergeSelectedChainsUp(void) {
+  Project* p = &chipnomadState->project;
+  if (p->viewMode != ViewMode::classic) return;
+  if (screen.selectMode != 1) return;
+  int merged = 0, refused = 0;
+
+  int startCol, startRow, endCol, endRow;
+  getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
+
+  for (int col = startCol; col <= endCol; col++) {
+    // Collect the column's selected rows (ascending) with non-empty chain
+    // cells.
+    int rows[PROJECT_MAX_LENGTH];
+    int count = 0;
+    for (int r = startRow; r <= endRow; r++) {
+      uint16_t cell = p->song[r][col];
+      if (cell == EMPTY_VALUE_16 || cell >= PROJECT_MAX_CHAINS) continue;
+      rows[count++] = r;
+    }
+    if (count < 1) continue;
+
+    // Length check BEFORE mutating: total phrase rows across all selected
+    // chains must fit in one chain (16 rows).
+    int target = p->song[rows[0]][col];
+    int targetUsed = 0;
+    for (int d = 0; d < 16; d++)
+      if (p->chains[target].rows[d].phrase != EMPTY_VALUE_16) targetUsed++;
+    int total = targetUsed;
+    for (int i = 1; i < count; i++) {
+      Chain* src = &p->chains[p->song[rows[i]][col]];
+      for (int d = 0; d < 16; d++)
+        if (src->rows[d].phrase != EMPTY_VALUE_16) total++;
+    }
+    if (total > 16) {
+      refused = 1;
+      continue;  // refuse this column
+    }
+
+    // Append ascending into the target's first empty row onward; clear the
+    // source chains and empty their song cells.
+    int write = 0;
+    while (write < 16 && p->chains[target].rows[write].phrase != EMPTY_VALUE_16) write++;
+    for (int i = 1; i < count; i++) {
+      int srcIdx = p->song[rows[i]][col];
+      Chain* src = &p->chains[srcIdx];
+      for (int d = 0; d < 16 && write < 16; d++) {
+        if (src->rows[d].phrase == EMPTY_VALUE_16) continue;
+        p->chains[target].rows[write] = src->rows[d];
+        write++;
+      }
+      chainClear(src);
+      p->song[rows[i]][col] = EMPTY_VALUE_16;
+    }
+    // If the topmost selected row was empty, point it at the merged chain
+    // so the result is visible at the top of the selection.
+    for (int r = startRow; r <= endRow; r++) {
+      if (p->song[r][col] == (uint16_t)target) break;
+      if (p->song[r][col] == EMPTY_VALUE_16) {
+        p->song[r][col] = (uint16_t)target;
+        break;
+      }
+    }
+    merged = 1;
+  }
+
+  projectModified = 1;
+  chipnomadQueueProjectRefresh(chipnomadState);
+  screenFullRedraw(&screen);
+  if (merged) screenMessage(MESSAGE_TIME, "Chains merged");
+  else if (refused) screenMessage(MESSAGE_TIME, CHAIN_MERGE_REFUSAL_TEXT);
+}
+
 static int onInput(int isKeyDown, int keys, int tapCount) {
   int handled = 0;
   if (grooveboxEditorActive && chipnomadState->project.viewMode == ViewMode::classic &&
@@ -582,12 +667,15 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     return 1;
   }
 
-  // Merge-up: OPT+UP with an active selection in simplified view. OPT+UP
-  // has no other binding on the Song screen (mute/solo machine does not
-  // consume it), so this is a free chord.
-  if (isKeyDown && keys == (keyOpt | keyUp) && screen.selectMode == 1 &&
-      chipnomadState->project.viewMode == ViewMode::simplified) {
-    songMergeSelectedPatternsUp();
+  // Merge-up: OPT+UP with an active selection. Simplified view merges
+  // patterns; classic view merges chains (identical gesture, matching
+  // helper description per view). OPT+UP has no other binding on the Song
+  // screen (mute/solo machine does not consume it), so this is a free chord.
+  if (isKeyDown && keys == (keyOpt | keyUp) && screen.selectMode == 1) {
+    if (chipnomadState->project.viewMode == ViewMode::simplified)
+      songMergeSelectedPatternsUp();
+    else
+      songMergeSelectedChainsUp();
     return 1;
   }
 

@@ -66,9 +66,9 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox semantic text colours follow th
     CHECK(mockGfxColors[14][8] == cs.textDefault);
     CHECK(mockGfxColors[13][18] == cs.textNames);
     CHECK(mockGfxColors[14][18] == cs.textEmpty);
-    CHECK(mockGfxColors[3][6] == cs.textValue);
-    CHECK(mockGfxColors[3][8] == cs.textEmpty);
-    CHECK(mockGfxColors[3][7] == cs.cursor);
+    CHECK(mockGfxColors[3][2] == cs.textTitles);
+    CHECK(mockGfxColors[3][4] == cs.textEmpty);
+    CHECK(mockGfxColors[3][3] == cs.cursor);
     CHECK(mockGfxColors[17][0] == cs.textInfo);
     screenGroovebox.onInput(1, keyRight, 1);
     CHECK(mockGfxColors[13][8] == cs.textNames);
@@ -296,7 +296,7 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox study split keeps field focus b
   CHECK(mockCursorY == 14);
   CHECK(row == 0);
   CHECK(track == 1);
-  CHECK(mockGfxCells[4][9] == '<');
+  CHECK(mockGfxCells[4][5] == '<');
   CHECK(std::memcmp(original.get(), &chipnomadState->project, sizeof(Project)) == 0);
   CHECK_FALSE(projectModified);
   screenGroovebox.onInput(1, keyLeft, 1);
@@ -324,12 +324,12 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox study field navigation reaches 
   for (int i = 0; i < 20; ++i) screenGroovebox.onInput(1, keyOpt | keyRight, 1);
   for (int i = 0; i < 10; ++i) screenGroovebox.onInput(1, keyOpt | keyDown, 1);
   CHECK(track == 7);
-  CHECK(mockGfxCells[10][37] == '<');
+  CHECK(mockGfxCells[10][11] == '<');
   CHECK(mockCursorY == 13);
   for (int i = 0; i < 20; ++i) screenGroovebox.onInput(1, keyOpt | keyLeft, 1);
   for (int i = 0; i < 10; ++i) screenGroovebox.onInput(1, keyOpt | keyUp, 1);
   CHECK(track == 0);
-  CHECK(mockGfxCells[3][7] == '<');
+  CHECK(mockGfxCells[3][3] == '<');
   CHECK_FALSE(projectModified);
 }
 
@@ -633,14 +633,11 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox full-size new scene and Length 
   CHECK(std::memcmp(original.get(), &p, sizeof(Project)) == 0);
 }
 
-TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox overview to step entry prepares new scene with one undo") {
+TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox Scenes entry prepares new scene with one undo") {
   auto& p = chipnomadState->project;
   auto original = std::make_unique<Project>(p);
-  screenGroovebox.onInput(1, keyOpt, 1);
-  screenGroovebox.onInput(0, 0, 0);
-  screenGroovebox.onInput(1, keyDown, 1);
-  screenGroovebox.onInput(1, keyOpt, 1);
-  screenGroovebox.onInput(0, 0, 0);
+  row = 1;
+  screenGroovebox.setup(1);
   for (int t = 0; t < 8; ++t) CHECK(p.song[1][t] == (t + 1) * 0x10);
   REQUIRE(grooveboxAction(GrooveboxAction::undo, 1, 0));
   CHECK(std::memcmp(original.get(), &p, sizeof(Project)) == 0);
@@ -715,9 +712,8 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox linked scene copy never overwri
 TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox note edits undo allocated slots and scene navigation is read-only") {
   auto& p = chipnomadState->project;
   auto original = std::make_unique<Project>(p);
-  screenGroovebox.onInput(1, keyOpt, 1);
-  screenGroovebox.onInput(0, 0, 0);
-  screenGroovebox.onInput(1, keyDown, 1);
+  row = 1;
+  screenGroovebox.setup(-1);
   screenGroovebox.draw();
   CHECK_FALSE(projectModified);
   CHECK(std::memcmp(original.get(), &p, sizeof(Project)) == 0);

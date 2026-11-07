@@ -61,6 +61,12 @@ Resource exhaustion does not partially apply the shared structural operations.
 Simple C is a session-only editor choice, not a fourth arrangement or file mode;
 saved projects retain Classic backing and the combined prototype's writer.
 
+In Simple C, attempting a shared-data edit opens **Make pattern independent /
+Cancel** after releasing the buttons. Confirming clones the chain and all its
+bars; repeat the edit afterwards. Cancel changes nothing. The header remains
+Pattern / Length / TR / Loop, without a permanent copy/status control.
+New IDs may affect conditional FX; shared editing remains available in Classic.
+
 In Groovebox mode, **SCENES** replaces Song in the navigation, using the same
 canonical arrangement and all its selection, copy/paste, clone and row-editing
 functions. There is no separate scene overview inside the step editor.
