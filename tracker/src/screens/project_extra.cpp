@@ -12,16 +12,19 @@ static int getColumnCount(int row) {
 static void drawStatic(void) {
   projectCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textLabel);
-  gfxPrint(0, 17, "Pitch table");
-  gfxPrint(0, 18, "Scale");
+  gfxPrint(0, 16, "Pitch table");
+  gfxPrint(0, 17, "Scale");
+  gfxPrint(0, 18, "View");
 }
 
 static void drawCursor(int col, int row) {
   if (row < SCR_PROJECT_ROWS) return projectCommonDrawCursor(col, row);
   if (row == SCR_PROJECT_ROWS) {
-    gfxCursor(13, 17, strlen(chipnomadState->project.pitchTable.name));
+    gfxCursor(13, 16, strlen(chipnomadState->project.pitchTable.name));
   } else if (row == SCR_PROJECT_ROWS + 1) {
-    gfxCursor(0, 18, 5);
+    gfxCursor(0, 17, 5);
+  } else if (row == SCR_PROJECT_ROWS + 2) {
+    gfxCursor(0, 18, 4);
   }
 }
 
@@ -31,10 +34,12 @@ static void drawField(int col, int row, CellState state) {
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
 
   if (row == SCR_PROJECT_ROWS) {
-    gfxClearRect(13, 17, PROJECT_PITCH_TABLE_TITLE_LENGTH, 1);
-    gfxPrint(13, 17, chipnomadState->project.pitchTable.name);
+    gfxClearRect(13, 16, PROJECT_PITCH_TABLE_TITLE_LENGTH, 1);
+    gfxPrint(13, 16, chipnomadState->project.pitchTable.name);
   } else if (row == SCR_PROJECT_ROWS + 1) {
-    gfxPrint(0, 18, "Scale");
+    gfxPrint(0, 17, "Scale");
+  } else if (row == SCR_PROJECT_ROWS + 2) {
+    gfxPrint(0, 18, "View");
   }
 }
 
@@ -45,12 +50,16 @@ static int onEdit(int col, int row, enum CellEditAction action) {
     screenSetup(&screenPitchTable, 0);
   } else if (row == SCR_PROJECT_ROWS + 1) {
     screenSetup(&screenScale, 0);
+  } else if (row == SCR_PROJECT_ROWS + 2) {
+    // View window: this project's view mode (read-only), default pattern
+    // length and the playhead mode for the simplified view.
+    screenSetup(&screenViewSettings, 0);
   }
   return 0;
 }
 
 ScreenData screenProjectExtra = {
-  .rows = SCR_PROJECT_ROWS + 2,
+  .rows = SCR_PROJECT_ROWS + 3,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,

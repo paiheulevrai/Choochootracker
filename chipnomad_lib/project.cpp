@@ -279,6 +279,19 @@ void projectInit(Project* p) {
   for (int c = 0; c < PROJECT_MAX_TABLES; c++) {
     tableClear(&p->tables[c]);
   }
+
+  // Clean patterns (simplified view) + reset the deferred conversion maps
+  for (int c = 0; c < PROJECT_MAX_PATTERNS; c++) {
+    patternClear(&p->patterns[c]);
+  }
+  for (int c = 0; c < PROJECT_MAX_CHAINS; c++) {
+    p->chainToPatternMap[c] = EMPTY_VALUE_16;
+  }
+  for (int c = 0; c < PROJECT_MAX_PATTERNS; c++) {
+    p->patternToChainMap[c] = EMPTY_VALUE_16;
+  }
+  p->viewMode = ViewMode::classic;
+  p->playheadMode = PlayheadMode::followPattern;
 }
 
 void projectFree(Project* p) {
@@ -351,6 +364,19 @@ int8_t wavetableIsEmpty(Project* project, int wavetable) {
   return 1;
 }
 
+// Is pattern empty? (all bars within length have empty phrases)
+int8_t patternIsEmpty(Project* project, int pattern) {
+  if (pattern < 0 || pattern >= PROJECT_MAX_PATTERNS) return 1;
+  Pattern* pat = &project->patterns[pattern];
+  int len = pat->length;
+  if (len < 1) len = 1;
+  if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+  for (int b = 0; b < len; b++) {
+    if (pat->bars[b].phrase != EMPTY_VALUE_16) return 0;
+  }
+  return 1;
+}
+
 // Note name in phrase
 const char* noteName(Project* project, uint8_t note) {
   if (note == NOTE_OFF) {
@@ -400,6 +426,15 @@ void chainClear(Chain* chain) {
 void instrumentClear(Instrument* instrument) {
   getInstrumentFunctions(instrument->type).free(instrument);
   getInstrumentFunctions(InstrumentType::none).init(instrument);
+}
+
+// Clear a single pattern with proper initialization
+void patternClear(Pattern* pattern) {
+  pattern->length = PROJECT_DEFAULT_PATTERN_LENGTH;
+  for (int b = 0; b < PROJECT_MAX_PATTERN_LENGTH; b++) {
+    pattern->bars[b].phrase = EMPTY_VALUE_16;
+    pattern->bars[b].transpose = 0;
+  }
 }
 
 // Clear a single table with proper initialization

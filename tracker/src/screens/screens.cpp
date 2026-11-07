@@ -13,6 +13,7 @@
 #include "utils.h"
 #include "copy_paste.h"
 #include "screen_instrument.h"
+#include "screen_groovebox.h"
 
 const AppScreen* currentScreen = NULL;
 static ScreenData* touchScreenData = NULL;
@@ -43,6 +44,10 @@ void drawScreenMap() {
   // Native preset lists use the popup area through the footer.
   if (currentScreen == &screenSelectionPopup || currentScreen == &screenMidiCC) return;
   const static int smY = 15;
+  const bool compact = canonicalSimplifiedActive &&
+    chipnomadState->project.viewMode == ViewMode::classic;
+  const int mixerX = compact ? 35 : 34;
+  const int songX = compact ? 36 : 35;
 
   const ColorScheme cs = appSettings.colorScheme;
   gfxSetBgColor(cs.background);
@@ -50,14 +55,16 @@ void drawScreenMap() {
   gfxClearRect(34, smY - 1, 6, 6);
 
   // Core screens
-  gfxPrint(34, smY + 1, "MSCPIT");
+  gfxPrint(mixerX, smY + 1, grooveboxEditorActive &&
+    chipnomadState->project.viewMode == ViewMode::classic ? "MSG IT" :
+    compact ? "MSPIT" : "MSCPIT");
 
   // Additional screens
   if (currentScreen == &screenMixer || (currentScreen == &screenInsertFX && screenInsertFXIsMaster())) {
-    gfxPrint(34, smY, "R");
-    gfxPrint(34, smY + 2, "D");
+    gfxPrint(mixerX, smY, "R");
+    gfxPrint(mixerX, smY + 2, "D");
   } else if (currentScreen == &screenSong || currentScreen == &screenProject || currentScreen == &screenSettings) {
-    gfxPrint(35, smY, "P");
+    gfxPrint(songX, smY, "P");
   } else if (currentScreen == &screenPhrase || currentScreen == &screenGroove) {
     gfxPrint(37, smY, "G");
   } else if (currentScreen == &screenInstrument || currentScreen == &screenSampleSettings || currentScreen == &screenFMEdit || currentScreen == &screenMonkEdit || currentScreen == &screenSIDEdit || currentScreen == &screenSoundFontEdit ||
@@ -72,16 +79,16 @@ void drawScreenMap() {
 
   // Show Settings below Song
   if (currentScreen == &screenSong || currentScreen == &screenProject || currentScreen == &screenSettings) {
-    gfxPrint(35, smY + 2, "S");
+    gfxPrint(songX, smY + 2, "S");
   }
 
   // Highlight current screen
   gfxSetFgColor(cs.textDefault);
   if (currentScreen == &screenMixer || (currentScreen == &screenInsertFX && screenInsertFXIsMaster())) {
     int page = screenMixerGetPage();
-    gfxPrint(34, smY + (page == 1 ? 0 : page == 2 ? 2 : 1), page == 1 ? "R" : page == 2 ? "D" : "M");
+    gfxPrint(mixerX, smY + (page == 1 ? 0 : page == 2 ? 2 : 1), page == 1 ? "R" : page == 2 ? "D" : "M");
   } else if (currentScreen == &screenSong) {
-    gfxPrint(35, smY + 1, "S");
+    gfxPrint(songX, smY + 1, "S");
   } else if (currentScreen == &screenChain) {
     gfxPrint(36, smY + 1, "C");
   } else if (currentScreen == &screenPhrase) {
@@ -99,15 +106,24 @@ void drawScreenMap() {
   } else if (currentScreen == &screenAYWavetable) {
     gfxPrint(39, smY + 2, "W");
   } else if (currentScreen == &screenProject) {
-    gfxPrint(35, smY, "P");
+    gfxPrint(songX, smY, "P");
   } else if (currentScreen == &screenGroove) {
     gfxPrint(37, smY, "G");
   } else if (currentScreen == &screenSettings) {
-    gfxPrint(35, smY + 2, "S");
+    gfxPrint(songX, smY + 2, "S");
   }
 }
 
 void screenSetup(const AppScreen* screen, int input) {
+  if (canonicalSimplifiedActive && chipnomadState &&
+      chipnomadState->project.viewMode == ViewMode::classic && screen == &screenChain)
+    screen = &screenPhrase;
+  if (grooveboxEditorActive && chipnomadState &&
+      chipnomadState->project.viewMode == ViewMode::classic &&
+      (screen == &screenChain || screen == &screenPhrase)) {
+    screen = &screenGroovebox;
+    input = *pSongRow;
+  }
   touchScreenData = NULL;
   pendingScreen = screen;
   pendingScreenInput = input;
@@ -123,7 +139,7 @@ void screenDraw() {
     gfxSetCursorBrackets(appSettings.cursorBrackets);
     gfxClearRect(0, 0, 40, 20);
     currentScreen->fullRedraw();
-    if (currentScreen != &screenTitle)
+    if (currentScreen != &screenTitle && currentScreen != &screenGroovebox)
       drawScreenMap();
 
     pendingScreen = NULL;
@@ -134,7 +150,7 @@ void screenDraw() {
   if (charEditIsOpen()) return;
 
   currentScreen->draw();
-  if (currentScreen != &screenTitle)
+  if (currentScreen != &screenTitle && currentScreen != &screenGroovebox)
     drawScreenMap();
 
   ScreenOverlayCoordinates overlay;
@@ -209,6 +225,7 @@ void screenClearMessage(void) {
 
 void screensInitAll(void) {
   screenSong.init();
+  screenGroovebox.init();
   screenChain.init();
   screenPhrase.init();
   screenTable.init();
@@ -429,9 +446,10 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
   }
   if (currentScreen == &screenProject) {
     // Field y-coordinates: row 0 buttons at y=3, File/Title/Author at
-    // y=5/6/7, Linear pitch y=9, Clock source y=10, Tempo y=11,
-    // Pitch table y=12, Scale y=13.
-    const int fieldY[] = {3, 5, 6, 7, 9, 10, 11, 12, 13};
+    // y=5/6/7, Linear pitch y=9, Tempo y=10, Sync y=11, Sync out y=12,
+    // Link y=13, Transport y=14, then the extra rows: Pitch table y=16,
+    // Scale y=17, View y=18.
+    const int fieldY[] = {3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17, 18};
     int field = -1, column = 0;
     for (unsigned i = 0; i < sizeof(fieldY) / sizeof(fieldY[0]); ++i)
       if (row == fieldY[i]) field = i;
@@ -446,6 +464,10 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
       if (column < 0 || column >= touchScreenData->getColumnCount(field)) return 0;
     } else if (field == 8) {
       if (col < 0 || col >= 5) return 0;
+    } else if (field == 12) {
+      // View row: whole label is the touch target.
+      if (col < 0 || col >= 4) return 0;
+      column = 0;
     } else {
       if (col < 13 || col >= 34) return 0;
     }

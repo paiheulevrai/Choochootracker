@@ -430,6 +430,104 @@ static int projectLoadChains(FILE* file, Project* p) {
   return 0;
 }
 
+// ── Patterns (simplified view) ──────────────────────────────────────────────
+// Pattern section is optional and only present in files saved by the
+// simplified view. Old files load with patterns[] cleared (projectInit) and
+// viewMode = classic.
+//
+// Each pattern block has:
+//   ### Pattern <hex idx>
+//   - Length: <hex>          (1..PROJECT_MAX_PATTERN_LENGTH)
+//   - Map: <hex>             (origin chain index, or -- if none)
+//   ```
+//   PPP TT                   (per-bar: phrase, hidden transpose)
+//   ...exactly `Length` lines (bars beyond length are skipped on load)
+//   ```
+//
+// `Map:` records which chain this pattern was generated from (decision #5:
+// chains[] and patterns[] stay independent across switches; the map preserves
+// the bidirectional link so a future mode switch reuses the existing pattern
+// instead of regenerating).
+static int projectLoadPatterns(FILE* file, Project* p) {
+  int idx;
+
+  char* line = peekLine(file);
+  if (line == NULL) return 1;
+  if (strcmp(line, "## Patterns")) return 1;
+  consumeLine(file);
+
+  while (1) {
+    line = peekLine(file);
+    if (line == NULL) return 1;
+    if (strncmp(line, "### Pattern", 11)) break;
+    if (sscanf(line, "### Pattern %X", &idx) != 1) return 1;
+    if (idx < 0 || idx >= PROJECT_MAX_PATTERNS) return 1;
+    consumeLine(file);
+
+    // - Length: <hex>
+    line = peekLine(file);
+    if (line == NULL) return 1;
+    unsigned int lenVal = 0;
+    if (sscanf(line, "- Length: %X", &lenVal) != 1) return 1;
+    if (lenVal < 1) lenVal = 1;
+    if (lenVal > PROJECT_MAX_PATTERN_LENGTH) lenVal = PROJECT_MAX_PATTERN_LENGTH;
+    p->patterns[idx].length = (uint8_t)lenVal;
+    consumeLine(file);
+
+    // - Map: <hex|-- >  (optional: origin chain index)
+    line = peekLine(file);
+    if (line == NULL) return 1;
+    if (strncmp(line, "- Map:", 5) == 0) {
+      unsigned int mapVal = 0;
+      if (sscanf(line, "- Map: %X", &mapVal) == 1 && mapVal < PROJECT_MAX_CHAINS) {
+        p->patternToChainMap[idx] = (uint16_t)mapVal;
+        if (p->chainToPatternMap[mapVal] == EMPTY_VALUE_16) {
+          p->chainToPatternMap[mapVal] = (uint16_t)idx;
+        }
+      } else {
+        p->patternToChainMap[idx] = EMPTY_VALUE_16;
+      }
+      consumeLine(file);
+      line = peekLine(file);
+      if (line == NULL) return 1;
+    }
+
+    // Skip opening ```
+    if (line[0] == '`') {
+      consumeLine(file);
+    }
+
+    // Read `Length` bar lines.
+    for (int b = 0; b < (int)lenVal; b++) {
+      line = peekLine(file);
+      if (line == NULL) return 1;
+      // Line layout: "PPP TT" — 3 hex digits, space, 2 hex digits.
+      // Or "--- --" when the bar has no phrase.
+      if (strlen(line) < 6) return 1;
+      PatternBar* bar = &p->patterns[idx].bars[b];
+      if (line[0] == '-' && line[1] == '-' && line[2] == '-') {
+        bar->phrase = EMPTY_VALUE_16;
+        bar->transpose = scanByteOrEmpty(line + 4);
+      } else {
+        uint16_t phraseVal = 0;
+        if (sscanf(line, "%hX", &phraseVal) != 1) return 1;
+        bar->phrase = phraseVal;
+        bar->transpose = scanByteOrEmpty(line + 4);
+      }
+      consumeLine(file);
+    }
+
+    // Skip closing ```
+    line = peekLine(file);
+    if (line == NULL) return 1;
+    if (line[0] == '`') {
+      consumeLine(file);
+    }
+  }
+
+  return 0;
+}
+
 static int projectLoadGrooves(FILE* file, Project* p) {
   int idx;
 
@@ -874,7 +972,32 @@ static int projectLoadInternal(FILE* file, Project* project) {
   if (p.chipsCount < 1 || p.chipsCount > PROJECT_MAX_TRACKS) return 1;
   consumeLine(file);
 
+  // Optional: View mode (added when the simplified view was introduced).
+  // Old files default to classic; the patterns[] array stays cleared and the
+  // conversion maps stay EMPTY_VALUE_16 (projectInit defaults).
   line = peekLine(file);
+  if (line && strncmp(line, "- View mode:", 12) == 0) {
+    int vm = 0;
+    if (sscanf(line, "- View mode: %d", &vm) == 1) {
+      p.viewMode = (vm == 1) ? ViewMode::simplified : ViewMode::classic;
+    }
+    consumeLine(file);
+    line = peekLine(file);
+    if (line == NULL) return 1;
+  }
+
+  // Optional: Playhead mode (added with the View window's "Playhead" row).
+  // Old files default to followPattern (projectInit's default).
+  if (line && strncmp(line, "- Playhead mode:", 16) == 0) {
+    int pm = 0;
+    if (sscanf(line, "- Playhead mode: %d", &pm) == 1) {
+      p.playheadMode = (pm == 1) ? PlayheadMode::followPattern : PlayheadMode::loopActiveBar;
+    }
+    consumeLine(file);
+    line = peekLine(file);
+    if (line == NULL) return 1;
+  }
+
   if (line && strncmp(line, "- Track inserts: ", 17) == 0) {
     unsigned header[3];
     if (!readInsertFields(line, "- Track inserts: ", header, 3) ||
@@ -1167,6 +1290,13 @@ static int projectLoadInternal(FILE* file, Project* project) {
   if (projectLoadSong(file, &p)) return 1;
   snprintf(projectFileError, 40, "Invalid chain data");
   if (projectLoadChains(file, &p)) return 1;
+  // Patterns section is optional; old files skip it. projectInit already
+  // cleared patterns[] and the conversion maps.
+  snprintf(projectFileError, 40, "Invalid patterns data format");
+  line = peekLine(file);
+  if (line && strcmp(line, "## Patterns") == 0) {
+    if (projectLoadPatterns(file, &p)) { projectFree(&p); return 1; }
+  }
   snprintf(projectFileError, 40, "Invalid groove data");
   if (projectLoadGrooves(file, &p)) return 1;
   snprintf(projectFileError, 40, "Invalid phrase data");
@@ -1573,6 +1703,43 @@ static int projectSaveChains(FILE* file, Project* project) {
   return 0;
 }
 
+// Patterns (simplified view). Saved as a sparse `## Patterns` section right
+// after `## Chains` so the chain↔pattern mapping is the next thing the loader
+// sees after consuming chains. Only non-empty patterns are written; the
+// conversion map entry is written as a `- Map:` line for each pattern that
+// has an origin chain.
+static int projectSavePatterns(FILE* file, Project* project) {
+  fprintf(file, "\n## Patterns\n");
+
+  for (int c = 0; c < PROJECT_MAX_PATTERNS; c++) {
+    if (patternIsEmpty(project, c)) continue;
+    Pattern* pat = &project->patterns[c];
+    int len = pat->length;
+    if (len < 1) len = 1;
+    if (len > PROJECT_MAX_PATTERN_LENGTH) len = PROJECT_MAX_PATTERN_LENGTH;
+    fprintf(file, "\n### Pattern %X\n", c);
+    fprintf(file, "- Length: %X\n", len);
+    if (project->patternToChainMap[c] != EMPTY_VALUE_16) {
+      fprintf(file, "- Map: %X\n", project->patternToChainMap[c]);
+    } else {
+      fprintf(file, "- Map: --\n");
+    }
+    fprintf(file, "\n```\n");
+    for (int b = 0; b < len; b++) {
+      PatternBar* bar = &pat->bars[b];
+      if (bar->phrase == EMPTY_VALUE_16) {
+        // "--- TT" — empty phrase slot; the hidden transpose still round-trips
+        fprintf(file, "--- %s\n", byteToHex(bar->transpose));
+      } else {
+        fprintf(file, "%03X %s\n", bar->phrase, byteToHex(bar->transpose));
+      }
+    }
+    fprintf(file, "```\n");
+  }
+
+  return 0;
+}
+
 static int projectSaveGrooves(FILE* file, Project* project) {
   fprintf(file, "\n## Grooves\n");
 
@@ -1697,6 +1864,9 @@ static int projectSaveInternal(FILE* file, Project* project) {
 
   fprintf(file, "- Frame rate: %f\n", project->tickRate);
   fprintf(file, "- Chips count: %d\n", project->chipsCount);
+  // Simplified view + playhead behaviour (old files: absent → classic defaults)
+  fprintf(file, "- View mode: %d\n", project->viewMode == ViewMode::simplified ? 1 : 0);
+  fprintf(file, "- Playhead mode: %d\n", project->playheadMode == PlayheadMode::followPattern ? 1 : 0);
   fprintf(file, "- Track inserts: 1,8,2\n");
   for (int t = 0; t < PROJECT_MAX_TRACKS; ++t) for (int slot = 0; slot < 2; ++slot) {
     const auto& c = project->trackInserts[t][slot];
@@ -1779,6 +1949,7 @@ static int projectSaveInternal(FILE* file, Project* project) {
   projectSavePitchTable(file, project);
   projectSaveSong(file, project);
   projectSaveChains(file, project);
+  projectSavePatterns(file, project);
   projectSaveGrooves(file, project);
   projectSavePhrases(file, project);
   projectSaveInstruments(file, project);

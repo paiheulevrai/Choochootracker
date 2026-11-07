@@ -22,6 +22,7 @@ int pasteChain(int chainIdx, int startCol, int startRow);
 
 // Phrase copy/paste
 void copyPhrase(int phraseIdx, int startCol, int startRow, int endCol, int endRow, int isCut);
+int canPastePhrase(int startCol);
 int pastePhrase(int phraseIdx, int startCol, int startRow);
 
 // Table copy/paste

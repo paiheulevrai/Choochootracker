@@ -242,6 +242,9 @@ int chipnomadQueuePlaybackStartPhraseRowFull(ChipNomadState* state, int trackIdx
 int chipnomadQueuePlaybackQueuePhrase(ChipNomadState* state, int trackIdx, int songRow, int chainRow);
 int chipnomadQueuePlaybackStartLiveChain(ChipNomadState* state, int trackIdx, int songRow);
 int chipnomadQueuePlaybackQueueLiveChain(ChipNomadState* state, int trackIdx, int songRow, int urgent);
+// One queued command for all tracks; each uses its own chain end (urgent: phrase
+// end). Empty destination cells stop their track. This is not a global bar clock.
+int chipnomadQueuePlaybackQueueLiveScene(ChipNomadState* state, int songRow, int urgent);
 int chipnomadQueuePlaybackPreviewNote(ChipNomadState* state, int trackIdx, uint8_t note, uint8_t instrument);
 // Copies the bounded native patch into the existing audio command queue.
 int chipnomadQueueSimpleChipPreview(ChipNomadState* state,int track,InstrumentType type,const InstrumentSimpleChip* patch);

@@ -91,11 +91,12 @@ static void fullRedraw() {
     gfxPrintf(0,2,"%.40s",statusText.c_str());
   }
   const SelectionItem* category = currentCategory();
+  const bool rootHelper = fullWidth && !collectionLayout && activePanel == 0 && category->helper;
   // Eight track previews occupy rows 3..10 on the SoundFont screen. Keep the
   // selected name on row 11, where it can use the full width of its panel.
   int categoryStart = collectionLayout ? std::max(0,categoryIndex-14) : std::max(0,categoryIndex-7);
   int itemStart = collectionLayout ? itemIndex - 8 : std::max(0,itemIndex-7);
-  for (int row = 0; row < (collectionLayout ? 15 : 16); ++row) {
+  for (int row = 0; row < (collectionLayout ? 15 : rootHelper ? 12 : 16); ++row) {
     int categoryItem = categoryStart + row;
     int childItem = itemStart + row;
     int y = (collectionLayout ? 3 : 2) + row;
@@ -128,7 +129,20 @@ static void fullRedraw() {
       }
     }
   }
-  if(collectionLayout&&category->helper){gfxSetFgColor(appSettings.colorScheme.textInfo);const char*path=category->helper;size_t length=strlen(path);gfxPrintf(0,18,"%-40.40s",length>40?path+length-40:path);}
+  if (rootHelper) {
+    gfxSetFgColor(appSettings.colorScheme.textInfo);
+    const char* text = category->helper;
+    for (int row = 15; row <= 18 && *text; ++row) {
+      int count = std::min(40, (int)strlen(text));
+      if (text[count] && count == 40)
+        for (int i = count - 1; i > 0; --i)
+          if (text[i] == ' ') { count = i; break; }
+      gfxPrintf(0, row, "%.*s", count, text);
+      text += count;
+      while (*text == ' ') ++text;
+    }
+  }
+  else if(collectionLayout&&category->helper){gfxSetFgColor(appSettings.colorScheme.textInfo);const char*path=category->helper;size_t length=strlen(path);gfxPrintf(0,18,"%-40.40s",length>40?path+length-40:path);}
   else if (activePanel == 1 && itemIndex < category->childCount && category->children[itemIndex].helper) {
     gfxSetFgColor(appSettings.colorScheme.textInfo);
     gfxPrintf(0, 18, "%-40.40s", category->children[itemIndex].helper);

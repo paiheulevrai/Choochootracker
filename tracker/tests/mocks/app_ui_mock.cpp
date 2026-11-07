@@ -99,7 +99,12 @@ ScreenPlaybackLevel screenGetPlaybackLevel(const AppScreen*) { return ScreenPlay
 LoopRange screenGetLoopRange(const AppScreen*) { return {}; }
 void screenFullRedraw(ScreenData* screen) { mockScreenData = screen; gfxClear(); }
 int screenInput(ScreenData* screen, int, int, int) { mockScreenData = screen; return 1; }
-void setCellColor(CellState, int, int) {}
+void setCellColor(CellState state, int empty, int content) {
+  const auto& cs = appSettings.colorScheme;
+  gfxSetFgColor(state == CellState::selected ? (empty ? cs.textEmpty : cs.selection) :
+    state == CellState::focus ? cs.textDefault :
+    empty ? cs.textEmpty : content ? cs.textValue : cs.textInfo);
+}
 void getSelectionBounds(ScreenData* screen, int* startCol, int* startRow, int* endCol, int* endRow) {
   *startCol = screen->selectStartCol < screen->cursorCol ? screen->selectStartCol : screen->cursorCol;
   *endCol = screen->selectStartCol > screen->cursorCol ? screen->selectStartCol : screen->cursorCol;
@@ -116,6 +121,13 @@ TouchAdjustResult screenTouchAdjust(int, int) { return touchAdjustNone; }
 void screenQuickHelpOpen(const AppScreen*) {}
 void fileBrowserSetup(const char* title, const char* extension, const char*,
                       void (*)(const char*), void (*)(void)) {
+  mockBrowserTitle = title;
+  mockBrowserExtension = extension;
+}
+
+void fileBrowserSetupFolderMode(const char* title, const char*, const char*,
+                                const char* extension, void (*)(const char*),
+                                void (*)(void)) {
   mockBrowserTitle = title;
   mockBrowserExtension = extension;
 }
