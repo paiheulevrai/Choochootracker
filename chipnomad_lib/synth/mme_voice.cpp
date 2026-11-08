@@ -1,5 +1,6 @@
 #include "mme_voice.h"
 #include "audio_math.h"
+#include "track_audio_modulation.h"
 
 #include <math.h>
 #include <string.h>
@@ -64,8 +65,7 @@ float MMEVoice::pairedOscillator(float phase, bool oscillatorB, float pairPositi
 
 // Adapted from Mutable Instruments Warps' diode ring-modulator model (MIT).
 float MMEVoice::diode(float x) const {
-  float sign = x > 0.0f ? 1.0f : -1.0f;
-  float dead = fabsf(x) - 0.667f; dead += fabsf(dead); return 0.043247658f * dead * dead * sign;
+  return trackAudioDiode(x);
 }
 
 float MMEVoice::shaper(float x) const {

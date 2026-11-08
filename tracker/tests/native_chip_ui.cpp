@@ -1176,28 +1176,31 @@ int main(int argc,char** argv){
     auto& instrument=prepareHomepageInstrument(InstrumentType::SCWF,"Audio modulation");
     instrument.modulation[0]={ModulationType::Audio,1,64,0,16,80,64,0};
     screenSetup(&screenModulation,0);appDraw();
+    key(1,keyEdit|keyRight);key(0,0);
+    require(instrument.modulation[0].p5==(uint8_t)AudioModulationMode::wave,"Audio source starts with WAVE");
+    currentScreen->fullRedraw();appDraw();
     for(int row=0;row<7;++row) { key(1,keyDown);key(0,0); }
     for(int type=0;type<(int)InstrumentType::totalCount;++type) {
       if(type==(int)InstrumentType::none || type==(int)InstrumentType::Midi) continue;
       getInstrumentFunctions((InstrumentType)type).init(&instrument);
       if(instrument.type==InstrumentType::none) continue;
-      instrument.modulation[0]={ModulationType::Audio,1,64,0,16,80,64,0};
+      instrument.modulation[0]={ModulationType::Audio,1,64,0,16,80,64,(uint8_t)AudioModulationMode::wave};
       currentScreen->fullRedraw();appDraw();
-      for(int mode=1;mode<4;++mode) {
+      for(int mode : {2,3,6,7,8,9,10}) {
         key(1,keyEdit|keyRight);key(0,0);
         if(instrument.modulation[0].p5!=mode)
           printf("Audio mode mismatch: engine %d, expected %d, actual %u\n",type,mode,instrument.modulation[0].p5);
-        require(instrument.modulation[0].p5==mode,"same four audio modes on every audio engine");
+        require(instrument.modulation[0].p5==mode,"same cross audio modes on every audio engine");
         require(instrument.modulation[0].destination==1,"direct mode destination");
         if(type==(int)InstrumentType::SCWF) capture(audioModulationModeName((AudioModulationMode)mode));
       }
       key(1,keyEdit|keyRight);key(0,0);
-      require(instrument.modulation[0].p5==3,"RING is last mode on every audio engine");
+      require(instrument.modulation[0].p5==(uint8_t)AudioModulationMode::vocoder,"VOCODER is last mode on every audio engine");
       const char* pitchName=instrumentModDestinationNameForInstrument(&instrument,2);
       require(!strcmp(pitchName,instrument.type==InstrumentType::AudioIn?"Cutoff":
         instrument.type==InstrumentType::Layer?"L1 Cents":"Pitch"),"WAVE preserves engine destinations");
     }
-    printf("Same four Audio modes on every audio engine; pitched engines retain Pitch\n");
+    printf("Trk Audio separates follower and raw audio; all audio engines expose cross modes including vocoder\n");
     chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
   }
   if(argc==3 && !strcmp(argv[2],"--layer-only")) {

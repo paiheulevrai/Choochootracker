@@ -30,6 +30,7 @@ class OPLVoice;
 class SimpleChipVoice;
 class AudioCommandQueue;
 struct PreparedInstrumentVoices;
+class TrackAudioVocoder;
 struct MidiRouterState;
 struct LinkClientState;
 class AudioMonitor;
@@ -124,6 +125,14 @@ struct ChipNomadState {
   uint8_t audioModTrackMask;
   uint8_t audioWaveTrackMask;
   uint8_t audioAmplitudeOwners[VOICE_OWNER_COUNT];
+  uint8_t audioCrossOwners[VOICE_OWNER_COUNT];
+  float audioCrossBuffer[VOICE_OWNER_COUNT][128];
+  struct AudioCrossState {
+    float depth, input[2], output[2];
+    uint8_t mode, source;
+  } audioCrossState[VOICE_OWNER_COUNT][4];
+  TrackAudioVocoder* audioVocoders[VOICE_OWNER_COUNT][4];
+  float audioCrossSmoothing, audioCrossDC;
   uint8_t audioWavePosition;
   float audioWaveHistory[PROJECT_MAX_TRACKS][64];
   float audioWaveSamples[PROJECT_MAX_TRACKS][64];

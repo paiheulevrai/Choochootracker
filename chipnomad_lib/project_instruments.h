@@ -91,7 +91,14 @@ inline float modulationAudioTimeSeconds(uint8_t value) {
   return value * value / 65025.0f;
 }
 
-enum class AudioModulationMode : uint8_t { envelope, wave, amplitude, ring, totalCount };
+enum class AudioModulationMode : uint8_t {
+  envelope, wave, amplitude, ring,
+  diode = 6, fold, bitXor, comparator, vocoder, totalCount
+};
+inline bool audioModulationModeValid(uint8_t mode) {
+  // IDs 4/5 belonged to removed experimental oscillator FM/PM modes.
+  return mode <= 3 || (mode >= 6 && mode < (uint8_t)AudioModulationMode::totalCount);
+}
 const char* audioModulationModeName(AudioModulationMode mode);
 
 enum class SequenceSource : uint8_t {
@@ -154,7 +161,7 @@ struct Modulation {
 };
 
 inline AudioModulationMode audioModulationMode(const Modulation& mod) {
-  return static_cast<AudioModulationMode>(mod.p5 < static_cast<uint8_t>(AudioModulationMode::totalCount) ? mod.p5 : 0);
+  return static_cast<AudioModulationMode>(audioModulationModeValid(mod.p5) ? mod.p5 : 0);
 }
 bool audioModulationModeSupported(InstrumentType type, AudioModulationMode mode);
 

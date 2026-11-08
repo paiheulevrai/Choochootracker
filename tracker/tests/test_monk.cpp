@@ -38,6 +38,17 @@ TEST_CASE("MonkSynth renders all vowel landmarks at supported playback rates") {
   }
 }
 
+TEST_CASE("MonkSynth retains its established output level without an extra 20 dB boost") {
+  auto voice = std::make_unique<MonkSynthVoice>();
+  auto i = monkInstrument();
+  voice->init(48000);
+  voice->configure(&i.chip.monk, 6000, 1);
+  voice->noteOn();
+  std::vector<float> audio(12000);
+  voice->renderMono(audio.data(), audio.size());
+  CHECK(std::sqrt(energy(audio) / audio.size()) == doctest::Approx(.109561).epsilon(.02));
+}
+
 TEST_CASE("MonkSynth tone and motion controls alter the native sound") {
   for (int parameter=0;parameter<monkParameterCount;++parameter) {
     CAPTURE(parameter);

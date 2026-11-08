@@ -31,6 +31,10 @@ static const SelectionItem envelopeSources[] = {{"ADSR", (int)ModulationType::AD
 static const SelectionItem lfoSources[] = {{"LFO", (int)ModulationType::LFO, NULL, 0}, {"syncLFO", (int)ModulationType::SLFO, NULL, 0}, {"slowLFO", (int)ModulationType::SlowLFO, NULL, 0}, {"FAST LFO", (int)ModulationType::FLFO, NULL, 0}};
 static const SelectionItem stickSources[] = {{"LINEAR", (int)ModulationType::StickLinear, NULL, 0}, {"RATE", (int)ModulationType::StickRate, NULL, 0}};
 enum { sequencePitchSelection = -10, sequenceVolumeSelection, sequenceGateSelection };
+enum { audioEnvelopeSelection = -20, audioSignalSelection };
+static const SelectionItem audioSources[] = {
+  {"ENV FOLLOWER", audioEnvelopeSelection, NULL, 0}, {"AUDIO", audioSignalSelection, NULL, 0}
+};
 static const SelectionItem sequenceSources[] = {
   {"PITCH", sequencePitchSelection, NULL, 0}, {"VOL", sequenceVolumeSelection, NULL, 0}, {"TRANCE GATE", sequenceGateSelection, NULL, 0}
 };
@@ -77,7 +81,12 @@ static void setModulationType(Modulation* mod, ModulationType type, int modIndex
 
 static void sourceSelected(int value) {
   Modulation* mod = &chipnomadState->project.instruments[cInstrument].modulation[editedModIndex];
-  if (value >= sequencePitchSelection && value <= sequenceGateSelection) {
+  if (value == audioEnvelopeSelection || value == audioSignalSelection) {
+    setModulationType(mod, ModulationType::Audio, editedModIndex);
+    if (value == audioEnvelopeSelection) mod->p5 = (uint8_t)AudioModulationMode::envelope;
+    else if (audioModulationMode(*mod) == AudioModulationMode::envelope)
+      mod->p5 = (uint8_t)AudioModulationMode::wave;
+  } else if (value >= sequencePitchSelection && value <= sequenceGateSelection) {
     setModulationType(mod, ModulationType::Sequence, editedModIndex);
     mod->p1 = static_cast<uint8_t>(value - sequencePitchSelection);
     mod->p2 = static_cast<uint8_t>(SequenceMode::normal);
@@ -97,9 +106,12 @@ static void openSourcePopup(int modIndex) {
   sourceCategories[1] = {"LFO", -1, lfoSources, 4};
   sourceCategories[2] = {"STICKS", -1, stickSources, 2};
   sourceCategories[3] = {"SEQUENCE", -1, sequenceSources, 3};
-  sourceCategories[4] = {"AUDIO", (int)ModulationType::Audio, NULL, 0};
+  sourceCategories[4] = {"TRK AUDIO", -1, audioSources, 2};
+  const auto& mod = chipnomadState->project.instruments[cInstrument].modulation[modIndex];
   selectionPopupSetup("SOURCE", sourceCategories, 5,
-    (int)chipnomadState->project.instruments[cInstrument].modulation[modIndex].type,
+    mod.type == ModulationType::Audio
+      ? (audioModulationMode(mod) == AudioModulationMode::envelope ? audioEnvelopeSelection : audioSignalSelection)
+      : (int)mod.type,
     sourceSelected, sourceCancelled);
   screenSetup(&screenSelectionPopup, 0);
 }
@@ -359,7 +371,9 @@ static const char* paramLabel(const Modulation* mod, int paramIdx) {
       break;
     case ModulationType::Audio: {
       static const char* labels[] = {"Track", "Atk", "Rel", "Sens", "Mode"};
-      if ((paramIdx == 1 || paramIdx == 2) && audioModulationMode(*mod) != AudioModulationMode::envelope) return "--";
+      const auto mode = audioModulationMode(*mod);
+      if ((paramIdx == 1 || paramIdx == 2) && mode != AudioModulationMode::envelope &&
+          !(paramIdx == 2 && mode == AudioModulationMode::vocoder)) return "--";
       return paramIdx < 5 ? labels[paramIdx] : NULL;
     }
     case ModulationType::Sequence:
@@ -390,7 +404,7 @@ static int paramCount(const Modulation* mod) {
     case ModulationType::FLFO: return mod->p1 == static_cast<uint8_t>(LFOShape::wavetable) ? 4 : 3;
     case ModulationType::StickLinear: return 1;
     case ModulationType::StickRate: return 2;
-    case ModulationType::Audio: return 5;
+    case ModulationType::Audio: return audioModulationMode(*mod) == AudioModulationMode::envelope ? 4 : 5;
     case ModulationType::Sequence:
       return mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) ? 5 : 2;
     default:      return 0;
@@ -479,7 +493,8 @@ static bool valueBar(const Modulation* mod, int modRow, float* position, bool* b
       return true;
     case ModulationType::Audio:
       *position = (&mod->p1)[paramIdx] / 255.0f;
-      return paramIdx == 3 || (paramIdx > 0 && paramIdx < 3 && audioModulationMode(*mod) == AudioModulationMode::envelope);
+      return paramIdx == 3 || (paramIdx > 0 && paramIdx < 3 && audioModulationMode(*mod) == AudioModulationMode::envelope) ||
+        (paramIdx == 2 && audioModulationMode(*mod) == AudioModulationMode::vocoder);
     case ModulationType::LFO:
     case ModulationType::SlowLFO:
       *position = mod->p3 / 255.0f;
@@ -562,8 +577,10 @@ static void drawField(int col, int row, CellState state) {
   switch (modRow) {
     case 0: // Type (on header row)
       gfxClearRect(valX, y, 8, 1);
-      gfxPrint(valX, y, mod->type == ModulationType::Sequence &&
-                         mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) ? "TGATE" : modTypeName(mod->type));
+      gfxPrint(valX, y, mod->type == ModulationType::Audio
+        ? (audioModulationMode(*mod) == AudioModulationMode::envelope ? "ENV FLW" : "AUDIO")
+        : mod->type == ModulationType::Sequence &&
+          mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate) ? "TGATE" : modTypeName(mod->type));
       break;
     case 1: // Destination
       gfxClearRect(valX, y, COL_RIGHT_X - COL_LEFT_VAL, 1);
@@ -604,7 +621,8 @@ static void drawField(int col, int row, CellState state) {
       } else if (mod->type == ModulationType::Audio) {
         if (paramIdx == 0) gfxPrintf(valX, y, "Track %u", (unsigned)mod->p1 + 1);
         else if (paramIdx == 4) gfxPrint(valX, y, audioModulationModeName(audioModulationMode(*mod)));
-        else if ((paramIdx == 1 || paramIdx == 2) && audioModulationMode(*mod) != AudioModulationMode::envelope) gfxPrint(valX, y, "--");
+        else if ((paramIdx == 1 || paramIdx == 2) && audioModulationMode(*mod) != AudioModulationMode::envelope &&
+                 !(paramIdx == 2 && audioModulationMode(*mod) == AudioModulationMode::vocoder)) gfxPrint(valX, y, "--");
         else gfxPrint(valX, y, byteToHex((&mod->p1)[paramIdx]));
       } else if (modulationIsTickLFO(mod->type) || mod->type == ModulationType::FLFO) {
         if (paramIdx == 0) {
@@ -665,6 +683,17 @@ static int onEdit(int col, int row, enum CellEditAction action) {
         openSourcePopup(modIdx);
         return 0;
       }
+      if (mod->type == ModulationType::Audio) {
+        const bool up = action == CellEditAction::increase || action == CellEditAction::increaseBig;
+        const bool down = action == CellEditAction::decrease || action == CellEditAction::decreaseBig;
+        if ((up && audioModulationMode(*mod) == AudioModulationMode::envelope) ||
+            (down && audioModulationMode(*mod) != AudioModulationMode::envelope)) {
+          mod->p5 = (uint8_t)(up ? AudioModulationMode::wave : AudioModulationMode::envelope);
+          screenFullRedraw(&screenData);
+          handled = 1;
+          break;
+        }
+      }
       handled = edit8noLast(action, &type, 1, 0, static_cast<uint8_t>(ModulationType::totalCount) - 1);
       if (type == static_cast<uint8_t>(ModulationType::StickVelocity)) {
         type = oldType < type ? static_cast<uint8_t>(ModulationType::StickRate)
@@ -719,7 +748,12 @@ static int onEdit(int col, int row, enum CellEditAction action) {
           const auto previous = audioModulationMode(*mod);
           const auto type = chipnomadState->project.instruments[cInstrument].type;
           handled = edit8noLast(action, &mod->p5, 1, 0,
-            audioModulationModeSupported(type, AudioModulationMode::ring) ? 3 : 1);
+            audioModulationModeSupported(type, AudioModulationMode::ring)
+              ? (uint8_t)AudioModulationMode::totalCount - 1 : 1);
+          if (mod->p5 == 0) mod->p5 = (uint8_t)AudioModulationMode::wave;
+          if (!audioModulationModeValid(mod->p5))
+            mod->p5 = (uint8_t)(previous < AudioModulationMode::diode
+              ? AudioModulationMode::diode : AudioModulationMode::ring);
           if (handled && audioModulationMode(*mod) != previous) {
             const auto mode = audioModulationMode(*mod);
             if (mode >= AudioModulationMode::amplitude) mod->destination = 1;
@@ -727,8 +761,9 @@ static int onEdit(int col, int row, enum CellEditAction action) {
               mode == AudioModulationMode::wave ? ": 8-sample control; CPU heavy" : "");
             screenFullRedraw(&screenData);
           }
-        } else if ((paramIdx == 1 || paramIdx == 2) && audioModulationMode(*mod) != AudioModulationMode::envelope) {
-          screenMessage(MESSAGE_TIME, "Attack/Release only apply to ENV");
+        } else if ((paramIdx == 1 || paramIdx == 2) && audioModulationMode(*mod) != AudioModulationMode::envelope &&
+                   !(paramIdx == 2 && audioModulationMode(*mod) == AudioModulationMode::vocoder)) {
+          screenMessage(MESSAGE_TIME, "ENV: Attack/Release; VOCODER: Release");
           handled = 1;
         } else {
           uint8_t* parameter = &mod->p1 + paramIdx;

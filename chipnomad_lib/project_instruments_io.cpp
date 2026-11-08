@@ -570,7 +570,7 @@ static int loadModulation(FILE* file, Instrument* instrument) {
         instrument->modulation[i].type = ModulationType::StickLinear;
       }
       if (instrument->modulation[i].type == ModulationType::Audio &&
-          (instrument->modulation[i].p5 >= (uint8_t)AudioModulationMode::totalCount ||
+          (!audioModulationModeValid(instrument->modulation[i].p5) ||
            !audioModulationModeSupported(instrument->type, audioModulationMode(instrument->modulation[i])))) {
         snprintf(projectFileError, sizeof(projectFileError), "Unsupported Audio modulation mode");
         return 1;

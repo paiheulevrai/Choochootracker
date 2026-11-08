@@ -3,6 +3,7 @@
 #include "pitch_table_utils.h"
 #include "project_utils.h"
 #include "synth/master_effects.h"
+#include "synth/track_audio_modulation.h"
 #include <chrono>
 #include <algorithm>
 #include <cmath>
@@ -10,6 +11,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <cstdlib>
 
 namespace {
 struct AudioModFixture {
@@ -320,6 +322,7 @@ TEST_CASE("Audio raw mode serialization retains old ENV and rejects invalid mode
   getInstrumentFunctions(InstrumentType::SCWF).init(&p->instruments[0]);
   const char* path = "build/tests/audio_modes.cni";
   for (int mode = 0; mode < (int)AudioModulationMode::totalCount; ++mode) {
+    if (!audioModulationModeValid((uint8_t)mode)) continue;
     p->instruments[0].modulation[0] = {ModulationType::Audio, 1, -64, 1, 16, 80, 64, (uint8_t)mode};
     REQUIRE(instrumentSave(p.get(), path, 0) == 0);
     REQUIRE(instrumentLoad(loaded.get(), path, 0) == 0);
@@ -332,7 +335,8 @@ TEST_CASE("Audio raw mode serialization retains old ENV and rejects invalid mode
   for (int type = 0; type < (int)InstrumentType::totalCount; ++type)
     for (int mode = 0; mode < (int)AudioModulationMode::totalCount; ++mode)
       CHECK(audioModulationModeSupported((InstrumentType)type, (AudioModulationMode)mode) ==
-        (mode < 2 || ((InstrumentType)type != InstrumentType::none && (InstrumentType)type != InstrumentType::Midi)));
+        (audioModulationModeValid((uint8_t)mode) &&
+         (mode < 2 || ((InstrumentType)type != InstrumentType::none && (InstrumentType)type != InstrumentType::Midi))));
   for (int removedMode : {4, 5}) {
     p->instruments[0].modulation[0].p5 = (uint8_t)removedMode;
     REQUIRE(instrumentSave(p.get(), path, 0) == 0);
@@ -379,7 +383,9 @@ TEST_CASE("Audio WAVE pitch reaches SCWF and BYOWTBL voices through the track ro
 
 TEST_CASE("Raw audio Layer CPU benchmark retains the existing voice pool") {
   for (bool varying : {false, true})
-  for (int mode : {-1, (int)AudioModulationMode::amplitude, (int)AudioModulationMode::ring, (int)AudioModulationMode::wave}) {
+  for (int mode : {-1, (int)AudioModulationMode::amplitude, (int)AudioModulationMode::ring,
+       (int)AudioModulationMode::wave, (int)AudioModulationMode::diode, (int)AudioModulationMode::fold,
+       (int)AudioModulationMode::bitXor, (int)AudioModulationMode::comparator, (int)AudioModulationMode::vocoder}) {
     AudioModFixture fixture(mode >= 0, true);
     if (varying)
       for (int n = 0; n < 48000; ++n)
@@ -398,6 +404,289 @@ TEST_CASE("Raw audio Layer CPU benchmark retains the existing voice pool") {
     for (auto& owner : fixture.state->audioInputVoices)
       for (auto* voice : owner) CHECK(voice == nullptr);
     for (float sample : output) CHECK(std::isfinite(sample));
+  }
+}
+TEST_CASE("Track audio cross modes are distinct, causal and callback independent") {
+  for (auto mode : {AudioModulationMode::diode, AudioModulationMode::fold,
+       AudioModulationMode::bitXor, AudioModulationMode::comparator, AudioModulationMode::vocoder}) {
+    CAPTURE((int)mode);
+    AudioModFixture dry(false), whole(true), split(true);
+    for (auto* fixture : {&dry, &whole, &split}) {
+      for (int n = 0; n < 48000; ++n) {
+        fixture->source[n] = (int16_t)(std::sin(n * 6.283185307 * 330 / 48000) * 26000);
+        fixture->target[n] = (int16_t)(std::sin(n * 6.283185307 * 900 / 48000) * 24000);
+      }
+      if (fixture != &dry) {
+        auto& mod = fixture->state->project.instruments[1].modulation[0];
+        mod.p5 = (uint8_t)mode; mod.amount = 127;
+        REQUIRE(chipnomadQueueProjectRefresh(fixture->state.get()));
+      }
+      uint8_t enabled[PROJECT_MAX_TRACKS] = {}; enabled[1] = 1;
+      REQUIRE(chipnomadQueueTrackEnabled(fixture->state.get(), enabled));
+    }
+    std::vector<float> a(8192), b(8192), plain(8192);
+    whole.render(a.data(), 4096); dry.render(plain.data(), 4096);
+    for (int offset = 0; offset < 4096;) {
+      const int frames = std::min(37, 4096 - offset);
+      split.render(b.data() + offset * 2, frames);
+      offset += frames;
+    }
+    double difference = 0, outputEnergy = 0;
+    for (size_t i = 0; i < a.size(); ++i) {
+      CHECK(std::isfinite(a[i]));
+      CHECK(std::fabs(a[i]) < 2.0f);
+      CHECK(a[i] == doctest::Approx(b[i]).epsilon(.00001));
+      difference += std::fabs(a[i] - plain[i]);
+      outputEnergy += a[i] * a[i];
+    }
+    CHECK(difference > 1);
+    CHECK(outputEnergy > .001);
+    CHECK(whole.state->audioCrossOwners[1] == 1);
+    CHECK((whole.state->audioVocoders[1][0] != nullptr) == (mode == AudioModulationMode::vocoder));
+  }
+}
+
+TEST_CASE("Track audio vocoder leases prepare only required slots and survive coalesced refreshes") {
+  AudioModFixture fixture(true, true);
+  auto* s = fixture.state.get();
+  for (auto& owner : s->audioVocoders) for (auto* vocoder : owner) CHECK(vocoder == nullptr);
+  auto& mod = s->project.instruments[1].modulation[0];
+  mod.p5 = (uint8_t)AudioModulationMode::vocoder;
+  REQUIRE(chipnomadQueueProjectRefresh(s));
+  float output[1024];
+  fixture.render(output, 512);
+  auto* original = s->audioVocoders[0][0];
+  REQUIRE(original != nullptr);
+  for (auto& owner : s->audioVocoders) {
+    CHECK(owner[0] != nullptr);
+    for (int m = 1; m < 4; ++m) CHECK(owner[m] == nullptr);
+  }
+  for (int n = 0; n < 5; ++n) REQUIRE(chipnomadQueueProjectRefresh(s));
+  fixture.render(output, 512);
+  CHECK(s->audioVocoders[0][0] == original);
+  mod.p5 = (uint8_t)AudioModulationMode::ring;
+  REQUIRE(chipnomadQueueProjectRefresh(s));
+  fixture.render(output, 512);
+  fixture.render(output, 512);
+  for (auto& owner : s->audioVocoders) for (auto* vocoder : owner) CHECK(vocoder == nullptr);
+  REQUIRE(chipnomadQueueProjectRefresh(s));
+  fixture.render(output, 512);
+}
+
+TEST_CASE("Track audio vocoder transfers a modulator spectrum and releases on silence") {
+  auto render = [](float frequency, bool silentCarrier) {
+    TrackAudioVocoder vocoder(48000);
+    std::vector<float> samples(48000);
+    for (int n = 0; n < 48000; ++n) {
+      const float source = n < 24000 ? std::sin(n * 6.283185307f * frequency / 48000) * .8f : 0;
+      float left = silentCarrier ? 0 : (std::sin(n * 6.283185307f * 220 / 48000) +
+        std::sin(n * 6.283185307f * 1800 / 48000)) * .25f;
+      float right = left;
+      vocoder.process(source, left, right, 1.0f - std::exp(-1.0f / (0.02f * 48000)));
+      samples[n] = left;
+      REQUIRE(std::isfinite(left));
+      CHECK(left == right);
+    }
+    return samples;
+  };
+  auto low = render(220, false), high = render(1800, false), silent = render(220, true);
+  auto magnitude = [](const std::vector<float>& samples, float hz) {
+    double re = 0, im = 0;
+    for (int n = 12000; n < 24000; ++n) {
+      re += samples[n] * std::cos(n * 6.283185307 * hz / 48000);
+      im += samples[n] * std::sin(n * 6.283185307 * hz / 48000);
+    }
+    return re * re + im * im;
+  };
+  CHECK(magnitude(low, 220) > magnitude(low, 1800) * 4);
+  CHECK(magnitude(high, 1800) > magnitude(high, 220) * 4);
+  double late = 0;
+  for (int n = 45000; n < 48000; ++n) late += low[n] * low[n];
+  CHECK(late < 1e-10);
+  for (float sample : silent) CHECK(sample == 0);
+}
+
+TEST_CASE("Monk vowels retain formant contrast through a CSAW track vocoder") {
+  std::vector<float> sounds[6];
+  const uint8_t vowels[] = {0, 64, 128, 191, 255, 128};
+  double power[6] = {};
+  for (int vowel = 0; vowel < 6; ++vowel) {
+    AudioModFixture fixture(false);
+    auto& p = fixture.state->project;
+    getInstrumentFunctions(InstrumentType::Monk).init(&p.instruments[0]);
+    auto& monk = p.instruments[0].chip.monk;
+    monk.vowel = vowels[vowel];
+    monk.glide = monk.delayMix = monk.vibrato = monk.breath = 0;
+    monk.unison = 1;
+    getInstrumentFunctions(InstrumentType::Braids).init(&p.instruments[1]);
+    auto& braids = p.instruments[1].chip.braids;
+    braids.model = 0;
+    braids.filterEnabled = 0;
+    braids.attack = braids.decay = 0; braids.sustain = 255;
+    p.instruments[1].modulation[0] = {ModulationType::Audio, 1, (int8_t)(vowel == 5 ? 0 : 127), 0, 0, 64, 79,
+      (uint8_t)AudioModulationMode::vocoder};
+    chipnomadInitChips(fixture.state.get(), 48000, nullptr);
+    REQUIRE(chipnomadQueuePlaybackPreviewNote(fixture.state.get(), 0, 45, 0));
+    REQUIRE(chipnomadQueuePlaybackPreviewNote(fixture.state.get(), 1, 45, 1));
+    uint8_t enabled[PROJECT_MAX_TRACKS] = {}; enabled[1] = 1;
+    REQUIRE(chipnomadQueueTrackEnabled(fixture.state.get(), enabled));
+    float output[1024];
+    for (int block = 0; block < 48; ++block) fixture.render(output, 512);
+    sounds[vowel].resize(48000);
+    fixture.render(sounds[vowel].data(), 24000);
+    for (float sample : sounds[vowel]) {
+      REQUIRE(std::isfinite(sample));
+      power[vowel] += sample * sample;
+    }
+    if (const char* folder = std::getenv("CCT_VOCODER_CAPTURE")) {
+      const std::string path = std::string(folder) + "\\monk-csaw-" + std::to_string(vowel) + ".f32";
+      FILE* file = std::fopen(path.c_str(), "wb");
+      REQUIRE(file != nullptr);
+      REQUIRE(std::fwrite(sounds[vowel].data(), sizeof(float), sounds[vowel].size(), file) == sounds[vowel].size());
+      REQUIRE(std::fclose(file) == 0);
+    }
+  }
+  auto bandEnergy = [](const std::vector<float>& sound, int low, int high) {
+    double result = 0;
+    for (int hz = low; hz <= high; hz += 20) {
+      double re = 0, im = 0;
+      for (int n = 0; n < 24000; ++n) {
+        const double phase = n * 6.283185307179586 * hz / 48000;
+        re += sound[n * 2] * std::cos(phase);
+        im += sound[n * 2] * std::sin(phase);
+      }
+      result += re * re + im * im;
+    }
+    return result;
+  };
+  double contrast[5];
+  for (int vowel = 0; vowel < 5; ++vowel) {
+    contrast[vowel] = bandEnergy(sounds[vowel], 300, 700) /
+      std::max(1e-20, bandEnergy(sounds[vowel], 1100, 2500));
+    std::printf("Monk -> CSAW vowel %d: %.2f dB relative to dry, low/mid ratio %.3f\n",
+      vowels[vowel], 10 * std::log10(power[vowel] / power[5]), contrast[vowel]);
+    CHECK(power[vowel] > power[5] * 0.5);
+    CHECK(power[vowel] < power[5] * 4);
+  }
+  const auto limits = std::minmax_element(std::begin(contrast), std::end(contrast));
+  const double contrastDb = 10 * std::log10(*limits.second / *limits.first);
+  std::printf("Monk -> CSAW vowel spectral contrast: %.2f dB\n", contrastDb);
+  CHECK(contrastDb > 12);
+}
+
+TEST_CASE("Track audio vocoder levels hot sources without losing their spectrum") {
+  double energy[3] = {};
+  for (int volume = 0; volume < 3; ++volume) {
+    TrackAudioVocoder vocoder(48000);
+    const float scale = volume == 0 ? .8f : volume == 1 ? 4.0f : 16.0f;
+    const float release = vocoder.releaseCoefficient(64);
+    for (int n = 0; n < 24000; ++n) {
+      const float source = scale * (std::sin(n * 6.283185307f * 600 / 48000) +
+        .1f * std::sin(n * 6.283185307f * 1800 / 48000));
+      float left = .2f * (std::sin(n * 6.283185307f * 600 / 48000) +
+        std::sin(n * 6.283185307f * 1800 / 48000));
+      float right = 0;
+      vocoder.process(source, left, right, release);
+      REQUIRE(std::isfinite(left));
+      CHECK(std::fabs(left) <= 1);
+      CHECK(right == 0);
+      if (n >= 12000) energy[volume] += left * left;
+    }
+    vocoder.reset();
+    float left = 0, right = 0;
+    vocoder.process(0, left, right, release);
+    CHECK(left == 0);
+    CHECK(right == 0);
+  }
+  REQUIRE(energy[0] > 1);
+  CHECK(energy[1] == doctest::Approx(energy[0]).epsilon(.005));
+  CHECK(energy[2] == doctest::Approx(energy[0]).epsilon(.005));
+}
+
+TEST_CASE("Fold and XOR do not turn quiet carriers or release tails into full-scale output") {
+  for (auto mode : {AudioModulationMode::fold, AudioModulationMode::bitXor}) {
+    for (float amplitude : {0.0f, .00001f, .001f, .01f, .1f, 1.0f}) {
+      double dryEnergy = 0, wetEnergy = 0;
+      for (int n = 0; n < 4096; ++n) {
+        const float carrier = amplitude * std::sin(n * .13f);
+        const float source = std::sin(n * .037f);
+        const float wet = trackAudioCrossSample(mode, carrier, source);
+        REQUIRE(std::isfinite(wet));
+        CHECK(std::fabs(wet) <= std::fabs(carrier) + 1e-7f);
+        dryEnergy += carrier * carrier;
+        wetEnergy += wet * wet;
+      }
+      CHECK(wetEnergy <= dryEnergy + 1e-10);
+      CHECK(trackAudioCrossSample(mode, 0, 1) == 0);
+    }
+  }
+}
+
+TEST_CASE("Optional user vocoder project loads and plays") {
+  const char* path = std::getenv("CCT_VOCODER_PROJECT");
+  if (!path || !*path) return;
+  std::unique_ptr<ChipNomadState, decltype(&chipnomadDestroy)> state{chipnomadCreate(), chipnomadDestroy};
+  REQUIRE(state != nullptr);
+  REQUIRE(projectLoad(&state->project, path) == 0);
+  chipnomadInitChips(state.get(), 48000, nullptr);
+  REQUIRE(chipnomadReserveRenderBuffers(state.get(), 512) == 0);
+  playbackStartSong(&state->playbackState, 0, 0, 1);
+  float output[1024];
+  double energy = 0;
+  for (int block = 0; block < 188; ++block) {
+    REQUIRE(chipnomadRender(state.get(), output, 512) == 512);
+    for (float sample : output) {
+      REQUIRE(std::isfinite(sample));
+      energy += sample * sample;
+    }
+  }
+  CHECK(energy > 0.01);
+}
+
+TEST_CASE("Track audio zero depth preserves the exact mix including Layers") {
+  for (bool layers : {false, true})
+  for (auto mode : {AudioModulationMode::diode, AudioModulationMode::fold,
+       AudioModulationMode::bitXor, AudioModulationMode::comparator, AudioModulationMode::vocoder}) {
+    AudioModFixture dry(false, layers), processed(true, layers);
+    auto& mod = processed.state->project.instruments[1].modulation[0];
+    mod.amount = 0; mod.p5 = (uint8_t)mode;
+    REQUIRE(chipnomadQueueProjectRefresh(processed.state.get()));
+    float a[1024], b[1024];
+    dry.render(a, 512); processed.render(b, 512);
+    for (int n = 0; n < 1024; ++n) CHECK(a[n] == b[n]);
+  }
+}
+
+TEST_CASE("Track audio reciprocal vocoders and multiple Layer slots remain callback independent") {
+  for (bool layers : {false, true}) {
+    AudioModFixture whole(true, layers), split(true, layers);
+    for (auto* fixture : {&whole, &split}) {
+      auto& p = fixture->state->project;
+      for (int n = 0; n < 48000; ++n) {
+        fixture->source[n] = (int16_t)(std::sin(n * 6.283185307 * 330 / 48000) * 24000);
+        fixture->target[n] = (int16_t)(std::sin(n * 6.283185307 * 900 / 48000) * 24000);
+      }
+      p.instruments[0].modulation[0] = {ModulationType::Audio, 1, 90, 1, 0, 80, 64, (uint8_t)AudioModulationMode::vocoder};
+      p.instruments[1].modulation[0] = {ModulationType::Audio, 1, 90, 0, 0, 80, 64, (uint8_t)AudioModulationMode::vocoder};
+      p.instruments[1].modulation[1] = {ModulationType::Audio, 1, -60, 0, 0, 0, 64, (uint8_t)AudioModulationMode::diode};
+      if (layers)
+        p.instruments[2].modulation[0] = {ModulationType::Audio, 1, 90, 0, 0, 80, 64, (uint8_t)AudioModulationMode::fold};
+      REQUIRE(chipnomadQueueProjectRefresh(fixture->state.get()));
+    }
+    std::vector<float> a(2048), b(2048);
+    whole.render(a.data(), 1024);
+    for (int offset = 0; offset < 1024;) {
+      const int frames = std::min(17, 1024 - offset);
+      split.render(b.data() + offset * 2, frames);
+      offset += frames;
+    }
+    double outputEnergy = 0;
+    for (int n = 0; n < 2048; ++n) {
+      CHECK(std::isfinite(a[n]));
+      CHECK(a[n] == doctest::Approx(b[n]).epsilon(.00001));
+      outputEnergy += a[n] * a[n];
+    }
+    CHECK(outputEnergy > .000001);
   }
 }
 

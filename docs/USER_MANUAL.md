@@ -1083,7 +1083,7 @@ Envelope/LFO duration parameters are measured in ticks, except the Audio followe
 
 ### Audio envelope follower
 
-Choose **AUDIO** in a modulation slot's Source menu, then select the source
+Choose **TRK AUDIO > ENV FOLLOWER** in a modulation slot's Source menu, then select the source
 **Track** and a normal destination. This source uses internal audio only, not
 microphones or other external inputs.
 
@@ -1105,29 +1105,54 @@ its Audio modulation tap. Only selected muted sources keep rendering.
 For Plaits six-op FM models, Harmonics selects a preset on the next note trigger;
 use Timbre (brightness) or Morph (envelope control) for continuous movement.
 
-The **Mode** field selects:
+### Track audio cross-modulation
 
-- **ENV**: the original envelope follower; Attack and Release apply only here.
+Choose **TRK AUDIO > AUDIO** for raw audio modulation. Select the source Track,
+Sensitivity and signed Amount, then choose a **Mode**:
+
 - **WAVE**: signed source audio modulates the selected parameter every 8 samples,
   using the existing destination range. Pitch is exponential pitch modulation,
   not linear FM. Buffered engines still apply changes at their native block rate.
 - **AM**: multiplies the target output by `1 + source * Amount`.
 - **RING**: crossfades the dry output to signed multiplication; maximum positive
   Amount is pure ring modulation. Negative Amount reverses the modulator.
+- **DIODE**: nonlinear diode ring modulation, using the diode transfer also
+  adapted from Mutable Instruments Warps in MME.
+- **FOLD**: combines the two signals in a wavefolder.
+- **XOR**: signed 12-bit digital cross-modulation.
+- FOLD and XOR retain the carrier's instantaneous amplitude bound instead of
+  producing a full-scale signal from a quiet carrier; they introduce no automatic gain.
+- **COMPARE**: compares carrier and source to reshape the carrier's polarity.
+- **VOCODER**: a 12-band spectral envelope follower shapes the stereo carrier
+  with the source's spectrum. Cascaded bandpass filters preserve formant contrast;
+  input level following attenuates hot sources without hard clipping or capping
+  individual band envelopes. Quiet sources receive at most four times gain.
+  Attack is fixed at 1 ms; **Rel** controls release
+  from 5 ms to one second. Use a harmonically rich carrier and a strong source.
+  This is a compact original vocoder, not the complete Warps firmware.
 
-All audio engines offer the same four modes. For audio-driven pitch modulation,
+For a vowel test, sustain MonkSynth on track 1 around C-3 and CSAW on track 2
+around C-3. On CSAW select Audio, source track 1, OUTPUT, VOCODER, Amount `7F`,
+Sens `40` and Rel `40`. Change `MWV` on the **MonkSynth track**, not the carrier:
+`00`, `40`, `80`, `BF`, `FF` select A, E, I, O, U. Mute track 1 to hear only
+the vocoded carrier; its audio remains available to modulation. High MonkSynth
+notes have fewer harmonics to describe vowels. Rel `FF` holds band envelopes
+for one second and can smear rapid vowel changes.
+
+All audio engines offer these same modes. For audio-driven pitch modulation,
 select **WAVE**, then the **Pitch** destination. This uses the engine's existing
 pitch path and native update cadence, not an engine-specific linear FM/PM mode.
 Audio Input retains its existing destinations (volume and filter), without
 pitch shifting. Layer uses **L1/L2/L3 Cents** for its children's pitch.
-MIDI has no audio output for AM/RING.
+MIDI has no audio output for the output-processing modes.
 Experimental files saved with the removed engine-specific FM/PM modes are
 rejected explicitly rather than silently changing their sound.
 
 Raw modes use the stereo average, sensitivity-limited to -1..1 before signed
-Amount. AM/RING affect the voice output before track processing, not master audio.
+Amount, except VOCODER which uses its input level follower instead.
+AM/RING affect the voice output before track processing, not master audio.
 Select track B on A and track A on B for reciprocal **XM**; no extra engine is
-created. Raw routing has a fixed 64-sample causal delay (1.33 ms at 48 kHz), also
+created for WAVE/AM/RING or the four simple cross-modulators. Raw routing has a fixed 64-sample causal delay (1.33 ms at 48 kHz), also
 for self-modulation, so cycles are independent of rendering order and callback size.
 Only necessary sources are retained, including muted ones. WAVE parameter updates
 can be CPU-intensive, especially with Layer/polyphony; AM/RING process
@@ -1136,6 +1161,17 @@ produce aliasing; there is no extra oversampling.
 WAVE uses FLFO's maximum 8-sample control interval (6 kHz at 48 kHz audio),
 aligned independently of callback size. AM/RING remain per-sample.
 Retriggering the same instrument keeps the follower's level.
+
+The new cross-modulators use **OUTPUT** (or OFF), not a parameter destination.
+Amount crossfades dry to processed audio; negative amounts invert the source.
+They process the summed voices once per instrument owner, after pan and before
+track tilt/EQ/inserts/sends. Layer children have independent processing, followed
+by any parent Layer processing. Multiple slots run in slot order.
+The vocoder prepares only the necessary owner/slot instances outside the audio
+callback; it does not duplicate a vocoder per chord voice. Its cost still scales
+with active tracks, Layer children and vocoder slots, so high-count configurations
+need target-console performance checks. Existing ENV/WAVE/AM/RING settings retain
+their saved identifiers and behavior.
 
 The source is read from the previous render block to make routing independent
 of track order and prevent recursive feedback. Without a faster FLFO, control

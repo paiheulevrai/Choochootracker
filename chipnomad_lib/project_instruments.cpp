@@ -4,14 +4,14 @@
 #include "project_instruments.h"
 
 const char* audioModulationModeName(AudioModulationMode mode) {
-  static const char* names[] = {"ENV", "WAVE", "AM", "RING"};
+  static const char* names[] = {"ENV", "WAVE", "AM", "RING", "--", "--", "DIODE", "FOLD", "XOR", "COMPARE", "VOCODER"};
   const int index = (int)mode;
   return index >= 0 && index < (int)AudioModulationMode::totalCount ? names[index] : "ENV";
 }
 
 bool audioModulationModeSupported(InstrumentType type, AudioModulationMode mode) {
   if (mode == AudioModulationMode::envelope || mode == AudioModulationMode::wave) return true;
-  return (mode == AudioModulationMode::amplitude || mode == AudioModulationMode::ring) &&
+  return audioModulationModeValid((uint8_t)mode) &&
     type != InstrumentType::Midi && type != InstrumentType::none;
 }
 #include "project.h"
