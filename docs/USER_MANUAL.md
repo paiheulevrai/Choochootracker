@@ -843,6 +843,24 @@ Tap **Engine** to choose from categorised engine lists.
 - `TRIG` reproduces the module with TRIG connected and LEVEL unpatched
 - `VCA` holds LEVEL open and applies the tracker ADSR after the voice
 
+#### Fatty
+
+Fatty is a tuned bass synth with a main oscillator, an optional octave-down
+sub oscillator, drive, and pitch glide. Glide `00` changes pitch immediately.
+The original oscillator shapes, drive and note transients are preserved.
+OSC and Sub pickers use **EDIT + [LEFT/RIGHT]** to cycle their waveforms.
+The right-column filter Type edits the filter independently of Sub.
+
+- `TRIG` is a one-shot: **D** sets decay and **C** softens the attack.
+  Note Off does not cut the pluck. The VCA attack and ADSR preview are inactive.
+- `VCA` uses Fatty's original linear timing (up to four seconds for attack,
+  decay and release, with a three-millisecond minimum release). Each note
+  restarts the attack and resets the filter;
+  glide preserves oscillator pitch continuity independently of the envelope.
+  Note Off starts release.
+- Switching envelope modes while sounding restarts the envelope using the
+  new mode's parameters. A short output transition bridges retriggers.
+
 #### Sampler
 
 This clean Sample engine plays mono or stereo PCM samples loaded into RAM.
@@ -1657,8 +1675,10 @@ reach about 8x drive at `7F` and 32x at `FF`; Crush reaches 4 bits then 1 bit.
 Rate reduces the sample rate from 1x through 16x at `7F` to 128x at `FF`, and
 can be used independently of Crush's bit reduction. Input adds up to 12 dB at
 `7F` and 36 dB at `FF`. Tone is a post-effect low-pass filter, bypassed at
-`FF`. A shared stereo auto-level stage smooths level changes and limits its
-correction to -36/+18 dB; very quiet or strongly cancelled signals can still
+`FF`. A shared stereo auto-level stage smooths level changes, including when
+notes emerge from silence, and limits its correction to -36/+18 dB. Gain
+reduction uses a short continuous transition rather than an instantaneous
+threshold jump; very quiet or strongly cancelled signals can still
 change in perceived loudness. Existing projects retain their Destruction bytes
 without conversion. Its old parameters are reinterpreted, so an old project
 can sound different or dry until Mix and the stages are edited.

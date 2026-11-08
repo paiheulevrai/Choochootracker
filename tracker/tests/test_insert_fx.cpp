@@ -565,6 +565,39 @@ TEST_SUITE("track inserts") {
     for (size_t i = silence.size() / 2; i < silence.size(); ++i)
       CHECK(fabsf(silence[i]) < .001f);
   }
+  TEST_CASE("Destruction auto level crosses its silence threshold without a gain step") {
+    for (int rate : {22050, 44100, 48000, 96000}) {
+      CAPTURE(rate);
+      InsertConfig config[2]{};
+      insertSelect(&config[0], insertDestruction);
+      const int parameters[8] = {0, 0, 40, 84, 48, 255, 255, 0};
+      for (int p = 0; p < 8; ++p) insertEdit(&config[0], p, parameters[p]);
+      InsertAutomation automation{};
+      InsertChain chain(rate);
+      REQUIRE(chain.ready());
+      chain.sync(config, &automation);
+      uint8_t effective[2][8];
+      values(config, effective);
+      std::vector<float> audio(rate * 2, 0);
+      const int ramp = rate / 50;
+      float previous = 0, maxStep = 0;
+      for (int event = 0; event < 3; ++event) {
+        std::fill(audio.begin(), audio.end(), 0);
+        for (int n = 0; n < ramp * 2; ++n) {
+          const float level = -0.02f * (n < ramp ? n : ramp * 2 - n) / ramp;
+          audio[n * 2] = audio[n * 2 + 1] = level;
+        }
+        chain.process(audio.data(), rate, effective);
+        for (int n = 0; n < rate; ++n) {
+          REQUIRE(std::isfinite(audio[n * 2]));
+          maxStep = std::max(maxStep, std::fabs(audio[n * 2] - previous));
+          previous = audio[n * 2];
+        }
+      }
+      CAPTURE(maxStep);
+      CHECK(maxStep < 0.03f * 48000 / rate);
+    }
+  }
   TEST_CASE("chorus and phaser extend from subtle to extreme modulation") {
     for (int module : {insertChorus, insertPhaser}) {
       InsertConfig c[2]{};

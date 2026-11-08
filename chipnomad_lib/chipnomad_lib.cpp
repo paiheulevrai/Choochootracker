@@ -804,6 +804,7 @@ static void retireLayerTracks(ChipNomadState* state) {
         ownerVoicesActive(state->mmeVoices, owner) ||
         ownerVoicesActive(state->monkVoices, owner) ||
         ownerVoicesActive(state->sinteredVoices, owner) ||
+        ownerVoicesActive(state->bass808Voices, owner) ||
         ownerVoicesActive(state->opllVoices, owner) ||
         ownerVoicesActive(state->oplVoices, owner) ||
         ownerVoicesActive(state->fourOpVoices, owner) ||
@@ -1131,6 +1132,7 @@ void chipnomadDestroy(ChipNomadState* state) {
       if(!voice)delete state->dx7Parts[i];
       delete state->opllVoices[i][voice];
       delete state->sinteredVoices[i][voice];
+      delete state->bass808Voices[i][voice];
     }
   }
 
@@ -3092,6 +3094,10 @@ static void updateBass808Voices(ChipNomadState* state) {
       }
     }
     InstrumentBass808 configured = *b;
+    if (track->note.fx[fxEAT].isOn) configured.attack = track->note.fx[fxEAT].fxValue;
+    if (track->note.fx[fxEDC].isOn) configured.decay = track->note.fx[fxEDC].fxValue;
+    if (track->note.fx[fxESU].isOn) configured.sustain = track->note.fx[fxESU].fxValue;
+    if (track->note.fx[fxERL].isOn) configured.release = track->note.fx[fxERL].fxValue;
     configured.waveform = (uint8_t)clampInt(waveform, 0, (int)Bass808Waveform::totalCount - 1);
     configured.subWaveform = (uint8_t)clampInt(subWaveform, 0, 4);
     configured.subLevel = (uint8_t)clampInt(subLevel, 0, 255);

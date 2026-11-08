@@ -55,9 +55,7 @@ class Bass808Voice {
  private:
   // Single-sample oscillator. phase is in [0,1); the accumulator is updated
   // by frequency/sampleRate each call. shape 0=sine, 1=triangle, 2=saw,
-  // 3=square.  Band-limiting is intentionally minimal: an 808 bass sits at
-  // the bottom of the spectrum where aliasing is rarely audible, and the
-  // shared MultimodeFilter downstream removes most out-of-band content.
+  // 3=square. Raw waveforms preserve Fatty's original harmonic character.
   static float waveform(float& phase, float phaseInc, int shape);
   // Glide coefficient (one-pole alpha) for a given glideValue byte.
   float glideCoefficient(uint8_t glideValue) const;

@@ -12,9 +12,7 @@ constexpr float kPi = 3.14159265358979323846f;
 constexpr float kReferenceCents = 6900.0f;
 constexpr float kReferenceHz    = 440.0f;
 
-// Tuned so the FX value 00 = ~5 ms glide (almost instant) and FF = ~1.05 s.
-// The mapping is exponential over the byte range, which feels musical:
-// small values are still snappy, large values stretch out smoothly.
+// Nonzero glide values span ~5 ms to ~1.05 s.
 constexpr float kGlideMinSeconds = 0.005f;
 constexpr float kGlideMaxSeconds = 1.05f;
 
@@ -22,17 +20,14 @@ inline float centsToHz(float cents) {
   return kReferenceHz * exp2f((cents - kReferenceCents) / 1200.0f);
 }
 
-// Exponential one-pole coefficient for a target time constant.  Returns the
-// per-sample 'a' such that y[n] = a*y[n-1] + (1-a)*x[n].  Clamped so a very
-// large time constant never produces a coefficient >= 1 (which would latch
-// the previous sample forever) and a very small one returns 0 (snap).
+// Per-sample interpolation weight for the pitch one-pole.
 inline float onePoleAlpha(float sampleRate, float timeConstantSeconds) {
   if (timeConstantSeconds <= 0.0f) return 0.0f;
   // expf(-1 / (sr * tc)) is the standard z-plane one-pole; rc = sr*tc samples.
   float rc = sampleRate * timeConstantSeconds;
-  if (rc > 1.0e6f) return 0.999999f;  // effectively frozen
   return 1.0f - expf(-1.0f / rc);
 }
+
 }  // namespace
 
 float Bass808Voice::waveform(float& phase, float phaseInc, int shape) {
@@ -53,6 +48,7 @@ float Bass808Voice::waveform(float& phase, float phaseInc, int shape) {
 }
 
 float Bass808Voice::glideCoefficient(uint8_t glideValue) const {
+  if (!glideValue) return 0.0f;
   // Exponential 0..255 -> seconds. Linear in log-space feels musical.
   const float t = glideValue / 255.0f;
   const float seconds = kGlideMinSeconds *
@@ -100,34 +96,25 @@ void Bass808Voice::configure(const InstrumentBass808* instrument, float pitchCen
   post_.setFilter(instrument->filterEnabled != 0, instrument->filterCharacter,
                   instrument->filterMode, instrument->filterSlope24dB != 0,
                   cutoffHz, resonance / 255.0f, instrument->filterColor);
-  // Envelope per mode, mirroring the plaits TRIG/LPG convention:
-  // TRIG (0): one-shot pluck — D byte = decay time, C byte (the sustain
-  //   slot) = attack softness/colour. The note decays to silence on its
-  //   own; gate-off and the sustain/release stages are unused.
-  // VCA (2): the ADSR drives the gain. A 3 ms release floor keeps the
-  //   envelope from stepping to zero when Release = 00 (de-click).
-  if (instrument->envelopeMode == 0) {
-    post_.setEnvelope(true,
-                      0.001f + instrument->sustain / 255.0f * 0.05f,  // C: softness
-                      instrument->decay / 255.0f * 4.0f,              // D: decay
-                      0.0f, 0.0f, instrument->envelopeShape);
-  } else {
-    float release = instrument->release / 255.0f * 4.0f;
-    if (release < 0.003f) release = 0.003f;  // de-click floor
-    post_.setEnvelope(true,
-                      instrument->attack  / 255.0f * 4.0f,   // up to 4 s attack
-                      instrument->decay   / 255.0f * 4.0f,   // up to 4 s decay
-                      instrument->sustain / 255.0f,          // 0..1 sustain level
-                      release,
-                      instrument->envelopeShape);
-  }
-  envelopeMode_ = instrument->envelopeMode == 0 ? 0 : 2;
+  const uint8_t nextMode = instrument->envelopeMode == 0 ? 0 : 2;
+  const bool modeChanged = envelopeMode_ != nextMode;
+  envelopeMode_ = nextMode;
+  const bool trig = envelopeMode_ == 0;
+  // Preserve Fatty's linear four-second VCA timing; TRIG maps D/C to a one-shot.
+  const auto time = [](uint8_t value) {
+    return value / 255.0f * 4.0f;
+  };
+  post_.setEnvelope(true,
+                    trig ? 0.001f + instrument->sustain / 255.0f * 0.05f : time(instrument->attack),
+                    trig ? instrument->decay / 255.0f * 4.0f : time(instrument->decay),
+                    trig ? 0.0f : instrument->sustain / 255.0f,
+                    trig ? 0.0f : fmaxf(0.003f, time(instrument->release)),
+                    instrument->envelopeShape);
 
   // Glide coefficient is updated every block; if the FX value changes
   // mid-glide the new coefficient takes effect without resetting the
   // running target.  (We only reset on noteOn to allow a fresh legato.)
   glideAlpha_ = glideCoefficient(glideValue);
-  envelopeMode_ = instrument->envelopeMode == 0 ? 0 : 2;
 
   // De-click ramp length scales with pitch: 2 ms is only ~10% of a 50 Hz
   // waveform, which still clicks. Ramp for at least 3/4 of one period of
@@ -147,40 +134,18 @@ void Bass808Voice::configure(const InstrumentBass808* instrument, float pitchCen
       if (rampFrames_ < 2) rampFrames_ = 2;
     }
   }
+  if (modeChanged && active_) noteOn();
 }
 
 void Bass808Voice::noteOn() {
   if (!instrument_) return;
-  // De-click: arm the ramp from the previous output. This must consider the
-  // KILLED-THEN-RETRIGGERED path too: the engine calls kill() (which clears
-  // active_ and arms the fade tail) and immediately noteOn() on the same
-  // tick. Gating on active_ alone made rampFrom_ zero there, so the output
-  // stepped from the ringing level to silence in one sample — the click.
-  // Any audible recent output (still active, a pending tail, or simply the
-  // last rendered sample) bridges the new note.
-  const bool wasAudible = active_ || transitionFrames_ > 0 || lastOutput_ != 0.0f;
-  rampFrom_ = wasAudible ? lastOutput_ : 0.0f;
+  rampFrom_ = lastOutput_;
   rampRemaining_ = rampFrames_;
-  // The new note owns the buffer: a pending kill fade is superseded by the
-  // ramp above (SampleVoice clears its transition the same way).
   transitionFrames_ = 0;
-  // On a fresh trigger with glide enabled, glideCents_ continues from its
-  // previous value (legato).  When the voice was idle we snap to target so
-  // the first sample doesn't slew in from a stale pitch.
   if (!active_) glideCents_ = currentCents_;
-  // Reset oscillator phases only on a fresh trigger (not legato), so a
-  // retriggered note restarts the waveform but a legato slide keeps the
-  // phase continuous (no click).  We treat the active_ check above as the
-  // legato discriminator: kill() clears active_ so the next noteOn is a
-  // fresh trigger; a noteOn while still active is a legato retrigger.
   if (!active_) { phaseMain_ = 0.0f; phaseSub_ = 0.0f; }
   active_ = true;
-  // Restart the envelope from zero on EVERY trigger (SampleVoice's exact
-  // pattern: "post_.kill(); // Restart sample attack; the output ramp
-  // bridges the previous waveform"). Resuming from the running level made
-  // the attack parameter inaudible — with sustain=FF the level never drops
-  // between notes, so the attack ramp started at ~1 and had nothing to do.
-  // The 2 ms output ramp armed above covers the amplitude step instead.
+  // Every note restarts its attack; the output ramp bridges the amplitude reset.
   post_.kill();
   post_.noteOn(true);
 }

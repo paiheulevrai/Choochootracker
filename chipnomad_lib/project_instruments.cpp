@@ -679,6 +679,7 @@ InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument)
     case InstrumentType::DrumSynth: return &instrument->chip.drumSynth;
     case InstrumentType::MME: return &instrument->chip.mme;
     case InstrumentType::Sintered: return &instrument->chip.sintered;
+    case InstrumentType::Bass808: return &instrument->chip.bass808;
     default: return NULL;
   }
 }
@@ -720,6 +721,14 @@ int instrumentMotionDestination(const Instrument* instrument, int destination, F
       *base = destination == 3 ? instrument->chip.mme.waves : destination == 4 ? instrument->chip.mme.interval : destination == 5 ? instrument->chip.mme.amount : destination == 6 ? instrument->chip.mme.flow : destination == 7 ? instrument->chip.mme.feedback : destination == 8 ? instrument->chip.mme.shaper : destination == 9 ? instrument->chip.mme.filterCutoffHz : instrument->chip.mme.filterResonance; break;
     case InstrumentType::Sintered:
       *base = destination == 3 ? instrument->chip.sintered.decay : destination == 4 ? instrument->chip.sintered.mod : destination == 5 ? instrument->chip.sintered.a : destination == 6 ? instrument->chip.sintered.b : destination == 7 ? instrument->chip.sintered.motion : destination == 8 ? instrument->chip.sintered.c : destination == 9 ? instrument->chip.sintered.filterCutoffHz : instrument->chip.sintered.filterResonance; break;
+    case InstrumentType::Bass808:
+      *base = destination == 3 ? instrument->chip.bass808.waveform :
+        destination == 4 ? instrument->chip.bass808.subWaveform :
+        destination == 5 ? instrument->chip.bass808.subLevel :
+        destination == 6 ? instrument->chip.bass808.drive :
+        destination == 7 ? instrument->chip.bass808.glide :
+        destination == 8 ? instrument->chip.bass808.filterCutoffHz :
+        instrument->chip.bass808.filterResonance; break;
     default: return 0;
   }
   return 1;
@@ -751,6 +760,8 @@ int instrumentCCDestinationValue(const Instrument* instrument, int destination, 
   if (!instrumentCCDestinationAvailable(instrument, destination)) return 0;
   if (destination >= midiCCDestinationAttack && destination <= midiCCDestinationRelease) return ccScale(cc, 255);
   const InstrumentModDestination* d = instrumentModDestination(instrument->type, destination);
+  if (instrument->type == InstrumentType::Bass808 && (destination == 3 || destination == 4))
+    return ccScale(cc, d->range);
   if (d->value == InstrumentMotionValue::cutoff) return (int)filterCutoffFromControl((uint8_t)ccScale(cc, 255));
   if (d->range == 16384) return ccScale(cc, 32767);
   if (d->value == InstrumentMotionValue::speed) return ccScale(cc, 500);
@@ -883,6 +894,16 @@ int instrumentSetCCDestination(Instrument* instrument, int destination, uint8_t 
       else if (destination == 8) instrument->chip.sintered.c = value;
       else if (destination == 9) instrument->chip.sintered.filterCutoffHz = value;
       else if (destination == 10) instrument->chip.sintered.filterResonance = value;
+      else return 0;
+      break;
+    case InstrumentType::Bass808:
+      if (destination == 3) instrument->chip.bass808.waveform = value;
+      else if (destination == 4) instrument->chip.bass808.subWaveform = value;
+      else if (destination == 5) instrument->chip.bass808.subLevel = value;
+      else if (destination == 6) instrument->chip.bass808.drive = value;
+      else if (destination == 7) instrument->chip.bass808.glide = value;
+      else if (destination == 8) instrument->chip.bass808.filterCutoffHz = value;
+      else if (destination == 9) instrument->chip.bass808.filterResonance = value;
       else return 0;
       break;
     default: return 0;

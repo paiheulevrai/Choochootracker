@@ -686,6 +686,7 @@ static bool liveCell(int control, int* col, int* row) {
     case InstrumentType::MME: pageCell = instrumentMMELiveCell; break;
     case InstrumentType::DrumSynth: pageCell = instrumentDrumSynthLiveCell; break;
     case InstrumentType::Sintered: pageCell = instrumentSinteredLiveCell; break;
+    case InstrumentType::Bass808: pageCell = instrumentBass808LiveCell; break;
     case InstrumentType::AChChid: pageCell = instrumentAChChidLiveCell; break;
     case InstrumentType::Monk: pageCell = instrumentMonkLiveCell; break;
     default: break;
@@ -1076,6 +1077,7 @@ void instrumentCommonDrawLivePreview(void) {
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
   InstrumentVoicePostSettings* post = voicePostSettings(instrument, instrument->type);
   if (post && instrument->type != InstrumentType::DrumSynth && instrument->type != InstrumentType::Sintered &&
+      (instrument->type != InstrumentType::Bass808 || instrument->chip.bass808.envelopeMode != 0) &&
       ((instrument->type != InstrumentType::Plaits &&
                 instrument->type != InstrumentType::PlaitsAlt) ||
                instrument->chip.plaits.envelopeMode != 0)) {

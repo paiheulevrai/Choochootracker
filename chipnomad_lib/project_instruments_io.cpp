@@ -548,6 +548,7 @@ static int loadInstrumentSintered(FILE* file, Instrument* instrument) {
 
 static int loadInstrumentBass808(FILE* file, Instrument* instrument) {
   InstrumentBass808* b = &instrument->chip.bass808;
+  b->envelopeMode = 2;
   while (1) {
     char* line = peekLine(file);
     if (line == NULL || line[0] == '#') return 0;
@@ -1109,7 +1110,6 @@ static int saveInstrumentBass808(FILE* file, Instrument* instrument) {
   fprintf(file, "- Sub level: %hhu\n", b->subLevel);
   fprintf(file, "- Drive: %hhu\n", b->drive);
   fprintf(file, "- Glide: %hhu\n", b->glide);
-  fprintf(file, "- Envelope mode: %hhu\n", b->envelopeMode);
   fprintf(file, "- Envelope mode: %hhu\n", b->envelopeMode);
   saveVoicePostSettings(file, b); return 0;
 }

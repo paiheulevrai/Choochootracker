@@ -109,7 +109,7 @@ static int columns(int row) {
   return row < 3 ? instrumentCommonColumnCount(row)
        : row == 3 ? 1
        : row <= 7 ? 2
-       : row == 8 ? 1
+       : row == 8 ? 2
        : chipnomadState->project.instruments[cInstrument].chip.bass808.envelopeMode == 0 ? 2 : 5;
 }
 
@@ -140,15 +140,17 @@ static void drawStatic(void) {
 static void drawCursor(int col, int row) {
   if (row < 3) { instrumentCommonDrawCursor(col, row); return; }
   InstrumentBass808* b = &chipnomadState->project.instruments[cInstrument].chip.bass808;
-  // VCA mode: the common helpers own the filter columns AND the ADSR row.
-  // TRIG mode: the common helpers own only the filter columns; the bottom
-  // row is the LPG D/C pair handled below (plaits-exact).
-  if (b->envelopeMode != 0 && instrumentCommonDrawVoicePostCursor(col, row)) return;
+  // Filter controls are shared in both envelope modes; only VCA uses row 9
+  // for the shared ADSR editor.
+  if ((col && row >= 4 && row <= 8) ||
+      (b->envelopeMode != 0 && row == 9)) {
+    instrumentCommonDrawVoicePostCursor(col, row);
+    return;
+  }
   if (row == 9) {
     if (b->envelopeMode == 0) gfxCursor(7 + col * 5, 14, 2);
     return;
   }
-  if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostCursor(col, row); return; }
   // The picker row spans its full label width so the popup affordance reads.
   if (row == 3) gfxCursor(kColumnValueX[0], 6, 3 + strlen(waveName(b->waveform)));
   else if (row == 8) gfxCursor(kColumnValueX[0], 12, b->envelopeMode == 0 ? 4 : 3);
@@ -158,8 +160,11 @@ static void drawCursor(int col, int row) {
 static void drawField(int col, int row, CellState state) {
   if (row < 3) { instrumentCommonDrawField(col, row, state); return; }
   InstrumentBass808* b = &chipnomadState->project.instruments[cInstrument].chip.bass808;
-  // VCA mode: common helpers own the filter columns AND the ADSR row.
-  if (b->envelopeMode != 0 && instrumentCommonDrawVoicePostField(col, row, state, b)) return;
+  if ((col && row >= 4 && row <= 8) ||
+      (b->envelopeMode != 0 && row == 9)) {
+    instrumentCommonDrawVoicePostField(col, row, state, b);
+    return;
+  }
 
   gfxSetFgColor(fieldValueColor(state));
   const int x = kColumnValueX[0];
@@ -207,7 +212,7 @@ static void drawField(int col, int row, CellState state) {
       gfxPrint(x, row + 4, subWaveName(*value));
     } else {
       fieldDrawNumber(x, row + 4, *value, state, -1.0f, false,
-                       instrumentLivePosition(liveSource1 + row - 4));
+                       instrumentLivePosition(liveSource3 + row - 5));
     }
   } else {
     gfxPrint(x, row + 4, "--");
@@ -215,20 +220,18 @@ static void drawField(int col, int row, CellState state) {
 }
 
 bool instrumentBass808LiveCell(int control, int* col, int* row) {
-  // Live bars map in page order: Sub, SubLvl, Drive, Glide (OSC is a picker,
-  // so it doesn't get a bar).
-  if (control < liveSource1 || control >= liveSource1 + 4) return false;
-  const int macroIndex = control - liveSource1;
+  // SubLvl, Drive and Glide are numeric fields; OSC and Sub are pickers.
+  if (control < liveSource3 || control > liveSource5) return false;
   *col = 0;
-  *row = 4 + macroIndex;  // rows 4..7
+  *row = 5 + control - liveSource3;
   return true;
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);
   InstrumentBass808* b = &chipnomadState->project.instruments[cInstrument].chip.bass808;
-  // VCA mode: the common helpers own the filter columns AND the ADSR row.
-  if (b->envelopeMode != 0 && ((row == 9) || (col && row >= 4 && row <= 8))) {
+  if ((col && row >= 4 && row <= 8) ||
+      (b->envelopeMode != 0 && row == 9)) {
     int ok = instrumentCommonOnEditVoicePost(col, row, action, b);
     if (ok) projectModified = 1;
     return ok;
@@ -270,6 +273,11 @@ static int onInput(int isKeyDown, int keys, int) {
   // Hold-to-popup on the OSC (row 3) and Sub (row 4) pickers, mirroring
   // the DrumSynth Model picker so the muscle memory transfers.
   const int row = screenInstrumentBass808.cursorRow;
+  if (screenInstrumentBass808.cursorCol != 0) {
+    waveButtonDown = 0;
+    subButtonDown = 0;
+    return 0;
+  }
   if (row == 3) {
     PopupEditInput input = popupEditInput(isKeyDown, keys, &waveButtonDown);
     if (input == PopupEditInput::cycle) {

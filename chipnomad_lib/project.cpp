@@ -144,23 +144,11 @@ void fillFXNames() {
     fxGroups[25].fxList = names; fxGroups[25].count = definition->fxCount;
     for (int i = 0; i < definition->fxCount; ++i) { names[i].fx = (FX)definition->fxList[i].fx; strcpy(names[i].name, definition->fxList[i].name); }
   }
-  // Bass808 FX group is appended last; materialize from its InstrumentDefinition.
-  {
-    const InstrumentDefinition* definition = getInstrumentDefinition(InstrumentType::Bass808);
-    FXName* names = instrumentGroupNames[(int)InstrumentType::Bass808];
-    fxGroups[fxGroupCount - 1].fxList = names; fxGroups[fxGroupCount - 1].count = definition->fxCount;
-    for (int i = 0; i < definition->fxCount; ++i) { names[i].fx = (FX)definition->fxList[i].fx; strcpy(names[i].name, definition->fxList[i].name); }
-  }
-  for (int group = 28; group < 29; ++group) {
-    InstrumentType type = fxGroups[group].instType;
-    const InstrumentDefinition* definition = getInstrumentDefinition(type);
-    FXName* names = instrumentGroupNames[(int)type];
-    fxGroups[group].fxList = names; fxGroups[group].count = definition->fxCount;
-    for (int i = 0; i < definition->fxCount; ++i) { names[i].fx = (FX)definition->fxList[i].fx; strcpy(names[i].name, definition->fxList[i].name); }
-  }
-
-  for (int index = fxGroupCount - 4; index < fxGroupCount; ++index) {
+  for (int index = 0; index < fxGroupCount; ++index) {
     auto type = fxGroups[index].instType;
+    if (type != InstrumentType::Monk && type != InstrumentType::SoundFont &&
+        type != InstrumentType::AudioIn && type != InstrumentType::Layer &&
+        type != InstrumentType::Bass808) continue;
     const auto* definition = getInstrumentDefinition(type);
     auto* names = instrumentGroupNames[(int)type];
     auto& group = fxGroups[index];
