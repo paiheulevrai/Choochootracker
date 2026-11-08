@@ -69,6 +69,7 @@ static SelectionItem instrumentTypeSynth[] = {
   {NULL, (int)InstrumentType::Plaits, NULL, 0},
   {NULL, (int)InstrumentType::PlaitsAlt, NULL, 0},
   {NULL, (int)InstrumentType::MME, NULL, 0},
+  {"Fatty", (int)InstrumentType::Bass808, NULL, 0},
 };
 static SelectionItem instrumentTypeDrums[] = {
   {NULL, (int)InstrumentType::DrumSynth, NULL, 0},
@@ -586,6 +587,7 @@ static ScreenData* instrumentScreen(void) {
     &screenInstrumentDrumSynth, &screenInstrumentMME,
     &screenInstrumentSintered,
     &screenInstrumentMidi, &screenInstrumentOPLL, &screenInstrumentOPL, &screenInstrumentSimpleChip, &screenInstrumentOPL, &screenInstrumentSoundFont, &screenInstrumentMonk, &screenInstrumentAudioIn, &screenInstrumentLayer,
+    &screenInstrumentBass808,
   };
   InstrumentScreenKind kind = getInstrumentDefinition(chipnomadState->project.instruments[cInstrument].type)->screen;
   ScreenData* data = screens[(int)kind];
@@ -688,6 +690,7 @@ static bool liveCell(int control, int* col, int* row) {
     case InstrumentType::DigiSophie:
     case InstrumentType::DrumSynth: pageCell = instrumentDrumSynthLiveCell; break;
     case InstrumentType::Sintered: pageCell = instrumentSinteredLiveCell; break;
+    case InstrumentType::Bass808: pageCell = instrumentBass808LiveCell; break;
     case InstrumentType::AChChid: pageCell = instrumentAChChidLiveCell; break;
     case InstrumentType::Monk: pageCell = instrumentMonkLiveCell; break;
     default: break;
@@ -1078,6 +1081,7 @@ void instrumentCommonDrawLivePreview(void) {
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
   InstrumentVoicePostSettings* post = voicePostSettings(instrument, instrument->type);
   if (post && instrument->type != InstrumentType::DrumSynth && instrument->type != InstrumentType::Sintered &&
+      (instrument->type != InstrumentType::Bass808 || instrument->chip.bass808.envelopeMode != 0) &&
       ((instrument->type != InstrumentType::Plaits &&
                 instrument->type != InstrumentType::PlaitsAlt) ||
                instrument->chip.plaits.envelopeMode != 0)) {

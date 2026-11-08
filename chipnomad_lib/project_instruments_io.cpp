@@ -546,6 +546,23 @@ static int loadInstrumentSintered(FILE* file, Instrument* instrument) {
   }
 }
 
+static int loadInstrumentBass808(FILE* file, Instrument* instrument) {
+  InstrumentBass808* b = &instrument->chip.bass808;
+  b->envelopeMode = 2;
+  while (1) {
+    char* line = peekLine(file);
+    if (line == NULL || line[0] == '#') return 0;
+    if (strncmp(line, "- Waveform: ", 12) == 0) sscanf(line, "- Waveform: %hhu", &b->waveform);
+    else if (strncmp(line, "- Sub waveform: ", 16) == 0) sscanf(line, "- Sub waveform: %hhu", &b->subWaveform);
+    else if (strncmp(line, "- Sub level: ", 13) == 0) sscanf(line, "- Sub level: %hhu", &b->subLevel);
+    else if (strncmp(line, "- Drive: ", 9) == 0) sscanf(line, "- Drive: %hhu", &b->drive);
+    else if (strncmp(line, "- Glide: ", 9) == 0) sscanf(line, "- Glide: %hhu", &b->glide);
+    else if (strncmp(line, "- Envelope mode: ", 17) == 0) sscanf(line, "- Envelope mode: %hhu", &b->envelopeMode);
+    else loadVoicePostSetting(line, b);
+    consumeLine(file);
+  }
+}
+
 static int loadModulation(FILE* file, Instrument* instrument) {
   for (int i = 0; i < 4; i++) {
     char* line = peekLine(file);
@@ -725,6 +742,13 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
 
   if (strncmp(line, "- Chip data:", 12) == 0) {
     consumeLine(file);
+    // Pre-merge Fatty test builds used DigiSophie's already published type ID.
+    line = peekLine(file);
+    if (instrument->type == InstrumentType::DigiSophie && line &&
+        strncmp(line, "- Waveform: ", 12) == 0) {
+      instrument->type = InstrumentType::Bass808;
+      instrument->chip.bass808.filterColor = 128;
+    }
     // Load chip-specific data based on instrument type
     switch (instrument->type) {
       case InstrumentType::AY1:
@@ -777,6 +801,9 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
       case InstrumentType::Sintered:
         if (loadInstrumentSintered(file, instrument)) return 1;
         break;
+      case InstrumentType::Bass808:
+        if (loadInstrumentBass808(file, instrument)) return 1;
+        break;
       case InstrumentType::SID:
         if(projectFileVersion<7||loadSIDData(file,instrument))return 1;break;
       case InstrumentType::SegaPSG:
@@ -818,6 +845,16 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
     if ((uint8_t)d->engine >= (uint8_t)DrumSynthEngine::totalCount) d->engine = DrumSynthEngine::kick;
     if (instrument->type == InstrumentType::DigiSophie && (uint8_t)d->engine > 3) d->engine = DrumSynthEngine::kick;
     if (d->filterCutoffHz > FILTER_CUTOFF_MAX_HZ) d->filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
+  } else if (instrument->type == InstrumentType::Bass808) {
+    InstrumentBass808* b = &instrument->chip.bass808;
+    if ((uint8_t)b->waveform >= (uint8_t)Bass808Waveform::totalCount) b->waveform = (uint8_t)Bass808Waveform::sine;
+    if (b->subWaveform > 4) b->subWaveform = 0;
+    // Legacy instruments saved before the EnvMode row load as VCA (same
+    // convention as plaits: 1 is a legacy alias for the ADSR mode).
+    if (b->envelopeMode == 1) b->envelopeMode = 2;
+    if (b->envelopeMode > 2) b->envelopeMode = 2;
+    if (b->subWaveform > 4) b->subWaveform = 0;
+    if (b->filterCutoffHz > FILTER_CUTOFF_MAX_HZ) b->filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
   } else if (instrument->type == InstrumentType::MME) {
     InstrumentMME* m = &instrument->chip.mme;
     if ((uint8_t)m->model >= (uint8_t)MMEModel::totalCount) m->model = MMEModel::ring;
@@ -1091,6 +1128,17 @@ static int saveInstrumentSintered(FILE* file, Instrument* instrument) {
   saveVoicePostSettings(file, s); return 0;
 }
 
+static int saveInstrumentBass808(FILE* file, Instrument* instrument) {
+  InstrumentBass808* b = &instrument->chip.bass808;
+  fprintf(file, "- Waveform: %hhu\n", b->waveform);
+  fprintf(file, "- Sub waveform: %hhu\n", b->subWaveform);
+  fprintf(file, "- Sub level: %hhu\n", b->subLevel);
+  fprintf(file, "- Drive: %hhu\n", b->drive);
+  fprintf(file, "- Glide: %hhu\n", b->glide);
+  fprintf(file, "- Envelope mode: %hhu\n", b->envelopeMode);
+  saveVoicePostSettings(file, b); return 0;
+}
+
 // Save modulation data
 static int saveModulation(FILE* file, Instrument* instrument) {
   fprintf(file, "- Modulation:\n");
@@ -1184,6 +1232,9 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
       break;
     case InstrumentType::Sintered:
       saveInstrumentSintered(file, instrument);
+      break;
+    case InstrumentType::Bass808:
+      saveInstrumentBass808(file, instrument);
       break;
     case InstrumentType::SID:
       saveSIDData(file,instrument);break;

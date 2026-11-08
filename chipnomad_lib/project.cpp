@@ -98,6 +98,7 @@ FXGroup fxGroups[] = {
   {"Audio in FX", NULL, 0, 8, InstrumentType::AudioIn},
   {"Layer FX", NULL, 0, 8, InstrumentType::Layer},
   {"DigiSophie FX", NULL, 0, 8, InstrumentType::DigiSophie},
+  {"Bass808 FX", NULL, 0, 8, InstrumentType::Bass808},
 };
 int fxGroupCount = sizeof(fxGroups) / sizeof(FXGroup);
 
@@ -153,8 +154,11 @@ void fillFXNames() {
     for (int i = 0; i < definition->fxCount; ++i) { names[i].fx = (FX)definition->fxList[i].fx; strcpy(names[i].name, definition->fxList[i].name); }
   }
 
-  for (int index = fxGroupCount - 5; index < fxGroupCount; ++index) {
+  for (int index = 0; index < fxGroupCount; ++index) {
     auto type = fxGroups[index].instType;
+    if (type != InstrumentType::Monk && type != InstrumentType::SoundFont &&
+        type != InstrumentType::AudioIn && type != InstrumentType::Layer &&
+        type != InstrumentType::Bass808 && type != InstrumentType::DigiSophie) continue;
     const auto* definition = getInstrumentDefinition(type);
     auto* names = instrumentGroupNames[(int)type];
     auto& group = fxGroups[index];

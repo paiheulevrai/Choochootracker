@@ -799,7 +799,7 @@ struct InsertChain::Impl {
           const float inputGain = powf(10.0f, p[7] / 20.0f);
           const float dcPole = expf(-6.28318530718f * 20.0f / rate);
           const float meter = coefficient(3.2f, rate);       // ~50 ms RMS window
-          const float gainDown = coefficient(32.0f, rate);   // ~5 ms attenuation
+          const float gainDown = coefficient(320.0f, rate);  // ~0.5 ms attenuation, without a hard gain step
           const float gainUp = coefficient(2.0f, rate);      // ~80 ms recovery
           for (int i = 0; i < n; ++i) {
             float dry[2] = {l[i], r[i]};
@@ -845,17 +845,13 @@ struct InsertChain::Impl {
             }
             float dryPower = 0.5f * (dry[0] * dry[0] + dry[1] * dry[1]);
             float wetPower = 0.5f * (wet[0] * wet[0] + wet[1] * wet[1]);
-            float previousDryPower = s.destructionDryPower;
             s.destructionDryPower += meter * (dryPower - s.destructionDryPower);
             s.destructionWetPower += meter * (wetPower - s.destructionWetPower);
             float targetGain = s.destructionDryPower < 1.0e-6f ? 1.0f :
                 sqrtf(s.destructionDryPower / std::max(s.destructionWetPower, 1.0e-8f));
             targetGain = std::clamp(targetGain, 0.015849f, 7.94328f);
             float speed = targetGain < s.destructionGain ? gainDown : gainUp;
-            if (previousDryPower < 1.0e-6f && s.destructionDryPower >= 1.0e-6f)
-              s.destructionGain = targetGain;
-            else
-              s.destructionGain += speed * (targetGain - s.destructionGain);
+            s.destructionGain += speed * (targetGain - s.destructionGain);
             l[i] = dry[0] + p[6] * (wet[0] * s.destructionGain - dry[0]);
             r[i] = dry[1] + p[6] * (wet[1] * s.destructionGain - dry[1]);
           }

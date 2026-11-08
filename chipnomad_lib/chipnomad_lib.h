@@ -21,6 +21,7 @@ class AudioInputVoice;
 class MMEVoice;
 class MonkSynthVoice;
 class SinteredVoice;
+class Bass808Voice;
 class OPLLVoice;
 class SIDVoice;
 class DX7Voice;
@@ -169,6 +170,7 @@ struct ChipNomadState {
   int opllPreviewTrack;
   OPLLVoice* opllVoices[VOICE_OWNER_COUNT][CHORD_MAX_VOICES];
   SinteredVoice* sinteredVoices[VOICE_OWNER_COUNT][CHORD_MAX_VOICES];
+  Bass808Voice* bass808Voices[VOICE_OWNER_COUNT][CHORD_MAX_VOICES];
   // MIDI-Out active-note tracking, Program/Bank cache, and MIDI-In routing
   // state now live behind the generic MIDI router (see midi/midi_router.h) -
   // one instance per ChipNomadState, so independent engine states (e.g. one
