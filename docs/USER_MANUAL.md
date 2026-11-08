@@ -1282,7 +1282,7 @@ Each FX has a 3-letter command and a hexadecimal value. The in-app help panel gi
 | `FIN` | signed `XX` | Accumulated fine offset in cents with Linear pitch, period units otherwise. |
 | `PRD` | signed `XX` | Accumulated relative oscillator-period offset. |
 | `VOL` | signed `XX` | Accumulated relative volume offset (`FF` is -1, not full volume). |
-| `VSL` | signed `XX` | Adds `XX` to volume on every phrase/table row. Use `00` to stop. |
+| `VSL` | signed `XX` | Slides by `XX` volume units per phrase/table row; `-1` is one step on the full `0-127` volume scale. Continues across note triggers; use `00` to stop. |
 | `PAN` | `00-FF` | Absolute instrument panorama: left, centre (`80`), right. |
 | `TPN` | `00-FF` | Absolute mixer-track panorama: left, centre (`80`), right. |
 | `RET` | `XY` | Retriggers every `Y` ticks; `X` applies a volume change. `Y=0` stops retriggering. |

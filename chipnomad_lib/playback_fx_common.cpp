@@ -247,13 +247,18 @@ static void initFX_VSL(PlaybackState* state, PlaybackTrackState* track, int trac
     speed = state->p->grooves[track->grooveIdx].speed[track->grooveRow];
   }
   if (speed == 0) speed = 1;
-  int value = (int8_t)(fx->fxValue) << 8; // Use 24.8 fixed point math
+  int value = (int8_t)(fx->fxValue) * 256;
   fx->d.bend.speed = value / speed;
 }
 
+static void restartFX_VSL(PlaybackState*, PlaybackTrackState*, int, PlaybackFXState*) {
+  // Keep the slide's accumulated value across note triggers.
+}
+
 static void handleFX_VSL(PlaybackState* state, PlaybackTrackState* track, int trackIdx, int chipIdx, PlaybackFXState* fx) {
-  fx->acc += fx->d.bend.speed;
-  track->note.volumeOffset += (fx->acc >> 8) * (PHRASE_VOLUME_MAX / 15);
+  const int maxOffset = PHRASE_VOLUME_MAX * 256;
+  fx->acc = clampInt(fx->acc + fx->d.bend.speed, -maxOffset, maxOffset);
+  track->note.volumeOffset += fx->acc >> 8;
 }
 
 // GRV - Track groove
@@ -513,7 +518,7 @@ void initFXHandlers(void) {
   fxHandlers[fxFIN] = (PlaybackFXHandler){initFX_FIN, handleFX_FIN, restartFX_FIN};
   fxHandlers[fxPRD] = (PlaybackFXHandler){initFX_PRD, handleFX_PRD, restartFX_PRD};
   fxHandlers[fxVOL] = (PlaybackFXHandler){initFX_VOL, handleFX_VOL, restartFX_VOL};
-  fxHandlers[fxVSL] = (PlaybackFXHandler){initFX_VSL, handleFX_VSL, NULL};
+  fxHandlers[fxVSL] = (PlaybackFXHandler){initFX_VSL, handleFX_VSL, restartFX_VSL};
   fxHandlers[fxRET] = (PlaybackFXHandler){NULL, handleFX_RET, restartFX_RET};
   fxHandlers[fxDEL] = (PlaybackFXHandler){initFX_DEL, handleFX_DEL, NULL};
   fxHandlers[fxOFF] = (PlaybackFXHandler){NULL, handleFX_OFF, NULL};
