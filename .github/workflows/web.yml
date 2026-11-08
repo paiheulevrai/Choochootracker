@@ -42,6 +42,7 @@ jobs:
           em++ --version
           make -C tracker -j2 -f Makefile.web web-deploy \
             COMMON_CFLAGS='-std=c++17 -Wall -g -Os -DTEST'
+          cmp web/index.html web/dist/index.html
       - name: Commit generated Web bundle
         run: |
           if git diff --quiet -- web/dist; then
