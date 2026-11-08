@@ -59,12 +59,20 @@ void makeDirectory(const char* path) {
 }
 
 // Copy one file unless the destination already exists, so the user's edits
-// and saved projects survive a VPK update.
+// and saved projects survive a VPK update. The data goes to "<target>.part"
+// and is renamed only after it was written and closed successfully: closing
+// the app (or a crash) mid-copy leaves at worst a stray .part file that the
+// next launch overwrites, never a truncated asset that looks complete.
 bool copyFileIfMissing(const char* source, const char* target) {
   if (fileExists(target)) return true;
+
+  char partial[PATH_LENGTH_VITA];
+  if (snprintf(partial, sizeof(partial), "%s.part", target) >= (int)sizeof(partial)) return false;
+  remove(partial);  // leftover of an interrupted launch
+
   FILE* in = fopen(source, "rb");
   if (!in) return false;
-  FILE* out = fopen(target, "wb");
+  FILE* out = fopen(partial, "wb");
   if (!out) {
     fclose(in);
     return false;
@@ -81,7 +89,8 @@ bool copyFileIfMissing(const char* source, const char* target) {
   if (ferror(in)) ok = false;
   fclose(in);
   if (fclose(out) != 0) ok = false;
-  if (!ok) remove(target);  // never leave a truncated asset behind
+  if (ok && rename(partial, target) != 0) ok = false;
+  if (!ok) remove(partial);
   return ok;
 }
 

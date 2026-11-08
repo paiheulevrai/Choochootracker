@@ -142,7 +142,11 @@ int fileGetDefaultDirectory(char* buffer, int bufferSize) {
   if (!buffer || bufferSize <= 0) return -1;
   int length = snprintf(buffer, bufferSize, "ux0:data/ChooChooTracker");
   if (length < 0 || length >= bufferSize) return -1;
-  return fileCreateDirectoryRecursive(buffer);
+  if (fileCreateDirectoryRecursive(buffer) != 0) {
+    fprintf(stderr, "Cannot create Vita workspace '%s': %s\n", buffer, strerror(errno));
+    return -1;
+  }
+  return 0;
 #elif defined(ANDROID_BUILD)
   extern int androidGetWorkspacePath(char*, int);
   return androidGetWorkspacePath(buffer, bufferSize);
