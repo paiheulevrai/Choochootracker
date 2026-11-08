@@ -37,11 +37,16 @@ void audioOutputSelect(const char* name) {
   SDL_strlcpy(selectedOutputName, name ? name : "", sizeof(selectedOutputName));
 }
 #ifdef ANDROID_BUILD
-#include "../android/audio_diagnostics.h"
 #include <jni.h>
-#include <android/log.h>
+#endif
+#ifdef CCT_AUDIO_DIAG
+#include "../android/audio_diagnostics.h"
+#include <atomic>
 #include <math.h>
-
+#ifdef ANDROID_BUILD
+#include <android/log.h>
+#endif
+namespace {
 static SDL_Thread* diagnosticThread;
 static SDL_atomic_t diagnosticStop;
 static std::atomic<uint32_t> callbackCount{0}, maxRenderUs{0}, maxGapUs{0};
@@ -51,9 +56,9 @@ static int diagnosticRate;
 static bool diagnosticTone;
 static double tonePhase;
 
-static void recordMaximum(std::atomic<uint32_t>& maximum, uint32_t value) {
-  uint32_t old = maximum.load(std::memory_order_relaxed);
-  while (old < value && !maximum.compare_exchange_weak(old, value, std::memory_order_relaxed)) {}
+static void recordMaximum(std::atomic<uint32_t>& m, uint32_t v) {
+  uint32_t old = m.load(std::memory_order_relaxed);
+  while (old < v && !m.compare_exchange_weak(old, v, std::memory_order_relaxed)) {}
 }
 
 static int reportAudioDiagnostics(void*) {
@@ -61,6 +66,7 @@ static int reportAudioDiagnostics(void*) {
   while (!SDL_AtomicGet(&diagnosticStop)) {
     SDL_Delay(100);
     if (++ticks % 10) continue;
+#ifdef ANDROID_BUILD
     __android_log_print(ANDROID_LOG_INFO, "CCTAudio",
       "callbacks=%u frames=%u render_max_us=%u gap_max_us=%u over_budget=%u invalid_buffers=%u render_failures=%u",
       callbackCount.load(std::memory_order_relaxed), lastFrames.load(std::memory_order_relaxed),
@@ -68,14 +74,23 @@ static int reportAudioDiagnostics(void*) {
       overBudget.load(std::memory_order_relaxed),
       audioDiagnostics::invalidBuffers.load(std::memory_order_relaxed),
       audioDiagnostics::renderFailures.load(std::memory_order_relaxed));
+#else
+    printf("DIAG callbacks=%u frames=%u render_max_us=%u gap_max_us=%u over_budget=%u\n",
+      callbackCount.load(std::memory_order_relaxed), lastFrames.load(std::memory_order_relaxed),
+      maxRenderUs.exchange(0, std::memory_order_relaxed),
+      maxGapUs.exchange(0, std::memory_order_relaxed),
+      overBudget.load(std::memory_order_relaxed));
+    fflush(stdout);
+#endif
   }
   return 0;
+}
 }
 #endif
 
 static void sdlAudioCallback(void* userdata, uint8_t* buffer, int bufferBytes) {
   AudioCallback* callback = (AudioCallback *)userdata;
-#ifdef ANDROID_BUILD
+#ifdef CCT_AUDIO_DIAG
   if (audioDiagnostics::enabled) {
     const Uint64 started = SDL_GetPerformanceCounter();
     if (previousCallback)
@@ -106,7 +121,7 @@ static void sdlAudioCallback(void* userdata, uint8_t* buffer, int bufferBytes) {
 }
 
 int audioSetup(AudioCallback* audioCallback, int sampleRate, int bufferSize) {
-#ifdef ANDROID_BUILD
+#ifdef CCT_AUDIO_DIAG
   const char* diagnostic = SDL_getenv("CCT_AUDIO_DIAG");
   audioDiagnostics::enabled = diagnostic && SDL_strcmp(diagnostic, "1") == 0;
   if (audioDiagnostics::enabled) {
@@ -114,10 +129,9 @@ int audioSetup(AudioCallback* audioCallback, int sampleRate, int bufferSize) {
     diagnosticTone = tone && SDL_strcmp(tone, "1") == 0;
     diagnosticRate = sampleRate;
     diagnosticFrequency = SDL_GetPerformanceFrequency();
-    previousCallback = 0;
-    tonePhase = 0;
+    previousCallback = 0; tonePhase = 0;
     callbackCount = maxRenderUs = maxGapUs = lastFrames = overBudget = 0;
-    audioDiagnostics::invalidBuffers = audioDiagnostics::renderFailures = 0;
+    SDL_AtomicSet(&diagnosticStop, 0);
   }
 #endif
   SDL_AudioSpec spec;
@@ -180,26 +194,34 @@ int audioSetup(AudioCallback* audioCallback, int sampleRate, int bufferSize) {
   // true DAC latency of ArkOS/ALSA is unmeasured, so this is a lower
   // bound on the real output latency there.
   measuredOutputLatencyMicros = (uint64_t)((uint64_t)spec.samples * 1000000ULL / (uint64_t)spec.freq);
-#ifdef ANDROID_BUILD
+#ifdef CCT_AUDIO_DIAG
   if (audioDiagnostics::enabled) {
+#ifdef ANDROID_BUILD
     __android_log_print(ANDROID_LOG_INFO, "CCTAudio",
       "backend=%s rate=%d requested_frames=%d callback_bytes=%u format=%u channels=%u tone=%d",
-      SDL_GetCurrentAudioDriver(), sampleRate, bufferSize, spec.size,
-      spec.format, spec.channels, diagnosticTone);
-    SDL_AtomicSet(&diagnosticStop, 0);
-    diagnosticThread = SDL_CreateThread(reportAudioDiagnostics, "CCTAudioStats", NULL);
-    if (!diagnosticThread)
+      SDL_GetCurrentAudioDriver(), sampleRate, bufferSize, spec.size, spec.format, spec.channels, diagnosticTone);
+#endif
+    diagnosticThread = SDL_CreateThread(reportAudioDiagnostics, "CCTAudioDiag", NULL);
+    if (!diagnosticThread) {
+#ifdef ANDROID_BUILD
       __android_log_print(ANDROID_LOG_ERROR, "CCTAudio", "Statistics thread: %s", SDL_GetError());
+ #else
+      fprintf(stderr, "Failed to start audio diagnostics thread: %s\n", SDL_GetError());
+ #endif
+      audioDiagnostics::enabled = false;
+    }
   }
 #endif
   return 0;
 }
 
 void audioPause(int isPaused) {
-#ifdef ANDROID_BUILD
+#ifdef CCT_AUDIO_DIAG
   // Reset only while SDL holds the callback paused, so intentional pauses do
   // not appear as scheduling gaps and the callback owns its timing state.
-  if (!isPaused && (selectedOutputDevice ? SDL_GetAudioDeviceStatus(selectedOutputDevice) : SDL_GetAudioStatus()) == SDL_AUDIO_PAUSED) previousCallback = 0;
+  if (!isPaused && audioDiagnostics::enabled &&
+      (selectedOutputDevice ? SDL_GetAudioDeviceStatus(selectedOutputDevice) : SDL_GetAudioStatus()) == SDL_AUDIO_PAUSED)
+    previousCallback = 0;
 #endif
   if (selectedOutputDevice) SDL_PauseAudioDevice(selectedOutputDevice, isPaused);
   else SDL_PauseAudio(isPaused);
@@ -209,15 +231,16 @@ void audioLock(void) { if (selectedOutputDevice) SDL_LockAudioDevice(selectedOut
 void audioUnlock(void) { if (selectedOutputDevice) SDL_UnlockAudioDevice(selectedOutputDevice); else SDL_UnlockAudio(); }
 
 void audioCleanup(void) {
-  if (selectedOutputDevice) { SDL_CloseAudioDevice(selectedOutputDevice); selectedOutputDevice = 0; }
-  else SDL_CloseAudio();
-#ifdef ANDROID_BUILD
+#ifdef CCT_AUDIO_DIAG
   if (diagnosticThread) {
     SDL_AtomicSet(&diagnosticStop, 1);
     SDL_WaitThread(diagnosticThread, NULL);
     diagnosticThread = NULL;
   }
+  audioDiagnostics::enabled = false;
 #endif
+  if (selectedOutputDevice) { SDL_CloseAudioDevice(selectedOutputDevice); selectedOutputDevice = 0; }
+  else SDL_CloseAudio();
 }
 
 #ifdef WEB_BUILD

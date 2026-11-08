@@ -357,6 +357,82 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+  if(argc==3 && !strcmp(argv[2],"--bass808-only")) {
+    screensInitAll();waveformDisplayInit();monitorDisplayInit();cInstrument=0;
+    Instrument& instrument=prepareHomepageInstrument(InstrumentType::Bass808,"Fatty UI check");
+    auto& bass=instrument.chip.bass808;
+    bass.subWaveform=3;bass.subLevel=176;bass.drive=112;bass.glide=68;
+    bass.filterCutoffHz=2345;bass.filterResonance=198;
+    chipnomadInitChips(chipnomadState,48000,nullptr);
+    require(chipnomadReserveRenderBuffers(chipnomadState,512)==0,"Fatty UI render buffers");
+    require(chipnomadQueueProjectRefresh(chipnomadState),"Fatty UI project snapshot");
+    require(chipnomadQueuePlaybackPreviewNote(chipnomadState,0,48,0),"Fatty UI preview note");
+    std::vector<float> audio(1024);
+    require(chipnomadRender(chipnomadState,audio.data(),512)==512,"Fatty UI live controls");
+    const PlaybackTrackState& track=chipnomadGetPlaybackStatus(chipnomadState)->tracks[0];
+    require(track.liveInstrument==0&&track.liveControls[liveSource2]>0&&track.liveControls[liveCutoff]>0,
+            "Fatty publishes macro and filter live values");
+    require(track.liveControls[liveSource3]==bass.subLevel&&track.liveControls[liveSource4]==bass.drive&&
+            track.liveControls[liveSource5]==bass.glide,"Fatty live values match their numeric fields");
+    int col=-1,row=-1;
+    require(!instrumentBass808LiveCell(liveSource1,&col,&row)&&
+            !instrumentBass808LiveCell(liveSource2,&col,&row),"Fatty picker controls have no bars");
+    require(instrumentBass808LiveCell(liveSource3,&col,&row)&&col==0&&row==5,"Fatty SubLvl live cell");
+    require(instrumentBass808LiveCell(liveSource4,&col,&row)&&col==0&&row==6,"Fatty Drive live cell");
+    require(instrumentBass808LiveCell(liveSource5,&col,&row)&&col==0&&row==7,"Fatty Glide live cell");
+    screenSetup(&screenInstrument,0);
+    screenDraw();
+    for(int mode : {2,0}) {
+      bass.envelopeMode=mode;
+      screenInstrumentBass808.cursorCol=1;screenInstrumentBass808.cursorRow=4;
+      const auto subBefore=bass.subWaveform;
+      const auto filterBefore=bass.filterCharacter;
+      key(1,keyEdit);key(1,keyEdit|keyRight);key(0,0);
+      require(bass.filterCharacter==filterBefore+1&&bass.subWaveform==subBefore,
+              "Fatty filter type keyboard edit never changes SUB");
+      key(1,keyEdit);key(1,keyEdit|keyLeft);key(0,0);
+      require(bass.filterCharacter==filterBefore&&bass.subWaveform==subBefore,
+              "Fatty filter type keyboard decrease leaves SUB unchanged");
+      screenInstrumentBass808.cursorCol=0;
+      key(1,keyEdit);key(1,keyEdit|keyRight);key(0,0);
+      require(bass.subWaveform==(subBefore+1)%5&&bass.filterCharacter==filterBefore,
+              "Fatty SUB keyboard edit still changes only SUB");
+      key(1,keyEdit);key(1,keyEdit|keyLeft);key(0,0);
+      require(bass.subWaveform==subBefore&&bass.filterCharacter==filterBefore,
+              "Fatty SUB keyboard decrease leaves filter unchanged");
+    }
+    bass.envelopeMode=2;
+    require(screenInstrumentBass808.getColumnCount(8)==2,"Fatty resonance column is reachable");
+    require(screenInstrumentBass808.getColumnCount(9)==5,"Fatty VCA ADSR has five fields");
+    screenInstrumentBass808.cursorCol=1;screenInstrumentBass808.cursorRow=8;
+    screenFullRedraw(&screenInstrumentBass808);capture("fatty-vca-filter");
+    const auto vcaResonance=bass.filterResonance;
+    require(screenInstrumentBass808.onEdit(1,8,CellEditAction::increase)&&bass.filterResonance!=vcaResonance,
+            "Fatty VCA resonance edits the filter");
+    screenInstrumentBass808.cursorCol=0;screenInstrumentBass808.cursorRow=8;
+    require(screenInstrumentBass808.onEdit(0,8,CellEditAction::increase)&&bass.envelopeMode==0,
+            "Fatty switches from VCA to TRIG through the editor");
+    require(screenInstrumentBass808.getColumnCount(8)==2&&screenInstrumentBass808.getColumnCount(9)==2,
+            "Fatty TRIG exposes filter resonance and LPG fields");
+    screenInstrumentBass808.cursorCol=1;screenInstrumentBass808.cursorRow=8;
+    screenFullRedraw(&screenInstrumentBass808);capture("fatty-trig-filter");
+    const auto trigResonance=bass.filterResonance;
+    require(screenInstrumentBass808.onEdit(1,8,CellEditAction::increase)&&bass.filterResonance!=trigResonance,
+            "Fatty TRIG resonance edits the filter, not an envelope macro");
+    bass.attack=255;
+    screenFullRedraw(&screenInstrumentBass808);appDraw();
+    const auto longAttackPixels=framePixels();
+    bass.attack=0;
+    screenFullRedraw(&screenInstrumentBass808);appDraw();
+    const auto zeroAttackPixels=framePixels();
+    for(int y=(15+gfxGetContentRowOffset())*gfxGetCharHeight();
+        y<(16+gfxGetContentRowOffset())*gfxGetCharHeight();++y)
+      for(int x=6*gfxGetCharWidth();x<23*gfxGetCharWidth();++x)
+        require(longAttackPixels[y*640+x]==zeroAttackPixels[y*640+x],
+                "Fatty TRIG live preview never draws the inactive VCA attack");
+    printf("Fatty VCA/TRIG filter navigation, live controls and field rendering passed\n");
+    chipnomadDestroy(chipnomadState);gfxCleanup();SDL_Quit();return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--live-queue-only")) {
     auto& p = chipnomadState->project;
     projectFree(&p); projectInitAY(&p);

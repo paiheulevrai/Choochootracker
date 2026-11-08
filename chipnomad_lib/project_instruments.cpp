@@ -433,6 +433,42 @@ static int initSinteredInstrument(Instrument* instrument) {
 }
 static int freeSinteredInstrument(Instrument* instrument) { freeCommon(instrument); return 0; }
 
+// Bass808 - modern sustained 808 bass synth (NOT a TR-808 kick recreation).
+static const char* modNameBass808(int modIndex) {
+  static const char* names[] = {"Off", "Volume", "Pitch", "OSC", "Sub", "SubLvl", "Drive", "Glide", "Cutoff", "Reso"};
+  return modIndex >= 0 && modIndex < 10 ? names[modIndex] : "Off";
+}
+static int initBass808Instrument(Instrument* instrument) {
+  initCommon(instrument); instrument->type = InstrumentType::Bass808;
+  InstrumentBass808* b = &instrument->chip.bass808;
+  b->waveform = (uint8_t)Bass808Waveform::sine;
+  b->subWaveform = 0;            // sub off by default
+  b->subLevel = 0;
+  b->drive = 24;                  // light saturation
+  b->glide = 0;                   // no portamento by default
+  b->envelopeMode = 2;            // VCA ADSR by default (TRIG = 0)
+  initVoicePostSettings(b);
+  // Sensible defaults for a sustained sub-bass: short attack, long
+  // sustain, medium release; the inherited InstrumentVoicePostSettings
+  // init zeroes these so override only what we need.
+  b->attack = 0;
+  b->decay = 32;
+  b->sustain = 255;
+  b->release = 64;
+  b->envelopeShape = 0x80;
+  // Default filter: warm LP with slight resonance and a wide-open cutoff,
+  // so a new instrument is audible immediately (the 1.2 kHz default
+  // muffled sub-bass notes).
+  b->filterEnabled = 1;
+  b->filterCharacter = 2;          // classic
+  b->filterMode = 0;               // low-pass
+  b->filterSlope24dB = 1;
+  b->filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
+  b->filterResonance = 32;
+  return 0;
+}
+static int freeBass808Instrument(Instrument* instrument) { freeCommon(instrument); return 0; }
+
 static const char* modNameMidi(int modIndex) {
   return "Off";
 }
@@ -495,6 +531,7 @@ static const InstrumentModDestination destDigiSophie[] = {N,D("Volume",instrumen
 static const InstrumentModDestination destMonk[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Vowel",fxMWV,255,InstrumentMotionValue::raw),D("Voice",fxMIN,255,InstrumentMotionValue::raw),D("Breath",fxMAM,255,InstrumentMotionValue::raw),D("Glide",fxMFL,255,InstrumentMotionValue::raw),D("Vibrato",fxMFB,255,InstrumentMotionValue::raw),D("Vib rate",fxMSH,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destMME[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Waves",fxMWV,255,InstrumentMotionValue::raw),D("Interval",fxMIN,255,InstrumentMotionValue::raw),D("Amount",fxMAM,255,InstrumentMotionValue::raw),D("Flow",fxMFL,255,InstrumentMotionValue::raw),D("Feedback",fxMFB,255,InstrumentMotionValue::raw),D("Shaper",fxMSH,255,InstrumentMotionValue::raw),D("Cutoff",fxMCF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxMRS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destSintered[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Decay",fxSDC,255,InstrumentMotionValue::raw),D("Mod",fxSMD,255,InstrumentMotionValue::raw),D("A",fxSA,255,InstrumentMotionValue::raw),D("B",fxSB,255,InstrumentMotionValue::raw),D("Motion",fxSMO,255,InstrumentMotionValue::raw),D("C",fxSC,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF3,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxSRS3,255,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destBass808[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("OSC",fxBWF,3,InstrumentMotionValue::raw),D("Sub",fxBSW,4,InstrumentMotionValue::raw),D("SubLvl",fxBSL,255,InstrumentMotionValue::raw),D("Drive",fxBDR,255,InstrumentMotionValue::raw),D("Glide",fxGLD,255,InstrumentMotionValue::raw),D("Cutoff",fxB80CF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxB80RS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destMidi[] = {N};
 static const InstrumentModDestination destOPLL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw)};
 #undef N
@@ -515,6 +552,7 @@ static const InstrumentFX fxMonk[]={F(fxMWV,"MWV"),F(fxMIN,"MIN"),F(fxMAM,"MAM")
 static const InstrumentFX fxMME[]={F(fxMMD,"MMD"),F(fxMWV,"MWV"),F(fxMIN,"MIN"),F(fxMAM,"MAM"),F(fxMFL,"MFL"),F(fxMFB,"MFB"),F(fxMSH,"MSH"),F(fxMCF,"MCF"),F(fxMRS,"MRS")};
 static const InstrumentFX fxSoundFont[]={F(fxFPT,"FPT"),F(fxFCF,"FCF"),F(fxFRS,"FRS"),F(fxFAT,"FAT"),F(fxFHD,"FHD"),F(fxFDC,"FDC"),F(fxFSU,"FSU"),F(fxFRL,"FRL")};
 static const InstrumentFX fxSintered[]={F(fxSMDL,"SMD"),F(fxSDC,"SDC"),F(fxSMD,"SMP"),F(fxSA,"SMA"),F(fxSB,"SMB"),F(fxSMO,"SMO"),F(fxSC,"SMC"),F(fxSCF3,"SCF"),F(fxSRS3,"SRS")};
+static const InstrumentFX fxBass808[]={F(fxBWF,"BWF"),F(fxBSW,"BSW"),F(fxBSL,"BSL"),F(fxBDR,"BDR"),F(fxGLD,"GLD"),F(fxB80CF,"BCF"),F(fxB80RS,"BRS")};
 static const InstrumentFX fxMidi[]={F(fxMC1,"MC1"),F(fxMC2,"MC2"),F(fxMC3,"MC3"),F(fxMC4,"MC4")};
 #undef F
 #define COUNT(a) (uint8_t)(sizeof(a) / sizeof((a)[0]))
@@ -553,6 +591,7 @@ static const InstrumentDefinition instrumentDefinitions[] = {
   {"Audio in",InstrumentCategory::utility,InstrumentScreenKind::audioIn,destAudioIn,COUNT(destAudioIn),fxAudioIn,COUNT(fxAudioIn),{3,modNameAudioIn,initAudioInInstrument,freeNoneInstrument,1,0}},
   {"Layer",InstrumentCategory::utility,InstrumentScreenKind::layer,destLayer,COUNT(destLayer),fxLayer,COUNT(fxLayer),{7,modNameNone,initLayerInstrument,freeNoneInstrument,0,0}},
   {"DigiSophie",InstrumentCategory::drums,InstrumentScreenKind::drumSynth,destDigiSophie,COUNT(destDigiSophie),fxDrumSynth,COUNT(fxDrumSynth),{10,modNameDigiSophie,initDigiSophieInstrument,freeDrumSynthInstrument,1,0}},
+  {"Fatty",InstrumentCategory::synth,InstrumentScreenKind::bass808,destBass808,COUNT(destBass808),fxBass808,COUNT(fxBass808),{9,modNameBass808,initBass808Instrument,freeBass808Instrument,1,0}},
 };
 #undef COUNT
 
@@ -672,6 +711,7 @@ InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument)
     case InstrumentType::DrumSynth: return &instrument->chip.drumSynth;
     case InstrumentType::MME: return &instrument->chip.mme;
     case InstrumentType::Sintered: return &instrument->chip.sintered;
+    case InstrumentType::Bass808: return &instrument->chip.bass808;
     default: return NULL;
   }
 }
@@ -714,6 +754,14 @@ int instrumentMotionDestination(const Instrument* instrument, int destination, F
       *base = destination == 3 ? instrument->chip.mme.waves : destination == 4 ? instrument->chip.mme.interval : destination == 5 ? instrument->chip.mme.amount : destination == 6 ? instrument->chip.mme.flow : destination == 7 ? instrument->chip.mme.feedback : destination == 8 ? instrument->chip.mme.shaper : destination == 9 ? instrument->chip.mme.filterCutoffHz : instrument->chip.mme.filterResonance; break;
     case InstrumentType::Sintered:
       *base = destination == 3 ? instrument->chip.sintered.decay : destination == 4 ? instrument->chip.sintered.mod : destination == 5 ? instrument->chip.sintered.a : destination == 6 ? instrument->chip.sintered.b : destination == 7 ? instrument->chip.sintered.motion : destination == 8 ? instrument->chip.sintered.c : destination == 9 ? instrument->chip.sintered.filterCutoffHz : instrument->chip.sintered.filterResonance; break;
+    case InstrumentType::Bass808:
+      *base = destination == 3 ? instrument->chip.bass808.waveform :
+        destination == 4 ? instrument->chip.bass808.subWaveform :
+        destination == 5 ? instrument->chip.bass808.subLevel :
+        destination == 6 ? instrument->chip.bass808.drive :
+        destination == 7 ? instrument->chip.bass808.glide :
+        destination == 8 ? instrument->chip.bass808.filterCutoffHz :
+        instrument->chip.bass808.filterResonance; break;
     default: return 0;
   }
   return 1;
@@ -745,6 +793,8 @@ int instrumentCCDestinationValue(const Instrument* instrument, int destination, 
   if (!instrumentCCDestinationAvailable(instrument, destination)) return 0;
   if (destination >= midiCCDestinationAttack && destination <= midiCCDestinationRelease) return ccScale(cc, 255);
   const InstrumentModDestination* d = instrumentModDestination(instrument->type, destination);
+  if (instrument->type == InstrumentType::Bass808 && (destination == 3 || destination == 4))
+    return ccScale(cc, d->range);
   if (d->value == InstrumentMotionValue::cutoff) return (int)filterCutoffFromControl((uint8_t)ccScale(cc, 255));
   if (d->range == 16384) return ccScale(cc, 32767);
   if (d->value == InstrumentMotionValue::speed) return ccScale(cc, 500);
@@ -878,6 +928,16 @@ int instrumentSetCCDestination(Instrument* instrument, int destination, uint8_t 
       else if (destination == 8) instrument->chip.sintered.c = value;
       else if (destination == 9) instrument->chip.sintered.filterCutoffHz = value;
       else if (destination == 10) instrument->chip.sintered.filterResonance = value;
+      else return 0;
+      break;
+    case InstrumentType::Bass808:
+      if (destination == 3) instrument->chip.bass808.waveform = value;
+      else if (destination == 4) instrument->chip.bass808.subWaveform = value;
+      else if (destination == 5) instrument->chip.bass808.subLevel = value;
+      else if (destination == 6) instrument->chip.bass808.drive = value;
+      else if (destination == 7) instrument->chip.bass808.glide = value;
+      else if (destination == 8) instrument->chip.bass808.filterCutoffHz = value;
+      else if (destination == 9) instrument->chip.bass808.filterResonance = value;
       else return 0;
       break;
     default: return 0;

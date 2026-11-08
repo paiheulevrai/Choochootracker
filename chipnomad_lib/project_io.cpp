@@ -261,6 +261,8 @@ static FXId scanFX(char* str, Project* p) {
   // UI). The AY2 Pulse Low Level FX owns the "SPL" name in this flat
   // namespace, so the sample FX keeps "SLP" in files and resolves here.
   if (!strcmp(buf, "SLP")) return fxSLP;
+  if (!strcmp(buf, "B8C")) return fxB80CF;
+  if (!strcmp(buf, "B8R")) return fxB80RS;
 
   // Scan all FX groups
   extern FXGroup fxGroups[];
@@ -1601,6 +1603,8 @@ static int projectSaveGrooves(FILE* file, Project* project) {
 // would hijack loads of both old and new files.
 static const char* fxSaveName(FXId fx) {
   if (fx == FX_ID_EMPTY || fx >= fxTotalCount) return "---";
+  if (fx == fxB80CF) return "B8C";
+  if (fx == fxB80RS) return "B8R";
   return fx == fxSLP ? "SLP" : fxNames[fx].name;
 }
 

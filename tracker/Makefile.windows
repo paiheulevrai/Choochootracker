@@ -100,6 +100,7 @@ native-chip-screenshots: $(NATIVE_SCREENSHOT_OBJECTS)
 		-DDESKTOP_BUILD -D__USE_MINGW_ANSI_STDIO=1 -D__WINDOWS_MM__ \
 		-o $(BUILD)/choochootracker.exe
 	cp /opt/SDL2/x86_64-w64-mingw32/bin/SDL2.dll $(BUILD)/
+		cp "$$($(CC) -print-file-name=libwinpthread-1.dll)" $(BUILD)/
 
 # Windows deployment using Docker
 .PHONY: windows-deploy
@@ -112,6 +113,6 @@ windows-deploy:
 	@mkdir -p ../../releases
 	@cp -r packaging/common/* $(BUILD)/
 	@cp packaging/windows/README.txt $(BUILD)/
-	@cd $(BUILD) && zip -r ChooChooTracker-$$(date +%Y-%m-%d)-$(VERSION)-Windows.zip choochootracker.exe SDL2.dll $(COMMON_DATA_DIRS) README.txt
+	@cd $(BUILD) && zip -r ChooChooTracker-$$(date +%Y-%m-%d)-$(VERSION)-Windows.zip choochootracker.exe SDL2.dll libwinpthread-1.dll $(COMMON_DATA_DIRS) README.txt
 	@mv $(BUILD)/ChooChooTracker-*-Windows.zip ../../releases/
 	@echo "Windows package created in ../../releases/"

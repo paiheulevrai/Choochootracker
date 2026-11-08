@@ -21,6 +21,7 @@
 #include "synth/track_audio_modulation.h"
 #include "monk_patch.h"
 #include "synth/sintered_voice.h"
+#include "synth/bass808_voice.h"
 #include "synth/opll_voice.h"
 #include "synth/sid_voice.h"
 #include "synth/dx7_voice.h"
@@ -68,6 +69,7 @@ static void updateDrumSynthVoices(ChipNomadState* state);
 static void updateMMEVoices(ChipNomadState* state);
 static void updateMonkVoices(ChipNomadState* state);
 static void updateSinteredVoices(ChipNomadState* state);
+static void updateBass808Voices(ChipNomadState* state);
 static void updateOPLLVoices(ChipNomadState* state);
 static void updateDX7Voices(ChipNomadState* state);
 static void updateFourOpVoices(ChipNomadState* state);
@@ -860,6 +862,7 @@ static void retireLayerTracks(ChipNomadState* state) {
         ownerVoicesActive(state->mmeVoices, owner) ||
         ownerVoicesActive(state->monkVoices, owner) ||
         ownerVoicesActive(state->sinteredVoices, owner) ||
+        ownerVoicesActive(state->bass808Voices, owner) ||
         ownerVoicesActive(state->opllVoices, owner) ||
         ownerVoicesActive(state->oplVoices, owner) ||
         ownerVoicesActive(state->fourOpVoices, owner) ||
@@ -1311,6 +1314,7 @@ void chipnomadDestroy(ChipNomadState* state) {
       if(!voice)delete state->dx7Parts[i];
       delete state->opllVoices[i][voice];
       delete state->sinteredVoices[i][voice];
+      delete state->bass808Voices[i][voice];
     }
   }
 
@@ -1405,6 +1409,7 @@ bool chipnomadCanSwitchInstrumentLive(InstrumentType type) {
     case InstrumentType::PlaitsAlt: case InstrumentType::AChChid:
     case InstrumentType::DrumSynth: case InstrumentType::MME:
     case InstrumentType::Sintered: case InstrumentType::Monk: case InstrumentType::AudioIn:
+    case InstrumentType::Bass808:
     case InstrumentType::OPLL: case InstrumentType::OPL2:
     case InstrumentType::SegaPSG: case InstrumentType::DX7:
     case InstrumentType::GenesisFM: case InstrumentType::SID:
@@ -1438,6 +1443,8 @@ PreparedInstrumentVoices* chipnomadPrepareInstrumentVoices(ChipNomadState* state
       prepareMissingVoices(prepared, state->mmeVoices, rate); break;
     case InstrumentType::Sintered:
       prepareMissingVoices(prepared, state->sinteredVoices, rate); break;
+    case InstrumentType::Bass808:
+      prepareMissingVoices(prepared, state->bass808Voices, rate); break;
     case InstrumentType::OPLL:
       prepareMissingVoices(prepared, state->opllVoices, rate); break;
     case InstrumentType::OPL2:
@@ -1512,6 +1519,7 @@ void chipnomadInstallInstrumentVoices(ChipNomadState* state, PreparedInstrumentV
     case InstrumentType::DrumSynth: installVoices(state->drumSynthVoices, prepared); break;
     case InstrumentType::MME: installVoices(state->mmeVoices, prepared); break;
     case InstrumentType::Sintered: installVoices(state->sinteredVoices, prepared); break;
+    case InstrumentType::Bass808: installVoices(state->bass808Voices, prepared); break;
     case InstrumentType::OPLL: installVoices(state->opllVoices, prepared); break;
     case InstrumentType::OPL2: installVoices(state->oplVoices, prepared); break;
     case InstrumentType::SegaPSG: installVoices(state->simpleChipVoices, prepared); break;
@@ -1631,6 +1639,13 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
   syncVoicePool(state->oplVoices, has(InstrumentType::OPL2) || has(InstrumentType::OPL3), inLayer(InstrumentType::OPL2), rate);
   syncVoicePool(state->opllVoices, has(InstrumentType::OPLL) || has(InstrumentType::VRC7), inLayer(InstrumentType::OPLL), rate);
   syncVoicePool(state->sinteredVoices, has(InstrumentType::Sintered), inLayer(InstrumentType::Sintered), rate);
+  // The Bass808 handoff added the instrument type and its on-demand
+  // ensureInstrumentVoices path, but never registered the pool here — any
+  // FRESH state (offline exporter/bounce, chip reinit) had a NULL voice
+  // pool, and applyVoiceEvents dereferenced it on the first note (segfault
+  // when bouncing a Fatty project, or stressing parameters that force a
+  // chip reinit).
+  syncVoicePool(state->bass808Voices, has(InstrumentType::Bass808), inLayer(InstrumentType::Bass808), rate);
   const bool directDX7 = has(InstrumentType::DX7), layerDX7 = inLayer(InstrumentType::DX7);
   for (int i = 0; i < VOICE_OWNER_COUNT; ++i) {
     const bool needed = i < PROJECT_MAX_TRACKS ? directDX7 : layerDX7;
@@ -1998,7 +2013,7 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   updateSoundbankVoices(state);
   updateSampleVoices(state); updateAudioInputVoices(state); updateSCWFVoices(state); updateBraidsVoices(state);
   updatePlaitsVoices(state); updatePlaitsAltVoices(state); updateAChChidVoices(state); updateDrumSynthVoices(state);
-  updateMMEVoices(state); updateMonkVoices(state); updateSinteredVoices(state); updateOPLLVoices(state); updateOPLVoices(state); updateFourOpVoices(state); updateSimpleChipVoices(state); updateSIDVoices(state); updateDX7Voices(state); applyVoiceEvents(state, dueMicros);
+  updateMMEVoices(state); updateMonkVoices(state); updateSinteredVoices(state); updateBass808Voices(state); updateOPLLVoices(state); updateOPLVoices(state); updateFourOpVoices(state); updateSimpleChipVoices(state); updateSIDVoices(state); updateDX7Voices(state); applyVoiceEvents(state, dueMicros);
   retireLayerTracks(state);
   for (int t = 0; t < state->audioProject.tracksCount; ++t) {
     PlaybackTrackState& track = state->playbackState.tracks[t];
@@ -2403,6 +2418,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
     renderStereoVoiceTracks(state, state->monkVoices, output, frames, true);
     renderMonoVoiceTracks(state, state->mmeVoices, output, frames);
     renderMonoVoiceTracks(state, state->sinteredVoices, output, frames);
+    renderMonoVoiceTracks(state, state->bass808Voices, output, frames);
     renderMonoVoiceTracks(state, state->opllVoices, output, frames);
     for(int t=0;t<voiceOwnerLimit(state);++t) {
       if (!voiceOwnerValid(state, t)) continue;
@@ -2606,6 +2622,13 @@ static void applyVoiceEvents(ChipNomadState* state, uint64_t dueMicros) {
         break;
       case InstrumentType::Sintered:
         applyEvent(state->sinteredVoices[trackIdx]);
+        break;
+      case InstrumentType::Bass808:
+        // Defense in depth: skip when the pool was never installed (e.g. a
+        // voice missing from chipnomadInitChips' sync list) instead of
+        // dereferencing NULL.
+        if (!state->bass808Voices[trackIdx][0]) break;
+        applyEvent(state->bass808Voices[trackIdx]);
         break;
       case InstrumentType::Midi: {
         // No voice object: send real MIDI Note On/Off instead, through the
@@ -3299,6 +3322,83 @@ static void updateMonkVoices(ChipNomadState* state) {
       int cents = note == EMPTY_VALUE_8 ? 6000 :
         (project->linearPitch ? project->pitchTable.values[note] : (note + 12) * 100) + track->note.fineOffset + pitch;
       voices[slot]->configure(&configured, (float)cents, (gain < 0.0f ? 0.0f : gain) / track->chordVoiceCount);
+    }
+  }
+}
+
+// Bass808 voice update.  Mirrors updateDrumSynthVoices: reads the
+// InstrumentBass808 struct + per-row FX + modulation, runs the values
+// through slewEngineFX for smoothing, and calls Bass808Voice::configure
+// on every chord slot.  The glide byte is passed straight through so the
+// voice can update its one-pole coefficient without resetting the target.
+static void updateBass808Voices(ChipNomadState* state) {
+  if (!state->bass808Voices[0][0]) return;
+  Project* project = &state->audioProject;
+  PlaybackState* playback = &state->playbackState;
+  for (int trackIdx = 0; trackIdx < voiceOwnerLimit(state); ++trackIdx) {
+    if (!voiceOwnerValid(state, trackIdx)) continue;
+    PlaybackTrackState* track = voiceOwnerState(state, trackIdx);
+    Bass808Voice** voices = state->bass808Voices[trackIdx];
+    if (!voices[0]) continue;
+    if (track->note.instrument == EMPTY_VALUE_8 ||
+        project->instruments[track->note.instrument].type != InstrumentType::Bass808) {
+      for (int slot = 0; slot < CHORD_MAX_VOICES; ++slot) voices[slot]->kill();
+      continue;
+    }
+    InstrumentBass808* b = &project->instruments[track->note.instrument].chip.bass808;
+    int waveform = b->waveform, subWaveform = b->subWaveform, subLevel = b->subLevel;
+    int drive = b->drive, glide = b->glide;
+    int cutoff = b->filterCutoffHz, resonance = b->filterResonance, pitchModulation = 0;
+    float gain = phraseGain(playback, track, &project->instruments[track->note.instrument]);
+    // Per-row FX overrides, applied through the shared slew so changes
+    // don't click.  Each fxBxx is set up in the Bass808 factory entry
+    // and resolves to its own fxIndex slot in PlaybackNoteState::fx[].
+    if (track->note.fx[fxBWF].isOn) waveform = track->note.fx[fxBWF].fxValue;
+    if (track->note.fx[fxBSW].isOn) subWaveform = track->note.fx[fxBSW].fxValue;
+    subLevel = slewEngineFX(track, fxBSL, track->note.fx[fxBSL].isOn ? track->note.fx[fxBSL].fxValue : subLevel);
+    drive = slewEngineFX(track, fxBDR, track->note.fx[fxBDR].isOn ? track->note.fx[fxBDR].fxValue : drive);
+    glide = slewEngineFX(track, fxGLD, track->note.fx[fxGLD].isOn ? track->note.fx[fxGLD].fxValue : glide);
+    cutoff = instrumentFXCutoff(slewEngineFX(track, fxB80CF, track->note.fx[fxB80CF].isOn ? track->note.fx[fxB80CF].fxValue : filterControlFromCutoff(cutoff)));
+    resonance = slewEngineFX(track, fxB80RS, track->note.fx[fxB80RS].isOn ? track->note.fx[fxB80RS].fxValue : resonance);
+    // Modulation destinations: 1=Volume, 2=Pitch, 3=Wave, 4=SubWave,
+    // 5=SubLvl, 6=Drive, 7=Glide, 8=Cutoff, 9=Reso.
+    for (int i = 0; i < 4; ++i) {
+      PlaybackModState* mod = &track->note.modulation[i]; if (!mod->modulation) continue;
+      int value = playbackModScaleToRange(mod->outValue, 255);
+      switch (mod->modulation->destination) {
+        case 1: gain = modulationIsAdditive(mod->modulation->type) ? gain + value / 255.0f : value * track->note.volume / (255.0f * PHRASE_VOLUME_MAX); break;
+        case 2: pitchModulation += playbackModScaleToRange(mod->outValue, 1200); break;
+        case 3: waveform += value; break;
+        case 4: subWaveform += value; break;
+        case 5: subLevel += value; break;
+        case 6: drive += value; break;
+        case 7: glide += value; break;
+        case 8: cutoff = playbackModulateCutoff(cutoff, mod); break;
+        case 9: resonance += value; break;
+      }
+    }
+    InstrumentBass808 configured = *b;
+    if (track->note.fx[fxEAT].isOn) configured.attack = track->note.fx[fxEAT].fxValue;
+    if (track->note.fx[fxEDC].isOn) configured.decay = track->note.fx[fxEDC].fxValue;
+    if (track->note.fx[fxESU].isOn) configured.sustain = track->note.fx[fxESU].fxValue;
+    if (track->note.fx[fxERL].isOn) configured.release = track->note.fx[fxERL].fxValue;
+    configured.waveform = (uint8_t)clampInt(waveform, 0, (int)Bass808Waveform::totalCount - 1);
+    configured.subWaveform = (uint8_t)clampInt(subWaveform, 0, 4);
+    configured.subLevel = (uint8_t)clampInt(subLevel, 0, 255);
+    configured.drive = (uint8_t)clampInt(drive, 0, 255);
+    configured.glide = (uint8_t)clampInt(glide, 0, 255);
+    recordLiveControls(track, {configured.waveform, configured.subWaveform, configured.subLevel, configured.drive, configured.glide, 0},
+                       filterControlFromCutoff((float)clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ)),
+                       clampInt(resonance, 0, 255));
+    for (int slot = 0; slot < track->chordVoiceCount; ++slot) {
+      uint8_t note = track->chordPitchFinal[slot];
+      int cents = note == EMPTY_VALUE_8 ? 6000 :
+        (project->linearPitch ? project->pitchTable.values[note] : (note + 12) * 100) + track->note.fineOffset + pitchModulation;
+      voices[slot]->configure(&configured, (float)cents,
+        (gain < 0.0f ? 0.0f : gain) / track->chordVoiceCount,
+        (uint16_t)clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ),
+        (uint8_t)clampInt(resonance, 0, 255),
+        (uint8_t)clampInt(glide, 0, 255));
     }
   }
 }

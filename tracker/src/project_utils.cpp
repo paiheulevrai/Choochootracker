@@ -94,6 +94,8 @@ const char* instrumentTypeName(InstrumentType type) {
       return "MME";
     case InstrumentType::Sintered:
       return "Sintered";
+    case InstrumentType::Bass808:
+      return "Fatty";
     case InstrumentType::Midi:
       return "MIDI Out";
     case InstrumentType::OPLL:
