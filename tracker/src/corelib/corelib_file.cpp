@@ -142,8 +142,7 @@ int fileGetDefaultDirectory(char* buffer, int bufferSize) {
   if (!buffer || bufferSize <= 0) return -1;
   int length = snprintf(buffer, bufferSize, "ux0:data/ChooChooTracker");
   if (length < 0 || length >= bufferSize) return -1;
-  createDirectoryRecursive(buffer);
-  return 0;
+  return fileCreateDirectoryRecursive(buffer);
 #elif defined(ANDROID_BUILD)
   extern int androidGetWorkspacePath(char*, int);
   return androidGetWorkspacePath(buffer, bufferSize);
