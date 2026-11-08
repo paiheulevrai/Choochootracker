@@ -491,9 +491,9 @@ Braidsは標準のChooChooTrackerマルチモードフィルターとADSRエン�
 
 ### Sintered
 
-**Sintered** はネイティブのワンショット・デジタルパーカッションシンセです。ノートが基本ピッチを設定。6モデルは `Knot`、`Shard`、`Burst`、`Comb`、`Logic`、`Melt`。各モデルに **Decay**、**Mod**、**Motion** のほかモデル固有の3つのコントロールがあります。Knot は Ratio/Spread/Fold、Shard は Ratio/Feedback/Bite、Burst は Noise/Color/Feedback、Comb は Time/Damping/Regen、Logic は Rate/Pattern/Crush、Melt は Ratio/Chaos/Drive。**Mod** は常に内部カップリングの深さ。
+**Sintered** はネイティブのワンショット・デジタルパーカッションシンセです。ノートが基本ピッチを設定。6モデルは `Knot`、`Crease`、`Burst`、`Comb`、`Logic`、`Melt`。各モデルに **Decay**、**Mod**、**Motion** のほかモデル固有の3つのコントロールがあります。Knot は Ratio/Spread/Fold、Crease は Ratio/Feedback/Bite、Burst は Noise/Color/Feedback、Comb は Time/Damping/Regen、Logic は Rate/Pattern/Crush、Melt は Ratio/Chaos/Drive。**Mod** は常に内部カップリングの深さ。
 
-Motion は内部マクロエンベロープで、値が `80` 未満はAD形状、`80` で無効、`80` 超はディケイのみ形状。中心から離れるほどエンベロープは速くなります。行き先はモデルごとに固定。これで Sintered はトラッカーパターンで予測可能な動作です。Knot は Mod/Fold、Shard は Feedback/Bite、Burst は Noise/Color/Feedback、Comb は Damping/Regen、Logic は Rate/Crush、Melt は Chaos/Drive を動かします。全モデルがノートトリガー時に状態をリセットし、内部フィードバックは繰り返し可能なヒット用に制限されます。
+Motion は内部マクロエンベロープで、値が `80` 未満はAD形状、`80` で無効、`80` 超はディケイのみ形状。中心から離れるほどエンベロープは速くなります。行き先はモデルごとに固定。これで Sintered はトラッカーパターンで予測可能な動作です。Knot は Mod/Fold、Crease は Feedback/Bite、Burst は Noise/Color/Feedback、Comb は Damping/Regen、Logic は Rate/Crush、Melt は Chaos/Drive を動かします。全モデルがノートトリガー時に状態をリセットし、内部フィードバックは繰り返し可能なヒット用に制限されます。
 
 ### MonkSynth
 

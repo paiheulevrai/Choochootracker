@@ -6,6 +6,8 @@
 #include <string.h>
 
 static int engineButtonDown;
+static bool digiSophie() { return chipnomadState->project.instruments[cInstrument].type == InstrumentType::DigiSophie; }
+static int lastModel() { return digiSophie() ? 3 : 11; }
 
 static void selectEngine(int value) {
   chipnomadState->project.instruments[cInstrument].chip.drumSynth.engine = (DrumSynthEngine)value;
@@ -15,16 +17,23 @@ static void selectEngine(int value) {
 static void cancelEngineSelection() { screenSetup(&screenInstrument, cInstrument); }
 static void openEngineSelection() {
   InstrumentDrumSynth* d = &chipnomadState->project.instruments[cInstrument].chip.drumSynth;
-  selectionPopupSetup("BOGIE MODEL", drumSynthCategories, drumSynthCategoryCount,
+  static const SelectionItem sophieModels[] = {
+    {"FUSE", 0, NULL, 0}, {"BOOM", 1, NULL, 0}, {"PIPE", 2, NULL, 0}, {"SHARD", 3, NULL, 0}
+  };
+  selectionPopupSetup(digiSophie() ? "DIGISOPHIE MODEL" : "BOGIE MODEL",
+    digiSophie() ? sophieModels : drumSynthCategories, digiSophie() ? 4 : drumSynthCategoryCount,
     (int)d->engine, selectEngine, cancelEngineSelection);
   screenSetup(&screenSelectionPopup, 0);
 }
 
 static const char* engineName(DrumSynthEngine e) {
+  if (digiSophie()) return digiSophieModelName((int)e);
   static const char* names[] = {"KICK", "SNARE", "HAT", "CLAP", "TOM", "RIM", "FM", "NOISE", "COWBELL", "CYMBAL", "SHAKER", "CLAVE"};
   return (int)e < 12 ? names[(int)e] : "KICK";
 }
 static const char* macroName(DrumSynthEngine e, int macro) {
+  static const char* sophie[] = {"Decay", "Color", "Sweep", "Metal", "FBK", "Fold"};
+  if (digiSophie()) return sophie[macro];
   static const char* generic[] = {"Decay", "Tone", "Sweep", "Noise", "FM", "Drive"};
   static const char* kick[] = {"Decay", "Tone", "Sweep", "Click", "Harm", "Drive"};
   static const char* snare[] = {"Decay", "Tone", "Snap", "Wire", "Body", "Drive"};
@@ -99,7 +108,7 @@ static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);
   InstrumentDrumSynth* d = &chipnomadState->project.instruments[cInstrument].chip.drumSynth;
   if (col && row >= 4 && row <= 8) { int ok = instrumentCommonOnEditVoicePost(col, row, action, d); if (ok) projectModified = 1; return ok; }
-  int ok = row == 3 ? edit8noLast(action, (uint8_t*)&d->engine, 1, 0, 11) :
+  int ok = row == 3 ? edit8noLast(action, (uint8_t*)&d->engine, 1, 0, lastModel()) :
     (drumSynthMacroUsed(d->engine, row - 4) && macro(d, row - 4) ? edit8noLast(action, macro(d, row - 4), 16, 0, 255) : 0);
   if (ok) { projectModified = 1; screenFullRedraw(&screenInstrumentDrumSynth); }
   return ok;
@@ -109,7 +118,7 @@ static int onInput(int isKeyDown, int keys, int) {
   PopupEditInput input = popupEditInput(isKeyDown, keys, &engineButtonDown);
   if (input == PopupEditInput::cycle) {
     cycle8((uint8_t*)&chipnomadState->project.instruments[cInstrument].chip.drumSynth.engine,
-      keys == (keyEdit | keyRight) ? 1 : -1, 0, 11, 0);
+      keys == (keyEdit | keyRight) ? 1 : -1, 0, lastModel(), 0);
     projectModified = 1; screenFullRedraw(&screenInstrumentDrumSynth); return 1;
   }
   if (input == PopupEditInput::hold) return 1;

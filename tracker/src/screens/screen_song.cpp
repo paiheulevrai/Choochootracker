@@ -116,7 +116,9 @@ static int livePlay(int tapCount) {
   for (int track = first; track <= last; ++track) {
     int chain = chipnomadState->project.song[row][track];
     if (status->tracks[track].mode == PlaybackMode::stopped) {
-      if (chain != EMPTY_VALUE_16) chipnomadQueuePlaybackStartLiveChain(chipnomadState, track, row);
+      int urgent = tapCount >= 2 && status->tracks[track].queue.liveAction != LiveQueueAction::none;
+      chipnomadQueuePlaybackQueueLiveChain(chipnomadState, track,
+        chain == EMPTY_VALUE_16 ? -1 : row, urgent);
     } else {
       // A Play press that starts a live chain must not turn the next, separate
       // chain selection into an urgent double-tap. A second press only upgrades

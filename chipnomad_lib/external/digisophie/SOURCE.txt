@@ -1,0 +1,12 @@
+DigiSophie DSP
+https://github.com/soejrd/digisophie
+Revision: 11d2364f3ea8faabd21bb9942fdc0a79606b4e1a
+
+MIT-licensed Sophie metallic percussion by Matt Estela and the DigiSophie
+contributors. Only sophie.c (renamed sophie.cpp for source discovery),
+sophie.h and its generated sine table are compiled. No Digitakt firmware,
+adapter, samples or GPL digihealth diagnostics are included.
+
+Tracker adapts the 48 kHz core to the output rate in DrumSynthVoice, sharing
+the existing voice pool and filter/VCA path with Bogie. The core is unmodified.
+LICENSE and THIRD_PARTY.md retain upstream attribution.

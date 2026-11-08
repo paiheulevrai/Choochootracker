@@ -68,6 +68,36 @@ void refreshWaveforms() {
 }
 }
 
+TEST_CASE_FIXTURE(VisualFixture, "Song top waveform draws changing audio and respects the display option") {
+  screensInitAll();
+  currentScreen = &screenSong;
+  appSettings.persistentWaveform = 1;
+  gfxSetContentRowOffset(2);
+  mockScopePixels.clear();
+  appDraw();
+  REQUIRE_FALSE(mockScopePixels.empty());
+  const auto silence = mockScopePixels;
+  std::vector<float> audio(1024 * 2);
+  for (int i = 0; i < 1024; ++i)
+    audio[2 * i] = audio[2 * i + 1] = 0.5f * sinf(i * 0.04f);
+  auto* monitor = chipnomadState->audioMonitor;
+  monitor->beginRender();
+  monitor->beginChunk(1024);
+  monitor->finishChunk(audio.data(), 1024, 48000);
+  monitor->publish();
+  appDraw();
+  CHECK(mockScopePixels != silence);
+  CHECK(gfxGetContentRowOffset() == 2);
+  appSettings.persistentWaveform = 0;
+  mockScopePixels.clear();
+  appDraw();
+  CHECK(mockScopePixels.empty());
+  appSettings.persistentWaveform = 1;
+  currentScreen = &screenChain;
+  appDraw();
+  CHECK(mockScopePixels.empty());
+}
+
 TEST_CASE_FIXTURE(VisualFixture, "Track display defaults to Detailed and round-trips each mode") {
   { std::ofstream f(settingsPath); f << "themeName: OldTheme\n"; }
   REQUIRE(settingsLoad() == 0);

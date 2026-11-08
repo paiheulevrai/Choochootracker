@@ -603,9 +603,9 @@ Op het Modulatiescherm, druk **EDIT** op een bron om een familie te kiezen (Enve
 
 ### Sintered
 
-**Sintered** is een native one-shot digitale percussie synth. Noten bepalen de fundamentele pitch; de zes modellen zijn `Knot`, `Shard`, `Burst`, `Comb`, `Logic` en `Melt`. Elk model heeft **Decay**, **Mod** en **Motion**, plus drie model-specifieke parameters: Knot gebruikt Ratio/Spread/Fold, Shard Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush en Melt Ratio/Chaos/Drive. **Mod** is altijd de interne koppeldiepte.
+**Sintered** is een native one-shot digitale percussie synth. Noten bepalen de fundamentele pitch; de zes modellen zijn `Knot`, `Crease`, `Burst`, `Comb`, `Logic` en `Melt`. Elk model heeft **Decay**, **Mod** en **Motion**, plus drie model-specifieke parameters: Knot gebruikt Ratio/Spread/Fold, Crease Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush en Melt Ratio/Chaos/Drive. **Mod** is altijd de interne koppeldiepte.
 
-Motion is een interne macro envelope: waarden onder `80` gebruiken een AD vorm, `80` schakelt uit, en waarden boven `80` gebruiken een decay-only vorm. Verder van het midden maakt de envelope sneller. De bestemmingen zijn per model vast, dus Sintered blijft voorspelbaar in trackerpatronen: Knot animeert Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Alle modellen resetten hun staat bij een noot-trigger en begrenzen interne feedback voor herhaalbare hits.
+Motion is een interne macro envelope: waarden onder `80` gebruiken een AD vorm, `80` schakelt uit, en waarden boven `80` gebruiken een decay-only vorm. Verder van het midden maakt de envelope sneller. De bestemmingen zijn per model vast, dus Sintered blijft voorspelbaar in trackerpatronen: Knot animeert Mod/Fold; Crease Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Alle modellen resetten hun staat bij een noot-trigger en begrenzen interne feedback voor herhaalbare hits.
 
 ### MonkSynth
 

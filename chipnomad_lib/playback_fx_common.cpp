@@ -306,6 +306,7 @@ static void handleFX_KIL(PlaybackState* state, PlaybackTrackState* track, int tr
     track->achchidGateCounter = 0;
     track->note.pitchBase = EMPTY_VALUE_8;
     track->note.noteKilled = 1;
+    track->euclidean.active = 0;
   }
 }
 
@@ -326,6 +327,15 @@ static void handleFX_DEL(PlaybackState* state, PlaybackTrackState* track, int tr
 // RET - Note retrigger
 static void restartFX_RET(PlaybackState* state, PlaybackTrackState* track, int trackIdx, PlaybackFXState* fx) {
   fx->counter = 0;
+}
+
+void playbackRetriggerNote(PlaybackState* state, int trackIdx) {
+  PlaybackTrackState* track = &state->tracks[trackIdx];
+  setupInstrument(state, trackIdx);
+  track->note.noteTriggered = 1;
+  tableInit(state, trackIdx, &track->note.instrumentTable, track->note.instrumentTable.tableIdx, 0, 1);
+  tableInit(state, trackIdx, &track->note.auxTable, track->note.auxTable.tableIdx, 0, 1);
+  restartFX(state, trackIdx);
 }
 
 static void handleFX_RET(PlaybackState* state, PlaybackTrackState* track, int trackIdx, int chipIdx, PlaybackFXState* fx) {
@@ -350,11 +360,7 @@ static void handleFX_RET(PlaybackState* state, PlaybackTrackState* track, int tr
   }
 
   if (fx->counter % delay == 0) {
-    setupInstrument(state, trackIdx);
-    track->note.noteTriggered = 1;
-    tableInit(state, trackIdx, &track->note.instrumentTable, track->note.instrumentTable.tableIdx, 0, 1);
-    tableInit(state, trackIdx, &track->note.auxTable, track->note.auxTable.tableIdx, 0, 1);
-    restartFX(state, trackIdx);
+    playbackRetriggerNote(state, trackIdx);
     fx->acc += volumeOffset;
   }
   track->note.volumeOffset += fx->acc * (PHRASE_VOLUME_MAX / 15);
@@ -414,12 +420,16 @@ static void handleFX_PSL(PlaybackState* state, PlaybackTrackState* track, int tr
 
 void initFX(PlaybackState* state, int trackIdx, const FXCell* fx, PlaybackTableState* tableState, int tableFXColumn) {
   if (fx->command == FX_ID_EMPTY || fx->command >= fxTotalCount) return;
+  if (fx->command == fxEUC || fx->command == fxREP || fx->command == fxRTO) return;
   if (tableState != NULL && (fx->command == fxSCL || fx->command == fxCRD)) return;
 
   PlaybackTrackState* track = &state->tracks[trackIdx];
   const bool layerAccepts = track->note.instrument != EMPTY_VALUE_8 &&
     state->p->instruments[track->note.instrument].type == InstrumentType::Layer &&
     instrumentFXAvailableInProject(state->p, track->note.instrument, fx->command);
+  const FXId runtimeCommand = fx->command == fxSTA ? fxSST : fx->command;
+  track->note.fx[runtimeCommand].tableSource = tableState
+    ? 1 + tableFXColumn + (tableState == &track->note.auxTable ? 4 : 0) : 0;
   if (fx->command >= fxF11 && fx->command <= fxF28) {
     int address = fx->command - fxF11, slot = address / 8, parameter = address % 8;
     int module = state->p->trackInserts[trackIdx][slot].module;
@@ -521,9 +531,17 @@ int handleFX(PlaybackState* state, int trackIdx, int chipIdx) {
 
   // All FX on this note
   for (int i = 0; i < fxTotalCount; i++) {
-    if (track->note.fx[i].isOn && fxHandlers[i].handle) {
+    if (!track->note.fx[i].isOn) continue;
+    if (fxHandlers[i].handle) {
       fxHandlers[i].handle(state, track, trackIdx, chipIdx, &track->note.fx[i]);
       track->note.fx[i].counter++;
+      const int source = track->note.fx[i].tableSource;
+      if (source >= 1 && source <= 8) {
+        auto& table = source <= 4 ? track->note.instrumentTable : track->note.auxTable;
+        const int lane = (source - 1) & 3;
+        if (table.tableIdx != EMPTY_VALUE_8 && table.heldCommand[lane] == i)
+          table.heldFX[lane] = track->note.fx[i];
+      }
     }
   }
 

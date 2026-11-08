@@ -76,7 +76,7 @@ static const char* getModulationParamName(ModulationType type, int paramIdx) {
   }
 }
 
-const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
+const char* helpFXHint(const FXCell& fx, int isTable, uint8_t instrumentIdx) {
   static const int bufferSize = 41; // Max length of a hint string
   static char buffer[bufferSize];
 
@@ -92,88 +92,99 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     "Up (+5 oct)"
   };
 
-  switch ((enum FX)fx[0]) {
+  switch ((enum FX)fx.command) {
     case fxARP: // Arpeggio
-      snprintf(buffer, bufferSize, "Arp intervals: %hhu, %hhu", (fx[1] & 0xf0) >> 4, (fx[1] & 0xf));
+      snprintf(buffer, bufferSize, "Arp intervals: %hhu, %hhu", (fx.value & 0xf0) >> 4, (fx.value & 0xf));
       break;
     case fxARC: // Arpeggio config
-      snprintf(buffer, bufferSize, "ARP config: %s, %d tics",arpModeHelp[(fx[1] & 0xf0) >> 4],(fx[1] & 0xf));
+      snprintf(buffer, bufferSize, "ARP config: %s, %d tics",arpModeHelp[(fx.value & 0xf0) >> 4],(fx.value & 0xf));
       break;
     case fxPVB: // Pitch vibrato
-      snprintf(buffer, bufferSize, "Vibrato: speed %hhu, depth %hhu", (fx[1] & 0xf0) >> 4, (fx[1] & 0xf));
+      snprintf(buffer, bufferSize, "Vibrato: speed %hhu, depth %hhu", (fx.value & 0xf0) >> 4, (fx.value & 0xf));
       break;
     case fxPBN: // Pitch bend
       if (chipnomadState->project.linearPitch) {
         // Linear pitch mode: show in semitones (value * 25 cents / 100 cents per semitone)
-        float semitones = (int8_t)fx[1] * 0.25f;
+        float semitones = (int8_t)fx.value * 0.25f;
         snprintf(buffer, bufferSize, "Pitch bend %+.2f semitones per step", semitones);
       } else {
-        snprintf(buffer, bufferSize, "Pitch bend %hhd per step", fx[1]);
+        snprintf(buffer, bufferSize, "Pitch bend %hhd per step", fx.value);
       }
       break;
     case fxPSL: // Pitch slide (portamento)
-      snprintf(buffer, bufferSize, "Pitch slide for %hhd tics", fx[1]);
+      snprintf(buffer, bufferSize, "Pitch slide for %hhd tics", fx.value);
       break;
     case fxPIT: // Pitch offset (semitones)
-      snprintf(buffer, bufferSize, "Pitch: %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Pitch: %+hhd (relative)", (int8_t)fx.value);
       break;
     case fxFIN: // Fine pitch offset
-      snprintf(buffer, bufferSize, "Finetune: %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Finetune: %+hhd (relative)", (int8_t)fx.value);
       break;
     case fxPRD: // Period offset
-      snprintf(buffer, bufferSize, "Period: %+hhd (relative)", fx[1]);
+      snprintf(buffer, bufferSize, "Period: %+hhd (relative)", fx.value);
       break;
     case fxVOL: // Volume (relative)
-      snprintf(buffer, bufferSize, "Volume: %+hhd (relative)", fx[1]);
+      snprintf(buffer, bufferSize, "Volume: %+hhd (relative)", fx.value);
       break;
     case fxVSL: // Volume slide
-      snprintf(buffer, bufferSize, "Volume slide %+hhd per step", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Volume slide %+hhd per step", (int8_t)fx.value);
       break;
     case fxPAN:
-      snprintf(buffer, bufferSize, "Instrument pan: %02X", fx[1]);
+      snprintf(buffer, bufferSize, "Instrument pan: %02X", fx.value);
       break;
     case fxTPN:
-      snprintf(buffer, bufferSize, "Track pan: %02X", fx[1]);
+      snprintf(buffer, bufferSize, "Track pan: %02X", fx.value);
       break;
     case fxRET: // Retrigger
-      snprintf(buffer, bufferSize, "Retrigger note every %hhd tics", fx[1] & 0xf);
+      snprintf(buffer, bufferSize, "Retrigger note every %hhd tics", fx.value & 0xf);
       break;
     case fxDEL: // Delay
-      snprintf(buffer, bufferSize, "Delay note by %hhd tics", fx[1]);
+      snprintf(buffer, bufferSize, "Delay note by %hhd tics", fx.value);
       break;
     case fxOFF: // Off
-      snprintf(buffer, bufferSize, "Note off after %hhu tics", fx[1]);
+      snprintf(buffer, bufferSize, "Note off after %hhu tics", fx.value);
       break;
     case fxKIL: // Kill note
-      snprintf(buffer, bufferSize, "Kill note after %hhu tics", fx[1]);
+      snprintf(buffer, bufferSize, "Kill note after %hhu tics", fx.value);
+      break;
+    case fxEUC:
+      if (!(fx.value >> 4)) snprintf(buffer, bufferSize, "Stop Euclidean retrigger");
+      else snprintf(buffer, bufferSize, "EUC: %u hits / %u rows, looping", fx.value >> 4, (fx.value & 15) + 1);
+      break;
+    case fxREP:
+      if (!fx.value) snprintf(buffer, bufferSize, "Stop repeating FX");
+      else snprintf(buffer, bufferSize, "Repeat previous FX: %+d per row", (int8_t)fx.value);
+      break;
+    case fxRTO:
+      snprintf(buffer, bufferSize, "Repeat stops at %02X", fx.value);
       break;
     case fxTIC: // Table speed
-      snprintf(buffer, bufferSize, "Set table speed to %hhu tics", fx[1]);
+      snprintf(buffer, bufferSize, "Set table speed to %hhu tics", fx.value);
       break;
     case fxTBL: // Set instrument table
-      snprintf(buffer, bufferSize, "Instrument table %s", byteToHex(fx[1]));
+      snprintf(buffer, bufferSize, "Instrument table %s", byteToHex(fx.value));
       break;
     case fxTBX: // Set aux table
-      snprintf(buffer, bufferSize, "Aux table %s", byteToHex(fx[1]));
+      snprintf(buffer, bufferSize, "Aux table %s", byteToHex(fx.value));
       break;
     case fxTHO: // Table hop
-      snprintf(buffer, bufferSize, "Hop to instrument table row %hhX", fx[1] & 0xf);
+      snprintf(buffer, bufferSize, "Hop to instrument table row %hhX", fx.value & 0xf);
       break;
     case fxTXH: // Aux table hop
-      snprintf(buffer, bufferSize, "Hop to aux table row %hhX", fx[1] & 0xf);
+      snprintf(buffer, bufferSize, "Hop to aux table row %hhX", fx.value & 0xf);
       break;
     case fxGRV: // Track groove
-      snprintf(buffer, bufferSize, "Track groove %s", byteToHex(fx[1]));
+      snprintf(buffer, bufferSize, "Track groove %s", byteToHex(fx.value));
       break;
     case fxGGR: // Global groove
-      snprintf(buffer, bufferSize, "Global groove %s", byteToHex(fx[1]));
+      snprintf(buffer, bufferSize, "Global groove %s", byteToHex(fx.value));
       break;
     case fxSCL:
       if (isTable) snprintf(buffer, bufferSize, "No effect in tables");
       else {
         static const char* const rootNames[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-        uint8_t preset = fx[1] >> 4;
-        uint8_t root = fx[1] & 0xf;
+        uint8_t preset = fx.value >> 4;
+        uint8_t root = fx.value & 0xf;
         if (preset < scalePresetCount && root < 12)
           snprintf(buffer, bufferSize, "%s, root %s", scalePresetName((ScalePreset)preset), rootNames[root]);
         else
@@ -182,16 +193,16 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
       break;
     case fxCRD:
       if (isTable) snprintf(buffer, bufferSize, "No effect in tables");
-      else snprintf(buffer, bufferSize, "%s, inversion %hX", chordName(fx[1] & 0x0f), fx[1] >> 4);
+      else snprintf(buffer, bufferSize, "%s, inversion %hX", chordName(fx.value & 0x0f), fx.value >> 4);
       break;
     case fxHOP: // Hop
-      if (!isTable && fx[1] == 0xff) {
+      if (!isTable && fx.value == 0xff) {
         snprintf(buffer, bufferSize, "Stop playback");
       } else {
-        if ((fx[1] & 0xf0) == 0) {
-          snprintf(buffer, bufferSize, "Hop to row %hhX ", fx[1] & 0xf);
+        if ((fx.value & 0xf0) == 0) {
+          snprintf(buffer, bufferSize, "Hop to row %hhX ", fx.value & 0xf);
         } else {
-          snprintf(buffer, bufferSize, "Hop to row %hhX (%hhu times)", fx[1] & 0xf, fx[1] >> 4);
+          snprintf(buffer, bufferSize, "Hop to row %hhX (%hhu times)", fx.value & 0xf, fx.value >> 4);
         }
       }
       break;
@@ -199,18 +210,18 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
       if (isTable) {
         snprintf(buffer, bufferSize, "No effect");
       } else {
-        snprintf(buffer, bufferSize, "Song hop by %hhd", fx[1]);
+        snprintf(buffer, bufferSize, "Song hop by %hhd", fx.value);
       }
       break;
     // Modulation FX - context-aware based on instrument
     case fxM1A: case fxM2A: case fxM3A: case fxM4A: {
       // Amount FX
-      int modSlot = (fx[0] - fxM1A) / 5; // 0-3
+      int modSlot = (fx.command - fxM1A) / 5; // 0-3
       if (instrumentIdx != EMPTY_VALUE_8 && instrumentIdx < PROJECT_MAX_INSTRUMENTS) {
         ModulationType modType = chipnomadState->project.instruments[instrumentIdx].modulation[modSlot].type;
-        snprintf(buffer, bufferSize, "Mod %d %s amount %+hhd (relative)", modSlot + 1, getModulationTypeName(modType), (int8_t)fx[1]);
+        snprintf(buffer, bufferSize, "Mod %d %s amount %+hhd (relative)", modSlot + 1, getModulationTypeName(modType), (int8_t)fx.value);
       } else {
-        snprintf(buffer, bufferSize, "Mod %d amount %+hhd (relative)", modSlot + 1, (int8_t)fx[1]);
+        snprintf(buffer, bufferSize, "Mod %d amount %+hhd (relative)", modSlot + 1, (int8_t)fx.value);
       }
       break;
     }
@@ -219,99 +230,99 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     case fxM31: case fxM32: case fxM33: case fxM34:
     case fxM41: case fxM42: case fxM43: case fxM44: {
       // Parameter FX
-      int modSlot = (fx[0] - fxM1A) / 5; // 0-3
-      int paramIdx = (fx[0] - fxM1A) % 5 - 1; // 0-3 (subtract 1 because M1A is amount)
+      int modSlot = (fx.command - fxM1A) / 5; // 0-3
+      int paramIdx = (fx.command - fxM1A) % 5 - 1; // 0-3 (subtract 1 because M1A is amount)
       if (instrumentIdx != EMPTY_VALUE_8 && instrumentIdx < PROJECT_MAX_INSTRUMENTS) {
         ModulationType modType = chipnomadState->project.instruments[instrumentIdx].modulation[modSlot].type;
         const char* paramName = getModulationParamName(modType, paramIdx);
-        snprintf(buffer, bufferSize, "Mod %d %s %s: %+hhd (relative)", modSlot + 1, getModulationTypeName(modType), paramName, (int8_t)fx[1]);
+        snprintf(buffer, bufferSize, "Mod %d %s %s: %+hhd (relative)", modSlot + 1, getModulationTypeName(modType), paramName, (int8_t)fx.value);
       } else {
-        snprintf(buffer, bufferSize, "Mod %d param %d: %+hhd (relative)", modSlot + 1, paramIdx + 1, (int8_t)fx[1]);
+        snprintf(buffer, bufferSize, "Mod %d param %d: %+hhd (relative)", modSlot + 1, paramIdx + 1, (int8_t)fx.value);
       }
       break;
     }
     // AY-specific FX
     case fxAYM: // AY Mixer settting
-      if (fx[1] & 0xf0) {
-        snprintf(buffer, bufferSize, "Mix %c%c, env %hhX %s", (fx[1] & 0x1) ? 'T' : '-', (fx[1] & 0x2) ? 'N' : '-', (fx[1] & 0xf0) >> 4, getEnvelopeShapeASCII((fx[1] & 0xf0) >> 4));
+      if (fx.value & 0xf0) {
+        snprintf(buffer, bufferSize, "Mix %c%c, env %hhX %s", (fx.value & 0x1) ? 'T' : '-', (fx.value & 0x2) ? 'N' : '-', (fx.value & 0xf0) >> 4, getEnvelopeShapeASCII((fx.value & 0xf0) >> 4));
       } else {
-        snprintf(buffer, bufferSize, "Mix %c%c", (fx[1] & 0x1) ? 'T' : '-', (fx[1] & 0x2) ? 'N' : '-');
+        snprintf(buffer, bufferSize, "Mix %c%c", (fx.value & 0x1) ? 'T' : '-', (fx.value & 0x2) ? 'N' : '-');
       }
       break;
     case fxERT: // Envelope retrigger
       snprintf(buffer, bufferSize, "Retrigger envelope");
       break;
     case fxNOI: // Noise (relative)
-      snprintf(buffer, bufferSize, "Noise period: %+hhd (relative)", fx[1]);
+      snprintf(buffer, bufferSize, "Noise period: %+hhd (relative)", fx.value);
       break;
     case fxNOA: // Noise (absolute)
-      if (fx[1] == EMPTY_VALUE_8) {
+      if (fx.value == EMPTY_VALUE_8) {
         snprintf(buffer, bufferSize, "Noise period: off");
       } else {
-        snprintf(buffer, bufferSize, "Noise period: %s (absolute)", byteToHex(fx[1]));
+        snprintf(buffer, bufferSize, "Noise period: %s (absolute)", byteToHex(fx.value));
       }
       break;
     case fxEAU: // Auto-env setting
-      if ((fx[1] & 0xf0) == 0) {
+      if ((fx.value & 0xf0) == 0) {
         snprintf(buffer, bufferSize, "Auto-envelope: off");
       } else {
-        uint8_t n = (fx[1] & 0xf0) >> 4;
-        uint8_t d = fx[1] & 0xf;
+        uint8_t n = (fx.value & 0xf0) >> 4;
+        uint8_t d = fx.value & 0xf;
         if (d == 0) d = 1;
         snprintf(buffer, bufferSize, "Auto-envelope: %hhu:%hhu", n, d);
       }
       break;
     case fxEVB: // Envelope vibrato
-      snprintf(buffer, bufferSize, "Envelope vibrato: speed %hhu, depth %hhu", (fx[1] & 0xf0) >> 4, (fx[1] & 0xf));
+      snprintf(buffer, bufferSize, "Envelope vibrato: speed %hhu, depth %hhu", (fx.value & 0xf0) >> 4, (fx.value & 0xf));
       break;
     case fxEBN: // Envelope bend
-      snprintf(buffer, bufferSize, "Envelope bend %+hhd per step", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Envelope bend %+hhd per step", (int8_t)fx.value);
       break;
     case fxESL: // Envelope slide (portamento)
-      snprintf(buffer, bufferSize, "Envelope slide for %hhd tics", fx[1]);
+      snprintf(buffer, bufferSize, "Envelope slide for %hhd tics", fx.value);
       break;
     case fxENT: // Envelope note
-      note = fx[1];
+      note = fx.value;
       if (note >= chipnomadState->project.pitchTable.length - chipnomadState->project.pitchTable.octaveSize * 4)
         note = chipnomadState->project.pitchTable.length - 1 - chipnomadState->project.pitchTable.octaveSize * 4;
       snprintf(buffer, bufferSize, "Envelope note %s", noteName(&chipnomadState->project, note));
       break;
     case fxEPT: // Envelope period offset
-      snprintf(buffer, bufferSize, "Envelope period: %+hhd (relative)", fx[1]);
+      snprintf(buffer, bufferSize, "Envelope period: %+hhd (relative)", fx.value);
       break;
     case fxEPL: // Envelope period L
-      snprintf(buffer, bufferSize, "Envelope period Low %s", byteToHex(fx[1]));
+      snprintf(buffer, bufferSize, "Envelope period Low %s", byteToHex(fx.value));
       break;
     case fxEPH: // Envelope period H
-      snprintf(buffer, bufferSize, "Envelope period High %s", byteToHex(fx[1]));
+      snprintf(buffer, bufferSize, "Envelope period High %s", byteToHex(fx.value));
       break;
     // Common AY FX
     case fxTNN: // Tone specific note
-      note = fx[1];
+      note = fx.value;
       if (note >= chipnomadState->project.pitchTable.length)
         note = chipnomadState->project.pitchTable.length - 1;
       snprintf(buffer, bufferSize, "Tone note %s", noteName(&chipnomadState->project, note));
       break;
     case fxTNP: // Tone pitch offset
-      snprintf(buffer, bufferSize, "Tone pitch: %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Tone pitch: %+hhd (relative)", (int8_t)fx.value);
       break;
     case fxTNF: // Tone fine offset
-      snprintf(buffer, bufferSize, "Tone finetune: %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Tone finetune: %+hhd (relative)", (int8_t)fx.value);
       break;
     case fxTRT: // Tone phase retrigger
       snprintf(buffer, bufferSize, "Retrigger tone phase");
       break;
     case fxENN: // Envelope specific note
-      note = fx[1];
+      note = fx.value;
       if (note >= chipnomadState->project.pitchTable.length)
         note = chipnomadState->project.pitchTable.length - 1;
       snprintf(buffer, bufferSize, "Envelope note %s", noteName(&chipnomadState->project, note));
       break;
     case fxENP: // Envelope pitch offset
-      snprintf(buffer, bufferSize, "Envelope pitch: %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Envelope pitch: %+hhd (relative)", (int8_t)fx.value);
       break;
     case fxENF: // Envelope fine offset
-      snprintf(buffer, bufferSize, "Envelope finetune: %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Envelope finetune: %+hhd (relative)", (int8_t)fx.value);
       break;
     // AY2-specific FX (software oscillator)
     case fxSFT: // Software oscillator type
@@ -319,58 +330,58 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
       static const char* oscTypeNames[] = {
         "Off", "Pulse", "SyncTone", "SyncEnv", "Wavetbl", "ToneFM", "EnvFM"
       };
-      const char* name = (fx[1] < static_cast<uint8_t>(AYSoftwareOscType::sample)) ? oscTypeNames[fx[1]] : "?";
+      const char* name = (fx.value < static_cast<uint8_t>(AYSoftwareOscType::sample)) ? oscTypeNames[fx.value] : "?";
       snprintf(buffer, bufferSize, "Software osc: %s", name);
       break;
     }
     case fxSFN: // Software oscillator specific note
-      note = fx[1];
+      note = fx.value;
       if (note >= chipnomadState->project.pitchTable.length)
         note = chipnomadState->project.pitchTable.length - 1;
       snprintf(buffer, bufferSize, "Software osc note %s", noteName(&chipnomadState->project, note));
       break;
     case fxSFP: // Software oscillator pitch offset
-      snprintf(buffer, bufferSize, "Software osc pitch: %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Software osc pitch: %+hhd (relative)", (int8_t)fx.value);
       break;
     case fxSFF: // Software oscillator fine offset
-      snprintf(buffer, bufferSize, "Software osc fine tune: %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Software osc fine tune: %+hhd (relative)", (int8_t)fx.value);
       break;
     case fxSRT: // Software oscillator phase retrigger
       snprintf(buffer, bufferSize, "Reset software osc phase");
       break;
     case fxSFM: // FM depth
-      snprintf(buffer, bufferSize, "FM depth %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "FM depth %+hhd (relative)", (int8_t)fx.value);
       break;
     case fxPWM: // Pulse width
-      snprintf(buffer, bufferSize, "Pulse width %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Pulse width %+hhd (relative)", (int8_t)fx.value);
       break;
     case fxSPL: // Pulse low level
-      snprintf(buffer, bufferSize, "Pulse low level %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Pulse low level %+hhd (relative)", (int8_t)fx.value);
       break;
     case fxSWT: // Wavetable index
-      snprintf(buffer, bufferSize, "Wavetable index %+hhd (relative)", (int8_t)fx[1]);
+      snprintf(buffer, bufferSize, "Wavetable index %+hhd (relative)", (int8_t)fx.value);
       break;
     // AYSample-specific FX
     case fxSMS: // Sample start position
-      snprintf(buffer, bufferSize, "Sample start position %04hX", (uint16_t)fx[1] * 64);
+      snprintf(buffer, bufferSize, "Sample start position %04hX", (uint16_t)fx.value * 64);
       break;
-    case fxBMD: snprintf(buffer, bufferSize, "Braids model %hhu", fx[1]); break;
-    case fxBTM: snprintf(buffer, bufferSize, "Braids timbre %hhu", fx[1]); break;
-    case fxBCL: snprintf(buffer, bufferSize, "Braids color %hhu", fx[1]); break;
-    case fxBCF: snprintf(buffer, bufferSize, "Braids cutoff %hhu", fx[1]); break;
-    case fxBRS: snprintf(buffer, bufferSize, "Braids resonance %hhu", fx[1]); break;
-    case fxSPT: snprintf(buffer, bufferSize, "Sample pitch %+hhd st", (int8_t)fx[1]); break;
-    case fxSST: snprintf(buffer, bufferSize, "Sample start %hhu", fx[1]); break;
-    case fxSTA: snprintf(buffer, bufferSize, "Sample start %hhu", fx[1]); break;
-    case fxSEN: snprintf(buffer, bufferSize, "Sample end %hhu", fx[1]); break;
-    case fxSVL: snprintf(buffer, bufferSize, "Sample volume %hhu", fx[1]); break;
-    case fxSCF: snprintf(buffer, bufferSize, "Sample cutoff %hhu", fx[1]); break;
-    case fxSRS: snprintf(buffer, bufferSize, "Sample resonance %hhu", fx[1]); break;
-    case fxSSP: snprintf(buffer, bufferSize, "Sample speed %hhu", fx[1]); break;
+    case fxBMD: snprintf(buffer, bufferSize, "Braids model %hhu", fx.value); break;
+    case fxBTM: snprintf(buffer, bufferSize, "Braids timbre %hhu", fx.value); break;
+    case fxBCL: snprintf(buffer, bufferSize, "Braids color %hhu", fx.value); break;
+    case fxBCF: snprintf(buffer, bufferSize, "Braids cutoff %hhu", fx.value); break;
+    case fxBRS: snprintf(buffer, bufferSize, "Braids resonance %hhu", fx.value); break;
+    case fxSPT: snprintf(buffer, bufferSize, "Sample pitch %+hhd st", (int8_t)fx.value); break;
+    case fxSST: snprintf(buffer, bufferSize, "Sample start %hhu", fx.value); break;
+    case fxSTA: snprintf(buffer, bufferSize, "Sample start %hhu", fx.value); break;
+    case fxSEN: snprintf(buffer, bufferSize, "Sample end %hhu", fx.value); break;
+    case fxSVL: snprintf(buffer, bufferSize, "Sample volume %hhu", fx.value); break;
+    case fxSCF: snprintf(buffer, bufferSize, "Sample cutoff %hhu", fx.value); break;
+    case fxSRS: snprintf(buffer, bufferSize, "Sample resonance %hhu", fx.value); break;
+    case fxSSP: snprintf(buffer, bufferSize, "Sample speed %hhu", fx.value); break;
     case fxSLP: {
       static const char* playbackModes[] = {"forward", "reverse", "loop", "ping-pong"};
       snprintf(buffer, bufferSize, "Sample playback: %s",
-        fx[1] <= 3 ? playbackModes[fx[1]] : "?");
+        fx.value <= 3 ? playbackModes[fx.value] : "?");
       break;
     }
     case fxSLI: {
@@ -379,27 +390,27 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
         ? &chipnomadState->project.instruments[instrumentIdx] : NULL;
       if (instrument && instrument->type == InstrumentType::Sample) {
         uint8_t count = sampleDecodeSliceCount(instrument->chip.sample.slice);
-        if (count) snprintf(buffer, bufferSize, "Play slice %hhu of %hhu", fx[1], count);
+        if (count) snprintf(buffer, bufferSize, "Play slice %hhu of %hhu", fx.value, count);
         else snprintf(buffer, bufferSize, "Slicing disabled");
       } else {
-        snprintf(buffer, bufferSize, "Slice %hhu (sample only)", fx[1]);
+        snprintf(buffer, bufferSize, "Slice %hhu (sample only)", fx.value);
       }
       break;
     }
-    case fxSDT: snprintf(buffer, bufferSize, "2xSCWF detune %hhu", fx[1]); break;
-    case fxSMX: snprintf(buffer, bufferSize, "2xSCWF oscillator mix %hhu", fx[1]); break;
-    case fxSCF2: snprintf(buffer, bufferSize, "2xSCWF cutoff %hhu", fx[1]); break;
-    case fxSRS2: snprintf(buffer, bufferSize, "2xSCWF resonance %hhu", fx[1]); break;
-    case fxBIA: snprintf(buffer, bufferSize, "BYOWTBL index A %hhu", fx[1]); break;
-    case fxBIB: snprintf(buffer, bufferSize, "BYOWTBL index B %hhu", fx[1]); break;
-    case fxPRO: snprintf(buffer, bufferSize, "Probability %hhu%%", fx[1] > 100 ? 100 : fx[1]); break;
-    case fxMOD: snprintf(buffer, bufferSize, "Modulo %hhu:%hhu", fx[1] >> 4, fx[1] & 15); break;
-    case fxSPD: snprintf(buffer, bufferSize, "Track clock mode %02hX", fx[1]); break;
-    case fxSLE: snprintf(buffer, bufferSize, "Engine FX slew %hhu ticks", fx[1]); break;
-    case fxFBR: snprintf(buffer, bufferSize, "FM brightness %+d", fmBrightnessFromByte(fx[1])); break;
+    case fxSDT: snprintf(buffer, bufferSize, "2xSCWF detune %hhu", fx.value); break;
+    case fxSMX: snprintf(buffer, bufferSize, "2xSCWF oscillator mix %hhu", fx.value); break;
+    case fxSCF2: snprintf(buffer, bufferSize, "2xSCWF cutoff %hhu", fx.value); break;
+    case fxSRS2: snprintf(buffer, bufferSize, "2xSCWF resonance %hhu", fx.value); break;
+    case fxBIA: snprintf(buffer, bufferSize, "BYOWTBL index A %hhu", fx.value); break;
+    case fxBIB: snprintf(buffer, bufferSize, "BYOWTBL index B %hhu", fx.value); break;
+    case fxPRO: snprintf(buffer, bufferSize, "Probability %hhu%%", fx.value > 100 ? 100 : fx.value); break;
+    case fxMOD: snprintf(buffer, bufferSize, "Modulo %hhu:%hhu", fx.value >> 4, fx.value & 15); break;
+    case fxSPD: snprintf(buffer, bufferSize, "Track clock mode %02hX", fx.value); break;
+    case fxSLE: snprintf(buffer, bufferSize, "Engine FX slew %hhu ticks", fx.value); break;
+    case fxFBR: snprintf(buffer, bufferSize, "FM brightness %+d", fmBrightnessFromByte(fx.value)); break;
     case fxFFB:
-      if (!fx[1]) snprintf(buffer, bufferSize, "FM feedback: preset");
-      else snprintf(buffer, bufferSize, "FM feedback %d", (fx[1] > 8 ? 8 : fx[1]) - 1);
+      if (!fx.value) snprintf(buffer, bufferSize, "FM feedback: preset");
+      else snprintf(buffer, bufferSize, "FM feedback %d", (fx.value > 8 ? 8 : fx.value) - 1);
       break;
     case fxCMD: case fxCNR: case fxCND: case fxCNS: case fxCSP: case fxCSS:
     case fxCSD: case fxCEI: case fxCEP: case fxCED:
@@ -409,36 +420,34 @@ const char* helpFXHint(uint8_t* fx, int isTable, uint8_t instrumentIdx) {
     case fxFET: case fxFTD: case fxFDT: case fxFHR: case fxFLR: case fxFLD:
     case fxSAT: case fxSDE: case fxSSU: case fxSRL: case fxSPR:
     case fxSCP: case fxSCT: case fxSRN: case fxSWV: case fxSFTY: case fxSMR: case fxSRG: case fxSSY: {
-      const char* description = helpFXDescription((FX)fx[0], instrumentIdx);
+      const char* description = helpFXDescription((FX)fx.command, instrumentIdx);
       const char* end = strchr(description, '\n');
-      snprintf(buffer, bufferSize, "%.*s %02X", int(end ? end - description : strlen(description)), description, fx[1]);
+      snprintf(buffer, bufferSize, "%.*s %02X", int(end ? end - description : strlen(description)), description, fx.value);
       break;
     }
-    case fxRSN: snprintf(buffer, bufferSize, "Track reverb send %hhu", fx[1]); break;
-    case fxDSN: snprintf(buffer, bufferSize, "Track delay send %hhu", fx[1]); break;
-    case fxEAT: snprintf(buffer, bufferSize, "Envelope attack %hhu", fx[1]); break;
-    case fxEDC: snprintf(buffer, bufferSize, "Envelope decay %hhu", fx[1]); break;
-    case fxESU: snprintf(buffer, bufferSize, "Envelope sustain %hhu", fx[1]); break;
-    case fxERL: snprintf(buffer, bufferSize, "Envelope release %hhu", fx[1]); break;
-    case fxESH: snprintf(buffer, bufferSize, "Envelope shape %hhu", fx[1]); break;
-    case fxTDC: snprintf(buffer, bufferSize, "Trigger decay %hhu", fx[1]); break;
-    case fxTCL: snprintf(buffer, bufferSize, "Trigger color %hhu", fx[1]); break;
-    case fxPMD: snprintf(buffer, bufferSize, "Plaits engine %hhu", fx[1]); break;
-    case fxPHA: snprintf(buffer, bufferSize, "Plaits harmonics %hhu", fx[1]); break;
-    case fxPTM: snprintf(buffer, bufferSize, "Plaits timbre %hhu", fx[1]); break;
-    case fxPMO: snprintf(buffer, bufferSize, "Plaits morph %hhu", fx[1]); break;
-    case fxPAX: snprintf(buffer, bufferSize, "Plaits aux mix %hhu", fx[1]); break;
-    case fxPCF: snprintf(buffer, bufferSize, "Plaits cutoff %hhu", fx[1]); break;
-    case fxPRS: snprintf(buffer, bufferSize, "Plaits resonance %hhu", fx[1]); break;
-    case fxDMD: snprintf(buffer, bufferSize, "Bogie engine %hhu", fx[1]); break;
-    case fxDDC: snprintf(buffer, bufferSize, "Bogie decay %hhu", fx[1]); break;
-    case fxDTO: snprintf(buffer, bufferSize, "Bogie tone %hhu", fx[1]); break;
-    case fxDSW: snprintf(buffer, bufferSize, "Bogie sweep %hhu", fx[1]); break;
-    case fxDNO: snprintf(buffer, bufferSize, "Bogie noise %hhu", fx[1]); break;
-    case fxDFM: snprintf(buffer, bufferSize, "Bogie FM %hhu", fx[1]); break;
-    case fxDDR: snprintf(buffer, bufferSize, "Bogie drive %hhu", fx[1]); break;
-    case fxDCF: snprintf(buffer, bufferSize, "Bogie cutoff %hhu", fx[1]); break;
-    case fxDRS: snprintf(buffer, bufferSize, "Bogie resonance %hhu", fx[1]); break;
+    case fxRSN: snprintf(buffer, bufferSize, "Track reverb send %hhu", fx.value); break;
+    case fxDSN: snprintf(buffer, bufferSize, "Track delay send %hhu", fx.value); break;
+    case fxEAT: snprintf(buffer, bufferSize, "Envelope attack %hhu", fx.value); break;
+    case fxEDC: snprintf(buffer, bufferSize, "Envelope decay %hhu", fx.value); break;
+    case fxESU: snprintf(buffer, bufferSize, "Envelope sustain %hhu", fx.value); break;
+    case fxERL: snprintf(buffer, bufferSize, "Envelope release %hhu", fx.value); break;
+    case fxESH: snprintf(buffer, bufferSize, "Envelope shape %hhu", fx.value); break;
+    case fxTDC: snprintf(buffer, bufferSize, "Trigger decay %hhu", fx.value); break;
+    case fxTCL: snprintf(buffer, bufferSize, "Trigger color %hhu", fx.value); break;
+    case fxPMD: snprintf(buffer, bufferSize, "Plaits engine %hhu", fx.value); break;
+    case fxPHA: snprintf(buffer, bufferSize, "Plaits harmonics %hhu", fx.value); break;
+    case fxPTM: snprintf(buffer, bufferSize, "Plaits timbre %hhu", fx.value); break;
+    case fxPMO: snprintf(buffer, bufferSize, "Plaits morph %hhu", fx.value); break;
+    case fxPAX: snprintf(buffer, bufferSize, "Plaits aux mix %hhu", fx.value); break;
+    case fxPCF: snprintf(buffer, bufferSize, "Plaits cutoff %hhu", fx.value); break;
+    case fxPRS: snprintf(buffer, bufferSize, "Plaits resonance %hhu", fx.value); break;
+    case fxDMD: case fxDDC: case fxDTO: case fxDSW: case fxDNO:
+    case fxDFM: case fxDDR: case fxDCF: case fxDRS: {
+      const char* description = helpFXDescription((FX)fx.command, instrumentIdx);
+      const char* end = strchr(description, '\n');
+      snprintf(buffer, bufferSize, "%.*s %02X", int(end ? end - description : strlen(description)), description, fx.value);
+      break;
+    }
     default:
       break;
   }
@@ -470,6 +479,9 @@ static void initFxHelpText() {
   fxHelpText[fxDEL] = "Delay\nDelays note start by N tics";
   fxHelpText[fxOFF] = "Note Off\nSends note off after N tics";
   fxHelpText[fxKIL] = "Kill Note\nStops note completely\nafter N tics";
+  fxHelpText[fxEUC] = "Euclidean Retrigger\nX hits over Y+1 rows, looping\nSame note and instrument\nNew note, OFF, KIL or EUC stops";
+  fxHelpText[fxREP] = "Repeat Previous FX\nSigned increment per row\nPersists through new notes\nREP00 or new FX stops; RTO limits";
+  fxHelpText[fxRTO] = "Repeat To\nSets REP's min/max boundary\nFinal value applied once\nThen repetition stops";
   fxHelpText[fxTIC] = "Table Speed\nSets table playback speed";
   fxHelpText[fxTBL] = "Set Table\nSwitches to specified\ninstrument table";
   fxHelpText[fxTBX] = "Aux Table\nSets auxiliary table\nfor this note";
@@ -667,6 +679,21 @@ const char* helpFXDescription(enum FX fxIdx, uint8_t instrumentIdx) {
     return text;
   }
 
+  if (chipnomadState && instrumentIdx < PROJECT_MAX_INSTRUMENTS &&
+      chipnomadState->project.instruments[instrumentIdx].type == InstrumentType::DigiSophie) {
+    switch (fxIdx) {
+      case fxDMD: return "DigiSophie Model FX\n00 FUSE; 01 BOOM; 02 PIPE; 03 SHARD\nUntil the next note trigger";
+      case fxDDC: return "DigiSophie Decay FX\nOverrides one-shot decay\nUntil the next note trigger";
+      case fxDTO: return "DigiSophie Color FX\nOverrides the model color macro\nUntil the next note trigger";
+      case fxDSW: return "DigiSophie Sweep FX\nBipolar sweep; 80 neutral\nUntil the next note trigger";
+      case fxDNO: return "DigiSophie Metal FX\nOverrides the model metal macro\nUntil the next note trigger";
+      case fxDFM: return "DigiSophie Feedback FX\nOverrides model feedback\nUntil the next note trigger";
+      case fxDDR: return "DigiSophie Fold FX\nOverrides wavefolding amount\nUntil the next note trigger";
+      case fxDCF: return "DigiSophie Cutoff FX\n00-FF logarithmic cutoff\nUntil the next note trigger";
+      case fxDRS: return "DigiSophie Resonance FX\n00 none; FF maximum\nUntil the next note trigger";
+      default: break;
+    }
+  }
   if (fxIdx == fxCMD && chipnomadState && instrumentIdx < PROJECT_MAX_INSTRUMENTS) {
     switch (chipnomadState->project.instruments[instrumentIdx].type) {
       case InstrumentType::SegaPSG: return "Sega Tone / Noise\n00 tone; 01 white; 02 periodic\nNoise clock is set by CNR";
@@ -740,6 +767,11 @@ const char* helpFXDescription(enum FX fxIdx, uint8_t instrumentIdx) {
               case 3: snprintf(buffer, bufferSize, "Mod %d Param 4 (relative)\nFLFO: (unused)", modSlot + 1); break;
             }
             break;
+          case ModulationType::Audio: {
+            static const char* names[] = {"Track", "Attack", "Release", "Sensitivity"};
+            snprintf(buffer, bufferSize, "Mod %d Param %d (relative)\nAudio: %s offset", modSlot + 1, paramIdx, names[paramIdx - 1]);
+            break;
+          }
           default:
             snprintf(buffer, bufferSize, "Mod %d Param %d (relative)\nOffsets modulation %d\nparameter %d",
                     modSlot + 1, paramIdx, modSlot + 1, paramIdx);

@@ -399,8 +399,12 @@ TEST_CASE("Fatty factory presets and Fatty FX names round trip") {
   std::string contents((std::istreambuf_iterator<char>(input)), {});
   input.close();
   REQUIRE(contents.find("- Envelope mode: 0\n") != std::string::npos);
+  const auto typePosition = contents.find("- Type: 33\n");
+  REQUIRE(typePosition != std::string::npos);
+  contents.replace(typePosition, strlen("- Type: 33\n"), "- Type: 32\n");
   contents.erase(contents.find("- Envelope mode: 0\n"), strlen("- Envelope mode: 0\n"));
   REQUIRE(instrumentLoadMemory(loaded.get(), reinterpret_cast<const uint8_t*>(contents.data()), contents.size(), 0) == 0);
+  CHECK(loaded->instruments[0].type == InstrumentType::Bass808);
   std::remove(path);
   CHECK(loaded->instruments[0].type == InstrumentType::Bass808);
   CHECK(loaded->instruments[0].chip.bass808.drive == 93);

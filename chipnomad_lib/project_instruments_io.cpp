@@ -586,6 +586,12 @@ static int loadModulation(FILE* file, Instrument* instrument) {
       if (instrument->modulation[i].type == ModulationType::StickVelocity) {
         instrument->modulation[i].type = ModulationType::StickLinear;
       }
+      if (instrument->modulation[i].type == ModulationType::Audio &&
+          (instrument->modulation[i].p5 >= (uint8_t)AudioModulationMode::totalCount ||
+           !audioModulationModeSupported(instrument->type, audioModulationMode(instrument->modulation[i])))) {
+        snprintf(projectFileError, sizeof(projectFileError), "Unsupported Audio modulation mode");
+        return 1;
+      }
       if (projectFileVersion < 3 && instrument->type == InstrumentType::Sample &&
           instrument->modulation[i].destination >= 5) {
         instrument->modulation[i].destination += 2;
@@ -706,6 +712,12 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
   // Older CCT/CNI files have no Color line. instrumentClear() zeroes the union.
   if (InstrumentVoicePostSettings* post = instrumentVoicePostSettings(instrument))
     post->filterColor = 128;
+  // Older DigiSophie files omitted the amplitude envelope entirely.
+  if (instrument->type == InstrumentType::DigiSophie) {
+    auto& post = static_cast<InstrumentVoicePostSettings&>(instrument->chip.drumSynth);
+    post.sustain = 255;
+    post.envelopeShape = 0x80;
+  }
 
   // Check version to determine format
   if (projectFileVersion == 1) {
@@ -730,6 +742,13 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
 
   if (strncmp(line, "- Chip data:", 12) == 0) {
     consumeLine(file);
+    // Pre-merge Fatty test builds used DigiSophie's already published type ID.
+    line = peekLine(file);
+    if (instrument->type == InstrumentType::DigiSophie && line &&
+        strncmp(line, "- Waveform: ", 12) == 0) {
+      instrument->type = InstrumentType::Bass808;
+      instrument->chip.bass808.filterColor = 128;
+    }
     // Load chip-specific data based on instrument type
     switch (instrument->type) {
       case InstrumentType::AY1:
@@ -763,6 +782,7 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
       case InstrumentType::PlaitsAlt:
         if (loadInstrumentPlaits(file, instrument)) return 1;
         break;
+      case InstrumentType::DigiSophie:
       case InstrumentType::DrumSynth:
         if (loadInstrumentDrumSynth(file, instrument)) return 1;
         break;
@@ -820,9 +840,10 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
   } else if (instrument->type == InstrumentType::Sample &&
              instrument->chip.sample.filterCutoffHz > FILTER_CUTOFF_MAX_HZ) {
     instrument->chip.sample.filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
-  } else if (instrument->type == InstrumentType::DrumSynth) {
+  } else if (instrument->type == InstrumentType::DrumSynth || instrument->type == InstrumentType::DigiSophie) {
     InstrumentDrumSynth* d = &instrument->chip.drumSynth;
     if ((uint8_t)d->engine >= (uint8_t)DrumSynthEngine::totalCount) d->engine = DrumSynthEngine::kick;
+    if (instrument->type == InstrumentType::DigiSophie && (uint8_t)d->engine > 3) d->engine = DrumSynthEngine::kick;
     if (d->filterCutoffHz > FILTER_CUTOFF_MAX_HZ) d->filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
   } else if (instrument->type == InstrumentType::Bass808) {
     InstrumentBass808* b = &instrument->chip.bass808;
@@ -1055,6 +1076,10 @@ static int saveInstrumentDrumSynth(FILE* file, Instrument* instrument) {
   fprintf(file, "- Drum decay: %hhu\n", d->decay); fprintf(file, "- Tone: %hhu\n", d->tone);
   fprintf(file, "- Sweep: %hhu\n", d->sweep); fprintf(file, "- Noise: %hhu\n", d->noise);
   fprintf(file, "- FM: %hhu\n", d->fm); fprintf(file, "- Drive: %hhu\n", d->drive);
+  if (instrument->type == InstrumentType::DigiSophie) {
+    saveVoicePostSettings(file, d);
+    return 0;
+  }
   fprintf(file, "- Filter enabled: %hhu\n", d->filterEnabled);
   fprintf(file, "- Filter character: %hhu\n", d->filterCharacter);
   fprintf(file, "- Filter mode: %hhu\n", d->filterMode);
@@ -1187,6 +1212,7 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
     case InstrumentType::PlaitsAlt:
       saveInstrumentPlaits(file, instrument);
       break;
+    case InstrumentType::DigiSophie:
     case InstrumentType::DrumSynth:
       saveInstrumentDrumSynth(file, instrument);
       break;

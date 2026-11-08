@@ -71,15 +71,21 @@ $(TARGET): $(OBJECTS) $(WINDOWS_ICON)
 
 NATIVE_SCREENSHOT_OBJECT = $(BUILD)/obj/tests/native_chip_ui.o
 NATIVE_SCREENSHOT_TARGET = $(BUILD)/native-chip-screenshots$(OUTPUT_EXT)
+NATIVE_SCREENSHOT_GFX_OBJECT = $(BUILD)/obj/tests/corelib_gfx_bmp_stream.o
+NATIVE_SCREENSHOT_OBJECTS = $(filter-out $(call object_for,platforms/shared/main.cpp) $(call object_for,platforms/sdl2/corelib_gfx.cpp),$(OBJECTS)) $(NATIVE_SCREENSHOT_GFX_OBJECT) $(NATIVE_SCREENSHOT_OBJECT)
 
 $(NATIVE_SCREENSHOT_OBJECT): tests/native_chip_ui.cpp $(HEADER_STAMP) Makefile.windows Makefile.common
 	@mkdir -p $(dir $@)
-	@$(CXX) $(CFLAGS) -Itests -c $< -o $@
+	@$(CXX) $(CFLAGS) -Itests -DBMP_STREAM_TEST -c $< -o $@
+
+$(NATIVE_SCREENSHOT_GFX_OBJECT): platforms/sdl2/corelib_gfx.cpp $(HEADER_STAMP) Makefile.windows Makefile.common
+	@mkdir -p $(dir $@)
+	@$(CXX) $(CFLAGS) -DBMP_STREAM_TEST -c $< -o $@
 
 .PHONY: native-chip-screenshots
-native-chip-screenshots: $(filter-out $(call object_for,platforms/shared/main.cpp),$(OBJECTS)) $(NATIVE_SCREENSHOT_OBJECT)
-	@$(file >$(BUILD)/native-chip-screenshots-objects.rsp,$(subst $(space),$(newline),$(filter-out $(call object_for,platforms/shared/main.cpp),$(OBJECTS)) $(NATIVE_SCREENSHOT_OBJECT)))
-	$(CXX) $(WINDOWS_CFLAGS) @$(BUILD)/native-chip-screenshots-objects.rsp $(XTRA_LIBS) -o $(NATIVE_SCREENSHOT_TARGET)
+native-chip-screenshots: $(NATIVE_SCREENSHOT_OBJECTS)
+	@$(file >$(BUILD)/native-chip-screenshots-objects.rsp,$(subst $(space),$(newline),$(NATIVE_SCREENSHOT_OBJECTS)))
+	$(CXX) $(WINDOWS_CFLAGS) @$(BUILD)/native-chip-screenshots-objects.rsp $(XTRA_LIBS) -Wl,--wrap=fopen -o $(NATIVE_SCREENSHOT_TARGET)
 
 # Docker-based Windows build (internal target)
 .PHONY: .windows-docker

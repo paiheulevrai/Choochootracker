@@ -94,6 +94,14 @@ The browser version refreshes its display at about 30 FPS and uses a fixed
 buffer settings are adjusted automatically; projects and other settings are
 preserved. Input polling and app timers keep their usual cadence.
 
+The in-app **Project > Export** menu offers WAV/stems, MIDI, M8S, LSDj and
+Furnace, just like Windows and macOS. Completed exports download automatically
+and remain in browser storage. Before exporting M8S or LSDj, use **Import export
+templates** above the tracker to add `.m8s` or `.lsdsng` files to
+`/user/projects` without loading them or replacing your current project, then
+choose the template from the corresponding export row. Templates are remembered
+until you quit; **EDIT + OPT** clears the selected template.
+
 ### Directory configuration
 
 | Folder | What it contains |
@@ -328,7 +336,7 @@ You can keep multiple sub-songs in a project by creating "islands": sections sep
 
 #### Live Mode
 
-Double-tap **OPT** to enter or leave Live Mode; `LIVE` replaces the Song title. The switch happens a moment after the second tap, so tapping **OPT** 3 times adds a highlight without entering or leaving Live Mode. In Live Mode, **PLAY** starts the selected chain on its own track when that track is stopped. On a playing track, it queues the selected chain for the next chain boundary; press **PLAY** twice for an urgent change at the next phrase boundary. A selected empty Song cell queues a quantised stop instead. `+` marks a queued chain, `!` an urgent chain and `-` a queued stop.
+Double-tap **OPT** to enter or leave Live Mode; `LIVE` replaces the Song title. The switch happens a moment after the second tap, so tapping **OPT** 3 times adds a highlight without entering or leaving Live Mode. In Live Mode, **PLAY** queues the selected chain for the next chain boundary. A playing track finishes its own chain; a stopped track waits for the first active track (lowest track number) to finish its chain. When no track is playing, playback starts immediately. Selected stopped tracks launch together on their reference boundary. Press **PLAY** twice for an urgent change at the next phrase boundary instead. A selected empty Song cell queues a quantised stop on a playing track, or cancels a stopped track's pending launch. `+` marks a queued chain, `!` an urgent chain and `-` a queued stop.
 
 Select one Song row across several columns to queue or stop those tracks together. Multi-row selections are deliberately rejected. Live queues are cleared while a Song range loop is active. Live is a performance mode and is not saved in the project.
 
@@ -695,13 +703,39 @@ a different musical role, and switching back does not recover an earlier
 destination. Choosing **None** still clears the instrument; loading an instrument
 or preset still loads that sound's own modulations.
 
+### DigiSophie
+
+Choose **Drums > DigiSophie** for the MIT-licensed DigiSophie models **FUSE**,
+**BOOM**, **PIPE** and **SHARD**. The original fixed-point oscillator core is
+used, not Digitakt firmware or samples. Tracker notes set pitch; shared volume,
+filter and ADSR controls shape the result.
+Projects and instrument files preserve the ADSR settings. Older DigiSophie
+files without ADSR fields load with a neutral envelope, so they play immediately
+without changing the engine.
+
+The six controls are **Decay**, **Color**, **Sweep**, **Metal**, **FBK** and
+**Fold**. Decay adds a one-shot amplitude falloff (about 18 ms to 4 seconds);
+the ADSR can further shape it and note-off starts Release. Sweep is bipolar:
+`80` is neutral, lower values sweep up from below the note and higher values
+sweep down from above it. Color changes inharmonic character, Metal controls
+FM/ring intensity, FBK controls oscillator feedback and Fold is the original
+level-compensated wavefolder (`00` bypasses it).
+
+All six controls support modulation, motion recording and the existing drum
+FX: `DDC` Decay, `DTO` Color, `DSW` Sweep, `DNO` Metal, `DFM` Feedback and `DDR`
+Fold. `DMD00-03` selects the model; `DCF` and `DRS` control the shared filter.
+DigiSophie works in Layer instruments. Its 48 kHz DSP is streamed through a
+small fixed buffer and resampled for the device rate; no sample loading or
+voice allocation occurs during rendering. High polyphony still needs a
+target-console performance check.
+
 ### Sintered
 
-**Sintered** is a native one-shot digital percussion synth. Notes set its fundamental pitch; its seven models are `Knot`, `Shard`, `Burst`, `Comb`, `Logic`, `Melt` and `Squall`. Every model has **Decay** and **Motion**, plus model-specific controls: Knot uses Mod/Ratio/Spread/Fold, Shard Mod/Ratio/Feedback/Bite, Burst Mod/Noise/Color/Feedback, Comb Mod/Time/Damping/Regen, Logic Mod/Rate/Pattern/Crush, Melt Mod/Ratio/Chaos/Drive and Squall FM/Detune/Voices/Clip.
+**Sintered** is a native one-shot digital percussion synth. Notes set its fundamental pitch; its seven models are `Knot`, `Crease`, `Burst`, `Comb`, `Logic`, `Melt` and `Squall`. Every model has **Decay** and **Motion**, plus model-specific controls: Knot uses Mod/Ratio/Spread/Fold, Crease Mod/Ratio/Feedback/Bite, Burst Mod/Noise/Color/Feedback, Comb Mod/Time/Damping/Regen, Logic Mod/Rate/Pattern/Crush, Melt Mod/Ratio/Chaos/Drive and Squall FM/Detune/Voices/Clip.
 
 The seventh control, **Gate**, is a toggle: **OFF** preserves the one-shot decay (including in older projects); **ON** sustains the note while its gate is open, then fades out using **Decay** on note-off. Press **EDIT** to toggle it. Motion and the initial impact still run once per trigger; retriggering resets the voice in either mode.
 
-Motion is an internal macro envelope, not pitch glide: values below `80` use an AD shape, `80` disables it, and values above `80` use a decay-only shape. Moving farther from the centre makes the sweep deeper and longer. Its destinations are fixed per model, so Sintered stays predictable in tracker patterns: Knot animates Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive; Squall FM. All models reset their state on a note trigger and bound internal feedback for repeatable hits.
+Motion is an internal macro envelope, not pitch glide: values below `80` use an AD shape, `80` disables it, and values above `80` use a decay-only shape. Moving farther from the centre makes the sweep deeper and longer. Its destinations are fixed per model, so Sintered stays predictable in tracker patterns: Knot animates Mod/Fold; Crease Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive; Squall FM. All models reset their state on a note trigger and bound internal feedback for repeatable hits.
 
 ### MonkSynth
 
@@ -850,6 +884,8 @@ sub oscillator, drive, and pitch glide. Glide `00` changes pitch immediately.
 The original oscillator shapes, drive and note transients are preserved.
 OSC and Sub pickers use **EDIT + [LEFT/RIGHT]** to cycle their waveforms.
 The right-column filter Type edits the filter independently of Sub.
+Projects and presets from the pre-merge Fatty test builds remain loadable;
+Fatty now uses its own type ID without replacing DigiSophie.
 
 - `TRIG` is a one-shot: **D** sets decay and **C** softens the attack.
   Note Off does not cut the pluck. The VCA attack and ADSR preview are inactive.
@@ -1051,6 +1087,7 @@ The available modulation types are:
 - SLIN - linear joystick control
 - SRAT - rate-based joystick control
 - Sequence - reads the tracker sequence as a modulation signal: **PITCH** is the final sequenced pitch, **VOL** is the final sequenced volume, and **TRANCE GATE** is an independent rhythmic modulator. Its Motif, Rate and Length select the gate pattern; Trigger chooses whether it is free-running, retriggered per note, or restarted at Phrase or Chain boundaries. Closed gates output zero, open gates output half level, and Accents distributes full-level gates euclidically across the active gates. It does not use or change a track insert.
+- Audio - follows the amplitude of a selectable **internal Track 1-8**, without muting that track or requiring an Audio Input instrument. See [Audio envelope follower](#audio-envelope-follower).
 
 The list of modulation destinations depends on the instrument type.
 
@@ -1062,7 +1099,72 @@ The modulation amount can be positive or negative. Its range depends on the dest
 
 PITCH and VOL Sequence sources have a **Mode**. **Normal** keeps the tracker value audible while also using it as modulation. **Bypass** makes it a source only: PITCH retriggers at the last pitch (or C-4 for the first note), and VOL keeps the last audible level. Trance Gate is already source-only. If any active Sequence slot bypasses PITCH or VOL, bypass wins. To prevent feedback, PITCH and VOL cannot target Pitch or Volume.
 
-All duration parameters, including attack, hold, decay and period, are measured in ticks.
+Envelope/LFO duration parameters are measured in ticks, except the Audio follower's Attack and Release, which are independent of song tempo.
+
+### Audio envelope follower
+
+Choose **AUDIO** in a modulation slot's Source menu, then select the source
+**Track** and a normal destination. This source uses internal audio only, not
+microphones or other external inputs.
+
+- **Atk / Rel**: Attack and Release, `00-FF`, from immediate to a one-second
+  time constant, with a quadratic curve for finer control at short times.
+  The status line shows milliseconds while editing.
+- **Sens**: input sensitivity, `00` off, `40` unity, `FF` about 4x gain.
+- **Amt**: signed depth. Positive values raise the destination with the source's
+  amplitude; negative values allow ducking or sidechain movement without a
+  compressor.
+
+For example, select the kick track, set a fast attack and a longer release, then
+use negative Amount on Volume or a **TF1/TF2 Parametric EQ** gain destination.
+The follower reads the source after its track processing, before master
+effects, and follows the larger stereo-channel magnitude. Source silence
+releases the envelope; an unavailable source track also supplies silence.
+Mixer mute silences the source's audible output and sends, but does not stop
+its Audio modulation tap. Only selected muted sources keep rendering.
+For Plaits six-op FM models, Harmonics selects a preset on the next note trigger;
+use Timbre (brightness) or Morph (envelope control) for continuous movement.
+
+The **Mode** field selects:
+
+- **ENV**: the original envelope follower; Attack and Release apply only here.
+- **WAVE**: signed source audio modulates the selected parameter every 8 samples,
+  using the existing destination range. Pitch is exponential pitch modulation,
+  not linear FM. Buffered engines still apply changes at their native block rate.
+- **AM**: multiplies the target output by `1 + source * Amount`.
+- **RING**: crossfades the dry output to signed multiplication; maximum positive
+  Amount is pure ring modulation. Negative Amount reverses the modulator.
+
+All audio engines offer the same four modes. For audio-driven pitch modulation,
+select **WAVE**, then the **Pitch** destination. This uses the engine's existing
+pitch path and native update cadence, not an engine-specific linear FM/PM mode.
+Audio Input retains its existing destinations (volume and filter), without
+pitch shifting. Layer uses **L1/L2/L3 Cents** for its children's pitch.
+MIDI has no audio output for AM/RING.
+Experimental files saved with the removed engine-specific FM/PM modes are
+rejected explicitly rather than silently changing their sound.
+
+Raw modes use the stereo average, sensitivity-limited to -1..1 before signed
+Amount. AM/RING affect the voice output before track processing, not master audio.
+Select track B on A and track A on B for reciprocal **XM**; no extra engine is
+created. Raw routing has a fixed 64-sample causal delay (1.33 ms at 48 kHz), also
+for self-modulation, so cycles are independent of rendering order and callback size.
+Only necessary sources are retained, including muted ones. WAVE parameter updates
+can be CPU-intensive, especially with Layer/polyphony; AM/RING process
+samples in blocks without reconfiguring engines per sample. Raw modulation can
+produce aliasing; there is no extra oversampling.
+WAVE uses FLFO's maximum 8-sample control interval (6 kHz at 48 kHz audio),
+aligned independently of callback size. AM/RING remain per-sample.
+Retriggering the same instrument keeps the follower's level.
+
+The source is read from the previous render block to make routing independent
+of track order and prevent recursive feedback. Without a faster FLFO, control
+blocks are at most 64 audio frames (about 1.45 ms at 44.1 kHz). Legacy chip
+parameters that are updated per tracker tick keep that update cadence. Layer
+children share the source audio tap, but each active modulation keeps its own
+follower settings. The source also works during offline bounce/export.
+
+### LFO timing and shapes
 
 **syncLFO** is the former SLFO: set its ticks and multiplier for tempo-synced
 movement. Existing SLFO settings and songs keep the same timing.
@@ -1117,6 +1219,8 @@ Tables are a core sound design tool in trackers. In Vortex Tracker terms, they c
 The Pitch column accepts relative (`~`) or absolute (`=`) pitch values in semitones. The Volume column is `00`-`7F`, applies to every engine on top of its envelope, and can be used for a gate: alternate `7F` and `00` then loop with `HOP 00`. The 4 FX lanes mostly match the lanes in a phrase, although a few FX behave differently in tables.
 
 Putting a `TIC` FX on the last table row sets the speed of that column and overrides the instrument's default table speed. Each FX column can run at a different tick speed. The Pitch and Volume columns follow the speed of the 1st FX column.
+
+Continuous table modifiers stay active throughout their table step, even when notes or several phrase loops pass before the next table step. Instrument and auxiliary table modifiers combine with the phrase FX; a phrase command on the same parameter takes precedence on that phrase row. Advancing the phrase does not repeat one-shot table actions such as MIDI CC sends, note retriggers or jumps.
 
 A 16-row table may look short next to a long Vortex Tracker instrument, but the `HOP` FX can create conditional loops such as "repeat these rows 5 times", as well as nested loops. With loops and independent FX column speeds, those 16 rows can go a surprisingly long way.
 
@@ -1202,6 +1306,9 @@ Each FX has a 3-letter command and a hexadecimal value. The in-app help panel gi
 | `PAN` | `00-FF` | Absolute instrument panorama: left, centre (`80`), right. |
 | `TPN` | `00-FF` | Absolute mixer-track panorama: left, centre (`80`), right. |
 | `RET` | `XY` | Retriggers every `Y` ticks; `X` applies a volume change. `Y=0` stops retriggering. |
+| `EUC` | `XY` | Track FX, phrase-only: plays `X` evenly distributed hits over `Y+1` phrase rows, counting the initial trigger. `EUC4F` gives four hits on rows 0, 4, 8 and 12 of a sixteen-row period. |
+| `REP` | signed `XX` | Repeats the preceding FX in the same column, adding `XX` to its command value at every new phrase row or table-column step. `01-7F` increases, `80-FF` decreases; values wrap on `00-FF`. `REP00` or a new command in that column stops it. |
+| `RTO` | `00-FF` | During REP, sets an inclusive maximum for an increasing value or minimum for a decreasing value. Applies the limit once and stops repeating when it is reached, without wrapping past it. |
 | `DEL` | `XX` ticks | Delays note-on. A delay longer than the current groove step skips the note. |
 | `OFF` | `XX` ticks | Sends note-off after `XX` ticks and enters an ADSR release stage. |
 | `KIL` | `XX` ticks | Hard-kills the voice after `XX` ticks without running ADSR release. |
@@ -1219,6 +1326,20 @@ Each FX has a 3-letter command and a hexadecimal value. The in-app help panel gi
 | `RNN` | `MX` | Plays a random note. `M` selects the mode: `0` always random, `1` random per PLAY, `2` pick and keep until the value changes. `X` selects the range: `0` any note, `1` +3 st, `2` +6 st, `3` +12 st, `4` -3 st, `5` -6 st, `6` -12 st, `7` +/-3 st, `8` +/-6 st, `9` +/-12 st. Random picks follow the project scale when the scale engine applies to the track. |
 | `SPD` | signed `XX` | Selects a persistent per-track clock ratio; see the speed table below. |
 | `SLE` | `00-FF` ticks | Sets persistent per-track glide time for continuous engine FX. `00` is immediate. The setting resets to `00` when playback stops. |
+
+**EUC** loops its `Y+1`-row period, reusing the same note and instrument
+until stopped. `Y=0` means one row; `Y=F` means sixteen. Excess hits
+are limited to one per row. `X=0` disables the retrigger pattern (a note written
+on that row still plays normally). A new written note/instrument, note-off,
+KIL or another EUC replaces/stops the running pattern. Row timing follows the
+track's groove and SPD rather than a fixed number of audio ticks.
+
+**REP/RTO** are independent per FX column, including both tables and their
+individual speeds. REP advances on its own row and on following empty rows;
+it survives new note/instrument triggers. RTO is the exception to the rule that
+a new command stops REP. A repeated relative FX still has its usual relative
+meaning; RTO stops reapplying it after the final value. Playback stop or Clear
+Track FX resets the repetition state.
 
 ### Audio FX sends
 
@@ -1475,6 +1596,47 @@ Use **SELECT + [DOWN]** from Mixer to open Delay, then **SELECT + [UP]** to retu
 
 The 1st repeat follows the stereo input. Later feedback crosses between the left and right channels.
 
+### Diffusing Echoverb
+
+On the Delay page, select the third **Algorithm: ECHOVERB**. This is an original
+stereo feedback-delay send, not a reverb placed after a delay. The first echo
+retains the source; subsequent circulations can dissolve into a cloud.
+
+- **TIME**: echo spacing in tracker ticks, using the existing Delay time.
+  New projects default to 12 ticks, matching Tape's default 1/8 division at
+  the default 6/6 groove (240 ms at 50 Hz). Existing saved times are unchanged.
+  Focusing Time displays common musical values in hex ticks: `06=1/16`,
+  `08=1/8T`, `0C=1/8`, `12=1/8.`, `18=1/4`, `24=1/4.`, `30=1/2`.
+  These divisions use 24 ticks per quarter note, independently of row groove.
+- **FEED**: regeneration and tail length, up to `95%`.
+- **DIFFUSE**: `00-FF`, from distinct repeats to increasingly dense stereo
+  echoes. Four allpass stages per channel and an energy-preserving stereo
+  rotation spread the feedback over time and between channels. The first echo
+  retains the input's stereo position; later repeats progressively spread.
+- **AGE**: `00-FF`, aggressive resolution loss and saturation **inside the
+  feedback loop**. No extra low-pass: use LP filter separately for darkening.
+  Increasing AGE reduces the feedback's sampling cadence down to 1.2 kHz,
+  lowers its resolution down to a step of 1/8 of a stereo-linked peak
+  envelope, and increases saturation drive. The envelope releases over 50 ms,
+  rather than following individual samples. Abrupt transients refresh the
+  sample hold to avoid losing short hits. This deliberately introduces grain,
+  aliasing and waveform flattening even on quiet repeats.
+  Stereo-linked power tracking provides bounded, smoothed gain compensation:
+  it restores level without blending the unsaturated waveform back in.
+  No added noise or extra low-pass; feedback has a safety ceiling.
+  Existing nonzero AGE and DIFFUSE settings change sound; both at `00` retain
+  the clean separated delay.
+- **HP filter / LP filter**: condition the feedback path.
+- **Return**: fully wet return level; the track send controls how much source
+  enters. **To Reverb** sends the wet echoes to the selected shared reverb.
+
+DIFFUSE and AGE are independent: use AGE `00` for a clean cloud, DIFFUSE `00`
+for separated deteriorating echoes, or increase both for a dusty cloud.
+Dropping the track send to zero leaves the tail running. Parameter changes
+are smoothed; changing algorithms or stopping/resetting playback clears the
+old effect state. High feedback is DC/low-frequency conditioned and bounded,
+but it can still create long, loud tails.
+
 ## 11. Project screen
 
 The Project screen provides **Load**, **Save**, **New**, **Export**, **Manage**, **Pitch table** and **Scale** commands, along with filename, title and author metadata.
@@ -1500,11 +1662,19 @@ When a named project is saved under a new name, the default export folder is ren
 
 **Load** also accepts Dirtywave M8 songs (`.m8s`, firmware 2.x-4.x), imported as a new project: structure (song rows, chains with transpose, phrases), notes, velocities, instrument numbers, note-offs, tempo and name. Notes keep their real pitch (the M8's `C-6` is `C-4` here). Each instrument used is imported under its M8 name: **MACROSYN** becomes Braids (same 47 models; timbre, color, filter, cutoff, resonance and pan carried over, cutoff curve approximate), **SAMPLER** becomes Sample (the `.m8s` only stores the WAV's path on the M8 card: the file is searched under the `.m8s` folder, its parents and your sample folder; otherwise the instrument keeps the M8 path and stays silent; +24 semitones of Pitch, as the M8 plays two octaves lower), **FMSYNTH** becomes a Genesis FM (rough approximation), **WAVSYNTH** and **HYPERSYNTH** become aChChid, **MIDI OUT** becomes MIDI Out (channel, bank, program, first 4 CCs). Other types become a default AY instrument. FX and tables are ignored.
 
-On desktop, the Export screen's **M8S** row does the reverse, in a limited way: tap it and pick an existing `.m8s` as a **template** (remembered until you quit, **EDIT + OPT** forgets it). Its song, chains, phrases, tempo and title are replaced and everything else is kept, except that Braids instruments are written back as MacroSynth and Sample instruments as Sampler (path `/Samples/<file name>`: copy the WAV there on the M8 yourself), if the template has an instrument of that type to copy from. FX are not exported, and a song using phrase `FF` or above cannot be exported (the M8 has 255 phrases). The exported file has not been tested on a real M8 yet. See [M8 songs](m8s-format.md) for the details.
+On desktop (including macOS) and Web, the Export screen's **M8S** row does the reverse, in a limited way: tap it and pick an existing `.m8s` as a **template** (remembered until you quit, **EDIT + OPT** forgets it). Its song, chains, phrases, tempo and title are replaced and everything else is kept, except that Braids instruments are written back as MacroSynth and Sample instruments as Sampler (path `/Samples/<file name>`: copy the WAV there on the M8 yourself), if the template has an instrument of that type to copy from. FX are not exported, and a song using phrase `FF` or above cannot be exported (the M8 has 255 phrases). The exported file has not been tested on a real M8 yet. See [M8 songs](m8s-format.md) for the details.
+
+On desktop, Web and Android, the **LSDJ** row likewise requires an existing
+`.lsdsng` template, remembered for the session and cleared with **EDIT + OPT**.
+The arrangement, notes and tempo are replaced; Game Boy pulse/noise instruments
+are converted and other types become default pulse instruments. The template's
+tables and other unsupported data are kept; volumes, note-offs and FX are not
+exported. The result is limited to the Game Boy's four channels and LSDj's
+128 chains and 255 phrases; it has not been tested in LSDj itself yet.
 
 On desktop and Android, **Load** also accepts Furnace modules (`.fur`, tested with the demos of Furnace 0.5 to 0.6.8.3; the newer format 240 layout is read but untested), imported as a new project from the first subsong. At most 8 channels can be kept: by default the channels that have notes, those playing samples first and those of a chip the tracker has instruments for before the others. The notes, volumes (rescaled to `00`-`7F`), note-offs, song order (one chain per order and channel, cut into 16-row phrases) and speed pattern (groove 0) are converted, with the effects `00xy` (ARP), `04xy` (PVB), `08xy` (PAN), `0Fxx` (GGR), `ECxx` (OFF) and `EDxx` (DEL). YM2612, YM2151, OPL2/OPL3 (2 and 4 operators) and SID instruments become the matching tracker instruments (SID instruments keep their volume, arpeggio, pulse width, waveform and cutoff macros; the filter mode and resonance macros keep only their first step, and relative or other macros are dropped; the SID effects `1E0y` to `1E5y` (attack, decay, sustain, release, ring modulation, sync) become one instrument variant per combination used, and macros follow the song tick rate), and Furnace samples are written as WAV files to `<samples folder>/<module name>/` and loaded into Sample instruments. AY-3-8910 channels get a default AY instrument; SN76489 instruments become Sega PSG ones with their volume, arpeggio and noise-mode macros; Game Boy channels become Game Boy pulse and noise instruments with their envelope, duty and volume macros (the wave channel plays a pulse); NES channels become Game Boy pulse and noise instruments with their volume, arpeggio and duty macros (the triangle plays a 50% pulse, the DPCM channel gets a default noise instrument, and the noise pitch is approximate); SNES instruments become Sample instruments, from the sample (BRR samples are decoded) or, for waveform instruments, from one looped cycle of the waveform (its envelope, wave synthesizer and echo are not converted); other chips keep their notes with a default square instrument. Macros, wavetables, the other effects and the other chips' patches are dropped, and a message tells how many conversion notes there are.
 
-On desktop and Android, the Export screen's **FURNACE** row writes the project as a Furnace module (`.fur`, format 157, readable by Furnace 0.6pre5 and 0.6.8.3), saved in the project folder (the folder the project was last loaded from or saved to) rather than the export folder, with a `_001` style suffix when the name is taken. The export is lossy because the tracker picks the sound per instrument and Furnace per channel: each track goes to the chip that matches the instruments it plays most (YM2612, YM2151, OPL2, OPL3, SID, otherwise AY-3-8910), with a default patch where an instrument belongs to another engine. Notes, volumes, chain transposition, the groove 0 speeds and the effects ARP, PVB, PAN, OFF and DEL are kept; samples, the other engines (Braids, Plaits...), the other effects and the tables are not. Chains of different lengths are padded with empty rows. On OPL3, a 4-operator patch only sounds on the first channel of a Furnace channel pair, so the tracks that play one are placed on channels 1, 3, 5... and leave the next channel empty.
+On desktop (including macOS), Web and Android, the Export screen's **FURNACE** row writes the project as a Furnace module (`.fur`, format 157, readable by Furnace 0.6pre5 and 0.6.8.3), saved in the project folder (the folder the project was last loaded from or saved to) rather than the export folder, with a `_001` style suffix when the name is taken. The export is lossy because the tracker picks the sound per instrument and Furnace per channel: each track goes to the chip that matches the instruments it plays most (YM2612, YM2151, OPL2, OPL3, SID, otherwise AY-3-8910), with a default patch where an instrument belongs to another engine. Notes, volumes, chain transposition, the groove 0 speeds and the effects ARP, PVB, PAN, OFF and DEL are kept; samples, the other engines (Braids, Plaits...), the other effects and the tables are not. Chains of different lengths are padded with empty rows. On OPL3, a 4-operator patch only sounds on the first channel of a Furnace channel pair, so the tracks that play one are placed on channels 1, 3, 5... and leave the next channel empty.
 
 On desktop, key jazz lets you type the filename, title and author directly on the keyboard instead of using the on-screen virtual keyboard — see [Key jazz](#key-jazz-desktop-only).
 
@@ -1563,6 +1733,8 @@ During Link playback, CCT gently corrects its local tick rate once per four-beat
 - **Quit ChooChooTracker** exits cleanly.
 
 Animated backgrounds blend the theme's **Background** and **Value Bars** colors. **Intensity** controls how strongly the accent appears; at zero, the background stays solid. Change **Value Bars** in **Edit color theme** to choose the accent. Animated backgrounds keep moving across the whole screen while you browse lane FX in Phrase or Table. The Mixer CPU reading stays visible as the background moves.
+
+For a personal background, choose **Load BMP** in the Background settings. On Android, put the `.bmp` file in your working folder (including a folder selected with the system picker), then select it in the tracker. The saved selection is loaded again when the app starts; keep the file in place and retain access to the working folder. **Missing** indicates that the selected BMP could not be opened or decoded.
 
 Battery information appears at the top right when the device reports a battery. **Battery info** selects **Percent**, estimated remaining **Time**, or **Off** (the default). Time starts with a rough estimate based on the charge percentage, then adjusts as soon as an observed one-minute reading shows a drop. Later readings smooth the estimate over the last ten minutes. It shows `CHARGE` or `FULL` while connected to power.
 

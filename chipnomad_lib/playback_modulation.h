@@ -18,7 +18,18 @@ struct PlaybackModState {
   int16_t data1;  // ADSR: From
   int16_t data2;  // ADSR: To
   int16_t outValue; // Read calculated value from this field (16-bit signed range)
-  float phase;
+  union {
+    float phase;
+    struct {
+      float level;
+      float attackCoefficient;
+      float releaseCoefficient;
+      float sampleRate;
+      int frames;
+      uint8_t attack;
+      uint8_t release;
+    } audio;
+  };
 
   // Cached values to detect changes that require reinitialization
   ModulationType cachedType;
@@ -31,6 +42,10 @@ void playbackModRestart(PlaybackModState* state);
 void playbackModNext(PlaybackModState* state);
 void playbackModNextAudio(PlaybackModState* state, float sampleRate);
 void playbackModNextAudioFrames(PlaybackModState* state, float sampleRate, int frames);
+void playbackModNextAudioEnvelope(PlaybackModState* state, float sampleRate, int frames, float peak);
+int playbackModAudioSource(const PlaybackModState* state);
+AudioModulationMode playbackModAudioMode(const PlaybackModState* state);
+float playbackModAudioSample(const PlaybackModState* state, float sample);
 int playbackModAudioControlFrames(const PlaybackModState* state, float sampleRate);
 void playbackModNoteOff(PlaybackModState* state);
 

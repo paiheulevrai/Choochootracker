@@ -590,9 +590,9 @@ Na tela de Modulação, pressione **EDIT** em uma fonte para escolher uma famíl
 
 ### Sintered
 
-**Sintered** é um sintetizador nativo de percussão digital one-shot. Notas definem sua pitch fundamental; seus seis modelos são `Knot`, `Shard`, `Burst`, `Comb`, `Logic` e `Melt`. Cada modelo tem **Decay**, **Mod** e **Motion**, mais três controles específicos: Knot usa Ratio/Spread/Fold, Shard Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush e Melt Ratio/Chaos/Drive. **Mod** é sempre a profundidade interna do acoplamento.
+**Sintered** é um sintetizador nativo de percussão digital one-shot. Notas definem sua pitch fundamental; seus seis modelos são `Knot`, `Crease`, `Burst`, `Comb`, `Logic` e `Melt`. Cada modelo tem **Decay**, **Mod** e **Motion**, mais três controles específicos: Knot usa Ratio/Spread/Fold, Crease Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush e Melt Ratio/Chaos/Drive. **Mod** é sempre a profundidade interna do acoplamento.
 
-Motion é um macro envelope interno: valores abaixo de `80` usam forma AD, `80` desativa, e valores acima usam formato só de decay. Quanto mais longe do centro, mais rápido o envelope. Seus destinos são fixos por modelo, mantendo Sintered previsível em padrões tracker: Knot anima Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Todos resetam o estado ao disparar nota e limitam o feedback interno para hits repetíveis.
+Motion é um macro envelope interno: valores abaixo de `80` usam forma AD, `80` desativa, e valores acima usam formato só de decay. Quanto mais longe do centro, mais rápido o envelope. Seus destinos são fixos por modelo, mantendo Sintered previsível em padrões tracker: Knot anima Mod/Fold; Crease Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Todos resetam o estado ao disparar nota e limitam o feedback interno para hits repetíveis.
 
 ### MonkSynth
 

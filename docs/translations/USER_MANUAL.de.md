@@ -506,9 +506,9 @@ Im Modulationsbildschirm drücke **EDIT** auf eine Quelle, um eine Familie zu w�
 
 ### Sintered
 
-**Sintered** ist ein nativer One-Shot Digital-Percussion-Synth. Noten bestimmen die Grundtonhöhe; die sechs Modelle sind `Knot`, `Shard`, `Burst`, `Comb`, `Logic` und `Melt`. Jedes Modell hat **Decay**, **Mod** und **Motion** sowie drei modell-spezifische Regler: Knot nutzt Ratio/Spread/Fold, Shard Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush und Melt Ratio/Chaos/Drive. **Mod** steuert immer die interne Kopplungstiefe.
+**Sintered** ist ein nativer One-Shot Digital-Percussion-Synth. Noten bestimmen die Grundtonhöhe; die sechs Modelle sind `Knot`, `Crease`, `Burst`, `Comb`, `Logic` und `Melt`. Jedes Modell hat **Decay**, **Mod** und **Motion** sowie drei modell-spezifische Regler: Knot nutzt Ratio/Spread/Fold, Crease Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush und Melt Ratio/Chaos/Drive. **Mod** steuert immer die interne Kopplungstiefe.
 
-Motion ist eine interne Makro-Hüllkurve: Werte unter `80` nutzen AD-Form, `80` deaktiviert sie, Werte über `80` Decay-only Form. Weiter weg vom Zentrum wird die Hüllkurve schneller. Die Ziele sind modellabhängig und machen Sintered im Tracker verlässlich: Knot animiert Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Alle Modelle setzen ihren Zustand bei einer Notentriggerung zurück und begrenzen internes Feedback für reproduzierbare Schläge.
+Motion ist eine interne Makro-Hüllkurve: Werte unter `80` nutzen AD-Form, `80` deaktiviert sie, Werte über `80` Decay-only Form. Weiter weg vom Zentrum wird die Hüllkurve schneller. Die Ziele sind modellabhängig und machen Sintered im Tracker verlässlich: Knot animiert Mod/Fold; Crease Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Alle Modelle setzen ihren Zustand bei einer Notentriggerung zurück und begrenzen internes Feedback für reproduzierbare Schläge.
 
 ### MonkSynth
 

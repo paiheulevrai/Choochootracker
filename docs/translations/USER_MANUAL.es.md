@@ -581,9 +581,9 @@ En la pantalla de Modulación, presiona **EDIT** en una fuente para elegir una f
 
 ### Sintered
 
-**Sintered** es un sintetizador nativo de percusión digital one-shot. Las notas fijan su afinación fundamental; sus seis modelos son `Knot`, `Shard`, `Burst`, `Comb`, `Logic` y `Melt`. Cada modelo tiene **Decay**, **Mod** y **Motion**, más tres controles propios: Knot usa Ratio/Spread/Fold, Shard Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush y Melt Ratio/Chaos/Drive. **Mod** es siempre la profundidad de acoplamiento interna.
+**Sintered** es un sintetizador nativo de percusión digital one-shot. Las notas fijan su afinación fundamental; sus seis modelos son `Knot`, `Crease`, `Burst`, `Comb`, `Logic` y `Melt`. Cada modelo tiene **Decay**, **Mod** y **Motion**, más tres controles propios: Knot usa Ratio/Spread/Fold, Crease Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush y Melt Ratio/Chaos/Drive. **Mod** es siempre la profundidad de acoplamiento interna.
 
-Motion es una macro envolvente interna: valores bajo `80` usan forma AD, `80` desactiva la envolvente, y valores sobre `80` usan forma solo decay. Acercarse más al centro ralentiza la envolvente. Sus destinos son fijos por modelo, haciendo a Sintered predecible en patrones tracker: Knot anima Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Todos los modelos resetean su estado con disparo de nota y limitan la retroalimentación interna para golpes repetibles.
+Motion es una macro envolvente interna: valores bajo `80` usan forma AD, `80` desactiva la envolvente, y valores sobre `80` usan forma solo decay. Acercarse más al centro ralentiza la envolvente. Sus destinos son fijos por modelo, haciendo a Sintered predecible en patrones tracker: Knot anima Mod/Fold; Crease Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Todos los modelos resetean su estado con disparo de nota y limitan la retroalimentación interna para golpes repetibles.
 
 ### MonkSynth
 

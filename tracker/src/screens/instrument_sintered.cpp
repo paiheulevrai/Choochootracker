@@ -13,7 +13,7 @@ static void openModelSelection() {
   selectionPopupSetup("SINTERED MODEL", sinteredCategories, sinteredCategoryCount, (int)s->model, selectModel, cancelModelSelection);
   screenSetup(&screenSelectionPopup, 0);
 }
-static const char* modelName(SinteredModel m) { static const char* names[] = {"KNOT", "SHARD", "BURST", "COMB", "LOGIC", "MELT", "SQUALL"}; int i = (int)m; return i >= 0 && i < 7 ? names[i] : "KNOT"; }
+static const char* modelName(SinteredModel m) { static const char* names[] = {"KNOT", "CREASE", "BURST", "COMB", "LOGIC", "MELT", "SQUALL"}; int i = (int)m; return i >= 0 && i < 7 ? names[i] : "KNOT"; }
 static const char* macroName(SinteredModel m, int i) {
   static const char* names[][6] = {
     {"Decay","Mod","Ratio","Spread","Motion","Fold"}, {"Decay","Mod","Ratio","Feedbk.","Motion","Bite"},

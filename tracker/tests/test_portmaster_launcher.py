@@ -1,7 +1,9 @@
 import os
+import io
 from pathlib import Path
 import subprocess
 import tempfile
+import tarfile
 import unittest
 
 
@@ -9,13 +11,33 @@ LAUNCHER = Path(__file__).resolve().parents[1] / "packaging" / "portmaster" / "C
 
 
 class PortMasterLauncherTest(unittest.TestCase):
-    def run_launcher(self, firmware):
+    def run_launcher(self, firmware, assets=None, installed=True, corrupt=False,
+                     launches=1, blocked=False, retry=False):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             control = root / "PortMaster"
             control.mkdir()
             game = root / "ports" / "choochootracker"
             game.mkdir(parents=True)
+            defaults = {"instruments/FACTORY/catalog.tsv": b"catalog",
+                        "instruments/FACTORY/builtins.tsv": b"builtins"}
+            if installed:
+                for name, data in {**defaults, "projects/My song.cct": b"user song"}.items():
+                    target = game / name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(data)
+            archive = game / "data.tar.gz"
+            if assets is not None:
+                with tarfile.open(archive, "w:gz") as package:
+                    for name, data in {**defaults, **assets}.items():
+                        info = tarfile.TarInfo(name)
+                        info.size = len(data)
+                        package.addfile(info, io.BytesIO(data))
+            if corrupt:
+                archive.write_bytes(archive.read_bytes()[:-8] if corrupt == "truncated"
+                                    else b"broken archive")
+            if blocked:
+                (game / "samples").write_bytes(b"user file blocking a directory")
             calls = root / "calls"
             mapper = root / "mapper"
             mapper.write_text(
@@ -35,18 +57,37 @@ class PortMasterLauncherTest(unittest.TestCase):
                 'bind_directories() { :; }\n'
                 'pm_platform_helper() { wait "$!"; }\n'
                 'pm_finish() { :; }\n'
+                'pm_message() { printf "%s\\n" "$*"; }\n'
             )
             env = dict(os.environ, XDG_DATA_HOME=tmp, HOME=tmp,
                        CCT_ROOT=tmp, CCT_CALLS=str(calls), CCT_FIRMWARE=firmware)
             # Start at the shared bootstrap to isolate host-specific discovery paths.
             script = LAUNCHER.read_text().split('source "$controlfolder/control.txt"', 1)[1]
-            result = subprocess.run(
-                ["bash", "-c",
-                 'controlfolder="$XDG_DATA_HOME/PortMaster"\n'
-                 'source "$controlfolder/control.txt"\n' + script],
-                env=env, capture_output=True, text=True, timeout=10,
-            )
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for launch in range(launches):
+                result = subprocess.run(
+                    ["bash", "-c",
+                     'controlfolder="$XDG_DATA_HOME/PortMaster"\n'
+                     'source "$controlfolder/control.txt"\n' + script],
+                    env=env, capture_output=True, text=True, timeout=10,
+                )
+                if corrupt or (blocked and launch == 0) or (not installed and assets is None):
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("Error:", result.stdout)
+                    self.assertFalse(calls.exists())
+                    self.assertEqual(archive.exists(), bool(corrupt or blocked))
+                    if corrupt:
+                        self.assertFalse((game / "projects/New song.cct").exists())
+                    self.assertFalse(list(game.glob(".data-extract.*")))
+                    if retry:
+                        (game / "samples").unlink()
+                        continue
+                    return []
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertFalse(archive.exists())
+                self.assertFalse(list(game.glob(".data-extract.*")))
+                for name, data in (assets or {}).items():
+                    expected = b"user song" if installed and name == "projects/My song.cct" else data
+                    self.assertEqual((game / name).read_bytes(), expected)
             lines = calls.read_text().splitlines()
             self.assertIn("app", lines)
             return [line for line in lines if line != "app"]
@@ -62,6 +103,30 @@ class PortMasterLauncherTest(unittest.TestCase):
                 self.assertEqual(self.run_launcher(firmware), [
                     "old guide -1 choochootracker.aarch64 -c ./choochootracker.gptk"
                 ])
+
+    def test_first_run_extracts_data_and_second_run_needs_no_archive(self):
+        self.run_launcher("ROCKNIX", installed=False, launches=2,
+                          assets={"projects/New song.cct": b"factory song",
+                                  "fonts/Pixel/font.bin": b"font"})
+
+    def test_update_preserves_existing_projects_and_adds_missing_assets(self):
+        self.run_launcher("ArkOS", assets={"projects/My song.cct": b"factory song",
+                                          "samples/New sample.wav": b"sample"})
+
+    def test_corrupt_archive_stops_before_starting_app_and_is_retained(self):
+        self.run_launcher("ROCKNIX", installed=False, corrupt=True)
+
+    def test_truncated_archive_does_not_install_partial_assets(self):
+        self.run_launcher("ROCKNIX", installed=False, corrupt="truncated",
+                          assets={"projects/New song.cct": b"factory song"})
+
+    def test_missing_archive_and_data_stops_before_starting_app(self):
+        self.run_launcher("ROCKNIX", installed=False)
+
+    def test_failed_merge_retains_archive_and_retry_completes(self):
+        self.run_launcher("ROCKNIX", blocked=True, retry=True, launches=2,
+                          assets={"projects/New song.cct": b"complete song",
+                                  "samples/New sample.wav": b"sample"})
 
 
 if __name__ == "__main__":

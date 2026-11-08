@@ -246,6 +246,9 @@ enum FX : FXId {
   // Layer lane tuning and level. Appended to preserve project FX IDs.
   fxL1C, fxL1V, fxL2C, fxL2V, fxL3C, fxL3V,
 
+  fxEUC, // Looping Euclidean retrigger over phrase rows
+  fxREP, fxRTO, // Per-column repeat and repeat limit
+
   // Bass808 FX.  Appended to preserve project FX IDs.
   // NOTE: filter cutoff/resonance use the B80 prefix because the
   // shorter B-prefixed names are already taken by Braids (fxBCF,
@@ -471,7 +474,10 @@ struct Project {
   uint8_t delayTicks;
   uint8_t delayFeedback;
   uint16_t delayFilterCutoffHz;
-  uint8_t delayAlgorithm; // 0 Ping-pong, 1 Tape Echo
+  uint8_t delayAlgorithm; // 0 Ping-pong, 1 Tape Echo, 2 Diffusing Echoverb
+  uint8_t echoDiffuse;
+  uint8_t echoAge;
+  uint16_t echoHighpassCutoffHz;
   uint8_t tapeDivision; // 0 1/16, 1 1/8T, 2 1/8, 3 1/8., 4 1/4, 5 1/4., 6 1/2
   uint8_t tapeHeads; // 0 H1, 1 H2, 2 H3, 3 H1+H2, 4 H1+H3, 5 H2+H3, 6 H1+H2+H3
   uint8_t tapeTone;

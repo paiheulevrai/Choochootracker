@@ -47,6 +47,19 @@
 #include <cctype>
 extern SDL_Renderer* renderer;
 static const char* output;
+#ifdef BMP_STREAM_TEST
+static const char* virtualBMPPath = "/ChooChooTracker/__bmp_stream_test__.bmp";
+static std::string virtualBMPBacking;
+static int virtualBMPOpens;
+extern "C" FILE* __real_fopen(const char*, const char*);
+extern "C" FILE* __wrap_fopen(const char* path, const char* mode) {
+  if (!virtualBMPBacking.empty() && !strcmp(path, virtualBMPPath)) {
+    ++virtualBMPOpens;
+    return __real_fopen(virtualBMPBacking.c_str(), mode);
+  }
+  return __real_fopen(path, mode);
+}
+#endif
 static void require(bool condition,const char* why){if(!condition){fprintf(stderr,"FAIL: %s\n",why);exit(2);}}
 static std::vector<uint32_t> framePixels(){std::vector<uint32_t> pixels(640*480);require(SDL_RenderReadPixels(renderer,nullptr,SDL_PIXELFORMAT_ARGB8888,pixels.data(),640*4)==0,"frame pixels");return pixels;}
 static size_t trackerInkPixels(const std::vector<uint32_t>& pixels){size_t count=0;for(uint32_t p:pixels){int r=(p>>16)&255,g=(p>>8)&255,b=p&255;int hi=std::max(r,std::max(g,b)),lo=std::min(r,std::min(g,b));if(hi-lo>40||lo>120)++count;}return count;}
@@ -278,6 +291,49 @@ static void captureHomepage() {
 int main(int argc,char** argv){
   if(argc!=2&&argc!=3) return 1;
   output=argv[1];initDefaultAppSettings();appSettings.screenWidth=640;appSettings.screenHeight=480;fontSetCurrent(fontGetDefault());require(!gfxSetup(&appSettings.screenWidth,&appSettings.screenHeight),"SDL dummy setup");
+#ifdef BMP_STREAM_TEST
+  if(argc==3 && !strcmp(argv[2],"--bmp-stream-only")) {
+    const std::string bmp = (std::filesystem::path(output) / "bmp-stream-valid.bmp").string();
+    const std::string invalid = (std::filesystem::path(output) / "bmp-stream-invalid.bmp").string();
+    SDL_Surface* fixture = SDL_CreateRGBSurfaceWithFormat(0, 2, 2, 32, SDL_PIXELFORMAT_ARGB8888);
+    require(fixture != nullptr, "BMP fixture surface");
+    require(SDL_FillRect(fixture, nullptr, 0xff123456) == 0, "BMP fixture pixels");
+    require(SDL_SaveBMP(fixture, bmp.c_str()) == 0, "BMP fixture saved");
+    SDL_FreeSurface(fixture);
+    FILE* bad = fopen(invalid.c_str(), "wb");
+    require(bad != nullptr, "invalid BMP fixture opened");
+    require(fwrite("not a BMP", 1, 9, bad) == 9, "invalid BMP fixture written");
+    require(fclose(bad) == 0, "invalid BMP fixture closed");
+    virtualBMPBacking = bmp;
+    SDL_Surface* bypass = SDL_LoadBMP(virtualBMPPath);
+    require(bypass == nullptr && virtualBMPOpens == 0, "SDL bypass cannot resolve virtual path");
+    for (const char* path : {bmp.c_str(), virtualBMPPath}) {
+      GfxImage* image = gfxImageLoadBMP(path);
+      require(image != nullptr, "title BMP loaded through application stream");
+      require(gfxImageWidth(image) == 2 && gfxImageHeight(image) == 2, "BMP dimensions preserved");
+      gfxImageFree(image);
+      for (int layout = 0; layout <= 1; ++layout)
+        require(gfxBackgroundLoadBMP(path, layout, (int)BackgroundTint::original, 100) == 1,
+          "background BMP loaded for stretch and tile");
+    }
+    require(virtualBMPOpens == 3, "both BMP entry points use application fopen");
+    virtualBMPBacking = invalid;
+    require(gfxImageLoadBMP(virtualBMPPath) == nullptr, "invalid virtual title BMP rejected");
+    require(gfxBackgroundLoadBMP(virtualBMPPath, 0, 0, 100) == 0, "invalid virtual background rejected");
+    virtualBMPBacking = bmp + ".missing";
+    require(gfxImageLoadBMP(virtualBMPPath) == nullptr, "missing virtual title BMP rejected");
+    require(strstr(SDL_GetError(), "Could not open BMP") != nullptr, "open failure reports SDL error");
+    require(gfxBackgroundLoadBMP(virtualBMPPath, 0, 0, 100) == 0, "missing virtual background rejected");
+    require(gfxBackgroundLoadBMP("", 0, 0, 100) == 0, "empty BMP path rejected");
+    require(gfxImageLoadBMP(nullptr) == nullptr, "null BMP path rejected");
+    virtualBMPBacking.clear();
+    require(std::filesystem::remove(bmp), "BMP fixture removed");
+    require(std::filesystem::remove(invalid), "invalid BMP fixture removed");
+    gfxCleanup(); SDL_Quit();
+    printf("BMP stream paths passed: normal, virtual, tile/stretch, invalid, missing, empty\n");
+    return 0;
+  }
+#endif
   if(argc==3 && !strcmp(argv[2],"--startup-smoke")) {
     require(!std::filesystem::exists(getAutosavePath()), "run startup smoke in an isolated package without autosave");
     appSetup(); appDraw();
@@ -376,6 +432,43 @@ int main(int argc,char** argv){
                 "Fatty TRIG live preview never draws the inactive VCA attack");
     printf("Fatty VCA/TRIG filter navigation, live controls and field rendering passed\n");
     chipnomadDestroy(chipnomadState);gfxCleanup();SDL_Quit();return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--live-queue-only")) {
+    auto& p = chipnomadState->project;
+    projectFree(&p); projectInitAY(&p);
+    p.tracksCount = 3; p.tickRate = 100;
+    for(auto& speed:p.grooves[0].speed) speed = 1;
+    p.chains[0].rows[0].phrase = p.chains[0].rows[1].phrase = 0;
+    for(int t=0;t<3;++t) p.song[0][t] = 0;
+    chipnomadInitChips(chipnomadState,48000,nullptr);
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit(); backgroundInit();
+    screenSetup(&screenSong,-1);
+    screenSong.onInput(1,keyOpt,1); screenSong.onInput(0,0,1);
+    screenSong.onInput(1,keyOpt,2); screenSong.onInput(0,0,2);
+    screenSong.onInput(1,keyPlay,1); screenSong.onInput(0,0,1);
+    std::vector<float> audio(480*2);
+    chipnomadRender(chipnomadState,audio.data(),480);
+    require(chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode==PlaybackMode::live,"first live launch");
+    *pSongTrack=1;
+    screenSong.onInput(1,keyPlay,1); screenSong.onInput(0,0,1);
+    chipnomadRender(chipnomadState,audio.data(),480);
+    auto& playback=chipnomadState->playbackState;
+    require(playback.tracks[1].mode==PlaybackMode::stopped &&
+      playback.tracks[1].queue.liveAction==LiveQueueAction::normal,"real Song PLAY queues stopped track");
+    playback.tracks[0].phraseRow=15; playback.tracks[0].chainRow=1;
+    chipnomadRender(chipnomadState,audio.data(),480);
+    require(playback.tracks[1].mode==PlaybackMode::live && playback.tracks[1].phraseRow==0,"live launch at chain boundary");
+    *pSongTrack=2;
+    screenSong.onInput(1,keyPlay,1); screenSong.onInput(0,0,1);
+    chipnomadRender(chipnomadState,audio.data(),480);
+    screenSong.onInput(1,keyPlay,2); screenSong.onInput(0,0,2);
+    playback.tracks[0].phraseRow=15; playback.tracks[0].chainRow=0;
+    chipnomadRender(chipnomadState,audio.data(),480);
+    require(playback.tracks[2].mode==PlaybackMode::live && playback.tracks[2].phraseRow==0,"real Song urgent launch at phrase boundary");
+    capture("live-queued-launch");
+    chipnomadDestroy(chipnomadState); chipnomadState=nullptr; gfxCleanup();
+    printf("Live Song input: stopped-track queue, chain launch and urgent phrase launch passed\n");
+    return 0;
   }
   if(argc==3 && !strcmp(argv[2],"--eq-presets-only")) {
     screensInitAll();waveformDisplayInit();monitorDisplayInit();backgroundInit();
@@ -1095,6 +1188,94 @@ int main(int argc,char** argv){
     captureHomepage();
     chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
   }
+  if(argc==3 && !strcmp(argv[2],"--echoverb-sophie-only")) {
+    auto& p=chipnomadState->project;
+    p.delayAlgorithm=0;
+    screenSetup(&screenMixer,0);key(1,keyDown|keyShift);key(0,0);
+    require(screenMixerGetPage()==2,"Delay page entered");
+    for(int n=0;n<2;++n) { key(1,keyEdit|keyRight);key(0,0); }
+    require(p.delayAlgorithm==2,"third Delay algorithm selected");
+    const auto ticks=p.delayTicks,feed=p.delayFeedback,diffuse=p.echoDiffuse,age=p.echoAge;
+    const auto hp=p.echoHighpassCutoffHz,lp=p.delayFilterCutoffHz;
+    for(int row=1;row<=8;++row) {
+      key(1,keyDown);key(0,0);
+      key(1,keyEdit|keyRight);key(0,0);
+    }
+    require(p.delayTicks!=ticks&&p.delayFeedback!=feed,"TIME and FEED editable");
+    require(p.echoDiffuse!=diffuse&&p.echoAge!=age,"DIFFUSE and AGE independent fields");
+    require(p.echoHighpassCutoffHz!=hp&&p.delayFilterCutoffHz!=lp,"Echoverb HP and LP editable");
+    capture("echoverb-controls");
+    auto& i=prepareHomepageInstrument(InstrumentType::DigiSophie,"Metallic Sophie");
+    screenSetup(&screenInstrument,0);appDraw();
+    for(int model=0;model<4;++model) {
+      if(model) require(screenInstrumentDrumSynth.onEdit(0,3,CellEditAction::increase),"Sophie model editable");
+      require((int)i.chip.drumSynth.engine==model,"four Sophie models accessible");
+      char name[32];snprintf(name,sizeof(name),"sophie-%s",digiSophieModelName(model));capture(name);
+    }
+    require(screenInstrumentDrumSynth.onEdit(0,3,CellEditAction::increase),"model boundary edit handled");
+    require((int)i.chip.drumSynth.engine==3,"Sophie model stops at SHARD");
+    for(int row=4;row<=9;++row) require(screenInstrumentDrumSynth.onEdit(0,row,CellEditAction::increase),"Sophie macro editable");
+    printf("Echoverb and DigiSophie production UI controls passed\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--delay-time-hints-only")) {
+    for(int algorithm=0;algorithm<3;++algorithm) {
+      chipnomadState->project.delayAlgorithm=algorithm;
+      screenSetup(&screenMixer,0);key(1,keyDown|keyShift);key(0,0);
+      for(int row=0;row<3;++row) { key(1,keyDown);key(0,0); }
+      const auto before=framePixels();
+      char name[32];snprintf(name,sizeof(name),"delay-time-%d",algorithm);capture(name);
+      key(1,keyDown);key(0,0);
+      const auto after=framePixels();
+      require(!std::equal(before.begin()+14*24*640,before.begin()+18*24*640,after.begin()+14*24*640),"time hint only shown on Time");
+    }
+    printf("All delay time visual hints passed\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--drum-selector-only")) {
+    prepareHomepageInstrument(InstrumentType::DrumSynth,"Bogie");
+    screenSetup(&screenInstrument,0);appDraw();
+    require(instrumentCommonOnEdit(0,0,CellEditAction::increase),"advance from Bogie");
+    require(chipnomadState->project.instruments[0].type==InstrumentType::DigiSophie,"DigiSophie in Drums");
+    require(instrumentCommonOnEdit(0,0,CellEditAction::increase),"advance from DigiSophie");
+    require(chipnomadState->project.instruments[0].type==InstrumentType::Sintered,"Sintered in Drums");
+    screenSetup(&screenInstrument,0);appDraw();
+    require(screenInstrumentSintered.onEdit(0,3,CellEditAction::increase),"Sintered model editable");
+    require(chipnomadState->project.instruments[0].chip.sintered.model==SinteredModel::shard,"CREASE retains model ID");
+    capture("sintered-crease");
+    require(instrumentCommonOnEdit(0,0,CellEditAction::decrease),"reverse from Sintered");
+    require(chipnomadState->project.instruments[0].type==InstrumentType::DigiSophie,"reverse Drums navigation");
+    printf("All three Drums engines selectable\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--audio-wave-only")) {
+    auto& instrument=prepareHomepageInstrument(InstrumentType::SCWF,"Audio modulation");
+    instrument.modulation[0]={ModulationType::Audio,1,64,0,16,80,64,0};
+    screenSetup(&screenModulation,0);appDraw();
+    for(int row=0;row<7;++row) { key(1,keyDown);key(0,0); }
+    for(int type=0;type<(int)InstrumentType::totalCount;++type) {
+      if(type==(int)InstrumentType::none || type==(int)InstrumentType::Midi) continue;
+      getInstrumentFunctions((InstrumentType)type).init(&instrument);
+      if(instrument.type==InstrumentType::none) continue;
+      instrument.modulation[0]={ModulationType::Audio,1,64,0,16,80,64,0};
+      currentScreen->fullRedraw();appDraw();
+      for(int mode=1;mode<4;++mode) {
+        key(1,keyEdit|keyRight);key(0,0);
+        if(instrument.modulation[0].p5!=mode)
+          printf("Audio mode mismatch: engine %d, expected %d, actual %u\n",type,mode,instrument.modulation[0].p5);
+        require(instrument.modulation[0].p5==mode,"same four audio modes on every audio engine");
+        require(instrument.modulation[0].destination==1,"direct mode destination");
+        if(type==(int)InstrumentType::SCWF) capture(audioModulationModeName((AudioModulationMode)mode));
+      }
+      key(1,keyEdit|keyRight);key(0,0);
+      require(instrument.modulation[0].p5==3,"RING is last mode on every audio engine");
+      const char* pitchName=instrumentModDestinationNameForInstrument(&instrument,2);
+      require(!strcmp(pitchName,instrument.type==InstrumentType::AudioIn?"Cutoff":
+        instrument.type==InstrumentType::Layer?"L1 Cents":"Pitch"),"WAVE preserves engine destinations");
+    }
+    printf("Same four Audio modes on every audio engine; pitched engines retain Pitch\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--layer-only")) {
     auto& project=chipnomadState->project;
     getInstrumentFunctions(InstrumentType::Layer).init(&project.instruments[0]);
@@ -1330,7 +1511,7 @@ int main(int argc,char** argv){
   for(int fx=fxFBR;fx<=fxFBK;++fx) {
     const char* description=helpFXDescription((FX)fx,0);
     require(description&&description[0]&&strchr(description,'\n'),"native FX has title and description");
-    uint8_t value[]={uint8_t(fx),0};require(helpFXHint(value,0,0)[0],"native FX has value hint");
+    FXCell value{FXId(fx),0};require(helpFXHint(value,0,0)[0],"native FX has value hint");
   }
   for(auto type:{InstrumentType::SegaPSG,InstrumentType::GBPulse,InstrumentType::GBNoise}) {
     getInstrumentFunctions(type).init(&chipnomadState->project.instruments[0]);

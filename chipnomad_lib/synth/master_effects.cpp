@@ -20,6 +20,18 @@ static float mixerGain(uint8_t value) {
 void MasterEffects::init(float sampleRate) {
   sampleRate_ = sampleRate > 0.0f ? sampleRate : 48000.0f;
   reverbFrames_.clear();
+  static const float diffusionSeconds[8] = {0.0071f, 0.0113f, 0.0173f, 0.0293f,
+                                             0.0083f, 0.0131f, 0.0197f, 0.0311f};
+  size_t diffusionSize = 0;
+  for (int i = 0; i < 8; ++i) {
+    echoDiffusionOffset_[i] = diffusionSize;
+    echoDiffusionLength_[i] = std::max<size_t>(1, (size_t)(sampleRate_ * diffusionSeconds[i]));
+    diffusionSize += echoDiffusionLength_[i];
+  }
+  echoDiffusion_.resize(diffusionSize);
+  echoSmoothing_ = 1.0f - expf(-1.0f / (0.020f * sampleRate_));
+  echoAgeRelease_ = expf(-1.0f / (0.050f * sampleRate_));
+  echoAgeGainSmoothing_ = 1.0f - expf(-8.0f / (0.005f * sampleRate_));
   // Clear retained storage once; resize value-initializes only new samples.
   reset();
   delayLine_.resize((size_t)(sampleRate_ * 8.0f) * 2);
@@ -29,6 +41,17 @@ void MasterEffects::init(float sampleRate) {
 void MasterEffects::resetDelay() {
   std::fill(delayLine_.begin(), delayLine_.end(), 0.0f);
   std::fill(springLine_.begin(), springLine_.end(), 0.0f);
+  std::fill(echoDiffusion_.begin(), echoDiffusion_.end(), 0.0f);
+  std::fill(echoDiffusionWrite_, echoDiffusionWrite_ + 8, 0);
+  echoAgePeak_ = echoAgeInputPower_ = echoAgeOutputPower_ = 0.0f;
+  echoAgeGain_ = 1.0f;
+  echoAgeHeld_[0] = echoAgeHeld_[1] = 0.0f;
+  echoAgePhase_ = 1.0f;
+  echoAgeControlFrame_ = 0;
+  std::fill(echoHighpassInput_, echoHighpassInput_ + 2, 0.0f);
+  std::fill(echoHighpassOutput_, echoHighpassOutput_ + 2, 0.0f);
+  std::fill(echoParameters_, echoParameters_ + 8, 0.0f);
+  echoParametersReady_ = false;
   delayWrite_ = springWrite_ = 0;
   delayFilterState_[0] = delayFilterState_[1] = 0.0f;
   tapeFilterState_[0] = tapeFilterState_[1] = 0.0f;
@@ -105,11 +128,12 @@ void MasterEffects::process(float* reverbBus, float* delayBus, float* output,
   if (!project || !output) return;
 
   reverbTailFrames_ = reverbTailFrames_ > frames ? reverbTailFrames_ - frames : 0;
-  delayTailFrames_ = delayTailFrames_ > frames ? delayTailFrames_ - frames : 0;
+  if (project->delayAlgorithm != 2)
+    delayTailFrames_ = delayTailFrames_ > frames ? delayTailFrames_ - frames : 0;
 
   if (delayBus && !delayLine_.empty()) {
     size_t capacity = delayLine_.size() / 2;
-    uint8_t algorithm = project->delayAlgorithm == 1 ? 1 : 0;
+    uint8_t algorithm = project->delayAlgorithm <= 2 ? project->delayAlgorithm : 0;
     if (algorithm != activeDelayAlgorithm_) {
       resetDelay();
       activeDelayAlgorithm_ = algorithm;
@@ -145,6 +169,105 @@ void MasterEffects::process(float* reverbBus, float* delayBus, float* output,
         if (++delayWrite_ == capacity) delayWrite_ = 0;
       }
       if (kOptimizeEffects && tailActive) delayTailFrames_ = delaySamples + frames;
+    } else if (algorithm == 2) {
+      // Coefficients and gains are smoothed per sample, independent of host block size.
+      const float targets[8] = {
+        std::max(1.0f, std::min(sampleRate_ * project->delayTicks / tickRate, (float)capacity - 2.0f)),
+        feedback, lowpassCoefficient(project->delayFilterCutoffHz),
+        highpassCoefficient(project->echoHighpassCutoffHz), returnGain, reverbSend,
+        project->echoDiffuse / 255.0f, project->echoAge / 255.0f
+      };
+      if (!echoParametersReady_) {
+        std::copy(targets, targets + 8, echoParameters_);
+        echoParametersReady_ = true;
+      }
+      for (size_t i = 0; i < frames; ++i) {
+        for (int p = 0; p < 8; ++p)
+          echoParameters_[p] += echoSmoothing_ * (targets[p] - echoParameters_[p]);
+        const float diffuse = echoParameters_[6];
+        const float age = echoParameters_[7];
+        const float ageCurve = age * age * age;
+        const float resolution = 1.0f / 32768.0f + ageCurve * (0.125f - 1.0f / 32768.0f);
+        const float drive = 12.0f * ageCurve;
+        float wet[2] = {delayRead(echoParameters_[0], 0), delayRead(echoParameters_[0], 1)};
+        float loops[2], clouds[2];
+        bool active = false;
+        for (int channel = 0; channel < 2; ++channel) {
+          loops[channel] = lowpass(wet[channel], echoParameters_[2], delayFilterState_[channel]);
+          loops[channel] = highpass(loops[channel], echoParameters_[3], echoHighpassInput_[channel],
+                                   echoHighpassOutput_[channel]);
+        }
+        const float peak = std::max(fabsf(loops[0]), fabsf(loops[1]));
+        const bool transient = peak > echoAgePeak_ * 1.5f;
+        echoAgePeak_ = std::max(peak, echoAgePeak_ * echoAgeRelease_);
+        if (age > 0.0f) {
+          const float step = std::max(1.0e-12f, echoAgePeak_) * resolution;
+          echoAgePhase_ += 1.0f - ageCurve * (1.0f - std::min(1.0f, 1200.0f / sampleRate_));
+          const bool capture = echoAgePhase_ >= 1.0f || transient;
+          if (capture) echoAgePhase_ = transient ? 0.0f : echoAgePhase_ - floorf(echoAgePhase_);
+          float inputPower = 0.0f, processedPower = 0.0f;
+          for (int channel = 0; channel < 2; ++channel) {
+            inputPower += loops[channel] * loops[channel];
+            if (capture) {
+              const float quantized = roundf(loops[channel] / step) * step;
+              const float normalized = quantized / std::max(1.0e-12f, echoAgePeak_);
+              echoAgeHeld_[channel] = quantized * (1.0f + drive * 0.25f) /
+                (1.0f + drive * fabsf(normalized));
+            }
+            processedPower += echoAgeHeld_[channel] * echoAgeHeld_[channel];
+          }
+          const float follow = 1.0f - echoAgeRelease_;
+          echoAgeInputPower_ += follow * (inputPower - echoAgeInputPower_);
+          echoAgeOutputPower_ += follow * (processedPower - echoAgeOutputPower_);
+          if (++echoAgeControlFrame_ == 8) {
+            echoAgeControlFrame_ = 0;
+            const float gain = std::min(4.0f, sqrtf((echoAgeInputPower_ + 1.0e-20f) /
+              (echoAgeOutputPower_ + 1.0e-20f)));
+            echoAgeGain_ += echoAgeGainSmoothing_ * (gain - echoAgeGain_);
+          }
+          for (int channel = 0; channel < 2; ++channel) {
+            const float processed = echoAgeHeld_[channel] * echoAgeGain_;
+            loops[channel] += age * (processed - loops[channel]);
+            loops[channel] = std::max(-2.0f, std::min(2.0f, loops[channel]));
+          }
+        } else {
+          echoAgePhase_ = 1.0f;
+        }
+        for (int channel = 0; channel < 2; ++channel) {
+          float cloud = loops[channel];
+          for (int stage = 0; stage < 4; ++stage) {
+            const int index = channel * 4 + stage;
+            const size_t position = echoDiffusionOffset_[index] + echoDiffusionWrite_[index];
+            const float delayed = echoDiffusion_[position];
+            const float spread = delayed - 0.65f * cloud;
+            echoDiffusion_[position] = cloud + 0.65f * spread;
+            cloud = spread;
+            if (++echoDiffusionWrite_[index] == echoDiffusionLength_[index])
+              echoDiffusionWrite_[index] = 0;
+            active |= fabsf(delayed) > tailThreshold;
+          }
+          clouds[channel] = cloud;
+        }
+        const float rotated[2] = {0.8f * clouds[0] - 0.6f * clouds[1],
+                                   0.6f * clouds[0] + 0.8f * clouds[1]};
+        for (int channel = 0; channel < 2; ++channel) {
+          const float loop = loops[channel] + diffuse * (rotated[channel] - loops[channel]);
+          const float input = delayBus[i * 2 + channel];
+          delayLine_[delayWrite_ * 2 + channel] = input + loop * echoParameters_[1];
+          output[i * 2 + channel] += wet[channel] * echoParameters_[4];
+          if (reverbBus) reverbBus[i * 2 + channel] += wet[channel] * echoParameters_[5];
+          active |= fabsf(input) > tailThreshold || fabsf(wet[channel]) > tailThreshold ||
+                    fabsf(loop) > tailThreshold;
+        }
+        if (active) delayTailFrames_ = (size_t)echoParameters_[0] + (size_t)(sampleRate_ * 2.0f) + 1;
+        else if (delayTailFrames_) {
+          --delayTailFrames_;
+          if (targets[0] > echoParameters_[0] + 0.01f)
+            delayTailFrames_ = std::max(delayTailFrames_,
+              (size_t)targets[0] + (size_t)(sampleRate_ * 2.0f) + 1);
+        }
+        if (++delayWrite_ == capacity) delayWrite_ = 0;
+      }
     } else {
       static constexpr uint8_t divisionTicks[] = {6, 8, 12, 18, 24, 36, 48};
       static constexpr uint8_t headMasks[] = {1, 2, 4, 3, 5, 6, 7};

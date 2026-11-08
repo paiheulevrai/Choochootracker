@@ -60,6 +60,8 @@ TEST_CASE_FIXTURE(ProjectFixture, "projectInit default groove") {
   CHECK(p.grooves[0].speed[0] == 6);
   CHECK(p.grooves[0].speed[1] == 6);
   CHECK(p.grooves[0].speed[2] == EMPTY_VALUE_8);
+  CHECK(p.delayTicks == 12);
+  CHECK(p.tapeDivision == 2);
 }
 
 TEST_CASE_FIXTURE(ProjectFixture, "projectInit default track tilt") {

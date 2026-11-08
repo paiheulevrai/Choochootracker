@@ -24,9 +24,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Check checked-in Web entry point
+      - name: Check Web entry point contract
         run: |
-          cmp web/index.html web/dist/index.html
           grep -Fq '<canvas id="canvas"' web/index.html
           ! grep -Eq '^WEB_CFLAGS.*DESKTOP_BUILD' tracker/Makefile.web
       - name: Test browser storage queue

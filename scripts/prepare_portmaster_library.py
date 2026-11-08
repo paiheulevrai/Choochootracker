@@ -2,12 +2,14 @@
 
 import argparse
 import hashlib
+import io
 import json
 from pathlib import Path, PurePosixPath
 import re
 import shutil
 import stat
 import subprocess
+import tarfile
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -57,6 +59,8 @@ Ready-to-run native ARM64 music tracker. No additional game data or runtime.
 The existing launcher uses PortMaster helpers. The ArkOS audio fallback preserves
 hardware volume controls; ROCKNIX uses gptokeyb2 to release Select/Shift correctly.
 Other firmware retains gptokeyb. The executable bit is restored after extraction.
+Bundled application data is unpacked from data.tar.gz on first launch; existing
+user assets are preserved, and the archive is removed only after successful extraction.
 
 ### CFW Tests
 Historical testing reported by the maintainer (2026-11-04), not certification of
@@ -121,10 +125,30 @@ def prepare(archive, manifest, output, tag, source_sha, run_url):
     required = [LAUNCHER, f"{PORT}/choochootracker.aarch64",
                 f"{PORT}/USER_MANUAL.md", f"{PORT}/choochootracker.gptk"]
     required += [f"{PORT}/{name}" for name in METADATA]
-    required += [f"{PORT}/instruments/FACTORY/{name}" for name in ("catalog.tsv", "builtins.tsv")]
+    required += [f"{PORT}/data.tar.gz"]
     for name in required:
         if not files.get(name):
             raise ValueError(f"Missing package file: {name}")
+    assets = {}
+    with tarfile.open(fileobj=io.BytesIO(files[f"{PORT}/data.tar.gz"]), mode="r:gz") as data:
+        for member in data:
+            path = PurePosixPath(member.name)
+            if (path.is_absolute() or ".." in path.parts or "\\" in member.name
+                    or ":" in member.name or not (member.isfile() or member.isdir())):
+                raise ValueError(f"Unsafe data archive path: {member.name}")
+            if member.isdir():
+                continue
+            name = str(path)
+            if name in assets or member.size > 90 * 1024 * 1024:
+                raise ValueError(f"Duplicate or oversized data file: {member.name}")
+            if re.match(r"lib(SDL|c[.-]|stdc\+\+|pthread|GL|EGL)", path.name):
+                raise ValueError(f"Do not bundle system libraries: {member.name}")
+            assets[name] = data.extractfile(member).read()
+            if "licenses" in path.parts:
+                files[f"{PORT}/{name}"] = assets[name]
+    for name in ("catalog.tsv", "builtins.tsv"):
+        if not assets.get(f"instruments/FACTORY/{name}"):
+            raise ValueError(f"Missing data archive file: instruments/FACTORY/{name}")
     binary = files[f"{PORT}/choochootracker.aarch64"]
     if binary[:6] != b"\x7fELF\x02\x01" or binary[18:20] != b"\xb7\x00":
         raise ValueError("Expected a little-endian AArch64 ELF64 executable")
@@ -225,7 +249,7 @@ def main():
             import_port(args.prepared, args.repository)
         else:
             update_checksum(args.archive, args.checksums)
-    except (ValueError, OSError, zipfile.BadZipFile, ET.ParseError,
+    except (ValueError, OSError, EOFError, zipfile.BadZipFile, tarfile.TarError, ET.ParseError,
             subprocess.CalledProcessError) as error:
         parser.exit(1, f"PortMaster preparation failed: {error}\n")
 

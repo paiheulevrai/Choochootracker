@@ -510,9 +510,9 @@ Na ekranie Modulacji, naciśnij **EDIT** na źródle, aby wybrać rodzinę (Enve
 
 ### Sintered
 
-**Sintered** to natywny syntezator digital perkusji one-shot. Nuty ustawiają ton podstawowy; sześć modeli to `Knot`, `Shard`, `Burst`, `Comb`, `Logic` i `Melt`. Każdy model ma **Decay**, **Mod** i **Motion**, plus trzy specyficzne kontrolki: Knot używa Ratio/Spread/Fold, Shard Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush, Melt Ratio/Chaos/Drive. **Mod** to zawsze głębokość wewnętrznego sprzężenia.
+**Sintered** to natywny syntezator digital perkusji one-shot. Nuty ustawiają ton podstawowy; sześć modeli to `Knot`, `Crease`, `Burst`, `Comb`, `Logic` i `Melt`. Każdy model ma **Decay**, **Mod** i **Motion**, plus trzy specyficzne kontrolki: Knot używa Ratio/Spread/Fold, Crease Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush, Melt Ratio/Chaos/Drive. **Mod** to zawsze głębokość wewnętrznego sprzężenia.
 
-Motion to wewnętrzne makro obwiedni: wartości poniżej `80` dają kształt AD, `80` dezaktywuje, a powyżej `80` aktywuje kształt decay-only. Oddalanie wartości od centrum przyspiesza obwiednię. Cele są stałe dla modelu, więc Sintered pozostaje przewidywalny w patternach trackera: Knot animuje Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Wszystkie modele resetują stan przy trigwaniu nuty i ograniczają wewnętrzny feedback, by uderzenia były powtarzalne.
+Motion to wewnętrzne makro obwiedni: wartości poniżej `80` dają kształt AD, `80` dezaktywuje, a powyżej `80` aktywuje kształt decay-only. Oddalanie wartości od centrum przyspiesza obwiednię. Cele są stałe dla modelu, więc Sintered pozostaje przewidywalny w patternach trackera: Knot animuje Mod/Fold; Crease Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Wszystkie modele resetują stan przy trigwaniu nuty i ograniczają wewnętrzny feedback, by uderzenia były powtarzalne.
 
 ### MonkSynth
 

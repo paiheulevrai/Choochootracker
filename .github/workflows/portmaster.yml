@@ -57,13 +57,16 @@ jobs:
           # Save the full listing so grep -q cannot terminate unzip early
           # and turn a successful match into a SIGPIPE failure under pipefail.
           unzip -Z1 releases/choochootracker.zip > releases/package-files.txt
-          grep -Fxq 'choochootracker/instruments/FACTORY/catalog.tsv' releases/package-files.txt
-          grep -Fxq 'choochootracker/instruments/FACTORY/builtins.tsv' releases/package-files.txt
-          grep -Eq '^choochootracker/instruments/FACTORY/[^/]+\.zip$' releases/package-files.txt
+          grep -Fxq 'choochootracker/data.tar.gz' releases/package-files.txt
+          unzip -p releases/choochootracker.zip choochootracker/data.tar.gz > releases/data.tar.gz
+          tar -tzf releases/data.tar.gz > releases/data-files.txt
+          grep -Fxq './instruments/FACTORY/catalog.tsv' releases/data-files.txt
+          grep -Fxq './instruments/FACTORY/builtins.tsv' releases/data-files.txt
+          grep -Eq '^\./instruments/FACTORY/[^/]+\.zip$' releases/data-files.txt
           for engine in dx7 opll vrc7 opl2 opl3 genesis arcade sid sega gb-pulse gb-noise; do
-            grep -Fxq "choochootracker/instruments/USER/$engine/README.txt" releases/package-files.txt
+            grep -Fxq "./instruments/USER/$engine/README.txt" releases/data-files.txt
           done
-          grep -Fxq 'choochootracker/licenses/miniz.txt' releases/package-files.txt
+          grep -Fxq './licenses/miniz.txt' releases/data-files.txt
           binary=tracker/build/portmaster/choochootracker.aarch64
           readelf -h "$binary" | grep -q AArch64
           glibc=$(readelf -V "$binary" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)

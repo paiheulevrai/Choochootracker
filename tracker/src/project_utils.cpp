@@ -85,6 +85,8 @@ const char* instrumentTypeName(InstrumentType type) {
       return "aChChid";
     case InstrumentType::DrumSynth:
       return "Bogie";
+    case InstrumentType::DigiSophie:
+      return "DigiSophie";
     case InstrumentType::Monk: return "MonkSynth";
     case InstrumentType::AudioIn: return "Audio in";
     case InstrumentType::Layer: return "Layer";

@@ -112,7 +112,7 @@ const SelectionItem mmeCategories[] = {
 };
 const int mmeCategoryCount = sizeof(mmeCategories) / sizeof(mmeCategories[0]);
 
-static const SelectionItem sinteredCore[] = {LEAF("KNOT", 0), LEAF("SHARD", 1), LEAF("BURST", 2)};
+static const SelectionItem sinteredCore[] = {LEAF("KNOT", 0), LEAF("CREASE", 1), LEAF("BURST", 2)};
 static const SelectionItem sinteredExperimental[] = {LEAF("COMB", 3), LEAF("LOGIC", 4), LEAF("MELT", 5), LEAF("SQUALL", 6)};
 const SelectionItem sinteredCategories[] = {CATEGORY("CORE", sinteredCore), CATEGORY("EXPERIMENTAL", sinteredExperimental)};
 const int sinteredCategoryCount = sizeof(sinteredCategories) / sizeof(sinteredCategories[0]);

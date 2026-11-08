@@ -575,9 +575,9 @@ Sur l’écran Modulation, appuyez sur **EDIT** sur une source pour choisir une 
 
 ### Sintered
 
-**Sintered** est un synthétiseur natif de percussion digitale one-shot. Les notes fixent sa hauteur fondamentale ; ses six modèles sont `Knot`, `Shard`, `Burst`, `Comb`, `Logic` et `Melt`. Chaque modèle a **Decay**, **Mod** et **Motion**, plus trois contrôles spécifiques : Knot utilise Ratio/Spread/Fold, Shard Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush et Melt Ratio/Chaos/Drive. **Mod** est toujours la profondeur de couplage interne.
+**Sintered** est un synthétiseur natif de percussion digitale one-shot. Les notes fixent sa hauteur fondamentale ; ses six modèles sont `Knot`, `Crease`, `Burst`, `Comb`, `Logic` et `Melt`. Chaque modèle a **Decay**, **Mod** et **Motion**, plus trois contrôles spécifiques : Knot utilise Ratio/Spread/Fold, Crease Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush et Melt Ratio/Chaos/Drive. **Mod** est toujours la profondeur de couplage interne.
 
-Motion est une enveloppe macro interne : valeurs sous `80` utilisent une forme AD, `80` la désactive, et au-dessus de `80` la forme est decay-only. Plus on s’éloigne du centre, plus l’enveloppe est rapide. Ses destinations sont fixes par modèle, pour garder Sintered prévisible dans les patterns tracker : Knot anime Mod/Fold ; Shard Feedback/Bite ; Burst Noise/Color/Feedback ; Comb Damping/Regen ; Logic Rate/Crush ; Melt Chaos/Drive. Tous les modèles réinitialisent leur état à chaque note et limitent leur feedback interne pour des frappes répétables.
+Motion est une enveloppe macro interne : valeurs sous `80` utilisent une forme AD, `80` la désactive, et au-dessus de `80` la forme est decay-only. Plus on s’éloigne du centre, plus l’enveloppe est rapide. Ses destinations sont fixes par modèle, pour garder Sintered prévisible dans les patterns tracker : Knot anime Mod/Fold ; Crease Feedback/Bite ; Burst Noise/Color/Feedback ; Comb Damping/Regen ; Logic Rate/Crush ; Melt Chaos/Drive. Tous les modèles réinitialisent leur état à chaque note et limitent leur feedback interne pour des frappes répétables.
 
 ### MonkSynth
 

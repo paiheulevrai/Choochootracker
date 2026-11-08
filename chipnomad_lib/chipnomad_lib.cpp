@@ -1,8 +1,10 @@
 #include "audio_monitor.h"
 #include "chipnomad_lib.h"
+#include <type_traits>
 #include "soundbank_fx.h"
 #include "chipnomad_lib_live_stick.h"
 #include "playback.h"
+#include "playback_internal.h"
 #include "synth/braids_voice.h"
 #include "synth/sample_voice.h"
 #include "synth/soundbank_voice.h"
@@ -334,7 +336,7 @@ class AudioCommandQueue {
           } else if (!command.b) { state->monkPreview->kill();state->sidPreview->kill();state->fourOpPreview->kill();state->dx7Preview->kill();state->opllPreview->kill(); state->oplPreview->kill();state->simpleChipPreview->kill(); state->opllPreviewTrack = -1; }
           break;
         case kStopPreview: playbackStopPreview(playback, command.a); break;
-        case kClearTrackFX: memset(playback->tracks[command.a].note.fx, 0, sizeof(playback->tracks[command.a].note.fx)); break;
+        case kClearTrackFX: playbackClearTrackFX(playback, command.a); break;
         case kSetScale:
           if (command.a >= 0 && command.a < 12 && command.b >= 0 && command.b < scalePresetCount) {
             playback->scaleRoot = (uint8_t)command.a;
@@ -925,8 +927,13 @@ struct TrackPanMix {
   bool active = false;
 };
 
+static bool trackNeedsRender(const ChipNomadState* state, int track) {
+  return state->playbackState.trackEnabled[track] || (state->audioModTrackMask & (1u << track));
+}
+
 static void updateAudioInputRoutedTracks(ChipNomadState* state) {
-  uint8_t mask = 0;
+  uint8_t mask = 0, modulationMask = 0, waveMask = 0;
+  memset(state->audioAmplitudeOwners, 0, sizeof(state->audioAmplitudeOwners));
   for (int owner = 0; owner < voiceOwnerLimit(state); ++owner) {
     if (!voiceOwnerValid(state, owner)) continue;
     int instrumentIdx = voiceOwnerState(state, owner)->note.instrument;
@@ -935,8 +942,16 @@ static void updateAudioInputRoutedTracks(ChipNomadState* state) {
     if (instrument.type == InstrumentType::AudioIn && instrument.audioInputSource > InstrumentAudioInputSource::external &&
         (int)instrument.audioInputSource <= PROJECT_MAX_TRACKS)
       mask |= (uint8_t)(1u << ((int)instrument.audioInputSource - 1));
+    for (const auto& mod : voiceOwnerState(state, owner)->note.modulation)
+      if (mod.modulation && mod.modulation->type == ModulationType::Audio && mod.modulation->destination) {
+        modulationMask |= (uint8_t)(1u << playbackModAudioSource(&mod));
+        const auto mode = playbackModAudioMode(&mod);
+        if (mode != AudioModulationMode::envelope) waveMask |= (uint8_t)(1u << playbackModAudioSource(&mod));
+        if (mode == AudioModulationMode::amplitude || mode == AudioModulationMode::ring)
+          state->audioAmplitudeOwners[owner] = 1;
+      }
   }
-  const uint8_t added = mask & ~state->audioInputRoutedTrackMask;
+  const uint8_t added = (mask | modulationMask) & ~(state->audioInputRoutedTrackMask | state->audioModTrackMask);
   for (int track = 0; track < PROJECT_MAX_TRACKS; ++track)
     if (added & (1u << track)) {
       memset(state->audioInputTrackCurrent + (size_t)track * state->mixBufferSize, 0,
@@ -945,6 +960,37 @@ static void updateAudioInputRoutedTracks(ChipNomadState* state) {
         (size_t)state->mixBufferSize * sizeof(float));
     }
   state->audioInputRoutedTrackMask = mask;
+  state->audioModTrackMask = modulationMask;
+  const uint8_t waveAdded = waveMask & ~state->audioWaveTrackMask;
+  for (int track = 0; track < PROJECT_MAX_TRACKS; ++track)
+    if (waveAdded & (1u << track)) memset(state->audioWaveHistory[track], 0, sizeof(state->audioWaveHistory[track]));
+  state->audioWaveTrackMask = waveMask;
+}
+
+static void prepareAudioWaveSamples(ChipNomadState* state, int frames) {
+  for (int source = 0; source < PROJECT_MAX_TRACKS; ++source) {
+    if (!(state->audioWaveTrackMask & (1u << source))) continue;
+    for (int i = 0; i < frames; ++i)
+      state->audioWaveSamples[source][i] = source < state->audioProject.tracksCount
+        ? state->audioWaveHistory[source][(state->audioWavePosition + i) & 63] : 0.0f;
+  }
+}
+
+static float audioAmplitudeGain(ChipNomadState* state, int owner, int frame) {
+  if (!state->audioAmplitudeOwners[owner]) return 1.0f;
+  float gain = 1.0f;
+  for (const auto& mod : voiceOwnerState(state, owner)->note.modulation) {
+    if (!mod.modulation || mod.modulation->type != ModulationType::Audio || !mod.modulation->destination) continue;
+    const auto mode = playbackModAudioMode(&mod);
+    const float sample = playbackModAudioSample(&mod, state->audioWaveSamples[playbackModAudioSource(&mod)][frame]);
+    if (mode == AudioModulationMode::amplitude) gain *= 1.0f + sample;
+    else if (mode == AudioModulationMode::ring) {
+      const int amount = std::clamp(mod.modulation->amount + mod.amountOffset, -128, 127);
+      const float depth = fabsf(amount / (amount < 0 ? 128.0f : 127.0f));
+      gain *= 1.0f - depth + sample;
+    }
+  }
+  return gain;
 }
 
 static TrackPanMix makeTrackPanMix(ChipNomadState* state, int instrumentPan, int trackPan) {
@@ -993,8 +1039,9 @@ static inline void mixTrackChannel(ChipNomadState* state, int trackIdx,
     return;
   }
   const bool routed = state->audioInputRoutedTrackMask & (1u << trackIdx);
-  if (routed)
+  if ((state->audioInputRoutedTrackMask | state->audioModTrackMask) & (1u << trackIdx))
     state->audioInputTrackCurrent[(size_t)trackIdx * state->mixBufferSize + sampleIndex] += sample;
+  if (!state->playbackState.trackEnabled[trackIdx]) return;
   state->audioMonitor->add(trackIdx, sampleIndex, sample);
   if (audioRecorderWantsTrackSample(trackIdx))
     audioRecorderCaptureTrackSample(trackIdx, sampleIndex, sample);
@@ -1013,6 +1060,9 @@ static inline void mixTrackFrame(ChipNomadState* state, int trackIdx,
                                  float left, float right, int frameIndex,
                                  float reverbSend, float delaySend,
                                  const TrackPanMix& pan) {
+  const float amplitude = audioAmplitudeGain(state, trackIdx, frameIndex);
+  left *= amplitude;
+  right *= amplitude;
   if (pan.active) {
     left *= pan.leftGain;
     right *= pan.rightGain;
@@ -1210,6 +1260,7 @@ static void prepareMissingVoices(PreparedInstrumentVoices* prepared,
 
 static InstrumentType voicePoolType(InstrumentType type) {
   switch (type) {
+    case InstrumentType::DigiSophie: return InstrumentType::DrumSynth;
     case InstrumentType::VRC7: return InstrumentType::OPLL;
     case InstrumentType::OPL3: return InstrumentType::OPL2;
     case InstrumentType::GBPulse:
@@ -1444,7 +1495,8 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
   syncVoicePool(state->plaitsVoices, has(InstrumentType::Plaits), inLayer(InstrumentType::Plaits), rate);
   syncVoicePool(state->plaitsAltVoices, has(InstrumentType::PlaitsAlt), inLayer(InstrumentType::PlaitsAlt), rate);
   syncVoicePool(state->achchidVoices, has(InstrumentType::AChChid), inLayer(InstrumentType::AChChid), rate);
-  syncVoicePool(state->drumSynthVoices, has(InstrumentType::DrumSynth), inLayer(InstrumentType::DrumSynth), rate);
+  syncVoicePool(state->drumSynthVoices, has(InstrumentType::DrumSynth) || has(InstrumentType::DigiSophie),
+    inLayer(InstrumentType::DrumSynth) || inLayer(InstrumentType::DigiSophie), rate);
   syncVoicePool(state->mmeVoices, has(InstrumentType::MME), inLayer(InstrumentType::MME), rate);
   syncVoicePool(state->sidVoices, has(InstrumentType::SID), inLayer(InstrumentType::SID), rate);
   syncVoicePool(state->simpleChipVoices, has(InstrumentType::SegaPSG) || has(InstrumentType::GBPulse) || has(InstrumentType::GBNoise), inLayer(InstrumentType::SegaPSG), rate);
@@ -1510,7 +1562,7 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
 }
 
 static int audioRateModulationFrames(const ChipNomadState* state) {
-  int frames = CCT_FLFO_MAX_CONTROL_FRAMES;
+  int frames = 64;
   bool active = false;
   for (int trackIdx = 0; trackIdx < state->audioProject.tracksCount; ++trackIdx) {
     const PlaybackTrackState* tracks[1 + INSTRUMENT_LAYER_COUNT] = {
@@ -1523,10 +1575,20 @@ static int audioRateModulationFrames(const ChipNomadState* state) {
       const PlaybackTrackState* track = tracks[lane];
       for (int i = 0; i < 4; ++i) {
         const PlaybackModState* mod = &track->note.modulation[i];
-        if (!mod->modulation || mod->modulation->type != ModulationType::FLFO ||
+        if (!mod->modulation ||
+            (mod->modulation->type != ModulationType::FLFO && mod->modulation->type != ModulationType::Audio) ||
             mod->modulation->destination == 0) continue;
         active = true;
-        frames = std::min(frames, playbackModAudioControlFrames(mod, (float)state->sampleRate));
+        if (mod->modulation->type == ModulationType::Audio &&
+            playbackModAudioMode(mod) == AudioModulationMode::wave &&
+            mod->modulation->amount + mod->amountOffset != 0 &&
+            mod->modulation->p4 + mod->p4Offset > 0) {
+          frames = std::min(frames, CCT_FLFO_MAX_CONTROL_FRAMES -
+            state->audioWavePosition % CCT_FLFO_MAX_CONTROL_FRAMES);
+        }
+        if (mod->modulation->type == ModulationType::FLFO)
+          frames = std::min(frames, std::min(CCT_FLFO_MAX_CONTROL_FRAMES,
+            playbackModAudioControlFrames(mod, (float)state->sampleRate)));
       }
     }
   }
@@ -1654,6 +1716,20 @@ static void applyVoicePostModulations(const PlaybackTrackState* track, Instrumen
 }
 
 static void updateAudioRateModulations(ChipNomadState* state, int frames) {
+  bool allVoices = false;
+  bool types[(int)InstrumentType::totalCount] = {};
+  const auto markType = [&](const PlaybackTrackState* track) {
+    if (track->note.instrument >= PROJECT_MAX_INSTRUMENTS) return;
+    const auto type = state->audioProject.instruments[track->note.instrument].type;
+    if (type < InstrumentType::totalCount) types[(int)type] = true;
+  };
+  float peaks[PROJECT_MAX_TRACKS] = {};
+  for (int source = 0; source < state->audioProject.tracksCount; ++source) {
+    if (!(state->audioModTrackMask & (1u << source))) continue;
+    const float* samples = state->audioInputTrackPrevious + (size_t)source * state->mixBufferSize;
+    for (int i = 0; i < state->audioInputTrackPreviousFrames * 2; ++i)
+      peaks[source] = std::max(peaks[source], fabsf(samples[i]));
+  }
   for (int trackIdx = 0; trackIdx < state->audioProject.tracksCount; ++trackIdx) {
     PlaybackTrackState* tracks[1 + INSTRUMENT_LAYER_COUNT] = {
       &state->playbackState.tracks[trackIdx],
@@ -1663,20 +1739,52 @@ static void updateAudioRateModulations(ChipNomadState* state, int frames) {
       ? 1 + INSTRUMENT_LAYER_COUNT : 1;
     for (int lane = 0; lane < count; ++lane) {
       PlaybackTrackState* track = tracks[lane];
-      for (int i = 0; i < 4; ++i)
-        playbackModNextAudioFrames(&track->note.modulation[i], (float)state->sampleRate, frames);
+      bool audioActive = false;
+      for (auto& mod : track->note.modulation) {
+        if (mod.modulation && mod.modulation->type == ModulationType::Audio) {
+          const auto mode = playbackModAudioMode(&mod);
+          if (mode == AudioModulationMode::envelope) {
+            playbackModNextAudioEnvelope(&mod, (float)state->sampleRate, frames, peaks[playbackModAudioSource(&mod)]);
+          } else if (mode == AudioModulationMode::wave) {
+            // Align control updates to sample position, not callback boundaries.
+            if (state->audioWavePosition % CCT_FLFO_MAX_CONTROL_FRAMES == 0)
+              mod.outValue = (int16_t)(playbackModAudioSample(&mod, state->audioWaveSamples[playbackModAudioSource(&mod)][0]) * 32385.0f);
+          } else mod.outValue = 0;
+          audioActive |= mod.modulation->destination != 0 &&
+            (mode == AudioModulationMode::envelope || mode == AudioModulationMode::wave);
+        } else {
+          playbackModNextAudioFrames(&mod, (float)state->sampleRate, frames);
+          allVoices |= mod.modulation && mod.modulation->type == ModulationType::FLFO &&
+            mod.modulation->destination != 0;
+        }
+      }
+      if (audioActive) {
+        markType(track);
+        if (lane == 0)
+          for (int child = 1; child < count; ++child) markType(tracks[child]);
+      }
     }
   }
-  updateSoundbankVoices(state);
-  updateSampleVoices(state); updateAudioInputVoices(state);
-  updateSCWFVoices(state);
-  updateBraidsVoices(state);
-  updatePlaitsVoices(state);
-  updatePlaitsAltVoices(state);
-  updateAChChidVoices(state);
-  updateDrumSynthVoices(state);
-  updateMMEVoices(state); updateMonkVoices(state);
-  updateSinteredVoices(state); updateOPLLVoices(state); updateOPLVoices(state); updateFourOpVoices(state); updateSimpleChipVoices(state); updateSIDVoices(state); updateDX7Voices(state);
+  const auto needs = [&](InstrumentType type) { return allVoices || types[(int)type]; };
+  if (needs(InstrumentType::SoundFont)) updateSoundbankVoices(state);
+  if (needs(InstrumentType::Sample)) updateSampleVoices(state);
+  if (needs(InstrumentType::AudioIn)) updateAudioInputVoices(state);
+  if (needs(InstrumentType::SCWF) || needs(InstrumentType::BYOWTBL)) updateSCWFVoices(state);
+  if (needs(InstrumentType::Braids)) updateBraidsVoices(state);
+  if (needs(InstrumentType::Plaits)) updatePlaitsVoices(state);
+  if (needs(InstrumentType::PlaitsAlt)) updatePlaitsAltVoices(state);
+  if (needs(InstrumentType::AChChid)) updateAChChidVoices(state);
+  if (needs(InstrumentType::DrumSynth) || needs(InstrumentType::DigiSophie)) updateDrumSynthVoices(state);
+  if (needs(InstrumentType::MME)) updateMMEVoices(state);
+  if (needs(InstrumentType::Monk)) updateMonkVoices(state);
+  if (needs(InstrumentType::Sintered)) updateSinteredVoices(state);
+  if (needs(InstrumentType::OPLL) || needs(InstrumentType::VRC7)) updateOPLLVoices(state);
+  if (needs(InstrumentType::OPL2) || needs(InstrumentType::OPL3)) updateOPLVoices(state);
+  if (needs(InstrumentType::SegaPSG) || needs(InstrumentType::GBPulse) || needs(InstrumentType::GBNoise))
+    updateSimpleChipVoices(state);
+  if (needs(InstrumentType::GenesisFM) || needs(InstrumentType::ArcadeFM)) updateFourOpVoices(state);
+  if (needs(InstrumentType::SID)) updateSIDVoices(state);
+  if (needs(InstrumentType::DX7)) updateDX7Voices(state);
   updateInsertValues(state);
 }
 
@@ -1702,7 +1810,7 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
     auto& track = state->playbackState.tracks[t];
     state->insertChains[t]->setTempo(state->audioProject.tickRate);
     uint16_t cleared = state->insertChains[t]->sync(state->audioProject.trackInserts[t], &track.inserts,
-        t < state->audioProject.tracksCount && state->playbackState.trackEnabled[t]);
+        t < state->audioProject.tracksCount && trackNeedsRender(state, t));
     for (int address = 0; address < 16; ++address) if (cleared & (1u << address)) {
       track.slewTarget[fxF11 + address] = -1;
       track.slewRemaining[fxF11 + address] = 0;
@@ -1714,7 +1822,12 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
     state->masterInsertChain->sync(state->audioProject.masterInserts, &state->masterInsertAutomation);
   const bool trackMaskChanged = state->audioCommands->applySettings(&state->playbackState);
   state->audioCommands->applyCommands(state);
-  if (!wasPlaying && playbackIsPlaying(&state->playbackState)) state->masterEffects->reset();
+  updateAudioInputRoutedTracks(state);
+  if (!wasPlaying && playbackIsPlaying(&state->playbackState)) {
+    state->masterEffects->reset();
+    memset(state->audioWaveHistory, 0, sizeof(state->audioWaveHistory));
+    state->audioWavePosition = 0;
+  }
   for (int t = 0; t < PROJECT_MAX_TRACKS; ++t) {
     auto& track = state->playbackState.tracks[t];
     if (track.insertReset != state->insertResetSeen[t]) {
@@ -1801,7 +1914,7 @@ static int prepareRenderChunk(ChipNomadState* state, float* output, int frames,
     return 0;
   }
   for (int t = 0; t < state->audioProject.tracksCount; ++t)
-    if (state->audioInputRoutedTrackMask & (1u << t))
+    if ((state->audioInputRoutedTrackMask | state->audioModTrackMask) & (1u << t))
       memset(state->audioInputTrackCurrent + (size_t)t * state->mixBufferSize, 0,
         (size_t)requiredSize * sizeof(float));
   state->sidechainSourceMask = 0;
@@ -1879,7 +1992,7 @@ static void captureSidechains(ChipNomadState* state, int frames) {
 
 static void renderChipTracks(ChipNomadState* state, float* output, int frames) {
   for (int chipIdx = 0; chipIdx < state->audioProject.chipsCount; ++chipIdx) {
-    if (chipIdx >= state->audioProject.tracksCount || !state->playbackState.trackEnabled[chipIdx]) continue;
+    if (chipIdx >= state->audioProject.tracksCount || !trackNeedsRender(state, chipIdx)) continue;
     uint8_t instrumentIdx = state->playbackState.tracks[chipIdx].note.instrument;
     if (instrumentIdx >= PROJECT_MAX_INSTRUMENTS) continue;
     InstrumentType type = state->audioProject.instruments[instrumentIdx].type;
@@ -1907,7 +2020,7 @@ static void renderChipTracks(ChipNomadState* state, float* output, int frames) {
     if (type != InstrumentType::AY1 && type != InstrumentType::AY2 && type != InstrumentType::AYSample) continue;
     SoundChip* chip = state->layerAYChips[owner];
     const int physicalTrack = voiceOwnerTrack(owner);
-    if (!chip || !state->playbackState.trackEnabled[physicalTrack]) continue;
+    if (!chip || !trackNeedsRender(state, physicalTrack)) continue;
     float* rendered = state->mixBuffer;
     chip->render(rendered, frames);
     processLayerVoiceEQ(state, owner, 0, rendered, frames);
@@ -1918,10 +2031,12 @@ static void renderChipTracks(ChipNomadState* state, float* output, int frames) {
     float reverbSend = effectiveTrackSend(state, physicalTrack, true);
     float delaySend = effectiveTrackSend(state, physicalTrack, false);
     TrackPanMix pan = makeVoiceOwnerPanMix(state, owner);
-    for (int i = 0; i < frames; ++i)
+    for (int i = 0; i < frames; ++i) {
+      const float amplitude = audioAmplitudeGain(state, owner, i);
       mixTrackFrame(state, physicalTrack, output, state->reverbBuffer, state->delayBuffer,
-                    rendered[i * 2] * gain, rendered[i * 2 + 1] * gain,
+                    rendered[i * 2] * gain * amplitude, rendered[i * 2 + 1] * gain * amplitude,
                     i, reverbSend, delaySend, pan);
+    }
   }
 }
 
@@ -1931,7 +2046,7 @@ static void renderMonoVoiceTracks(ChipNomadState* state, Voice* const voices[][C
     if (!voiceOwnerValid(state, owner)) continue;
     const int trackIdx = voiceOwnerTrack(owner);
     PlaybackTrackState* voiceTrack = voiceOwnerState(state, owner);
-    if (!state->playbackState.trackEnabled[trackIdx]) continue;
+    if (!trackNeedsRender(state, trackIdx)) continue;
     for (int slot = 0; slot < voiceTrack->chordVoiceCount; ++slot) {
       Voice* voice = voices[owner][slot];
       if (!voice || !voice->active()) continue;
@@ -1951,6 +2066,10 @@ static void renderMonoVoiceTracks(ChipNomadState* state, Voice* const voices[][C
       for (int i = 0; i < frames; ++i) {
         float left = rendered[owner >= PROJECT_MAX_TRACKS ? i * 2 : i] * 0.25f * trackGain;
         float right = rendered[owner >= PROJECT_MAX_TRACKS ? i * 2 + 1 : i] * 0.25f * trackGain;
+        if (owner >= PROJECT_MAX_TRACKS) {
+          const float amplitude = audioAmplitudeGain(state, owner, i);
+          left *= amplitude; right *= amplitude;
+        }
         mixTrackFrame(state, trackIdx, output, state->reverbBuffer, state->delayBuffer,
                       left, right, i, reverbSend, delaySend, pan);
       }
@@ -1964,7 +2083,7 @@ static void renderStereoVoiceTracks(ChipNomadState* state, Voice* const voices[]
     if (!voiceOwnerValid(state, owner)) continue;
     const int trackIdx = voiceOwnerTrack(owner);
     PlaybackTrackState* voiceTrack = voiceOwnerState(state, owner);
-    if (!state->playbackState.trackEnabled[trackIdx]) continue;
+    if (!trackNeedsRender(state, trackIdx)) continue;
     for (int slot = 0; slot < (includeReleaseSlots ? CHORD_MAX_VOICES : voiceTrack->chordVoiceCount); ++slot) {
       Voice* voice = voices[owner][slot];
       if (!voice || !voice->active()) continue;
@@ -1978,10 +2097,12 @@ static void renderStereoVoiceTracks(ChipNomadState* state, Voice* const voices[]
       float reverbSend = effectiveTrackSend(state, trackIdx, true);
       float delaySend = effectiveTrackSend(state, trackIdx, false);
       TrackPanMix pan = makeVoiceOwnerPanMix(state, owner);
-      for (int i = 0; i < frames; ++i)
+      for (int i = 0; i < frames; ++i) {
+        const float amplitude = owner >= PROJECT_MAX_TRACKS ? audioAmplitudeGain(state, owner, i) : 1.0f;
         mixTrackFrame(state, trackIdx, output, state->reverbBuffer, state->delayBuffer,
-                      rendered[i * 2] * gain, rendered[i * 2 + 1] * gain,
+                      rendered[i * 2] * gain * amplitude, rendered[i * 2 + 1] * gain * amplitude,
                       i, reverbSend, delaySend, pan);
+      }
     }
   }
 }
@@ -2013,16 +2134,17 @@ static void updateInsertValues(ChipNomadState* state) {
 
 static void processTrackInserts(ChipNomadState* state, float* output, int frames) {
   for (int t = 0; t < state->audioProject.tracksCount; ++t) {
-    if (!state->insertActive[t] || !state->playbackState.trackEnabled[t]) continue;
+    if (!state->insertActive[t] || !trackNeedsRender(state, t)) continue;
     float* samples = state->insertBuffer + (size_t)t * state->mixBufferSize;
     const float* sidechain[2] = {
       sidechainFor(state, state->insertValues[t][0][5]),
       sidechainFor(state, state->insertValues[t][1][5])
     };
     state->insertChains[t]->process(samples, frames, state->insertValues[t], sidechain);
-    if (state->audioInputRoutedTrackMask & (1u << t))
+    if ((state->audioInputRoutedTrackMask | state->audioModTrackMask) & (1u << t))
       memcpy(state->audioInputTrackCurrent + (size_t)t * state->mixBufferSize,
              samples, (size_t)frames * 2 * sizeof(float));
+    if (!state->playbackState.trackEnabled[t]) continue;
     float reverb = effectiveTrackSend(state, t, true), delay = effectiveTrackSend(state, t, false);
     bool excludeFromMaster = state->masterSidechainExcludeMask & (1u << t);
     bool routed = state->audioInputRoutedTrackMask & (1u << t);
@@ -2118,15 +2240,16 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
       break;
     }
     int frames = (int)state->frameSampleCounter < samplesLeft ? (int)state->frameSampleCounter : samplesLeft;
+    updateAudioInputRoutedTracks(state);
     const int modulationFrames = audioRateModulationFrames(state);
     if (modulationFrames > 0) {
       frames = std::min(frames, modulationFrames);
+      prepareAudioWaveSamples(state, frames);
       updateAudioRateModulations(state, frames);
     }
     float* output = buffer + (samples - samplesLeft) * 2;
     bool hasReverb, hasDelay;
     if (!prepareRenderChunk(state, output, frames, &hasReverb, &hasDelay)) return 0;
-    updateAudioInputRoutedTracks(state);
     // Track-bounce capture bracket: the capture sites only run for tracks
     // with an active voice, so the chunk end fills the remainder with
     // silence - without this, rests between notes would be missing from a
@@ -2171,7 +2294,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
       if (!part || (!part->active() && !dx7Selected)) continue;
       float* rendered = state->mixBuffer;
       part->render(rendered,frames);
-      if(!state->playbackState.trackEnabled[physicalTrack])continue;
+      if(!trackNeedsRender(state, physicalTrack))continue;
       for (int i = frames - 1; i >= 0; --i) rendered[i * 2] = rendered[i * 2 + 1] = rendered[i];
       processLayerVoiceEQ(state, t, 0, rendered, frames);
       captureVoiceMonitor(state,t,rendered,frames,2,part->envelopeLevel());
@@ -2179,8 +2302,10 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
       float gain=state->audioProject.trackVolume[physicalTrack]/100.f*.25f;
       float reverb=effectiveTrackSend(state,physicalTrack,true),delay=effectiveTrackSend(state,physicalTrack,false);
       TrackPanMix pan = makeVoiceOwnerPanMix(state, t);
-      for(int i=0;i<frames;++i)
-        mixTrackFrame(state,physicalTrack,output,state->reverbBuffer,state->delayBuffer,rendered[i*2]*gain,rendered[i*2+1]*gain,i,reverb,delay,pan);
+      for(int i=0;i<frames;++i) {
+        const float amplitude = t >= PROJECT_MAX_TRACKS ? audioAmplitudeGain(state, t, i) : 1.0f;
+        mixTrackFrame(state,physicalTrack,output,state->reverbBuffer,state->delayBuffer,rendered[i*2]*gain*amplitude,rendered[i*2+1]*gain*amplitude,i,reverb,delay,pan);
+      }
     }
 
     renderStereoVoiceTracks(state,state->fourOpVoices,output,frames);
@@ -2194,7 +2319,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
       limitSIDVoices(sidPool,sidCount,4);
     }
     renderMonoVoiceTracks(state,state->sidVoices,output,frames);
-    if (state->opllPreviewTrack >= 0 && state->playbackState.trackEnabled[state->opllPreviewTrack]) {
+    if (state->opllPreviewTrack >= 0 && trackNeedsRender(state, state->opllPreviewTrack)) {
       const int track = state->opllPreviewTrack;
       bool opl = state->chipPreviewType == InstrumentType::Monk || isOPL(state->chipPreviewType)||isFourOp(state->chipPreviewType);
       if(state->chipPreviewType==InstrumentType::Monk)state->monkPreview->render(state->mixBuffer,frames);else if(state->chipPreviewType==InstrumentType::SID)state->sidPreview->render(state->mixBuffer,frames);else if(state->chipPreviewType==InstrumentType::DX7)state->dx7Preview->render(state->mixBuffer,frames);else if(isFourOp(state->chipPreviewType))state->fourOpPreview->render(state->mixBuffer,frames);else if (opl) state->oplPreview->render(state->mixBuffer,frames);else if(isSimpleChip(state->chipPreviewType))state->simpleChipPreview->render(state->mixBuffer,frames);else state->opllPreview->render(state->mixBuffer, frames);
@@ -2218,7 +2343,14 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
     state->stopTransition.process(output, frames);
     state->audioMonitor->finishChunk(output, frames, state->sampleRate);
     audioRecorderEndTrackChunk(frames);
-    if (state->audioInputRoutedTrackMask) {
+    if (state->audioInputRoutedTrackMask | state->audioModTrackMask) {
+      for (int source = 0; source < state->audioProject.tracksCount; ++source) {
+        if (!(state->audioWaveTrackMask & (1u << source))) continue;
+        const float* input = state->audioInputTrackCurrent + (size_t)source * state->mixBufferSize;
+        for (int i = 0; i < frames; ++i)
+          state->audioWaveHistory[source][(state->audioWavePosition + i) & 63] = (input[i * 2] + input[i * 2 + 1]) * 0.5f;
+      }
+      state->audioWavePosition = (state->audioWavePosition + frames) & 63;
       float* previous = state->audioInputTrackPrevious;
       state->audioInputTrackPrevious = state->audioInputTrackCurrent;
       state->audioInputTrackCurrent = previous;
@@ -2322,10 +2454,12 @@ static void applyVoiceEvents(ChipNomadState* state, uint64_t dueMicros) {
           } else voice->noteOff();
         }
         break;
+      case InstrumentType::DigiSophie:
       case InstrumentType::DrumSynth:
         for (int slot = 0; slot < CHORD_MAX_VOICES; ++slot)
           if (track->note.noteKilled || (track->note.noteTriggered && slot >= track->chordVoiceCount)) state->drumSynthVoices[trackIdx][slot]->kill();
           else if (track->note.noteTriggered) state->drumSynthVoices[trackIdx][slot]->noteOn();
+          else if (track->note.noteReleased) state->drumSynthVoices[trackIdx][slot]->noteOff();
         break;
       case InstrumentType::SID:
         applyEvent(state->sidVoices[trackIdx]);break;
@@ -2632,7 +2766,8 @@ static void updateSampleVoices(ChipNomadState* state) {
       int value = playbackModScaleToRange(mod->outValue, 255);
       switch (mod->modulation->destination) {
         case 1:
-          gain *= value / 255.0f;
+          gain = mod->modulation->type == ModulationType::Audio
+            ? gain + value / 255.0f : gain * value / 255.0f;
           break;
         case 2:
           pitchCents += playbackModScaleToRange(mod->outValue, 1200);
@@ -2867,11 +3002,13 @@ static void updateDrumSynthVoices(ChipNomadState* state) {
     DrumSynthVoice** voices = state->drumSynthVoices[trackIdx];
     if (!voices[0]) continue;
     if (track->note.instrument == EMPTY_VALUE_8 ||
-        project->instruments[track->note.instrument].type != InstrumentType::DrumSynth) {
+        (project->instruments[track->note.instrument].type != InstrumentType::DrumSynth &&
+         project->instruments[track->note.instrument].type != InstrumentType::DigiSophie)) {
       for (int slot = 0; slot < CHORD_MAX_VOICES; ++slot) voices[slot]->kill();
       continue;
     }
     InstrumentDrumSynth* d = &project->instruments[track->note.instrument].chip.drumSynth;
+    const bool sophie = project->instruments[track->note.instrument].type == InstrumentType::DigiSophie;
     int engine = (int)d->engine, decay = d->decay, tone = d->tone, sweep = d->sweep;
     int noise = d->noise, fm = d->fm, drive = d->drive;
     int cutoff = d->filterCutoffHz, resonance = d->filterResonance, pitchModulation = 0;
@@ -2897,10 +3034,22 @@ static void updateDrumSynthVoices(ChipNomadState* state) {
       }
     }
     InstrumentDrumSynth configured = *d;
-    configured.engine = (DrumSynthEngine)clampInt(engine, 0, 11);
+    configured.engine = (DrumSynthEngine)clampInt(engine, 0, sophie ? 3 : 11);
     configured.decay = (uint8_t)clampInt(decay, 0, 255); configured.tone = (uint8_t)clampInt(tone, 0, 255);
     configured.sweep = (uint8_t)clampInt(sweep, 0, 255); configured.noise = (uint8_t)clampInt(noise, 0, 255);
     configured.fm = (uint8_t)clampInt(fm, 0, 255); configured.drive = (uint8_t)clampInt(drive, 0, 255);
+    if (sophie) {
+      auto& amp = static_cast<InstrumentVoicePostSettings&>(configured);
+      int attack = track->note.fx[fxEAT].isOn ? track->note.fx[fxEAT].fxValue : amp.attack;
+      int ampDecay = track->note.fx[fxEDC].isOn ? track->note.fx[fxEDC].fxValue : amp.decay;
+      int sustain = track->note.fx[fxESU].isOn ? track->note.fx[fxESU].fxValue : amp.sustain;
+      int release = track->note.fx[fxERL].isOn ? track->note.fx[fxERL].fxValue : amp.release;
+      int shape = track->note.fx[fxESH].isOn ? track->note.fx[fxESH].fxValue : amp.envelopeShape;
+      int unusedDecay = 0, unusedColor = 0;
+      applyVoicePostModulations(track, InstrumentType::DigiSophie, &attack, &ampDecay, &sustain,
+        &release, &shape, &unusedDecay, &unusedColor);
+      amp.attack = attack; amp.decay = ampDecay; amp.sustain = sustain; amp.release = release; amp.envelopeShape = shape;
+    }
     recordLiveControls(track, {configured.decay, configured.tone, configured.sweep, configured.noise, configured.fm, configured.drive},
                        filterControlFromCutoff((float)clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ)),
                        clampInt(resonance, 0, 255));
@@ -2909,7 +3058,7 @@ static void updateDrumSynthVoices(ChipNomadState* state) {
       int cents = note == EMPTY_VALUE_8 ? 6000 :
         (project->linearPitch ? project->pitchTable.values[note] : (note + 12) * 100) + track->note.fineOffset + pitchModulation;
       voices[slot]->configure(&configured, (float)cents, (gain < 0.0f ? 0.0f : gain) / track->chordVoiceCount,
-        (uint16_t)clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ), (uint8_t)clampInt(resonance, 0, 255));
+        (uint16_t)clampInt(cutoff, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ), (uint8_t)clampInt(resonance, 0, 255), sophie);
     }
   }
 }

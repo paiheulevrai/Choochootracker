@@ -29,6 +29,9 @@ TEST_CASE("Plaits-Alt contains exactly its 24 supplemental engines") {
 }
 
 TEST_CASE("model names come from the catalog") {
+  CHECK((int)SinteredModel::shard == 1);
+  CHECK(strcmp(modelCatalogName(InstrumentType::Sintered, 1), "CREASE") == 0);
+  CHECK(strcmp(digiSophieModelName(3), "SHARD") == 0);
   CHECK(strcmp(modelCatalogName(InstrumentType::Braids, 46), "DIGI-MOD") == 0);
   CHECK(strcmp(modelCatalogName(InstrumentType::Plaits, 5), "WAVE TERRAIN") == 0);
   CHECK(strcmp(modelCatalogName(InstrumentType::PlaitsAlt, 23), "PHASE FLOCK") == 0);
