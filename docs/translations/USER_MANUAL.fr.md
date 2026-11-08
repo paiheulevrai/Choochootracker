@@ -1080,7 +1080,7 @@ Les Tracker FX forçent les valeurs du séquenceur ou du moteur sonore sur les 
 | `FIN` | signé `XX` | Offset fin accumulé en cents avec pitch Linéaire, en unités de période sinon. |
 | `PRD` | signé `XX` | Offset relatif accumulé de période d’oscillateur. |
 | `VOL` | signé `XX` | Offset relatif accumulé du volume (`FF` = -1, pas volume max). |
-| `VSL` | signé `XX` | Ajoute `XX` au volume à chaque ligne de phrase/table. Utiliser `00` pour arrêter. |
+| `VSL` | signé `XX` | Fait glisser le volume de `XX` unités par ligne de phrase/table ; `-1` vaut un cran sur toute l’échelle `0-127`. Continue entre les notes ; utiliser `00` pour arrêter. |
 | `PAN` | `00-FF` | Panoramique absolu de l’instrument : gauche, centre (`80`), droite. |
 | `TPN` | `00-FF` | Panorama absolu de la piste du mixer : gauche, centre (`80`), droite. |
 | `RET` | `XY` | Redéclenche toutes les `Y` ticks ; `X` applique un changement de volume. `Y=0` arrête le redéclenchement. |

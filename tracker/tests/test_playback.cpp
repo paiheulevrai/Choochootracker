@@ -396,6 +396,34 @@ TEST_CASE_FIXTURE(PlaybackFixture, "table volume and VOL apply to the shared voi
   CHECK(playbackVolumeGain(&state->playbackState, track) == 0.0f);
 }
 
+TEST_CASE_FIXTURE(PlaybackFixture, "VSL uses single-volume steps and continues across note triggers") {
+  PlaybackTrackState& track = state->playbackState.tracks[0];
+  state->project.grooves[0].speed[0] = 1;
+  track.note.volume = PHRASE_VOLUME_MAX;
+  const FXCell vsl = {fxVSL, 0xff};
+  initFX(&state->playbackState, 0, &vsl, nullptr, -1);
+
+  for (int step = 0; step < 16; ++step) {
+    track.note.volumeOffset = 0;
+    handleFX(&state->playbackState, 0, 0);
+  }
+  CHECK(track.note.fx[fxVSL].acc == -16 * 256);
+  CHECK(track.note.volumeOffset == -16);
+
+  restartFX(&state->playbackState, 0);
+  track.note.volumeOffset = 0;
+  handleFX(&state->playbackState, 0, 0);
+  CHECK(track.note.fx[fxVSL].acc == -17 * 256);
+  CHECK(track.note.volumeOffset == -17);
+
+  for (int step = 17; step < 140; ++step) {
+    track.note.volumeOffset = 0;
+    handleFX(&state->playbackState, 0, 0);
+  }
+  CHECK(track.note.fx[fxVSL].acc == -PHRASE_VOLUME_MAX * 256);
+  CHECK(track.note.volumeOffset == -PHRASE_VOLUME_MAX);
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "Sequence sources bypass sequencer output and generate rhythmic Trance Gates") {
   setInstrument(0, 0, 0, 15, 0);
   Instrument& instrument = state->project.instruments[0];
