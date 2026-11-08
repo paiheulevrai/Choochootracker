@@ -59,6 +59,7 @@
     <div id="audio-status" role="status"></div>
     <div id="file-controls" aria-label="Project, sample and recovery controls">
       <button id="import-project" disabled>Import .cct</button>
+      <button id="import-templates" disabled>Import export templates</button>
       <button id="import-samples" disabled>Import WAVs</button>
       <button id="import-folder" disabled>Import sample folder</button>
       <button id="import-banks" disabled>Import sound banks</button>
@@ -71,6 +72,7 @@
       <input id="bank-input" type="file" accept=".sf2,.sf3,.sfz,.exs,.zip,.wav,.aif,.aiff,.ogg" multiple hidden>
       <input id="bank-folder-input" type="file" webkitdirectory multiple hidden>
       <input id="project-input" type="file" accept=".cct" hidden>
+      <input id="template-input" type="file" accept=".m8s,.lsdsng" multiple hidden>
       <input id="sample-input" type="file" accept=".wav,audio/wav" multiple hidden>
       <input id="sample-folder-input" type="file" accept=".wav,audio/wav" webkitdirectory multiple hidden>
     </div>
@@ -419,6 +421,7 @@
     });
 
     document.querySelector('#import-project').addEventListener('click', () => document.querySelector('#project-input').click());
+    document.querySelector('#import-templates').addEventListener('click', () => document.querySelector('#template-input').click());
     document.querySelector('#import-samples').addEventListener('click', () => document.querySelector('#sample-input').click());
     document.querySelector('#import-folder').addEventListener('click', () => document.querySelector('#sample-folder-input').click());
     document.querySelector('#project-input').addEventListener('change', async (event) => {
@@ -428,6 +431,10 @@
       await importFiles([file], '/user/projects');
       const result = window.Module.ccall('webLoadProject', 'number', ['string'], [path]);
       status.textContent = result === 0 ? 'Project loaded: ' + file.name : 'Could not load ' + file.name + '.';
+      event.target.value = '';
+    });
+    document.querySelector('#template-input').addEventListener('change', async (event) => {
+      if (event.target.files.length) await importFiles(event.target.files, '/user/projects');
       event.target.value = '';
     });
     const importSamples = async (event) => {
