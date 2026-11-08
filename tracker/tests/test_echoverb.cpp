@@ -4,6 +4,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <string>
 #include <vector>
 
 namespace {
@@ -28,9 +32,9 @@ Project echoProject() {
   return p;
 }
 
-std::vector<float> render(Project p, const std::vector<float>& input) {
+std::vector<float> render(Project p, const std::vector<float>& input, int sampleRate = rate) {
   MasterEffects effects{};
-  effects.init(rate);
+  effects.init(sampleRate);
   std::vector<float> bus(input), output(input.size(), 0.0f);
   effects.process(nullptr, bus.data(), output.data(), bus.size() / 2, &p);
   return output;
@@ -87,10 +91,12 @@ TEST_CASE("Echoverb diffusion grows over circulations independently of age") {
   p.echoDiffuse = 0;
   auto agedSeparated = render(p, impulse);
   CHECK(cloud[repeat * 2] == doctest::Approx(separated[repeat * 2]));
-  CHECK(std::fabs(cloud[repeat * 4]) > 0.1f);
+  CHECK(std::fabs(cloud[repeat * 4]) > 0.08f);
   CHECK(std::fabs(cloud[repeat * 6]) > 0.01f);
-  for (size_t i = 1; i < cloud.size(); i += 2)
-    CHECK(cloud[i] == 0.0f);
+  double stereoEnergy = 0;
+  for (size_t i = repeat * 4 + 1; i < cloud.size(); i += 2)
+    stereoEnergy += cloud[i] * cloud[i];
+  CHECK(stereoEnergy > 0.01);
   CHECK(occupancy(cloud, repeat * 2, repeat) > occupancy(separated, repeat * 2, repeat) * 2);
   CHECK(occupancy(cloud, repeat * 3, repeat) > occupancy(cloud, repeat * 2, repeat));
   CHECK(occupancy(agedCloud, repeat * 2, repeat) > occupancy(agedSeparated, repeat * 2, repeat) * 1.5);
@@ -100,7 +106,7 @@ TEST_CASE("Echoverb diffusion grows over circulations independently of age") {
 TEST_CASE("Echoverb ageing accumulates inside the feedback loop") {
   std::vector<float> burst(2 * repeat * 5, 0.0f);
   for (int i = 0; i < 128; ++i)
-    burst[i * 2] = i & 1 ? -0.6f : 0.6f;
+    burst[i * 2] = 0.6f * std::sin(i * 2.0f * 3.14159265358979323846f / 16);
   Project p = echoProject();
   auto clean = render(p, burst);
   p.echoAge = 128;
@@ -110,10 +116,12 @@ TEST_CASE("Echoverb ageing accumulates inside the feedback loop") {
   const double agedRatio2 = energy(aged, 2 * repeat, 128) / energy(aged, repeat, 128);
   const double cleanRatio3 = energy(clean, 3 * repeat, 128) / energy(clean, 2 * repeat, 128);
   const double agedRatio3 = energy(aged, 3 * repeat, 128) / energy(aged, 2 * repeat, 128);
-  CHECK(agedRatio2 > cleanRatio2 * 0.75);
-  CHECK(agedRatio2 < cleanRatio2 * 0.98);
-  CHECK(agedRatio3 > cleanRatio3 * 0.75);
-  CHECK(agedRatio3 < cleanRatio3 * 0.98);
+  CHECK(agedRatio2 > cleanRatio2 * 0.3);
+  CHECK(agedRatio3 > cleanRatio3 * 0.3);
+  double difference = 0;
+  for (int n = 2 * repeat; n < 4 * repeat; ++n)
+    difference += std::fabs(aged[n * 2] - clean[n * 2]);
+  CHECK(difference > 1);
 }
 
 TEST_CASE("Echoverb age changes feedback resolution and saturates without another filter") {
@@ -129,27 +137,17 @@ TEST_CASE("Echoverb age changes feedback resolution and saturates without anothe
   const float lp = 1.0f - std::exp(-2.0f * 3.14159265358979323846f * 0.45f);
   const float hp = std::exp(-2.0f * 3.14159265358979323846f * 20.0f / rate);
   const float filtered = 0.8f * lp * hp;
-  int exponent = 0;
-  const float mantissa = std::frexp(filtered, &exponent);
-  const float scaled = mantissa * 2.0f;
-  const float edge = std::max(0.0f, (scaled - (int)scaled - 0.75f) * 4.0f);
-  const float quantized = std::ldexp(((int)scaled + edge) / 2.0f, exponent);
-  const float crushed = (filtered + quantized) * 0.5f;
-  const float compensated = crushed * 0.95f + 0.05f * crushed / (1.0f + 32.0f * crushed);
   CHECK(clean[repeat * 4] == doctest::Approx(filtered * 0.9f));
-  CHECK(aged[repeat * 4] == doctest::Approx(0.9f * compensated));
   CHECK(aged[repeat * 2] == doctest::Approx(clean[repeat * 2]));
-  CHECK(std::fabs(aged[repeat * 4]) > std::fabs(clean[repeat * 4]) * 0.7f);
+  CHECK(energy(aged, repeat * 2, repeat) > energy(clean, repeat * 2, repeat) * 0.3);
   CHECK(std::fabs(aged[repeat * 4]) < std::fabs(clean[repeat * 4]));
   CHECK(std::fabs(moderate[repeat * 4]) > std::fabs(aged[repeat * 4]));
   CHECK(energy(moderate, repeat * 4, repeat) > 0.001);
-  const double cleanDecay = energy(clean, repeat * 3, repeat) / energy(clean, repeat * 2, repeat);
-  CHECK(energy(aged, repeat * 3, repeat) / energy(aged, repeat * 2, repeat) > cleanDecay * 0.5);
+  CHECK(energy(aged, repeat * 3, repeat) > energy(clean, repeat * 3, repeat) * 0.1);
 
   impulse[0] = 0.2f;
   auto quietAged = render(p, impulse);
-  CHECK(std::fabs(aged[repeat * 4] / 0.8f) <
-        std::fabs(quietAged[repeat * 4] / 0.2f));
+  CHECK(aged[repeat * 4] / 0.8f == doctest::Approx(quietAged[repeat * 4] / 0.2f));
 }
 
 TEST_CASE("Echoverb age produces no self-excitation or sustained hiss") {
@@ -166,7 +164,7 @@ TEST_CASE("Echoverb age produces no self-excitation or sustained hiss") {
   CHECK(energy(tail, rate * 31, rate) < 0.0000000001);
 }
 
-TEST_CASE("Echoverb AGE retains low-level repeats without feedback gain") {
+TEST_CASE("Echoverb AGE retains low-level repeats with bounded compensation") {
   for (int age : {128, 255})
   for (float amplitude : {0.8f, 0.02f, 0.0002f}) {
     std::vector<float> burst(2 * repeat * 8, 0.0f);
@@ -182,7 +180,7 @@ TEST_CASE("Echoverb AGE retains low-level repeats without feedback gain") {
     CHECK(energy(aged, repeat * 5, 128) > energy(clean, repeat * 5, 128) * (age == 255 ? 0.1 : 0.3));
     for (int cycle = 2; cycle < 8; ++cycle) {
       CHECK(energy(aged, repeat * cycle, 128) > 0);
-      CHECK(energy(aged, repeat * cycle, 128) <= energy(clean, repeat * cycle, 128) * 1.01);
+      CHECK(energy(aged, repeat * cycle, 128) <= energy(clean, repeat * cycle, 128) * 2.0);
     }
     for (size_t n = 0; n < aged.size(); n += 2) {
       CHECK(std::isfinite(aged[n]));
@@ -214,9 +212,9 @@ TEST_CASE("Echoverb extreme AGE adds distortion rather than just reducing volume
     }
     return std::sqrt(error / (gain * gain * reference));
   };
-  CHECK(distortion(extreme) > 0.06);
+  CHECK(distortion(extreme) > 0.25);
   CHECK(distortion(extreme) > distortion(moderate) * 3);
-  CHECK(energy(extreme, 2 * repeat, 128) > energy(clean, 2 * repeat, 128) * 0.5);
+  CHECK(energy(extreme, 2 * repeat, repeat) > energy(clean, 2 * repeat, repeat) * 0.3);
   CHECK(energy(extreme, repeat, 128) == doctest::Approx(energy(clean, repeat, 128)));
 }
 
@@ -288,6 +286,7 @@ TEST_CASE("Echoverb smooths automation identically across block sizes") {
     b.process(reverbB.data() + 2 * pos, input.data() + 2 * pos, outB.data() + 2 * pos, n, &p);
     pos += n;
   }
+
   p.delayTicks = 12;
   p.delayFeedback = 35;
   p.delayFilterCutoffHz = 1200;
@@ -309,4 +308,74 @@ TEST_CASE("Echoverb smooths automation identically across block sizes") {
     CHECK(outA[i] == doctest::Approx(outB[i]).epsilon(0.00001));
     CHECK(reverbA[i] == doctest::Approx(reverbB[i]).epsilon(0.00001));
   }
+}
+
+TEST_CASE("Echoverb AGE is audible at native sample rates after matching gain") {
+  for (int sampleRate : {32000, 44100, 48000}) {
+    const int spacing = sampleRate / 10, length = sampleRate / 20;
+    Project p = echoProject();
+    std::vector<float> input(2 * spacing * 12, 0.0f);
+    for (int n = 0; n < length; ++n) {
+      const float fade = std::sin(n * 3.14159265358979323846f / length);
+      input[n * 2] = input[n * 2 + 1] =
+        0.4f * fade * std::sin(n * 2.0f * 3.14159265358979323846f * 900.0f / sampleRate);
+    }
+    auto clean = render(p, input, sampleRate);
+    for (int age : {128, 255}) {
+      p.echoAge = age;
+      auto aged = render(p, input, sampleRate);
+      double dot = 0, cleanEnergy = energy(clean, 2 * spacing, length), error = 0;
+      for (int n = 2 * spacing; n < 2 * spacing + length; ++n)
+        dot += clean[n * 2] * aged[n * 2];
+      const double gain = dot / cleanEnergy;
+      for (int n = 2 * spacing; n < 2 * spacing + length; ++n) {
+        const double difference = aged[n * 2] - gain * clean[n * 2];
+        error += difference * difference;
+      }
+      const double residual = std::sqrt(error / energy(aged, 2 * spacing, length));
+      CHECK(residual > (age == 255 ? 0.6 : 0.08));
+      CHECK(energy(aged, 2 * spacing, length) > cleanEnergy * 0.3);
+      CHECK(energy(aged, 5 * spacing, length) > energy(clean, 5 * spacing, length) * 0.1);
+      CHECK(energy(aged, spacing, length) == doctest::Approx(energy(clean, spacing, length)));
+      std::printf("AGE %02X @ %d Hz: gain-matched residual %.3f, second-repeat energy %.3f x clean\n",
+        age, sampleRate, residual, energy(aged, 2 * spacing, length) / cleanEnergy);
+      if (const char* folder = std::getenv("CCT_ECHOVERB_CAPTURE")) {
+        const std::string path = (std::filesystem::path(folder) /
+          ("age-" + std::to_string(age) + "-" + std::to_string(sampleRate) + ".f32")).string();
+        FILE* file = std::fopen(path.c_str(), "wb");
+        REQUIRE(file != nullptr);
+        CHECK(std::fwrite(aged.data(), sizeof(float), aged.size(), file) == aged.size());
+        CHECK(std::fclose(file) == 0);
+        if (age == 128) {
+          const std::string cleanPath = (std::filesystem::path(folder) /
+            ("age-0-" + std::to_string(sampleRate) + ".f32")).string();
+          file = std::fopen(cleanPath.c_str(), "wb");
+          REQUIRE(file != nullptr);
+          CHECK(std::fwrite(clean.data(), sizeof(float), clean.size(), file) == clean.size());
+          CHECK(std::fclose(file) == 0);
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("Echoverb diffusion densifies and spreads a mono tail at 48 kHz") {
+  constexpr int sampleRate = 48000, spacing = 4800;
+  Project p = echoProject();
+  std::vector<float> input(2 * spacing * 8, 0.0f);
+  input[0] = 0.8f;
+  auto separated = render(p, input, sampleRate);
+  p.echoDiffuse = 255;
+  auto cloud = render(p, input, sampleRate);
+  CHECK(cloud[spacing * 2] == separated[spacing * 2]);
+  CHECK(cloud[spacing * 2 + 1] == 0.0f);
+  CHECK(occupancy(cloud, spacing * 2, spacing) > occupancy(separated, spacing * 2, spacing) * 2);
+  CHECK(occupancy(cloud, spacing * 4, spacing) > occupancy(cloud, spacing * 2, spacing));
+  double rightEnergy = 0, lateLeftEnergy = energy(cloud, spacing * 2, spacing * 6);
+  for (int n = spacing * 2; n < spacing * 8; ++n)
+    rightEnergy += cloud[n * 2 + 1] * cloud[n * 2 + 1];
+  CHECK(rightEnergy > lateLeftEnergy * 0.2);
+  CHECK(rightEnergy < lateLeftEnergy * 5);
+  CHECK(energy(cloud, spacing * 2, spacing * 6) + rightEnergy <
+    energy(separated, spacing * 2, spacing * 6) * 1.1);
 }

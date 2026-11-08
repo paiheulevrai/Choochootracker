@@ -695,6 +695,12 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
   // Older CCT/CNI files have no Color line. instrumentClear() zeroes the union.
   if (InstrumentVoicePostSettings* post = instrumentVoicePostSettings(instrument))
     post->filterColor = 128;
+  // Older DigiSophie files omitted the amplitude envelope entirely.
+  if (instrument->type == InstrumentType::DigiSophie) {
+    auto& post = static_cast<InstrumentVoicePostSettings&>(instrument->chip.drumSynth);
+    post.sustain = 255;
+    post.envelopeShape = 0x80;
+  }
 
   // Check version to determine format
   if (projectFileVersion == 1) {
@@ -1033,6 +1039,10 @@ static int saveInstrumentDrumSynth(FILE* file, Instrument* instrument) {
   fprintf(file, "- Drum decay: %hhu\n", d->decay); fprintf(file, "- Tone: %hhu\n", d->tone);
   fprintf(file, "- Sweep: %hhu\n", d->sweep); fprintf(file, "- Noise: %hhu\n", d->noise);
   fprintf(file, "- FM: %hhu\n", d->fm); fprintf(file, "- Drive: %hhu\n", d->drive);
+  if (instrument->type == InstrumentType::DigiSophie) {
+    saveVoicePostSettings(file, d);
+    return 0;
+  }
   fprintf(file, "- Filter enabled: %hhu\n", d->filterEnabled);
   fprintf(file, "- Filter character: %hhu\n", d->filterCharacter);
   fprintf(file, "- Filter mode: %hhu\n", d->filterMode);

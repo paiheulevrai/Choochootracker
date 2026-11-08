@@ -8,7 +8,10 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <vector>
 
 namespace {
@@ -159,6 +162,81 @@ TEST_CASE("DigiSophie Layer shares the prepared drum pool and preserves release 
   for (int n = 0; n < 100; ++n) REQUIRE(chipnomadRender(state.get(), output.data(), 512) == 512);
   std::printf("DigiSophie 8 tracks x 3 Layer children: %.2f ms / 51200 frames; shared voice bytes=%zu\n",
     std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count(), sizeof(DrumSynthVoice));
+}
+
+TEST_CASE("DigiSophie saved and legacy projects render immediately after reopening") {
+  auto p = std::make_unique<Project>();
+  projectInitAY(p.get());
+  fillFXNames();
+  for (int model = 0; model < 4; ++model) {
+    p->instruments[model] = sophieInstrument(model);
+    auto& amp = static_cast<InstrumentVoicePostSettings&>(p->instruments[model].chip.drumSynth);
+    amp.attack = 3; amp.decay = 17; amp.sustain = 210; amp.release = 28; amp.envelopeShape = 0x91;
+  }
+  const char* file = "build/tests/digisophie_reopen.cct";
+  REQUIRE(projectSave(p.get(), file) == 0);
+  std::ifstream saved(file);
+  std::ostringstream legacy;
+  std::string line;
+  while (std::getline(saved, line)) {
+    if (line.find("- Attack: ") == 0 || line.find("- Decay: ") == 0 ||
+        line.find("- Sustain: ") == 0 || line.find("- Release: ") == 0 ||
+        line.find("- Envelope shape: ") == 0) continue;
+    legacy << line << '\n';
+  }
+  saved.close();
+  for (bool oldFormat : {false, true}) {
+    if (oldFormat) {
+      std::ofstream output(file);
+      output << legacy.str();
+      REQUIRE(output.good());
+    }
+    for (int model = 0; model < 4; ++model) {
+      std::unique_ptr<ChipNomadState, decltype(&chipnomadDestroy)> state{chipnomadCreate(), chipnomadDestroy};
+      REQUIRE(projectLoad(&state->project, file) == 0);
+      chipnomadInitChips(state.get(), 48000, nullptr);
+      REQUIRE(chipnomadReserveRenderBuffers(state.get(), 512) == 0);
+      CAPTURE(oldFormat); CAPTURE(model);
+      const auto& amp = static_cast<const InstrumentVoicePostSettings&>(
+        state->project.instruments[model].chip.drumSynth);
+      CHECK(amp.sustain == (oldFormat ? 255 : 210));
+      CHECK(amp.attack == (oldFormat ? 0 : 3));
+      CHECK(amp.decay == (oldFormat ? 0 : 17));
+      CHECK(amp.release == (oldFormat ? 0 : 28));
+      CHECK(amp.envelopeShape == (oldFormat ? 0x80 : 0x91));
+      REQUIRE(chipnomadQueuePlaybackPreviewNote(state.get(), model, 45, model));
+      std::vector<float> samples(1024);
+      REQUIRE(chipnomadRender(state.get(), samples.data(), 512) == 512);
+      CHECK(energy(samples) > 0.000001);
+    }
+  }
+  std::remove(file);
+  projectFree(p.get());
+}
+
+TEST_CASE("DigiSophie provided project renders immediately after opening") {
+  const char* file = std::getenv("CCT_DIGISOPHIE_PROJECT");
+  if (!file) return;
+  auto p = std::make_unique<Project>();
+  projectInit(p.get());
+  fillFXNames();
+  REQUIRE(projectLoad(p.get(), file) == 0);
+  int tested = 0;
+  for (int instrument = 0; instrument < PROJECT_MAX_INSTRUMENTS; ++instrument) {
+    if (p->instruments[instrument].type != InstrumentType::DigiSophie) continue;
+    CAPTURE(instrument);
+    std::unique_ptr<ChipNomadState, decltype(&chipnomadDestroy)> state{chipnomadCreate(), chipnomadDestroy};
+    REQUIRE(projectLoad(&state->project, file) == 0);
+    chipnomadInitChips(state.get(), 48000, nullptr);
+    REQUIRE(chipnomadReserveRenderBuffers(state.get(), 512) == 0);
+    REQUIRE(chipnomadQueuePlaybackPreviewNote(state.get(), 0, 45, instrument));
+    std::vector<float> samples(1024);
+    REQUIRE(chipnomadRender(state.get(), samples.data(), 512) == 512);
+    CHECK(energy(samples) > 0.000001);
+    ++tested;
+  }
+  CHECK(tested > 0);
+  projectFree(p.get());
 }
 
 TEST_CASE("Echoverb CPU comparison with existing send algorithms") {

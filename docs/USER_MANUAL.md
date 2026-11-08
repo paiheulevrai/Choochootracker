@@ -709,6 +709,9 @@ Choose **Drums > DigiSophie** for the MIT-licensed DigiSophie models **FUSE**,
 **BOOM**, **PIPE** and **SHARD**. The original fixed-point oscillator core is
 used, not Digitakt firmware or samples. Tracker notes set pitch; shared volume,
 filter and ADSR controls shape the result.
+Projects and instrument files preserve the ADSR settings. Older DigiSophie
+files without ADSR fields load with a neutral envelope, so they play immediately
+without changing the engine.
 
 The six controls are **Decay**, **Color**, **Sweep**, **Metal**, **FBK** and
 **Fold**. Decay adds a one-shot amplitude falloff (about 18 ms to 4 seconds);
@@ -1586,16 +1589,23 @@ retains the source; subsequent circulations can dissolve into a cloud.
   `08=1/8T`, `0C=1/8`, `12=1/8.`, `18=1/4`, `24=1/4.`, `30=1/2`.
   These divisions use 24 ticks per quarter note, independently of row groove.
 - **FEED**: regeneration and tail length, up to `95%`.
-- **DIFFUSE**: `00-FF`, from distinct repeats to increasingly dense echoes.
+- **DIFFUSE**: `00-FF`, from distinct repeats to increasingly dense stereo
+  echoes. Four allpass stages per channel and an energy-preserving stereo
+  rotation spread the feedback over time and between channels. The first echo
+  retains the input's stereo position; later repeats progressively spread.
 - **AGE**: `00-FF`, aggressive resolution loss and saturation **inside the
   feedback loop**. No extra low-pass: use LP filter separately for darkening.
-  `00-80` retains the gentle range; `81-FF` progressively enters extreme
-  crushing. At `FF`, the relative quantization step reaches 1/2 (16 times
-  coarser than the previous maximum), and saturation drive reaches 32 instead
-  of 2. Quantization follows signal magnitude so quiet tails are not gated
-  away. Extreme crushing retains 50% of the unquantized signal and saturation
-  loss compensation rises from 85% to 95%, without boosting feedback.
-  Existing high AGE settings now sound more degraded; AGE `00` is unchanged.
+  Increasing AGE reduces the feedback's sampling cadence down to 1.2 kHz,
+  lowers its resolution down to a step of 1/8 of a stereo-linked peak
+  envelope, and increases saturation drive. The envelope releases over 50 ms,
+  rather than following individual samples. Abrupt transients refresh the
+  sample hold to avoid losing short hits. This deliberately introduces grain,
+  aliasing and waveform flattening even on quiet repeats.
+  Stereo-linked power tracking provides bounded, smoothed gain compensation:
+  it restores level without blending the unsaturated waveform back in.
+  No added noise or extra low-pass; feedback has a safety ceiling.
+  Existing nonzero AGE and DIFFUSE settings change sound; both at `00` retain
+  the clean separated delay.
 - **HP filter / LP filter**: condition the feedback path.
 - **Return**: fully wet return level; the track send controls how much source
   enters. **To Reverb** sends the wet echoes to the selected shared reverb.
