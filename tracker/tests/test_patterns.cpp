@@ -604,6 +604,155 @@ TEST_CASE_FIXTURE(PatternFixture, "patternEnsureBarExclusive: multiplied bars is
   CHECK(ch->rows[3].transpose == 0);
 }
 
+TEST_CASE_FIXTURE(PatternFixture, "conversion: four shared bars keep only the third bar variation") {
+  auto* p = project.get();
+  p->song[0][0] = p->song[1][0] = 1;
+  p->song[0][1] = 2;
+  for (int b = 0; b < 4; ++b) p->chains[1].rows[b].phrase = 12;
+  p->chains[2].rows[0].phrase = 12;
+  p->phrases[12].rows[0].note = 48;
+  const Phrase source = p->phrases[12];
+  const Chain other = p->chains[2];
+  REQUIRE(convertChainsToPatterns(p) == 0);
+  const int pattern = p->song[0][0];
+  REQUIRE(p->song[1][0] == pattern);
+  const int edited = patternEnsureBarExclusive(p, nullptr, pattern, 2);
+  REQUIRE(edited != EMPTY_VALUE_16);
+  REQUIRE(edited != 12);
+  p->phrases[edited].rows[1].note = 60;
+  p->phrases[edited].rows[2].note = 64;
+  REQUIRE(convertPatternsToChains(p) == 0);
+  CHECK(p->song[0][0] == 1);
+  CHECK(p->song[1][0] == 1);
+  CHECK(p->chains[1].rows[0].phrase == 12);
+  CHECK(p->chains[1].rows[1].phrase == 12);
+  CHECK(p->chains[1].rows[3].phrase == 12);
+  const int variation = p->chains[1].rows[2].phrase;
+  REQUIRE(variation < PROJECT_MAX_PHRASES);
+  CHECK(variation != 12);
+  CHECK(p->phrases[variation].rows[0].note == 48);
+  CHECK(p->phrases[variation].rows[1].note == 60);
+  CHECK(p->phrases[variation].rows[2].note == 64);
+  CHECK(std::memcmp(&source, &p->phrases[12], sizeof(Phrase)) == 0);
+  CHECK(std::memcmp(&other, &p->chains[2], sizeof(Chain)) == 0);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "canonical bar isolation: only the edited chain row changes") {
+  auto* p = project.get();
+  p->song[0][0] = p->song[1][0] = 1;
+  p->song[0][1] = 2;
+  for (int b = 0; b < 4; ++b) {
+    p->chains[1].rows[b].phrase = 12;
+    p->chains[1].rows[b].transpose = 3;
+  }
+  p->chains[2].rows[0].phrase = 12;
+  p->chains[1].rows[7].phrase = 13;
+  p->phrases[12].rows[0].note = 48;
+  const Phrase source = p->phrases[12];
+  const Chain before = p->chains[1];
+  const Chain other = p->chains[2];
+
+  auto writeThirdBar = [&]() {
+    int fresh = chainEnsureBarExclusive(p, 1, 2);
+    if (fresh == EMPTY_VALUE_16) return fresh;
+    p->phrases[fresh].rows[1].note = 60;
+    p->phrases[fresh].rows[2].note = 64;
+    return fresh;
+  };
+
+  SUBCASE("one phrase copy, no chain copy or conversion") {
+    const int edited = writeThirdBar();
+    REQUIRE(edited != EMPTY_VALUE_16);
+    CHECK(edited != 12);
+    CHECK(edited != 13);  // Retained reference after a gap stays reserved.
+    CHECK(p->viewMode == ViewMode::classic);
+    CHECK(p->song[0][0] == 1);
+    CHECK(p->song[1][0] == 1);
+    for (int b = 0; b < 16; ++b) {
+      CHECK(p->chains[1].rows[b].transpose == before.rows[b].transpose);
+      CHECK(p->chains[1].rows[b].phrase == (b == 2 ? edited : before.rows[b].phrase));
+    }
+    CHECK(playbackResolvePhraseAt(p, 0, 0, 2) == edited);
+    CHECK(playbackResolvePhraseAt(p, 1, 0, 2) == edited);
+    CHECK(playbackResolveTransposeAt(p, 0, 0, 2) == 3);
+    CHECK(chainEnsureBarExclusive(p, 1, 2) == edited);
+    CHECK(std::memcmp(&source, &p->phrases[12], sizeof(Phrase)) == 0);
+    CHECK(std::memcmp(&other, &p->chains[2], sizeof(Chain)) == 0);
+
+  }
+
+  SUBCASE("full phrase pool refuses before any mutation") {
+    for (auto& phrase : p->phrases) phrase.rows[0].note = 48;
+    CHECK(writeThirdBar() == EMPTY_VALUE_16);
+    CHECK(std::memcmp(&before, &p->chains[1], sizeof(Chain)) == 0);
+    CHECK(std::memcmp(&other, &p->chains[2], sizeof(Chain)) == 0);
+    CHECK(p->phrases[12].rows[1].note == EMPTY_VALUE_8);
+    CHECK(p->song[0][0] == 1);
+    CHECK(p->song[1][0] == 1);
+  }
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "canonical bar isolation: exclusive bars need no free slot") {
+  auto* p = project.get();
+  p->song[0][0] = p->song[1][0] = 1;
+  p->chains[1].rows[0] = {12, 0xFD};
+  for (auto& phrase : p->phrases) phrase.rows[0].note = 48;
+  CHECK(chainEnsureBarExclusive(p, 1, 0) == 12);
+  CHECK(p->chains[1].rows[0].transpose == 0xFD);
+  CHECK(chainEnsureBarExclusive(p, -1, 0) == EMPTY_VALUE_16);
+  CHECK(chainEnsureBarExclusive(p, 1, 16) == EMPTY_VALUE_16);
+  CHECK(chainEnsureBarExclusive(nullptr, 1, 0) == EMPTY_VALUE_16);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "canonical bar isolation: retained Pattern bars reserve empty slots") {
+  auto* p = project.get();
+  p->chains[1].rows[0].phrase = 12;
+  p->patterns[2].bars[15].phrase = 12;
+  p->patterns[2].bars[14].phrase = 0;
+  int fresh = chainEnsureBarExclusive(p, 1, 0);
+  REQUIRE(fresh != EMPTY_VALUE_16);
+  CHECK(fresh != 12);
+  CHECK(fresh != 0);
+  CHECK(p->patterns[2].bars[15].phrase == 12);
+  CHECK(chainEnsureBarExclusive(p, 1, 0) == fresh);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "canonical bar reconciliation: reuse exact content and reclaim only owned copies") {
+  auto* p = project.get();
+  p->chains[1].rows[0] = p->chains[1].rows[1] = {12, 3};
+  p->phrases[12].rows[0].note = 48;
+  int edited = chainEnsureBarExclusive(p, 1, 1);
+  REQUIRE(edited != EMPTY_VALUE_16);
+  p->phrases[edited].rows[1].note = 60;
+  CHECK(chainReconcileEditedBar(p, 1, 1, edited) == edited);
+  CHECK(p->chains[1].rows[1].transpose == 3);
+  SUBCASE("reverted edit releases its copy") {
+    p->phrases[edited].rows[1].note = EMPTY_VALUE_8;
+    CHECK(chainReconcileEditedBar(p, 1, 1, edited) == 12);
+    CHECK(p->chains[1].rows[1].transpose == 3);
+    CHECK(phraseIsEmpty(p, edited));
+  }
+  SUBCASE("matching another chain keeps retained copies alive") {
+    p->phrases[15] = p->phrases[edited];
+    p->chains[2].rows[0] = {15, 0xFC};
+    p->patterns[3].bars[15].phrase = (uint16_t)edited;
+    CHECK(chainReconcileEditedBar(p, 1, 1, edited) == 15);
+    CHECK(p->chains[1].rows[1].transpose == 3);
+    CHECK(p->phrases[edited].rows[1].note == 60);
+    CHECK(p->patterns[3].bars[15].phrase == edited);
+  }
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "canonical bar reconciliation: unknown ownership never clears authored data") {
+  auto* p = project.get();
+  p->chains[1].rows[0] = {12, 3};
+  p->chains[2].rows[0] = {15, 0};
+  p->phrases[12].rows[0].note = p->phrases[15].rows[0].note = 48;
+  CHECK(chainReconcileEditedBar(p, 1, 0, -1) == 15);
+  CHECK(p->chains[1].rows[0].transpose == 3);
+  CHECK(p->phrases[12].rows[0].note == 48);
+}
+
 TEST_CASE_FIXTURE(PatternFixture, "patternAppendPattern: merges and refuses overflow") {
   // Two 2-bar patterns merge into a 4-bar one; a third 2-bar one would
   // make 6 (fits), but a 14-bar + 3-bar source refuses (17 > 16).

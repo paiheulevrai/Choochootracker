@@ -6,6 +6,8 @@
 #include "utils.h"
 #include "chipnomad_lib.h"
 #include "project_utils.h"
+#include "pattern_utils.h"
+#include "screen_groovebox.h"
 #include "pitch_table_utils.h"
 #include "version.h"
 #include "audio_manager.h"
@@ -135,8 +137,15 @@ int projectLoadFromPath(const char* path) {
     loadResult = projectLoad(&replacement, path);
   }
 
+  bool legacySimplified = loadResult == 0 && replacement.viewMode == ViewMode::simplified;
+  if (legacySimplified && convertPatternsToChains(&replacement) != 0) {
+    snprintf(projectFileError, 40, "Simplified import: slots full");
+    loadResult = 1;
+  }
   if (loadResult == 0) {
     audioManager.replaceProject(&replacement);
+    grooveboxEditorActive = false;
+    canonicalSimplifiedActive = legacySimplified || appSettings.defaultViewMode == 1;
     autosaveLoadFailed = 0;
     projectModified = 0; // Clear modified flag after loading
 
@@ -249,20 +258,15 @@ void projectOpenFromScreenAtPath(const AppScreen* returnScreen, const char* path
   screenSetup(&screenFileBrowser, 0);
 }
 
-// New-project flow: build the project directly in the DEFAULT view mode
-// (appSettings.defaultViewMode — global setting, editable in the View
-// window). No chooser screen; the mode can be switched later via the View
-// window's full conversion.
+// All new projects use canonical chains; the default chooses only the editor.
 static void doNewProject(void) {
   Project replacement;
   projectInitAY(&replacement);
   instrumentEQInitPresets(&replacement);
-  replacement.viewMode =
-    appSettings.defaultViewMode == 1 ? ViewMode::simplified : ViewMode::classic;
-  if (replacement.viewMode == ViewMode::simplified) {
-    projectUtilsSeedSimplifiedPatterns(&replacement);
-  }
+  replacement.viewMode = ViewMode::classic;
   audioManager.replaceProject(&replacement);
+  grooveboxEditorActive = false;
+  canonicalSimplifiedActive = appSettings.defaultViewMode == 1;
   projectModified = 0;
   appSettings.projectFilename[0] = 0;
   exportResetFolderTracking();

@@ -310,6 +310,7 @@ static void captureHomepage() {
 }
 int main(int argc,char** argv){
   if(argc!=2&&argc!=3) return 1;
+  setvbuf(stdout, nullptr, _IONBF, 0);
   output=argv[1];initDefaultAppSettings();appSettings.screenWidth=640;appSettings.screenHeight=480;fontSetCurrent(fontGetDefault());require(!gfxSetup(&appSettings.screenWidth,&appSettings.screenHeight),"SDL dummy setup");
 #ifdef BMP_STREAM_TEST
   if(argc==3 && !strcmp(argv[2],"--bmp-stream-only")) {
@@ -1285,53 +1286,31 @@ int main(int argc,char** argv){
       appChord(keyEdit, keyLeft); appChord(keyEdit, keyLeft);
       require(grooveboxEditorActive && !canonicalSimplifiedActive, "Simple C switches directly to Groovebox");
       appChord(keyEdit, keyLeft);
-      require(currentScreen != &screenViewSettings && grooveboxEditorActive,
-        "pending Reip conversion preserves the active editor");
-      appChord(0, keyDown); appChord(0, keyDown); appChord(0, keyEdit);
-      require(currentScreen == &screenViewSettings && grooveboxEditorActive && p.viewMode == ViewMode::classic,
-        "cancelling Reip conversion preserves Groovebox and Classic backing");
-      appChord(keyEdit, keyRight); appChord(keyEdit, keyRight);
-      require(!grooveboxEditorActive && !canonicalSimplifiedActive, "direct editor cycle returns to Classic");
+      require(currentScreen == &screenViewSettings && !grooveboxEditorActive &&
+        !canonicalSimplifiedActive && p.viewMode == ViewMode::classic,
+        "three-editor cycle returns to Classic without a conversion choice");
       require(!memcmp(original.get(), &p, sizeof(Project)), "canonical mode roundtrip preserves entire project");
       if (grooveboxCellShared(&p, 0, 0, 0)) {
         canonicalSimplifiedActive = true;
         screenPhrase.init(); screenSetup(&screenPhrase, -1); appDraw();
         appChord(keyEdit, keyRight);
-        require(!memcmp(original.get(), &p, sizeof(Project)), "shared canonical note edit does not silently alter other occurrences");
-        require(currentScreen == &screenSelectionPopup, "shared Simple C edit offers independence on release");
-        appChord(0, keyOpt);
-        require(currentScreen == &screenPhrase && !memcmp(original.get(), &p, sizeof(Project)),
-          "Simple C popup cancellation preserves project and returns to pattern");
-        appChord(keyShift, keyLeft);
-        appChord(keyShift, keyOpt);
-        appResetInputState();
-        appButton(keyShift, true);
-        appButton(keyEdit, true); appButton(keyEdit, false);
-        appButton(keyEdit, true); appButton(keyEdit, false);
-        appButton(keyShift, false);
-        require(!grooveboxCellShared(&p, 0, 0, 0),
-          "Song deep-clone gesture isolates the selected chain and all its phrases");
-        appChord(keyShift, keyRight);
-        require(p.song[0][0] != original->song[0][0], "explicit copy creates a different chain");
+        require(currentScreen == &screenPhrase, "shared Simplified edit stays in the editor without a popup");
+        require(!memcmp(p.song, original->song, sizeof(p.song)), "automatic bar isolation preserves every Song occurrence");
         int sourceChain = original->song[0][0];
-        require(!memcmp(&p.chains[sourceChain], &original->chains[sourceChain], sizeof(Chain)),
-          "explicit copy preserves the complete original chain including transpose and gaps");
-        for (int b = 0; b < 16; ++b) {
-          int src = original->chains[sourceChain].rows[b].phrase;
-          if (src < PROJECT_MAX_PHRASES)
-            require(!memcmp(&p.phrases[src], &original->phrases[src], sizeof(Phrase)),
-              "explicit copy preserves every original shared phrase");
+        for (int c = 0; c < PROJECT_MAX_CHAINS; ++c) {
+          for (int b = 0; b < 16; ++b) {
+            require(p.chains[c].rows[b].transpose == original->chains[c].rows[b].transpose,
+              "automatic isolation retains every transpose");
+            if (c != sourceChain || b != 0)
+              require(p.chains[c].rows[b].phrase == original->chains[c].rows[b].phrase,
+                "automatic isolation changes only the edited bar reference");
+          }
         }
-        require(!projectLoad(&p, path.c_str()), "reload shared source for popup confirmation");
-        *pSongRow = *pSongTrack = *pChainRow = 0;
-        screenSetup(&screenPhrase, -1); appDraw();
-        appChord(keyEdit, keyRight);
-        require(currentScreen == &screenSelectionPopup, "shared popup can be reopened");
-        appChord(0, keyEdit);
-        require(currentScreen == &screenPhrase && !grooveboxCellShared(&p, 0, 0, 0),
-          "Simple C popup confirms independence without leaving pattern workflow");
-        require(!memcmp(&p.chains[sourceChain], &original->chains[sourceChain], sizeof(Chain)),
-          "popup independence preserves source chain");
+        int sourcePhrase = original->chains[sourceChain].rows[0].phrase;
+        if (p.chains[sourceChain].rows[0].phrase != sourcePhrase)
+          require(!memcmp(&p.phrases[sourcePhrase], &original->phrases[sourcePhrase], sizeof(Phrase)),
+            "automatic isolation preserves the shared source phrase");
+        require(phraseCount(p) <= originalPhrases + 1, "editing allocates at most one phrase, never a whole pattern");
       }
 
       require(!projectLoad(&p, path.c_str()), "reload source for original Reip comparison");
@@ -1440,7 +1419,106 @@ int main(int argc,char** argv){
     }
     auto& p = chipnomadState->project;
     projectFree(&p); projectInitAY(&p);
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
     canonicalSimplifiedActive = true;
+    grooveboxEditorActive = false;
+    p.song[0][0] = p.song[1][0] = 1;
+    p.song[0][1] = 2;
+    for (int b = 0; b < 4; ++b) p.chains[1].rows[b] = {12, 3};
+    p.chains[2].rows[0] = {12, 0};
+    p.phrases[12].rows[0].note = 48;
+    p.phrases[12].rows[0].instrument = 0;
+    p.phrases[12].rows[0].volume = PHRASE_VOLUME_MAX;
+    auto source = p.phrases[12];
+    *pSongRow = 0; *pSongTrack = 0; *pChainRow = 2;
+    screenPhrase.init(); screenSetup(&screenPhrase, -1); appDraw();
+    require(p.chains[1].rows[2].phrase == 12, "opening shared third bar does not clone");
+    appChord(keyEdit, keyRight);
+    int edited = p.chains[1].rows[2].phrase;
+    require(currentScreen == &screenPhrase && edited != 12 &&
+      p.phrases[edited].rows[0].note == 49, "first gesture edits third bar automatically without popup");
+    require(p.song[0][0] == 1 && p.song[1][0] == 1 &&
+      p.chains[1].rows[0].phrase == 12 && p.chains[1].rows[1].phrase == 12 &&
+      p.chains[1].rows[3].phrase == 12 && p.chains[2].rows[0].phrase == 12 &&
+      !memcmp(&source, &p.phrases[12], sizeof(Phrase)),
+      "A A B A preserves siblings, other chains and linked Song occurrences");
+    appChord(keyEdit, keyRight);
+    require(p.chains[1].rows[2].phrase == edited && p.phrases[edited].rows[0].note == 50,
+      "successive edits reuse the isolated phrase");
+    appChord(keyEdit, keyLeft); appChord(keyEdit, keyLeft);
+    require(p.chains[1].rows[2].phrase == 12 && phraseIsEmpty(&p, edited) &&
+      p.chains[1].rows[2].transpose == 3,
+      "returning to identical content reuses A and frees only the editor-created copy");
+    auto rawKey = [&](SDL_Keycode code, bool down) {
+      MainLoopEventData event = {};
+      event.type = down ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
+      event.data.input = {InputDeviceType::keyboard, (int)code};
+      appOnEvent(event); appDraw();
+    };
+    rawKey(SDLK_ESCAPE, true); rawKey(SDLK_ESCAPE, false);
+    rawKey(SDLK_x, true); rawKey(SDLK_x, false);
+    edited = p.chains[1].rows[2].phrase;
+    require(edited != 12 && p.phrases[edited].rows[0].note == 50 &&
+      !memcmp(&source, &p.phrases[12], sizeof(Phrase)),
+      "desktop key jazz also isolates only the edited bar");
+    rawKey(SDLK_ESCAPE, true); rawKey(SDLK_ESCAPE, false);
+    *pChainRow = 0;
+    screenPhrase.init(); screenSetup(&screenPhrase, -1); appDraw();
+    for (auto& phrase : p.phrases) phrase.rows[0].note = 48;
+    screenSetup(&screenPhrase, -1); appDraw();
+    auto fullPool = std::make_unique<Project>(p);
+    appChord(keyEdit, keyRight);
+    require(currentScreen == &screenPhrase && !memcmp(fullPool.get(), &p, sizeof(Project)),
+      "full phrase pool refuses the edit without popup or partial mutation");
+    int savedDefault = appSettings.defaultViewMode;
+    appSettings.defaultViewMode = 1;
+    // Keep SDL paused: this harness renders on the calling thread.
+    auto savedResume = audioManager.resume;
+    audioManager.resume = [] {};
+    projectCreateNewFromScreen(&screenSong);
+    require(canonicalSimplifiedActive && !grooveboxEditorActive &&
+      p.viewMode == ViewMode::classic &&
+      std::all_of(std::begin(p.song[0]), std::end(p.song[0]),
+        [](uint16_t c) { return c == EMPTY_VALUE_16; }),
+      "new Simplified projects start canonical and unallocated");
+    p.song[0][0] = 1;
+    p.chains[1].rows[0] = {12, 0};
+    p.phrases[12].rows[0].note = 48;
+    require(!convertChainsToPatterns(&p), "build historical Simplified import fixture");
+    const auto legacyPath = std::filesystem::path(output) / "legacy-simplified-import.cct";
+    require(!projectSave(&p, legacyPath.string().c_str()), "historical fixture saves");
+    require(!projectLoadFromPath(legacyPath.string().c_str()), "historical Simplified imports once on load");
+    require(p.viewMode == ViewMode::classic && canonicalSimplifiedActive &&
+      p.phrases[p.chains[p.song[0][0]].rows[0].phrase].rows[0].note == 48,
+      "historical import opens the only Simplified editor with preserved notes");
+    std::filesystem::remove(legacyPath);
+    auto failedImport = std::make_unique<Project>();
+    projectInitAY(failedImport.get());
+    failedImport->viewMode = ViewMode::simplified;
+    failedImport->song[0][0] = 1;
+    failedImport->patternToChainMap[1] = 1;
+    failedImport->chainToPatternMap[1] = 1;
+    failedImport->patterns[1].bars[0].phrase = 12;
+    failedImport->chains[1].rows[0].phrase = 13;
+    for (auto& phrase : failedImport->phrases) phrase.rows[0].note = 48;
+    failedImport->phrases[12].rows[0].note = 60;
+    const auto failedPath = std::filesystem::path(output) / "legacy-full-import.cct";
+    require(!projectSave(failedImport.get(), failedPath.string().c_str()), "full legacy import fixture saves");
+    auto beforeImport = std::make_unique<Project>(p);
+    require(projectLoadFromPath(failedPath.string().c_str()) != 0 &&
+      !memcmp(beforeImport.get(), &p, sizeof(Project)),
+      "failed legacy reconciliation does not replace the live project");
+    require(!projectLoad(failedImport.get(), failedPath.string().c_str()) &&
+      failedImport->viewMode == ViewMode::simplified &&
+      failedImport->phrases[12].rows[0].note == 60,
+      "failed legacy reconciliation leaves the source file intact");
+    projectFree(failedImport.get());
+    std::filesystem::remove(failedPath);
+    audioManager.stop();
+    audioManager.resume = savedResume;
+    appSettings.defaultViewMode = (uint8_t)savedDefault;
+    projectFree(&p); projectInitAY(&p);
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
     *pSongRow = 0; *pSongTrack = 0; *pChainRow = 0;
     p.song[0][0] = 0;
     p.chains[0].rows[0] = {0, 2};
@@ -1815,10 +1893,10 @@ int main(int argc,char** argv){
     appChord(0, keyEdit);
     int initialPhrase = project.chains[project.song[0][0]].rows[0].phrase;
     require(project.phrases[initialPhrase].rows[0].note != EMPTY_VALUE_8, "actual EDIT press inserts note");
-    std::vector<float> previewAudio(1024 * 2);
-    chipnomadRender(chipnomadState, previewAudio.data(), 1024);
     require(chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode == PlaybackMode::phraseRow,
       "note edit uses standard row preview instead of starting the song");
+    std::vector<float> previewAudio(1024 * 2);
+    chipnomadRender(chipnomadState, previewAudio.data(), 1024);
     require(std::any_of(previewAudio.begin(), previewAudio.end(), [](float v) { return std::abs(v) > 0.000001f; }),
       "default AY note editing produces audible preview samples");
     appChord(keyEdit, keyRight);

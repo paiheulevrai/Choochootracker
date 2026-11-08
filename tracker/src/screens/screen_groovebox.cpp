@@ -312,7 +312,8 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
   GrooveboxReferences refs(&p);
   int length = grooveboxTrackLength(&p, row, col);
   int reset = std::clamp((int)appSettings.defaultPatternLength, 1, 16);
-  if (action != GrooveboxAction::makeIndependent && c >= 0 && refs.chains[c] > 1) {
+  if (action != GrooveboxAction::makeIndependent && !canonicalSimplifiedActive &&
+      c >= 0 && refs.chains[c] > 1) {
     screenMessage(MESSAGE_TIME_ERROR, "Shared chain: make independent first");
     return false;
   }
@@ -342,6 +343,8 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     return false;
   }
   bool clone = action == GrooveboxAction::makeIndependent;
+  bool linkedDuplicate = canonicalSimplifiedActive && !clone &&
+    (action == GrooveboxAction::doubleLength || action == GrooveboxAction::duplicateBar);
   int target = c;
   if (c < 0 || clone) target = allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (col + 1) * 16, 16);
   if (target < 0) { screenMessage(MESSAGE_TIME_ERROR, "No free chain"); return false; }
@@ -373,6 +376,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
         if (sources[i] < 0) { screenMessage(MESSAGE_TIME_ERROR, "Select an existing source bar"); return false; }
       }
     }
+    if (linkedDuplicate) continue;
     slots[i] = allocateSlot(refs.freePhrases, PROJECT_MAX_PHRASES, col * 128, 128);
     if (slots[i] < 0) { screenMessage(MESSAGE_TIME_ERROR, "No free phrase: action cancelled"); return false; }
   }
@@ -381,6 +385,11 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
   if (clone) p.chains[target] = p.chains[c];
   else if (c < 0) chainClear(&p.chains[target]);
   for (int i = 0; i < count; ++i) {
+    if (linkedDuplicate) {
+      p.chains[target].rows[first + i] =
+        p.chains[c].rows[action == GrooveboxAction::doubleLength ? i : bar];
+      continue;
+    }
     if (slots[i] < 0) continue;
     undo->savePhrase(slots[i]);
     if (sources[i] >= 0) p.phrases[slots[i]] = p.phrases[sources[i]];

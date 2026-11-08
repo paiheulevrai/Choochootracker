@@ -379,6 +379,23 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox study detail fields align with 
   CHECK_FALSE(projectModified);
 }
 
+TEST_CASE_FIXTURE(GrooveboxUIFixture, "canonical Simplified doubles shared patterns without allocating phrases") {
+  canonicalSimplifiedActive = true;
+  grooveboxEditorActive = false;
+  auto& p = chipnomadState->project;
+  p.song[0][0] = p.song[1][0] = 1;
+  p.chains[1].rows[0] = {12, 0xFD};
+  for (auto& phrase : p.phrases) phrase.rows[0].note = 48;
+  auto before = std::make_unique<Project>(p);
+  REQUIRE(grooveboxAction(GrooveboxAction::doubleLength, 0, 0));
+  CHECK(p.song[0][0] == 1);
+  CHECK(p.song[1][0] == 1);
+  CHECK(p.chains[1].rows[1].phrase == 12);
+  CHECK(p.chains[1].rows[1].transpose == 0xFD);
+  CHECK(std::memcmp(p.phrases, before->phrases, sizeof(p.phrases)) == 0);
+  CHECK(grooveboxTrackLength(&p, 1, 0) == 2);
+}
+
 TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox view entry includes canonical Simplified without converting classic data") {
   screenViewSettings.setup(0);
   REQUIRE(mockScreenData != nullptr);
@@ -394,6 +411,11 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox view entry includes canonical S
   CHECK_FALSE(canonicalSimplifiedActive);
   CHECK(chipnomadState->project.viewMode == ViewMode::classic);
   CHECK_FALSE(projectModified);
+  edit(0, 0, CellEditAction::decrease);
+  CHECK_FALSE(grooveboxEditorActive);
+  CHECK_FALSE(canonicalSimplifiedActive);
+  edit(0, 0, CellEditAction::increase);
+  CHECK(grooveboxEditorActive);
   edit(0, 0, CellEditAction::increase);
   CHECK(canonicalSimplifiedActive);
   edit(0, 0, CellEditAction::increase);

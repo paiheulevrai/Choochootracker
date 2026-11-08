@@ -15,6 +15,7 @@
 #include "screens/selection_popup.h"
 #include "chipnomad_lib.h"
 #include "project_utils.h"
+#include "pattern_utils.h"
 #include "waveform_display.h"
 #include "piano_display.h"
 #include "monitor_display.h"
@@ -809,11 +810,18 @@ int appContinueProject(void) {
   projectInit(&replacement);
   // Restore only after CONTINUE. Never autosave a placeholder from the title.
   int projectLoaded = 0;
+  bool legacySimplified = false;
   FILE* autosaveCheck = fopen(getAutosavePath(), "rb");
   int autosaveExists = autosaveCheck != NULL;
   if (autosaveCheck) fclose(autosaveCheck);
   if (projectLoad(&replacement, getAutosavePath()) == 0) {
     projectLoaded = 1;
+    legacySimplified = replacement.viewMode == ViewMode::simplified;
+    if (legacySimplified &&
+        convertPatternsToChains(&replacement) != 0) {
+      snprintf(projectFileError, 40, "Simplified import: slots full");
+      projectLoaded = 0;
+    }
   }
   // Only a genuine parse failure is worth warning about - no autosave yet
   // (first launch) is normal and falls through to the demo silently.
@@ -835,8 +843,16 @@ int appContinueProject(void) {
     extractFilenameWithoutExtension(defaultProject, appSettings.projectFilename, FILENAME_LENGTH + 1);
   }
   if (!projectLoaded) projectInitAY(&replacement);
+  legacySimplified = legacySimplified || replacement.viewMode == ViewMode::simplified;
+  if (replacement.viewMode == ViewMode::simplified && convertPatternsToChains(&replacement) != 0) {
+    snprintf(projectFileError, 40, "Simplified import: slots full");
+    projectFree(&replacement);
+    return 1;
+  }
   unopenedAutosave = false;
   audioManager.replaceProject(&replacement);
+  grooveboxEditorActive = false;
+  canonicalSimplifiedActive = legacySimplified || appSettings.defaultViewMode == 1;
   screensInitAll();
   return 0;
 }

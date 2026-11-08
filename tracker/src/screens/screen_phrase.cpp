@@ -11,7 +11,6 @@
 #include "synth/sample_voice.h"
 #include "screen_groovebox.h"
 #include "field_style.h"
-#include "selection_popup.h"
 #include <climits>
 #include <algorithm>
 
@@ -42,7 +41,9 @@ static int patternHeaderField = 0;
 // song[*pSongRow][*pSongTrack] but cached so we can detect when it changes).
 static int currentPatternIdx = -1;
 static uint8_t lastBarTranspose = 0;
-static bool canonicalSharedPending = false;
+static bool canonicalBarExclusive = false;
+static int canonicalOwnedPhrase = -1;
+static bool canonicalEditPending = false;
 
 // Mutate reference state (defined below; reset from init/setup and
 // re-captured from draw() when selection mode closes).
@@ -117,6 +118,8 @@ static ScreenData screen = {
 };
 
 static void init(void) {
+  canonicalOwnedPhrase = -1;
+  canonicalEditPending = false;
   lastBarTranspose = 0;
   lastNote = 48;
   lastInstrument = 0;
@@ -140,7 +143,9 @@ static void init(void) {
 }
 
 static void setup(int input) {
-  canonicalSharedPending = false;
+  canonicalBarExclusive = false;
+  canonicalOwnedPhrase = -1;
+  canonicalEditPending = false;
   Project* p = &chipnomadState->project;
   if (p->viewMode == ViewMode::simplified) {
     // Resolve the phrase from the current pattern bar.
@@ -1121,6 +1126,9 @@ static void triggerRowPreview(int row) {
 }
 
 static void refreshCanonicalPhrase() {
+  canonicalBarExclusive = false;
+  canonicalOwnedPhrase = -1;
+  canonicalEditPending = false;
   currentPatternIdx = chipnomadState->project.song[*pSongRow][*pSongTrack];
   int length = grooveboxTrackLength(&chipnomadState->project, *pSongRow, *pSongTrack);
   *pChainRow = std::clamp(*pChainRow, 0, std::max(0, length - 1));
@@ -1143,38 +1151,49 @@ static bool canonicalCanExtend() {
   return true;
 }
 
-static void canonicalIndependentCancel() {
-  screenSetup(&screenPhrase, -1);
-}
-
-static void canonicalIndependentChoice(int value) {
-  if (value == 0 && grooveboxAction(GrooveboxAction::makeIndependent, *pSongRow, *pSongTrack))
-    screenMessage(MESSAGE_TIME, "Independent: edit this pattern again");
-  canonicalIndependentCancel();
-}
-
-static bool canonicalSharingAllowed() {
-  if (grooveboxCellShared(&chipnomadState->project, *pSongRow, *pSongTrack, *pChainRow)) {
-    screenMessage(MESSAGE_TIME_ERROR, "Used elsewhere: make independent?");
-    canonicalSharedPending = true;
-    return false;
-  }
-  return true;
-}
-
-static bool canonicalWritable() {
+static bool canonicalWritable(bool phraseEdit = true) {
   if (!canonicalSimplifiedActive || chipnomadState->project.viewMode != ViewMode::classic) return true;
-  if (!canonicalSharingAllowed()) return false;
   if (!hasPhrase) {
     if (!canonicalCanExtend()) return false;
     if (!grooveboxAction(GrooveboxAction::resetLength, *pSongRow, *pSongTrack)) return false;
     refreshCanonicalPhrase();
   }
+  if (hasPhrase && phraseEdit && !canonicalBarExclusive) {
+    int exclusive = chainEnsureBarExclusive(&chipnomadState->project, currentPatternIdx, *pChainRow);
+    if (exclusive == EMPTY_VALUE_16) {
+      screenMessage(MESSAGE_TIME_ERROR, "No free phrase: edit cancelled");
+      return false;
+    }
+    if (exclusive != phraseIdx) canonicalOwnedPhrase = exclusive;
+    phraseIdx = exclusive;
+    phraseRows = chipnomadState->project.phrases[phraseIdx].rows;
+    canonicalBarExclusive = true;
+  }
+  if (hasPhrase && phraseEdit) canonicalEditPending = true;
   return hasPhrase;
 }
 
+static void canonicalFinishEdit() {
+  if (!canonicalSimplifiedActive || !canonicalEditPending || isFxEdit) return;
+  canonicalEditPending = false;
+  int reconciled = chainReconcileEditedBar(&chipnomadState->project,
+    currentPatternIdx, *pChainRow, canonicalOwnedPhrase);
+  if (reconciled == EMPTY_VALUE_16) {
+    screenMessage(MESSAGE_TIME_ERROR, "Invalid edited bar: reuse cancelled");
+    canonicalOwnedPhrase = -1;
+    return;
+  }
+  if (reconciled != phraseIdx) {
+    phraseIdx = reconciled;
+    phraseRows = chipnomadState->project.phrases[phraseIdx].rows;
+    canonicalOwnedPhrase = -1;
+    canonicalBarExclusive = false;
+    projectModified = 1;
+    chipnomadQueueProjectRefresh(chipnomadState);
+  }
+}
+
 static int editCell(int col, int row, CellEditAction action) {
-  if (!canonicalWritable()) return 0;
   int handled = 0;
   uint16_t maxVolume = PHRASE_VOLUME_MAX;
 
@@ -1272,7 +1291,6 @@ static int onEdit(int col, int row, CellEditAction action) {
         }
         operation = GrooveboxAction::shorten;
       } else return 0;
-      if (!canonicalSharingAllowed()) return 1;
       int length = grooveboxTrackLength(p, *pSongRow, *pSongTrack);
       if ((operation == GrooveboxAction::emptyBar || operation == GrooveboxAction::doubleLength ||
           (operation == GrooveboxAction::resetLength && appSettings.defaultPatternLength > length)) &&
@@ -1286,7 +1304,7 @@ static int onEdit(int col, int row, CellEditAction action) {
       else return 0;
       handled = 1;
     } else if (patternHeaderField == 3) {
-      if (!canonicalWritable()) return 1;
+      if (!canonicalWritable(false)) return 1;
       handled = edit8noLimit(action, &p->chains[currentPatternIdx].rows[*pChainRow].transpose,
         &lastBarTranspose, p->pitchTable.octaveSize);
     }
@@ -1678,17 +1696,6 @@ static int inputScreenNavigation(int keys, int tapCount) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
-  if (!isKeyDown && keys == 0 && canonicalSharedPending) {
-    canonicalSharedPending = false;
-    static const SelectionItem choices[] = {
-      {"Make pattern independent", 0, nullptr, 0, "Clone this chain and its bars. Other occurrences stay unchanged. New IDs may affect conditional FX. Repeat the edit after confirmation."},
-      {"Cancel", 1, nullptr, 0, "Keep shared references and all content unchanged."},
-    };
-    selectionPopupSetup("SHARED PATTERN", choices, 2, 0,
-      canonicalIndependentChoice, canonicalIndependentCancel, true);
-    screenSetup(&screenSelectionPopup, 0);
-    return 1;
-  }
   // ── Pattern header navigation (simplified view only) ──────────────────────
   // When the cursor is on the pattern header (patternHeaderField != 0),
   // LEFT/RIGHT move between the Length / Loop fields and UP/DOWN exit the
@@ -1754,6 +1761,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
 
       fullRedraw();
     }
+    if (!isKeyDown && keys == 0) canonicalFinishEdit();
     return 1;
   }
 
@@ -1766,10 +1774,15 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   if (canonicalSimplifiedActive && isKeyDown && screen.selectMode == 1 &&
       (keys == (keyOpt | keyLeft) || keys == (keyOpt | keyRight) ||
        keys == (keyOpt | keyUp) || keys == (keyOpt | keyDown)) && !canonicalWritable()) return 1;
-  if (fillInput(isKeyDown, keys)) return 1;
+  if (fillInput(isKeyDown, keys)) {
+    if (!isKeyDown && keys == 0) canonicalFinishEdit();
+    return 1;
+  }
 
   if (screen.selectMode == 0 && inputScreenNavigation(keys, tapCount)) return 1;
-  return screenInput(&screen, isKeyDown, keys, tapCount);
+  int handled = screenInput(&screen, isKeyDown, keys, tapCount);
+  if (!isKeyDown && keys == 0) canonicalFinishEdit();
+  return handled;
 }
 
 static LoopRange getLoopRange(void) {
@@ -1892,6 +1905,7 @@ int phraseKeyJazzHandleRawKey(InputCode input, int isDown) {
   }
 
   if (!keyJazzEnabled) return 0;
+  if (!isDown) canonicalFinishEdit();
 
   if (inputIsShiftKey(input)) return 1; // Swallow: see inputIsShiftKey's doc comment
 

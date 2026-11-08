@@ -4,24 +4,21 @@ ChooChooTracker is an 8-track music tracker for handheld consoles.
 
 ## Three-view text prototype
 
-Project -> View -> Mode cycles through Classic, Simplified, Groovebox and
-**Simple C** (canonical Simplified experiment) with
-EDIT + LEFT/RIGHT. Simplified retains Reip's existing conversion and editing
-behaviour. Entering Groovebox from Simplified uses that same conversion screen
-to return the project to Classic first; cancelling does not enter Groovebox.
-Classic and Groovebox use the same Song/Chains/Phrases without conversion.
+Project -> View -> Mode cycles through Classic, Groovebox and Simplified with
+EDIT + LEFT/RIGHT. There is one Simplified behaviour: bars isolate automatically
+when edited, directly in the canonical Song/Chains/Phrases arrangement.
+Changing editor does not convert the project.
 The Groovebox choice is session-only; Default mode remains Classic/Simplified.
 
-### Simple C: Simplified without view conversion
+### Simplified: on-the-fly bar editing
 
-Simple C reuses the Phrase editor's Simplified navigation and header, but each
+Simplified reuses Reip's Phrase editor navigation and header, but each
 pattern is an existing chain and each bar is a chain row. The project remains
-Classic internally. Classic, Simple C and Groovebox switch directly without
+Classic internally. Classic, Simplified and Groovebox switch directly without
 rewriting Song, changing phrase IDs, baking transposes, or allocating on browse.
-The original Simplified choice remains available for comparison; entering it
-still uses Reip's conversion. Existing Simplified-format projects must first
-return to Classic through that converter; this experiment does not replace
-the importer or writer.
+Historical Pattern-format projects are reconciled to chains once when loaded,
+using the existing importer. A failed import leaves the current project and
+source file unchanged. The combined writer still retains historical arrays/maps.
 
 - Song SHIFT + RIGHT opens the pattern/Phrase editor directly, skipping Chain.
   SHIFT + LEFT returns to Song; SHIFT + RIGHT opens Instrument/Table as usual.
@@ -36,6 +33,8 @@ the importer or writer.
   B + A resets the default. Limits are 1..16. Added bars reference independent
   no-event phrases; no-event does not force silence. New empty patterns are
   materialized at the configured default length on the first edit, not browse.
+  Doubling copies bar references; each bar isolates automatically on editing.
+  Length edits affect every Song occurrence of the same pattern.
 - Loop BAR uses the existing phrase loop; PAT uses the existing chain loop.
   Song transport remains unchanged. Loop is not a new shared bar clock.
 - TR edits the current chain row's signed pitch-table-step transpose directly;
@@ -46,26 +45,26 @@ the importer or writer.
   At least two populated occurrences per track are required. Every affected
   track is checked before mutation; overlength, gaps with retained references,
   or exhaustion refuse the operation. New chain IDs may affect conditional FX.
-- Shared chains/phrases are browseable but protected against implicit edits.
-  A blocked edit explains that the material is used elsewhere; use Classic
-  to inspect the references, or deep-clone the selected occurrence in Song.
-  In Song selection mode, hold SHIFT and press EDIT twice (keep SHIFT held).
-  This copies the chain and all referenced bars, including retained data.
-  Other occurrences stay unchanged. Repeat the edit afterward.
-  Copies consume slots and can change ID-dependent FX. Classic remains available
-  for deliberate linked editing.
+- Opening a bar changes nothing. Editing a shared phrase copies only that bar,
+  without a popup or a whole-pattern copy. A pattern `A A A A` becomes `A A B A`;
+  other patterns using A stay unchanged. Song occurrences of the same pattern
+  remain linked. Classic still allows deliberate shared-phrase editing.
+- At the end of an editing gesture, the edited bar can reuse an existing
+  referenced phrase with exactly identical stored content. Its transpose stays
+  unchanged. Only a known editor-created copy is cleared, and only if no retained
+  reference needs it; other unreferenced authored data is left intact.
+  Phrase identity can affect MOD visit counters. No note transposition is baked.
+- To make a whole Song occurrence independent, the existing manual deep clone
+  remains available: in Song selection, hold SHIFT and press EDIT twice.
 
 Length stops at the first absent phrase, matching Classic playback. References
 after that gap remain stored; extending across the gap is refused.
 Resource exhaustion does not partially apply the shared structural operations.
-Simple C is a session-only editor choice, not a fourth arrangement or file mode;
+Simplified is an editor choice, not another arrangement or file mode;
 saved projects retain Classic backing and the combined prototype's writer.
 
-In Simple C, attempting a shared-data edit opens **Make pattern independent /
-Cancel** after releasing the buttons. Confirming clones the chain and all its
-bars; repeat the edit afterwards. Cancel changes nothing. The header remains
-Pattern / Length / TR / Loop, without a permanent copy/status control.
-New IDs may affect conditional FX; shared editing remains available in Classic.
+The header remains Pattern / Length / TR / Loop, without a permanent
+copy/status control. Slot exhaustion cancels the edit with an error message.
 
 In Groovebox mode, **SCENES** replaces Song in the navigation, using the same
 canonical arrangement and all its selection, copy/paste, clone and row-editing

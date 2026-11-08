@@ -98,7 +98,7 @@ static void viewStatic(void) {
 //   Classic:    the LSDJ-style song -> chain -> phrase structure
 static const char* modeDescription(ViewMode mode) {
   if (mode == ViewMode::classic && canonicalSimplifiedActive)
-    return "Simplified over chains: no conversion. Shared data needs explicit Copy.";
+    return "Patterns over chains. Bars isolate automatically on edit; no view conversion.";
   if (mode == ViewMode::classic && grooveboxEditorActive)
     return "Text step grid over classic chains. Shared cells are read-only.";
   return mode == ViewMode::simplified
@@ -187,7 +187,7 @@ static void viewField(int, int row, CellState state) {
     gfxClearRect(23, 2, 10, 1);
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
     gfxPrint(23, 2, p && p->viewMode == ViewMode::simplified ? "Simplified" :
-      grooveboxEditorActive ? "Groovebox" : canonicalSimplifiedActive ? "Simple C" : "Classic");
+      grooveboxEditorActive ? "Groovebox" : canonicalSimplifiedActive ? "Simplified" : "Classic");
   } else if (row == 1) {
     gfxSetFgColor(cs.textDefault);
     gfxPrint(0, 3, "Default mode");
@@ -232,21 +232,15 @@ static int viewEdit(int, int row, CellEditAction action) {
   if (!p) return 0;
 
   if (row == 0) {
-    // Active mode: ONLY EDIT + LEFT/RIGHT (increase/decrease) changes the
-    // toggle and opens the conversion screen for the OTHER mode. A plain
-    // EDIT tap changes nothing (the warning prompt belongs to an actual
-    // mode switch, not to merely visiting the row).
+    // Historical Pattern-format projects use the import converter once.
     if (action == CellEditAction::increase || action == CellEditAction::decrease) {
-      int current = p->viewMode == ViewMode::simplified ? 1 : grooveboxEditorActive ? 2 :
-        canonicalSimplifiedActive ? 3 : 0;
-      int next = (current + (action == CellEditAction::increase ? 1 : 3)) % 4;
-      if (next == 2 && p->viewMode == ViewMode::simplified) {
-        screenViewConvertSetup(&screenGrooveboxAfterConversion, ViewMode::classic);
-      } else if (next == 1 || p->viewMode == ViewMode::simplified) {
-        screenViewConvertSetup(&screenViewSettings, next == 1 ? ViewMode::simplified : ViewMode::classic);
+      int current = grooveboxEditorActive ? 1 : canonicalSimplifiedActive ? 2 : 0;
+      int next = (current + (action == CellEditAction::increase ? 1 : 2)) % 3;
+      if (p->viewMode == ViewMode::simplified) {
+        screenViewConvertSetup(&screenViewSettings, ViewMode::classic);
       } else {
-        grooveboxEditorActive = next == 2;
-        canonicalSimplifiedActive = next == 3;
+        grooveboxEditorActive = next == 1;
+        canonicalSimplifiedActive = next == 2;
         screenFullRedraw(&viewData);
       }
       return 1;

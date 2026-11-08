@@ -1,4 +1,37 @@
-# Reip Simplified, Simple C and Groovebox: comparison prototype
+# Simplified on-the-fly workflow and historical comparison
+
+## Current behaviour
+
+There is now one Simplified choice, alongside Classic and Groovebox. It keeps
+Reip's pattern editor workflow but writes directly to chains. Opening a bar
+does not allocate. The first write isolates only a shared phrase reference,
+without a popup; every Song occurrence of that chain remains linked.
+Length edits also affect all occurrences. Doubling copies references and
+defers phrase isolation until editing.
+
+At the end of an editing gesture, the edited bar may reuse a referenced
+phrase with exactly identical stored content. The bar transpose is retained.
+Only a known unused editor-created copy is cleared; retained chain/Pattern references
+are checked. Changed phrase identities may change MOD visit-counter behaviour.
+No allocation, content search or reconciliation runs in the audio callback.
+
+New projects have Classic backing regardless of the default editor. Historical
+Pattern-format files are reconciled once on load, before replacing the live
+project. Conversion failure does not replace the current project or rewrite
+the source file. Historical conversion helpers and serialized arrays/maps
+remain for import compatibility; they are no longer another selectable workflow.
+
+Validation of this revision: Windows application and native harness build;
+121 focused doctest cases / 101,186 assertions pass. All three native selectors
+below pass, with the canonical selector repeated three times. Actual inputs
+cover automatic isolation, successive edits, identical-content reuse, desktop
+key jazz, full-slot refusal, canonical new projects, successful legacy import
+and failed import preserving the live project and source file. The harness
+keeps SDL callbacks paused during project-load tests because it renders audio
+synchronously.
+
+The historical comparison below describes the earlier four-choice prototype,
+not the current interface.
 
 This is a proposal for discussion with Reip, not a replacement of his work or
 a claim that his conversion is broken. His pattern workflow is the UX reference.
@@ -107,9 +140,9 @@ colours and waveform alignment. Captures are developer output, not release
 assets. An optional local console reproduction project may be supplied through
 `CCT_GROOVEBOX_REPRO_PROJECT`; no private console project is distributed.
 
-For manual comparison, choose Project -> View -> Mode. The choices are Classic,
-Reip Simplified, Groovebox and Simple C. From Classic, EDIT + LEFT selects
-Simple C; another LEFT selects Groovebox. Keep copies of your projects.
+For manual testing, choose Project -> View -> Mode. The choices are Classic,
+Groovebox and Simplified. From Classic, EDIT + LEFT selects Simplified;
+another LEFT selects Groovebox. Keep copies of your projects.
 
 The native harness also supports full-song rendering:
 
@@ -125,7 +158,7 @@ arranged-row coverage and effect tails matter, not just a short opening render.
 Hardware input/audio/suspend, console CPU cost, complete-song equivalence and
 historical file compatibility still need independent validation.
 
-Current integration validation: Windows comparison executable builds; all three
+Previous four-choice integration validation: Windows comparison executable builds; all three
 native comparison selectors above pass, including shared-popup cancel/confirm.
 The focused doctest selection passes 115 cases / 101,100 assertions:
 

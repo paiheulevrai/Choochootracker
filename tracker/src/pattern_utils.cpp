@@ -54,6 +54,66 @@ int patternFindClosestEmptyPhrase(Project* p, int targetIdx) {
   return EMPTY_VALUE_16;
 }
 
+int chainEnsureBarExclusive(Project* p, int chainIdx, int barIdx) {
+  if (!p || p->viewMode != ViewMode::classic || chainIdx < 0 ||
+      chainIdx >= PROJECT_MAX_CHAINS || barIdx < 0 || barIdx >= 16)
+    return EMPTY_VALUE_16;
+  auto& bar = p->chains[chainIdx].rows[barIdx];
+  int phrase = bar.phrase;
+  if (phrase >= PROJECT_MAX_PHRASES) return EMPTY_VALUE_16;
+  bool used[PROJECT_MAX_PHRASES] = {};
+  bool shared = false;
+  for (int c = 0; c < PROJECT_MAX_CHAINS; ++c) {
+    for (int r = 0; r < 16; ++r) {
+      int f = p->chains[c].rows[r].phrase;
+      if (f >= PROJECT_MAX_PHRASES) continue;
+      used[f] = true;
+      if (f == phrase && (c != chainIdx || r != barIdx)) shared = true;
+    }
+  }
+  for (const auto& pattern : p->patterns) {
+    for (const auto& b : pattern.bars) {
+      if (b.phrase >= PROJECT_MAX_PHRASES) continue;
+      used[b.phrase] = true;
+      if (b.phrase == phrase) shared = true;
+    }
+  }
+  if (!shared) return phrase;
+  for (int fresh = 0; fresh < PROJECT_MAX_PHRASES; ++fresh) {
+    if (used[fresh] || !phraseIsEmpty(p, fresh)) continue;
+    p->phrases[fresh] = p->phrases[phrase];
+    bar.phrase = (uint16_t)fresh;
+    return fresh;
+  }
+  return EMPTY_VALUE_16;
+}
+
+int chainReconcileEditedBar(Project* p, int chainIdx, int barIdx, int ownedPhrase) {
+  if (!p || p->viewMode != ViewMode::classic || chainIdx < 0 ||
+      chainIdx >= PROJECT_MAX_CHAINS || barIdx < 0 || barIdx >= 16 ||
+      ownedPhrase < -1 || ownedPhrase >= PROJECT_MAX_PHRASES)
+    return EMPTY_VALUE_16;
+  int editedPhrase = p->chains[chainIdx].rows[barIdx].phrase;
+  if (editedPhrase >= PROJECT_MAX_PHRASES ||
+      (ownedPhrase >= 0 && editedPhrase != ownedPhrase)) return EMPTY_VALUE_16;
+  uint16_t references[PROJECT_MAX_PHRASES] = {};
+  for (const auto& chain : p->chains)
+    for (const auto& row : chain.rows)
+      if (row.phrase < PROJECT_MAX_PHRASES) ++references[row.phrase];
+  for (const auto& pattern : p->patterns)
+    for (const auto& bar : pattern.bars)
+      if (bar.phrase < PROJECT_MAX_PHRASES) ++references[bar.phrase];
+  for (int f = 0; f < PROJECT_MAX_PHRASES; ++f) {
+    if (f == editedPhrase || !references[f] ||
+        memcmp(&p->phrases[f], &p->phrases[editedPhrase], sizeof(Phrase)) != 0)
+      continue;
+    p->chains[chainIdx].rows[barIdx].phrase = (uint16_t)f;
+    if (ownedPhrase >= 0 && references[ownedPhrase] == 1) phraseClear(&p->phrases[ownedPhrase]);
+    return f;
+  }
+  return editedPhrase;
+}
+
 int findClosestEmptyPattern(Project* p, int startIdx) {
   if (startIdx < 0) startIdx = 0;
   if (startIdx >= PROJECT_MAX_PATTERNS) startIdx = PROJECT_MAX_PATTERNS - 1;

@@ -82,6 +82,15 @@ int patternAppendPattern(Project* p, int targetIdx, int srcIdx);
 int patternEnsureBarExclusive(Project* p, struct ConversionPhraseState* st,
   int patternIdx, int barIdx);
 
+// Canonical Simplified: isolate only this chain row, preserving its transpose
+// and every Song occurrence of the chain. Never called from the audio thread.
+// Returns EMPTY_VALUE_16 without mutation on invalid input or slot exhaustion.
+int chainEnsureBarExclusive(Project* p, int chainIdx, int barIdx);
+// Reuse exact stored content after an edit. Only a known editor-created copy
+// can be cleared, and only after checking all retained references. Pass -1
+// when ownership is unknown: matching can rebind, but never clears old data.
+int chainReconcileEditedBar(Project* p, int chainIdx, int barIdx, int ownedPhrase);
+
 // Find the closest unallocated phrase index to `patternIdx`, scanning
 // outward from `patternIdx`. Returns EMPTY_VALUE_16 if phrases are full.
 // "Unallocated" means the phrase is empty AND not referenced by any chain
