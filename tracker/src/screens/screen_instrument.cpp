@@ -72,6 +72,7 @@ static SelectionItem instrumentTypeSynth[] = {
 };
 static SelectionItem instrumentTypeDrums[] = {
   {NULL, (int)InstrumentType::DrumSynth, NULL, 0},
+  {NULL, (int)InstrumentType::DigiSophie, NULL, 0},
   {NULL, (int)InstrumentType::Sintered, NULL, 0},
 };
 static SelectionItem instrumentTypeSample[] = {
@@ -96,7 +97,7 @@ static SelectionItem instrumentTypeUtility[] = {
 };
 static const SelectionItem instrumentTypeCategories[] = {
   {"CHIP", -1, instrumentTypeChip, 7},
-  {"DRUMS", -1, instrumentTypeDrums, 2},
+  {"DRUMS", -1, instrumentTypeDrums, sizeof(instrumentTypeDrums) / sizeof(instrumentTypeDrums[0])},
   {"SAMPLE", -1, instrumentTypeSample, 4},
   {"SYNTH", -1, instrumentTypeSynth, sizeof(instrumentTypeSynth) / sizeof(instrumentTypeSynth[0])},
   {"UTILITY", -1, instrumentTypeUtility, 3},
@@ -445,13 +446,15 @@ static const char* layerChildLabel(const Instrument& child) {
     return modelCatalogName(child.type, child.chip.braids.model);
   if (child.type == InstrumentType::Plaits || child.type == InstrumentType::PlaitsAlt)
     return modelCatalogName(child.type, child.chip.plaits.engine);
+  if (child.type == InstrumentType::DigiSophie)
+    return digiSophieModelName((int)child.chip.drumSynth.engine);
   if (child.type == InstrumentType::DrumSynth) {
     static const char* names[] = {"Bogie/Kick", "Bogie/Snare", "Bogie/Hat", "Bogie/Clap", "Bogie/Tom", "Bogie/Rim", "Bogie/FM", "Bogie/Noise", "Bogie/Cowbell", "Bogie/Cymbal", "Bogie/Shaker", "Bogie/Clave"};
     int model = (int)child.chip.drumSynth.engine;
     return names[model >= 0 && model < (int)DrumSynthEngine::totalCount ? model : 0];
   }
   if (child.type == InstrumentType::Sintered) {
-    static const char* names[] = {"Sintered/Knot", "Sintered/Shard", "Sintered/Burst", "Sintered/Comb", "Sintered/Logic", "Sintered/Melt", "Sintered/Squall"};
+    static const char* names[] = {"Sintered/Knot", "Sintered/Crease", "Sintered/Burst", "Sintered/Comb", "Sintered/Logic", "Sintered/Melt", "Sintered/Squall"};
     int model = (int)child.chip.sintered.model;
     return names[model >= 0 && model < (int)SinteredModel::totalCount ? model : 0];
   }
@@ -597,7 +600,7 @@ static void init(void) {
   screenInstrumentNone.cursorRow = 0;
   screenInstrumentNone.cursorCol = 0;
   SelectionItem* groups[] = {instrumentTypeChip, instrumentTypeSample, instrumentTypeSynth, instrumentTypeDrums, instrumentTypeUtility};
-  const int counts[] = {7, 4, sizeof(instrumentTypeSynth) / sizeof(instrumentTypeSynth[0]), 2, 3};
+  const int counts[] = {7, 4, sizeof(instrumentTypeSynth) / sizeof(instrumentTypeSynth[0]), sizeof(instrumentTypeDrums) / sizeof(instrumentTypeDrums[0]), 3};
   for (int group = 0; group < 5; ++group)
     for (int item = 0; item < counts[group]; ++item)
       groups[group][item].label = getInstrumentDefinition((InstrumentType)groups[group][item].value)->uiName;
@@ -682,6 +685,7 @@ static bool liveCell(int control, int* col, int* row) {
     case InstrumentType::Plaits:
     case InstrumentType::PlaitsAlt: pageCell = instrumentPlaitsLiveCell; break;
     case InstrumentType::MME: pageCell = instrumentMMELiveCell; break;
+    case InstrumentType::DigiSophie:
     case InstrumentType::DrumSynth: pageCell = instrumentDrumSynthLiveCell; break;
     case InstrumentType::Sintered: pageCell = instrumentSinteredLiveCell; break;
     case InstrumentType::AChChid: pageCell = instrumentAChChidLiveCell; break;

@@ -569,6 +569,12 @@ static int loadModulation(FILE* file, Instrument* instrument) {
       if (instrument->modulation[i].type == ModulationType::StickVelocity) {
         instrument->modulation[i].type = ModulationType::StickLinear;
       }
+      if (instrument->modulation[i].type == ModulationType::Audio &&
+          (instrument->modulation[i].p5 >= (uint8_t)AudioModulationMode::totalCount ||
+           !audioModulationModeSupported(instrument->type, audioModulationMode(instrument->modulation[i])))) {
+        snprintf(projectFileError, sizeof(projectFileError), "Unsupported Audio modulation mode");
+        return 1;
+      }
       if (projectFileVersion < 3 && instrument->type == InstrumentType::Sample &&
           instrument->modulation[i].destination >= 5) {
         instrument->modulation[i].destination += 2;
@@ -746,6 +752,7 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
       case InstrumentType::PlaitsAlt:
         if (loadInstrumentPlaits(file, instrument)) return 1;
         break;
+      case InstrumentType::DigiSophie:
       case InstrumentType::DrumSynth:
         if (loadInstrumentDrumSynth(file, instrument)) return 1;
         break;
@@ -800,9 +807,10 @@ int instrumentLoadData(FILE* file, Instrument* instrument, Project* p) {
   } else if (instrument->type == InstrumentType::Sample &&
              instrument->chip.sample.filterCutoffHz > FILTER_CUTOFF_MAX_HZ) {
     instrument->chip.sample.filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
-  } else if (instrument->type == InstrumentType::DrumSynth) {
+  } else if (instrument->type == InstrumentType::DrumSynth || instrument->type == InstrumentType::DigiSophie) {
     InstrumentDrumSynth* d = &instrument->chip.drumSynth;
     if ((uint8_t)d->engine >= (uint8_t)DrumSynthEngine::totalCount) d->engine = DrumSynthEngine::kick;
+    if (instrument->type == InstrumentType::DigiSophie && (uint8_t)d->engine > 3) d->engine = DrumSynthEngine::kick;
     if (d->filterCutoffHz > FILTER_CUTOFF_MAX_HZ) d->filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
   } else if (instrument->type == InstrumentType::MME) {
     InstrumentMME* m = &instrument->chip.mme;
@@ -1146,6 +1154,7 @@ int instrumentSaveData(FILE* file, int idx, Instrument* instrument) {
     case InstrumentType::PlaitsAlt:
       saveInstrumentPlaits(file, instrument);
       break;
+    case InstrumentType::DigiSophie:
     case InstrumentType::DrumSynth:
       saveInstrumentDrumSynth(file, instrument);
       break;

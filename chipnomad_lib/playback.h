@@ -29,6 +29,21 @@ enum class LiveQueueAction : uint8_t {
   stopUrgent,
 };
 
+struct PlaybackRepeatState {
+  FXCell last;
+  int8_t increment;
+  uint8_t active;
+  uint8_t limited;
+  uint8_t limit;
+};
+
+struct PlaybackEuclideanState {
+  uint8_t active;
+  uint8_t pulses;
+  uint8_t length;
+  uint8_t step;
+};
+
 struct PlaybackTableState {
   uint8_t tableIdx;
   uint8_t baseSpeed;
@@ -38,6 +53,8 @@ struct PlaybackTableState {
   uint8_t fxAuxState[16][4]; // Used for stateful effects like HOP
   FXId heldCommand[4];
   PlaybackFXState heldFX[4];
+  PlaybackRepeatState repeat[4];
+  FXCell currentFX[4];
 };
 
 struct PlaybackNoteState {
@@ -125,6 +142,8 @@ struct PlaybackTrackState {
   uint32_t conditionVisits[16];
   uint32_t conditionRandom;
   uint16_t conditionPhrase;
+  PlaybackRepeatState repeat[3];
+  PlaybackEuclideanState euclidean;
 
   // What the engine last played for liveInstrument's sound controls.
   uint8_t liveInstrument;
@@ -135,7 +154,7 @@ struct PlaybackTrackState {
   uint8_t chordVoiceCount;
   uint8_t chordPitchBase[CHORD_MAX_VOICES];
   uint8_t chordPitchFinal[CHORD_MAX_VOICES];
-  // Cached phrase row data
+  // Cached phrase row, including resolved REP/RTO values for DEL.
   PhraseRow currentPhraseRow;
   // FX auxillary state data for the phrase (used by HOP)
   uint8_t fxAuxState[16][3];

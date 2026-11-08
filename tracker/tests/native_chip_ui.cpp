@@ -1112,6 +1112,94 @@ int main(int argc,char** argv){
     captureHomepage();
     chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
   }
+  if(argc==3 && !strcmp(argv[2],"--echoverb-sophie-only")) {
+    auto& p=chipnomadState->project;
+    p.delayAlgorithm=0;
+    screenSetup(&screenMixer,0);key(1,keyDown|keyShift);key(0,0);
+    require(screenMixerGetPage()==2,"Delay page entered");
+    for(int n=0;n<2;++n) { key(1,keyEdit|keyRight);key(0,0); }
+    require(p.delayAlgorithm==2,"third Delay algorithm selected");
+    const auto ticks=p.delayTicks,feed=p.delayFeedback,diffuse=p.echoDiffuse,age=p.echoAge;
+    const auto hp=p.echoHighpassCutoffHz,lp=p.delayFilterCutoffHz;
+    for(int row=1;row<=8;++row) {
+      key(1,keyDown);key(0,0);
+      key(1,keyEdit|keyRight);key(0,0);
+    }
+    require(p.delayTicks!=ticks&&p.delayFeedback!=feed,"TIME and FEED editable");
+    require(p.echoDiffuse!=diffuse&&p.echoAge!=age,"DIFFUSE and AGE independent fields");
+    require(p.echoHighpassCutoffHz!=hp&&p.delayFilterCutoffHz!=lp,"Echoverb HP and LP editable");
+    capture("echoverb-controls");
+    auto& i=prepareHomepageInstrument(InstrumentType::DigiSophie,"Metallic Sophie");
+    screenSetup(&screenInstrument,0);appDraw();
+    for(int model=0;model<4;++model) {
+      if(model) require(screenInstrumentDrumSynth.onEdit(0,3,CellEditAction::increase),"Sophie model editable");
+      require((int)i.chip.drumSynth.engine==model,"four Sophie models accessible");
+      char name[32];snprintf(name,sizeof(name),"sophie-%s",digiSophieModelName(model));capture(name);
+    }
+    require(screenInstrumentDrumSynth.onEdit(0,3,CellEditAction::increase),"model boundary edit handled");
+    require((int)i.chip.drumSynth.engine==3,"Sophie model stops at SHARD");
+    for(int row=4;row<=9;++row) require(screenInstrumentDrumSynth.onEdit(0,row,CellEditAction::increase),"Sophie macro editable");
+    printf("Echoverb and DigiSophie production UI controls passed\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--delay-time-hints-only")) {
+    for(int algorithm=0;algorithm<3;++algorithm) {
+      chipnomadState->project.delayAlgorithm=algorithm;
+      screenSetup(&screenMixer,0);key(1,keyDown|keyShift);key(0,0);
+      for(int row=0;row<3;++row) { key(1,keyDown);key(0,0); }
+      const auto before=framePixels();
+      char name[32];snprintf(name,sizeof(name),"delay-time-%d",algorithm);capture(name);
+      key(1,keyDown);key(0,0);
+      const auto after=framePixels();
+      require(!std::equal(before.begin()+14*24*640,before.begin()+18*24*640,after.begin()+14*24*640),"time hint only shown on Time");
+    }
+    printf("All delay time visual hints passed\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--drum-selector-only")) {
+    prepareHomepageInstrument(InstrumentType::DrumSynth,"Bogie");
+    screenSetup(&screenInstrument,0);appDraw();
+    require(instrumentCommonOnEdit(0,0,CellEditAction::increase),"advance from Bogie");
+    require(chipnomadState->project.instruments[0].type==InstrumentType::DigiSophie,"DigiSophie in Drums");
+    require(instrumentCommonOnEdit(0,0,CellEditAction::increase),"advance from DigiSophie");
+    require(chipnomadState->project.instruments[0].type==InstrumentType::Sintered,"Sintered in Drums");
+    screenSetup(&screenInstrument,0);appDraw();
+    require(screenInstrumentSintered.onEdit(0,3,CellEditAction::increase),"Sintered model editable");
+    require(chipnomadState->project.instruments[0].chip.sintered.model==SinteredModel::shard,"CREASE retains model ID");
+    capture("sintered-crease");
+    require(instrumentCommonOnEdit(0,0,CellEditAction::decrease),"reverse from Sintered");
+    require(chipnomadState->project.instruments[0].type==InstrumentType::DigiSophie,"reverse Drums navigation");
+    printf("All three Drums engines selectable\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--audio-wave-only")) {
+    auto& instrument=prepareHomepageInstrument(InstrumentType::SCWF,"Audio modulation");
+    instrument.modulation[0]={ModulationType::Audio,1,64,0,16,80,64,0};
+    screenSetup(&screenModulation,0);appDraw();
+    for(int row=0;row<7;++row) { key(1,keyDown);key(0,0); }
+    for(int type=0;type<(int)InstrumentType::totalCount;++type) {
+      if(type==(int)InstrumentType::none || type==(int)InstrumentType::Midi) continue;
+      getInstrumentFunctions((InstrumentType)type).init(&instrument);
+      if(instrument.type==InstrumentType::none) continue;
+      instrument.modulation[0]={ModulationType::Audio,1,64,0,16,80,64,0};
+      currentScreen->fullRedraw();appDraw();
+      for(int mode=1;mode<4;++mode) {
+        key(1,keyEdit|keyRight);key(0,0);
+        if(instrument.modulation[0].p5!=mode)
+          printf("Audio mode mismatch: engine %d, expected %d, actual %u\n",type,mode,instrument.modulation[0].p5);
+        require(instrument.modulation[0].p5==mode,"same four audio modes on every audio engine");
+        require(instrument.modulation[0].destination==1,"direct mode destination");
+        if(type==(int)InstrumentType::SCWF) capture(audioModulationModeName((AudioModulationMode)mode));
+      }
+      key(1,keyEdit|keyRight);key(0,0);
+      require(instrument.modulation[0].p5==3,"RING is last mode on every audio engine");
+      const char* pitchName=instrumentModDestinationNameForInstrument(&instrument,2);
+      require(!strcmp(pitchName,instrument.type==InstrumentType::AudioIn?"Cutoff":
+        instrument.type==InstrumentType::Layer?"L1 Cents":"Pitch"),"WAVE preserves engine destinations");
+    }
+    printf("Same four Audio modes on every audio engine; pitched engines retain Pitch\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--layer-only")) {
     auto& project=chipnomadState->project;
     getInstrumentFunctions(InstrumentType::Layer).init(&project.instruments[0]);
@@ -1347,7 +1435,7 @@ int main(int argc,char** argv){
   for(int fx=fxFBR;fx<=fxFBK;++fx) {
     const char* description=helpFXDescription((FX)fx,0);
     require(description&&description[0]&&strchr(description,'\n'),"native FX has title and description");
-    uint8_t value[]={uint8_t(fx),0};require(helpFXHint(value,0,0)[0],"native FX has value hint");
+    FXCell value{FXId(fx),0};require(helpFXHint(value,0,0)[0],"native FX has value hint");
   }
   for(auto type:{InstrumentType::SegaPSG,InstrumentType::GBPulse,InstrumentType::GBNoise}) {
     getInstrumentFunctions(type).init(&chipnomadState->project.instruments[0]);

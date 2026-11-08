@@ -485,9 +485,9 @@ Braids 使用标准的 ChooChooTracker 多模滤波器和 ADSR 包络。
 
 ### Sintered
 
-**Sintered** 是原生单次数字打击合成器。音符设定基频；六个模型为 `Knot`、`Shard`、`Burst`、`Comb`、`Logic` 和 `Melt`。每个模型拥有 **Decay**、**Mod** 和 **Motion**，以及三个模型专属控制：Knot 的 Ratio/Spread/Fold，Shard 的 Ratio/Feedback/Bite，Burst 的 Noise/Color/Feedback，Comb 的 Time/Damping/Regen，Logic 的 Rate/Pattern/Crush，Melt 的 Ratio/Chaos/Drive。**Mod** 总是内部耦合深度。
+**Sintered** 是原生单次数字打击合成器。音符设定基频；六个模型为 `Knot`、`Crease`、`Burst`、`Comb`、`Logic` 和 `Melt`。每个模型拥有 **Decay**、**Mod** 和 **Motion**，以及三个模型专属控制：Knot 的 Ratio/Spread/Fold，Crease 的 Ratio/Feedback/Bite，Burst 的 Noise/Color/Feedback，Comb 的 Time/Damping/Regen，Logic 的 Rate/Pattern/Crush，Melt 的 Ratio/Chaos/Drive。**Mod** 总是内部耦合深度。
 
-Motion 是内部宏包络：值低于 `80` 使用 AD 形状，`80` 禁用，超过 `80` 使用衰退形状。越远离中心，包络越快。目标固定分配，确保 Sintered 在 tracker 模式中表现可预测：Knot 动画 Mod/Fold；Shard 动画 Feedback/Bite；Burst 动画 Noise/Color/Feedback；Comb 动画 Damping/Regen；Logic 动画 Rate/Crush；Melt 动画 Chaos/Drive。所有模型在音符触发时重置状态，内部反馈界限固定，确保击打可重复。
+Motion 是内部宏包络：值低于 `80` 使用 AD 形状，`80` 禁用，超过 `80` 使用衰退形状。越远离中心，包络越快。目标固定分配，确保 Sintered 在 tracker 模式中表现可预测：Knot 动画 Mod/Fold；Crease 动画 Feedback/Bite；Burst 动画 Noise/Color/Feedback；Comb 动画 Damping/Regen；Logic 动画 Rate/Crush；Melt 动画 Chaos/Drive。所有模型在音符触发时重置状态，内部反馈界限固定，确保击打可重复。
 
 ### MonkSynth
 

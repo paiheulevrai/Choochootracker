@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <algorithm>
 
 static constexpr float pi = 3.14159265358979323846f;
 
@@ -11,10 +12,18 @@ void DrumSynthVoice::init(float sampleRate) {
   instrument_ = nullptr; active_ = false; age_ = duration_ = envelope_ = 0.0f;
   frequency_ = 110.0f; noiseLow_ = 0.0f; randomState_ = 0x43525452u;
   memset(phase_, 0, sizeof(phase_)); post_.init(sampleRate_);
+  ds_voice_init(&sophie_);
+  sophieRead_ = DS_BLOCK_SIZE;
+  digiSophie_ = sophieTrigger_ = false;
+  sophiePosition_ = sophieLeft_ = sophieRight_ = 0.0f;
 }
 
 void DrumSynthVoice::configure(const InstrumentDrumSynth* instrument, float pitchCents,
-                               float gain, uint16_t cutoffHz, uint8_t resonance) {
+                               float gain, uint16_t cutoffHz, uint8_t resonance, bool digiSophie) {
+  const bool decayChanged = !instrument_ || digiSophie_ != digiSophie ||
+    (instrument && parameters_.decay != instrument->decay);
+  if (digiSophie_ != digiSophie) kill();
+  digiSophie_ = digiSophie;
   if (instrument) parameters_ = *instrument;
   instrument_ = instrument ? &parameters_ : nullptr;
   frequency_ = 440.0f * powf(2.0f, (pitchCents - 6900.0f) / 1200.0f);
@@ -23,6 +32,24 @@ void DrumSynthVoice::configure(const InstrumentDrumSynth* instrument, float pitc
   post_.setFilter(instrument_->filterEnabled != 0, instrument_->filterCharacter,
     instrument_->filterMode, instrument_->filterSlope24dB != 0, cutoffHz, resonance / 255.0f,
     instrument_->filterColor);
+  if (digiSophie_) {
+    sophieParams_.phase_inc = (uint16_t)std::clamp(frequency_ * 65536.0f / 24000.0f, 8.0f, 24576.0f);
+    sophieParams_.model = std::min<uint8_t>((uint8_t)instrument_->engine, 3);
+    sophieParams_.color = instrument_->tone / 2;
+    sophieParams_.sweep = (int8_t)((int)instrument_->sweep / 2 - 64);
+    sophieParams_.metal = instrument_->noise / 2;
+    sophieParams_.feedback = instrument_->fm / 2;
+    sophieParams_.fold = instrument_->drive / 2;
+    sophieParams_.velocity = 127;
+    if (decayChanged) {
+      const float decay = instrument_->decay / 255.0f;
+      sophieDecay_ = expf(-6.9f / (sampleRate_ * (0.018f + decay * decay * 4.0f)));
+    }
+    const auto& amp = static_cast<const InstrumentVoicePostSettings&>(*instrument_);
+    const auto time = [](uint8_t value) { const float n = value / 255.0f; return n * n * 5.0f; };
+    post_.setEnvelope(true, time(amp.attack), time(amp.decay), amp.sustain / 255.0f,
+      time(amp.release), amp.envelopeShape);
+  } else post_.setEnvelope(false, 0, 0, 1, 0, 0);
 }
 
 void DrumSynthVoice::noteOn() {
@@ -32,8 +59,15 @@ void DrumSynthVoice::noteOn() {
   float d = instrument_->decay / 255.0f;
   duration_ = 0.018f + d * d * (instrument_->engine == DrumSynthEngine::hat ? 1.55f : 2.0f);
   post_.noteOn(true);
+  if (digiSophie_) {
+    sophieRead_ = DS_BLOCK_SIZE;
+    sophieTrigger_ = true;
+    sophiePosition_ = 0;
+    sophieLeft_ = sophieSample();
+    sophieRight_ = sophieSample();
+  }
 }
-void DrumSynthVoice::noteOff() { }
+void DrumSynthVoice::noteOff() { if (digiSophie_) post_.noteOff(); }
 void DrumSynthVoice::kill() { active_ = false; post_.kill(); }
 
 float DrumSynthVoice::random() {
@@ -49,9 +83,36 @@ float DrumSynthVoice::oscillator(float frequency, int shape, int slot) {
   return sinf(2.0f * pi * p);
 }
 
+float DrumSynthVoice::sophieSample() {
+  if (sophieRead_ == DS_BLOCK_SIZE) {
+    ds_voice_render(&sophie_, &sophieParams_, sophieTrigger_, sophieBuffer_, DS_BLOCK_SIZE);
+    ds_fold_block(sophieBuffer_, DS_BLOCK_SIZE, sophieParams_.fold);
+    sophieTrigger_ = false;
+    sophieRead_ = 0;
+  }
+  return sophieBuffer_[sophieRead_++] * (1.0f / 2147483648.0f);
+}
+
 void DrumSynthVoice::render(float* output, size_t frames) {
   if (!output) return;
   if (!active_ || !instrument_) { memset(output, 0, frames * sizeof(float)); return; }
+  if (digiSophie_) {
+    const float step = 48000.0f / sampleRate_;
+    for (size_t i = 0; i < frames; ++i) {
+      if (!post_.envelopeActive() || envelope_ < 0.001f) {
+        kill(); memset(output + i, 0, (frames - i) * sizeof(float)); break;
+      }
+      output[i] = post_.process((sophieLeft_ + (sophieRight_ - sophieLeft_) * sophiePosition_) * envelope_);
+      envelope_ *= sophieDecay_;
+      sophiePosition_ += step;
+      while (sophiePosition_ >= 1.0f) {
+        sophiePosition_ -= 1.0f;
+        sophieLeft_ = sophieRight_;
+        sophieRight_ = sophieSample();
+      }
+    }
+    return;
+  }
   const float tone = instrument_->tone / 255.0f, sweep = instrument_->sweep / 255.0f;
   const float noise = instrument_->noise / 255.0f, fm = instrument_->fm / 255.0f;
   const float drive = 1.0f + instrument_->drive / 255.0f * 5.5f;

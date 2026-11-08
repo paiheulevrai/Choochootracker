@@ -20,6 +20,16 @@ static float mixerGain(uint8_t value) {
 void MasterEffects::init(float sampleRate) {
   sampleRate_ = sampleRate > 0.0f ? sampleRate : 48000.0f;
   reverbFrames_.clear();
+  static const float diffusionSeconds[6] = {0.0071f, 0.0113f, 0.0173f,
+                                             0.0083f, 0.0131f, 0.0197f};
+  size_t diffusionSize = 0;
+  for (int i = 0; i < 6; ++i) {
+    echoDiffusionOffset_[i] = diffusionSize;
+    echoDiffusionLength_[i] = std::max<size_t>(1, (size_t)(sampleRate_ * diffusionSeconds[i]));
+    diffusionSize += echoDiffusionLength_[i];
+  }
+  echoDiffusion_.resize(diffusionSize);
+  echoSmoothing_ = 1.0f - expf(-1.0f / (0.020f * sampleRate_));
   // Clear retained storage once; resize value-initializes only new samples.
   reset();
   delayLine_.resize((size_t)(sampleRate_ * 8.0f) * 2);
@@ -29,6 +39,12 @@ void MasterEffects::init(float sampleRate) {
 void MasterEffects::resetDelay() {
   std::fill(delayLine_.begin(), delayLine_.end(), 0.0f);
   std::fill(springLine_.begin(), springLine_.end(), 0.0f);
+  std::fill(echoDiffusion_.begin(), echoDiffusion_.end(), 0.0f);
+  std::fill(echoDiffusionWrite_, echoDiffusionWrite_ + 6, 0);
+  std::fill(echoHighpassInput_, echoHighpassInput_ + 2, 0.0f);
+  std::fill(echoHighpassOutput_, echoHighpassOutput_ + 2, 0.0f);
+  std::fill(echoParameters_, echoParameters_ + 8, 0.0f);
+  echoParametersReady_ = false;
   delayWrite_ = springWrite_ = 0;
   delayFilterState_[0] = delayFilterState_[1] = 0.0f;
   tapeFilterState_[0] = tapeFilterState_[1] = 0.0f;
@@ -105,11 +121,12 @@ void MasterEffects::process(float* reverbBus, float* delayBus, float* output,
   if (!project || !output) return;
 
   reverbTailFrames_ = reverbTailFrames_ > frames ? reverbTailFrames_ - frames : 0;
-  delayTailFrames_ = delayTailFrames_ > frames ? delayTailFrames_ - frames : 0;
+  if (project->delayAlgorithm != 2)
+    delayTailFrames_ = delayTailFrames_ > frames ? delayTailFrames_ - frames : 0;
 
   if (delayBus && !delayLine_.empty()) {
     size_t capacity = delayLine_.size() / 2;
-    uint8_t algorithm = project->delayAlgorithm == 1 ? 1 : 0;
+    uint8_t algorithm = project->delayAlgorithm <= 2 ? project->delayAlgorithm : 0;
     if (algorithm != activeDelayAlgorithm_) {
       resetDelay();
       activeDelayAlgorithm_ = algorithm;
@@ -145,6 +162,79 @@ void MasterEffects::process(float* reverbBus, float* delayBus, float* output,
         if (++delayWrite_ == capacity) delayWrite_ = 0;
       }
       if (kOptimizeEffects && tailActive) delayTailFrames_ = delaySamples + frames;
+    } else if (algorithm == 2) {
+      // Coefficients and gains are smoothed per sample, independent of host block size.
+      const float targets[8] = {
+        std::max(1.0f, std::min(sampleRate_ * project->delayTicks / tickRate, (float)capacity - 2.0f)),
+        feedback, lowpassCoefficient(project->delayFilterCutoffHz),
+        highpassCoefficient(project->echoHighpassCutoffHz), returnGain, reverbSend,
+        project->echoDiffuse / 255.0f, project->echoAge / 255.0f
+      };
+      if (!echoParametersReady_) {
+        std::copy(targets, targets + 8, echoParameters_);
+        echoParametersReady_ = true;
+      }
+      for (size_t i = 0; i < frames; ++i) {
+        for (int p = 0; p < 8; ++p)
+          echoParameters_[p] += echoSmoothing_ * (targets[p] - echoParameters_[p]);
+        const float diffuse = echoParameters_[6];
+        const float age = echoParameters_[7];
+        const float extreme = std::max(0.0f, (age - 128.0f / 255.0f) * (255.0f / 127.0f));
+        const float extremeCurve = extreme * extreme;
+        const float quantizeStep = (1.0f + 15.0f * age * age +
+          240.0f * extremeCurve) * (1.0f / 512.0f);
+        const float quantizeScale = age > 0.0f ? 1.0f / quantizeStep : 0.0f;
+        const float saturation = 2.0f * age + 30.0f * extremeCurve;
+        const float crushMix = age * (1.0f - 0.5f * extremeCurve);
+        const float saturationMix = 0.15f - 0.10f * extremeCurve;
+        float wet[2] = {delayRead(echoParameters_[0], 0), delayRead(echoParameters_[0], 1)};
+        bool active = false;
+        for (int channel = 0; channel < 2; ++channel) {
+          float loop = lowpass(wet[channel], echoParameters_[2], delayFilterState_[channel]);
+          loop = highpass(loop, echoParameters_[3], echoHighpassInput_[channel],
+                          echoHighpassOutput_[channel]);
+          if (age > 0.0f) {
+            // Relative steps preserve quiet tails; neither stage adds loop gain.
+            const float limited = std::max(-8.0f, std::min(8.0f, loop));
+            int exponent = 0;
+            const float mantissa = frexpf(limited, &exponent);
+            const float scaled = mantissa * quantizeScale;
+            const int whole = (int)scaled;
+            const float edge = std::max(0.0f, (fabsf(scaled - whole) - 0.75f) * 4.0f);
+            const float quantized = ldexpf((whole + (scaled < 0.0f ? -edge : edge)) * quantizeStep, exponent);
+            loop += crushMix * (quantized - loop);
+            const float saturated = loop / (1.0f + saturation * fabsf(loop));
+            loop += saturationMix * (saturated - loop);
+          }
+          float cloud = loop;
+          for (int stage = 0; stage < 3; ++stage) {
+            const int index = channel * 3 + stage;
+            const size_t position = echoDiffusionOffset_[index] + echoDiffusionWrite_[index];
+            const float delayed = echoDiffusion_[position];
+            const float spread = delayed - 0.65f * cloud;
+            echoDiffusion_[position] = cloud + 0.65f * spread;
+            cloud = spread;
+            if (++echoDiffusionWrite_[index] == echoDiffusionLength_[index])
+              echoDiffusionWrite_[index] = 0;
+            active |= fabsf(delayed) > tailThreshold;
+          }
+          loop += diffuse * (cloud - loop);
+          const float input = delayBus[i * 2 + channel];
+          delayLine_[delayWrite_ * 2 + channel] = input + loop * echoParameters_[1];
+          output[i * 2 + channel] += wet[channel] * echoParameters_[4];
+          if (reverbBus) reverbBus[i * 2 + channel] += wet[channel] * echoParameters_[5];
+          active |= fabsf(input) > tailThreshold || fabsf(wet[channel]) > tailThreshold ||
+                    fabsf(loop) > tailThreshold;
+        }
+        if (active) delayTailFrames_ = (size_t)echoParameters_[0] + (size_t)(sampleRate_ * 2.0f) + 1;
+        else if (delayTailFrames_) {
+          --delayTailFrames_;
+          if (targets[0] > echoParameters_[0] + 0.01f)
+            delayTailFrames_ = std::max(delayTailFrames_,
+              (size_t)targets[0] + (size_t)(sampleRate_ * 2.0f) + 1);
+        }
+        if (++delayWrite_ == capacity) delayWrite_ = 0;
+      }
     } else {
       static constexpr uint8_t divisionTicks[] = {6, 8, 12, 18, 24, 36, 48};
       static constexpr uint8_t headMasks[] = {1, 2, 4, 3, 5, 6, 7};

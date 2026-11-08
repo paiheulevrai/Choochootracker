@@ -2,6 +2,18 @@
 #include <algorithm>
 #include <vector>
 #include "project_instruments.h"
+
+const char* audioModulationModeName(AudioModulationMode mode) {
+  static const char* names[] = {"ENV", "WAVE", "AM", "RING"};
+  const int index = (int)mode;
+  return index >= 0 && index < (int)AudioModulationMode::totalCount ? names[index] : "ENV";
+}
+
+bool audioModulationModeSupported(InstrumentType type, AudioModulationMode mode) {
+  if (mode == AudioModulationMode::envelope || mode == AudioModulationMode::wave) return true;
+  return (mode == AudioModulationMode::amplitude || mode == AudioModulationMode::ring) &&
+    type != InstrumentType::Midi && type != InstrumentType::none;
+}
 #include "project.h"
 #include "monk_patch.h"
 #include "sid_patch.h"
@@ -38,7 +50,7 @@ int modulationIsLiveStick(ModulationType type) {
 
 int modulationIsAdditive(ModulationType type) {
   return type == ModulationType::LFO || type == ModulationType::SlowLFO ||
-         type == ModulationType::Sequence || modulationIsLiveStick(type);
+         type == ModulationType::Sequence || type == ModulationType::Audio || modulationIsLiveStick(type);
 }
 
 uint8_t sequenceGatePattern(const Modulation* modulation) { return modulation->p3 & 63; }
@@ -335,6 +347,23 @@ static int initDrumSynthInstrument(Instrument* instrument) {
 }
 static int freeDrumSynthInstrument(Instrument* instrument) { freeCommon(instrument); return 0; }
 
+const char* digiSophieModelName(int model) {
+  static const char* names[] = {"FUSE", "BOOM", "PIPE", "SHARD"};
+  return names[std::clamp(model, 0, 3)];
+}
+static const char* modNameDigiSophie(int index) {
+  static const char* names[] = {"Off", "Volume", "Pitch", "Decay", "Color", "Sweep", "Metal", "Feedback", "Fold", "Cutoff", "Reso"};
+  return names[index];
+}
+static int initDigiSophieInstrument(Instrument* instrument) {
+  initDrumSynthInstrument(instrument);
+  instrument->type = InstrumentType::DigiSophie;
+  auto& d = instrument->chip.drumSynth;
+  d.decay = 160; d.tone = 128; d.sweep = 128;
+  d.noise = 128; d.fm = 64; d.drive = 0;
+  return 0;
+}
+
 static const char* modNameMonk(int index) {
   static const char* names[] = {"-", "Volume", "Pitch", "Vowel", "Voice", "Breath", "Glide", "Vibrato", "Vib rate"};
   return index >= 0 && index < 9 ? names[index] : "-";
@@ -462,6 +491,7 @@ static const InstrumentModDestination destSCWF[] = {N,D("Volume",instrumentNoFX,
 static const InstrumentModDestination destBYOWTBL[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),O("Detune",fxSDT,255,InstrumentMotionValue::raw,5),O("Mix",fxSMX,255,InstrumentMotionValue::raw,6),O("Index A",fxBIA,255,InstrumentMotionValue::raw,3),O("Index B",fxBIB,255,InstrumentMotionValue::raw,4),D("Cutoff",fxSCF2,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxSRS2,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destAChChid[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Cutoff",fxACF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxARS,255,InstrumentMotionValue::raw),D("EnvMod",fxAEM,255,InstrumentMotionValue::raw),D("Decay",fxADC,255,InstrumentMotionValue::raw),D("Accent",fxAAC,255,InstrumentMotionValue::raw),O("Timbre",fxATM,16384,InstrumentMotionValue::raw,3),O("Color",fxACL,16384,InstrumentMotionValue::raw,4)};
 static const InstrumentModDestination destDrumSynth[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Decay",fxDDC,255,InstrumentMotionValue::raw),D("Tone",fxDTO,255,InstrumentMotionValue::raw),D("Sweep",fxDSW,255,InstrumentMotionValue::raw),D("Noise",fxDNO,255,InstrumentMotionValue::raw),D("FM",fxDFM,255,InstrumentMotionValue::raw),D("Drive",fxDDR,255,InstrumentMotionValue::raw),D("Cutoff",fxDCF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxDRS,255,InstrumentMotionValue::raw)};
+static const InstrumentModDestination destDigiSophie[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Decay",fxDDC,255,InstrumentMotionValue::raw),D("Color",fxDTO,255,InstrumentMotionValue::raw),D("Sweep",fxDSW,255,InstrumentMotionValue::raw),D("Metal",fxDNO,255,InstrumentMotionValue::raw),D("Feedback",fxDFM,255,InstrumentMotionValue::raw),D("Fold",fxDDR,255,InstrumentMotionValue::raw),D("Cutoff",fxDCF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxDRS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destMonk[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Vowel",fxMWV,255,InstrumentMotionValue::raw),D("Voice",fxMIN,255,InstrumentMotionValue::raw),D("Breath",fxMAM,255,InstrumentMotionValue::raw),D("Glide",fxMFL,255,InstrumentMotionValue::raw),D("Vibrato",fxMFB,255,InstrumentMotionValue::raw),D("Vib rate",fxMSH,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destMME[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Waves",fxMWV,255,InstrumentMotionValue::raw),D("Interval",fxMIN,255,InstrumentMotionValue::raw),D("Amount",fxMAM,255,InstrumentMotionValue::raw),D("Flow",fxMFL,255,InstrumentMotionValue::raw),D("Feedback",fxMFB,255,InstrumentMotionValue::raw),D("Shaper",fxMSH,255,InstrumentMotionValue::raw),D("Cutoff",fxMCF,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxMRS,255,InstrumentMotionValue::raw)};
 static const InstrumentModDestination destSintered[] = {N,D("Volume",instrumentNoFX,255,InstrumentMotionValue::raw),D("Pitch",instrumentNoFX,0,InstrumentMotionValue::raw),D("Decay",fxSDC,255,InstrumentMotionValue::raw),D("Mod",fxSMD,255,InstrumentMotionValue::raw),D("A",fxSA,255,InstrumentMotionValue::raw),D("B",fxSB,255,InstrumentMotionValue::raw),D("Motion",fxSMO,255,InstrumentMotionValue::raw),D("C",fxSC,255,InstrumentMotionValue::raw),D("Cutoff",fxSCF3,FILTER_CUTOFF_MAX_HZ,InstrumentMotionValue::cutoff),D("Reso",fxSRS3,255,InstrumentMotionValue::raw)};
@@ -522,6 +552,7 @@ static const InstrumentDefinition instrumentDefinitions[] = {
   {"MonkSynth",InstrumentCategory::synth,InstrumentScreenKind::monk,destMonk,COUNT(destMonk),fxMonk,COUNT(fxMonk),{8,modNameMonk,initMonkInstrument,freeNoneInstrument,1,0}},
   {"Audio in",InstrumentCategory::utility,InstrumentScreenKind::audioIn,destAudioIn,COUNT(destAudioIn),fxAudioIn,COUNT(fxAudioIn),{3,modNameAudioIn,initAudioInInstrument,freeNoneInstrument,1,0}},
   {"Layer",InstrumentCategory::utility,InstrumentScreenKind::layer,destLayer,COUNT(destLayer),fxLayer,COUNT(fxLayer),{7,modNameNone,initLayerInstrument,freeNoneInstrument,0,0}},
+  {"DigiSophie",InstrumentCategory::drums,InstrumentScreenKind::drumSynth,destDigiSophie,COUNT(destDigiSophie),fxDrumSynth,COUNT(fxDrumSynth),{10,modNameDigiSophie,initDigiSophieInstrument,freeDrumSynthInstrument,1,0}},
 };
 #undef COUNT
 
@@ -637,6 +668,7 @@ InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument)
     case InstrumentType::BYOWTBL: return &instrument->chip.byowtbl;
     case InstrumentType::Plaits:
     case InstrumentType::PlaitsAlt: return &instrument->chip.plaits;
+    case InstrumentType::DigiSophie:
     case InstrumentType::DrumSynth: return &instrument->chip.drumSynth;
     case InstrumentType::MME: return &instrument->chip.mme;
     case InstrumentType::Sintered: return &instrument->chip.sintered;
@@ -673,6 +705,7 @@ int instrumentMotionDestination(const Instrument* instrument, int destination, F
       *base = destination == 3 ? instrument->chip.byowtbl.detune : destination == 4 ? instrument->chip.byowtbl.mix : destination == 5 ? instrument->chip.byowtbl.frameIndex[0] : destination == 6 ? instrument->chip.byowtbl.frameIndex[1] : destination == 7 ? instrument->chip.byowtbl.filterCutoffHz : instrument->chip.byowtbl.filterResonance; break;
     case InstrumentType::AChChid:
       *base = destination == 3 ? instrument->chip.achchid.cutoff : destination == 4 ? instrument->chip.achchid.resonance * 255 / 100 : destination == 5 ? instrument->chip.achchid.envMod * 255 / 100 : destination == 6 ? instrument->chip.achchid.decay * 255 / 2000 : destination == 7 ? instrument->chip.achchid.accent * 255 / 100 : destination == 8 ? (instrument->chip.achchid.timbre + 64) / 129 : (instrument->chip.achchid.color + 64) / 129; break;
+    case InstrumentType::DigiSophie:
     case InstrumentType::DrumSynth:
       *base = destination == 3 ? instrument->chip.drumSynth.decay : destination == 4 ? instrument->chip.drumSynth.tone : destination == 5 ? instrument->chip.drumSynth.sweep : destination == 6 ? instrument->chip.drumSynth.noise : destination == 7 ? instrument->chip.drumSynth.fm : destination == 8 ? instrument->chip.drumSynth.drive : destination == 9 ? instrument->chip.drumSynth.filterCutoffHz : instrument->chip.drumSynth.filterResonance; break;
     case InstrumentType::Monk:
@@ -799,6 +832,7 @@ int instrumentSetCCDestination(Instrument* instrument, int destination, uint8_t 
       else if (destination == 9) instrument->chip.achchid.color = value;
       else return 0;
       break;
+    case InstrumentType::DigiSophie:
     case InstrumentType::DrumSynth:
       if (destination == 3) instrument->chip.drumSynth.decay = value;
       else if (destination == 4) instrument->chip.drumSynth.tone = value;

@@ -720,9 +720,9 @@ On the Modulation screen, press **EDIT** on a source to choose a family (Envelop
 
 ### Sintered
 
-**Sintered** is a native one-shot digital percussion synth. Notes set its fundamental pitch; its six models are `Knot`, `Shard`, `Burst`, `Comb`, `Logic` and `Melt`. Every model has **Decay**, **Mod** and **Motion**, plus three model-specific controls: Knot uses Ratio/Spread/Fold, Shard Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush and Melt Ratio/Chaos/Drive. **Mod** is always the internal coupling depth.
+**Sintered** is a native one-shot digital percussion synth. Notes set its fundamental pitch; its six models are `Knot`, `Crease`, `Burst`, `Comb`, `Logic` and `Melt`. Every model has **Decay**, **Mod** and **Motion**, plus three model-specific controls: Knot uses Ratio/Spread/Fold, Crease Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush and Melt Ratio/Chaos/Drive. **Mod** is always the internal coupling depth.
 
-Motion is an internal macro envelope, not pitch glide: values below `80` use an AD shape, `80` disables it, and values above `80` use a decay-only shape. Moving farther from the centre makes the envelope faster. Its destinations are fixed per model, so Sintered stays predictable in tracker patterns: Knot animates Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. All models reset their state on a note trigger and bound internal feedback for repeatable hits.
+Motion is an internal macro envelope, not pitch glide: values below `80` use an AD shape, `80` disables it, and values above `80` use a decay-only shape. Moving farther from the centre makes the envelope faster. Its destinations are fixed per model, so Sintered stays predictable in tracker patterns: Knot animates Mod/Fold; Crease Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. All models reset their state on a note trigger and bound internal feedback for repeatable hits.
 
 ### MME
 

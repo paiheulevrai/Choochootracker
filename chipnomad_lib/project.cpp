@@ -18,11 +18,12 @@ FXName fxNamesSequencer[] = {
   {fxRET, "RET"}, {fxDEL, "DEL"}, {fxOFF, "OFF"}, {fxKIL, "KIL"}, {fxTIC, "TIC"},
   {fxTBL, "TBL"}, {fxTBX, "TBX"}, {fxTHO, "THO"}, {fxTXH, "TXH"}, {fxGRV, "GRV"},
   {fxGGR, "GGR"}, {fxHOP, "HOP"}, {fxSNG, "SNG"}, {fxPRO, "PRO"},
-  {fxMOD, "MOD"}, {fxRNN, "RNN"}, {fxSPD, "SPD"}, {fxSLE, "SLE"}, {fxPAN, "PAN"}
+  {fxMOD, "MOD"}, {fxRNN, "RNN"}, {fxSPD, "SPD"}, {fxSLE, "SLE"}, {fxPAN, "PAN"},
+  {fxREP, "REP"}, {fxRTO, "RTO"}
 };
 int fxSequencerCount = sizeof(fxNamesSequencer) / sizeof(FXName);
 
-FXName fxNamesTrack[] = {{fxRSN, "RSN"}, {fxDSN, "DSN"}, {fxSCL, "SCL"}, {fxCRD, "CRD"}, {fxTPN, "TPN"}};
+FXName fxNamesTrack[] = {{fxRSN, "RSN"}, {fxDSN, "DSN"}, {fxSCL, "SCL"}, {fxCRD, "CRD"}, {fxTPN, "TPN"}, {fxEUC, "EUC"}};
 int fxTrackCount = sizeof(fxNamesTrack) / sizeof(FXName);
 
 FXName fxNamesEnvelope[] = {
@@ -96,6 +97,7 @@ FXGroup fxGroups[] = {
   {"SoundFont FX", NULL, 0, 8, InstrumentType::SoundFont},
   {"Audio in FX", NULL, 0, 8, InstrumentType::AudioIn},
   {"Layer FX", NULL, 0, 8, InstrumentType::Layer},
+  {"DigiSophie FX", NULL, 0, 8, InstrumentType::DigiSophie},
 };
 int fxGroupCount = sizeof(fxGroups) / sizeof(FXGroup);
 
@@ -151,7 +153,7 @@ void fillFXNames() {
     for (int i = 0; i < definition->fxCount; ++i) { names[i].fx = (FX)definition->fxList[i].fx; strcpy(names[i].name, definition->fxList[i].name); }
   }
 
-  for (int index = fxGroupCount - 4; index < fxGroupCount; ++index) {
+  for (int index = fxGroupCount - 5; index < fxGroupCount; ++index) {
     auto type = fxGroups[index].instType;
     const auto* definition = getInstrumentDefinition(type);
     auto* names = instrumentGroupNames[(int)type];
@@ -227,10 +229,13 @@ void projectInit(Project* p) {
   p->beadsReverbHighpassCutoffHz = 150;
   p->delayReturn = 100;
   p->delayReverbSend = 0;
-  p->delayTicks = 9;
+  p->delayTicks = 12;
   p->delayFeedback = 50;
   p->delayFilterCutoffHz = 12000;
   p->delayAlgorithm = 0;
+  p->echoDiffuse = 160;
+  p->echoAge = 64;
+  p->echoHighpassCutoffHz = 80;
   p->tapeDivision = 2;
   p->tapeHeads = 6;
   p->tapeTone = 160;

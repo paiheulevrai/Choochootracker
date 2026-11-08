@@ -41,8 +41,17 @@ class MasterEffects {
   std::vector<beads::FloatFrame> beadsReverbFrames_;
   std::vector<float> delayLine_;
   std::vector<float> springLine_;
+  std::vector<float> echoDiffusion_;
   size_t delayWrite_;
   size_t springWrite_;
+  size_t echoDiffusionOffset_[6];
+  size_t echoDiffusionLength_[6];
+  size_t echoDiffusionWrite_[6];
+  float echoHighpassInput_[2];
+  float echoHighpassOutput_[2];
+  float echoParameters_[8];
+  float echoSmoothing_;
+  bool echoParametersReady_;
   float reverbFilterState_[2];
   float reverbHighpassInputState_[2];
   float reverbHighpassOutputState_[2];

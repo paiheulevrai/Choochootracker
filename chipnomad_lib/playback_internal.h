@@ -5,9 +5,12 @@
 
 void handleNoteOff(PlaybackState* state, int trackIdx);
 void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck);
-void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRow, int skipDelCheck);
+void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRow, int skipDelCheck, int resolved = 0);
 void tableInit(PlaybackState* state, int trackIdx, struct PlaybackTableState* table, int tableIdx, int row, int speed);
-void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* table, int fxIdx);
+void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* table, int fxIdx, const FXCell* resolved = nullptr);
+void playbackRetriggerNote(PlaybackState* state, int trackIdx);
+FXCell playbackRepeatFX(PlaybackRepeatState* repeat, FXCell cell, int advance = 1);
+void playbackClearTrackFX(PlaybackState* state, int trackIdx);
 void initFX(PlaybackState* state, int trackIdx, const FXCell* fx, PlaybackTableState* tableState, int tableFXColumn);
 #ifdef TEST
 inline void initFX(PlaybackState* state, int trackIdx, const uint8_t* fx, PlaybackTableState* tableState, int column) {

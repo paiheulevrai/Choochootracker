@@ -22,7 +22,7 @@ PLAITS_ALT_LIBS = ../chipnomad_lib/external/mutable/plaits_alt \
 	../chipnomad_lib/external/mutable/plaits_alt/dsp/physical_modelling \
 	../chipnomad_lib/external/mutable/plaits_alt/dsp/speech
 BEADS_LIBS = ../chipnomad_lib/external/mutable/beads ../chipnomad_lib/external/mutable/beads/dsp
-COMMON_LIBS = $(BEADS_LIBS) ../chipnomad_lib/external/msfa ../chipnomad_lib/external/emu76489 ../chipnomad_lib/external/gb_apu ../chipnomad_lib/external/gb_apu/blargg ../chipnomad_lib/external/ymfm src ../chipnomad_lib ../chipnomad_lib/chips ../chipnomad_lib/synth ../chipnomad_lib/external/ayumi ../chipnomad_lib/external/open303/Source/DSPCode ../chipnomad_lib/external/mutable/braids ../chipnomad_lib/external/mutable/stmlib/utils $(PLAITS_LIBS) $(PLAITS_ALT_LIBS) ../chipnomad_lib/export ../chipnomad_lib/midi ../chipnomad_lib/link src/corelib src/import src/screens platforms/shared
+COMMON_LIBS = ../chipnomad_lib/external/digisophie $(BEADS_LIBS) ../chipnomad_lib/external/msfa ../chipnomad_lib/external/emu76489 ../chipnomad_lib/external/gb_apu ../chipnomad_lib/external/gb_apu/blargg ../chipnomad_lib/external/ymfm src ../chipnomad_lib ../chipnomad_lib/chips ../chipnomad_lib/synth ../chipnomad_lib/external/ayumi ../chipnomad_lib/external/open303/Source/DSPCode ../chipnomad_lib/external/mutable/braids ../chipnomad_lib/external/mutable/stmlib/utils $(PLAITS_LIBS) $(PLAITS_ALT_LIBS) ../chipnomad_lib/export ../chipnomad_lib/midi ../chipnomad_lib/link src/corelib src/import src/screens platforms/shared
 
 # Base build directory
 BUILD_BASE = build

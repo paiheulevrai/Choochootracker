@@ -2,6 +2,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <initializer_list>
+#include <algorithm>
 #include "playback_internal.h"
 #include "synth/sample_voice.h"
 
@@ -54,6 +56,60 @@ static void resetTableFXAuxState(PlaybackTableState* tableState) {
   memset(tableState->fxAuxState, 0, sizeof(tableState->fxAuxState));
 }
 
+FXCell playbackRepeatFX(PlaybackRepeatState* repeat, FXCell cell, int advance) {
+  if (cell.command == fxREP) {
+    if (advance) {
+      repeat->active = cell.value != 0 && repeat->last.command != FX_ID_EMPTY;
+      repeat->increment = (int8_t)cell.value;
+      repeat->limited = 0;
+    }
+  } else if (cell.command == fxRTO) {
+    if (advance && repeat->active) {
+      repeat->limited = 1;
+      repeat->limit = cell.value;
+    }
+  } else if (cell.command != FX_ID_EMPTY) {
+    if (advance) {
+      repeat->active = 0;
+      repeat->limited = 0;
+      repeat->last = cell;
+    }
+    return cell;
+  }
+  if (!repeat->active) return {FX_ID_EMPTY, 0};
+  if (advance) {
+    int next = (int)repeat->last.value + repeat->increment;
+    if (repeat->limited &&
+        ((repeat->increment > 0 && next >= repeat->limit) ||
+         (repeat->increment < 0 && next <= repeat->limit))) {
+      next = repeat->limit;
+      repeat->active = 0;
+    }
+    repeat->last.value = (uint8_t)next;
+  }
+  return repeat->last;
+}
+
+static PhraseRow resolvePhraseFX(PlaybackTrackState* track, const PhraseRow* row, int advance) {
+  PhraseRow resolved = *row;
+  for (int i = 0; i < 3; ++i)
+    resolved.fx[i] = playbackRepeatFX(&track->repeat[i], row->fx[i], advance);
+  return resolved;
+}
+
+static void progressEuclidean(PlaybackState* state, int trackIdx) {
+  auto& track = state->tracks[trackIdx];
+  auto& euclidean = track.euclidean;
+  if (!euclidean.active) return;
+  if (track.note.pitchBase == EMPTY_VALUE_8 || track.note.instrument == EMPTY_VALUE_8) {
+    euclidean.active = 0;
+    return;
+  }
+  euclidean.step = (euclidean.step + 1) % euclidean.length;
+  if ((euclidean.step * euclidean.pulses) % euclidean.length < euclidean.pulses)
+    playbackRetriggerNote(state, trackIdx);
+}
+
 static void resetNoteFX(PlaybackState* state, int trackIdx) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
   track->note.nativeFM = {};
@@ -65,6 +121,22 @@ static void resetNoteFX(PlaybackState* state, int trackIdx) {
     track->note.fx[i].acc = 0;
     track->note.fx[i].tableSource = 0;
   }
+}
+
+static void resetSequencerFX(PlaybackTrackState* track) {
+  memset(track->repeat, 0, sizeof(track->repeat));
+  for (auto& repeat : track->repeat) repeat.last.command = FX_ID_EMPTY;
+  track->euclidean = {};
+  for (auto* table : {&track->note.instrumentTable, &track->note.auxTable}) {
+    memset(table->repeat, 0, sizeof(table->repeat));
+    for (auto& repeat : table->repeat) repeat.last.command = FX_ID_EMPTY;
+  }
+}
+
+void playbackClearTrackFX(PlaybackState* state, int trackIdx) {
+  auto* track = &state->tracks[trackIdx];
+  memset(track->note.fx, 0, sizeof(track->note.fx));
+  resetSequencerFX(track);
 }
 
 static void resetInstrumentFX(PlaybackTrackState* track) {
@@ -100,6 +172,7 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   memset(track->conditionVisits, 0, sizeof(track->conditionVisits));
   track->conditionRandom = 0x6d2b79f5u ^ (uint32_t)(trackIdx + 1) * 0x9e3779b9u;
   track->conditionPhrase = EMPTY_VALUE_16;
+  resetSequencerFX(track);
 
   track->note.pitchBase = EMPTY_VALUE_8;
   track->note.pitchFinal = EMPTY_VALUE_8;
@@ -190,20 +263,23 @@ void hopToTableRow(PlaybackState* state, int trackIdx, PlaybackTableState* table
   }
 }
 
-void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* table, int fxIdx) {
+void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* table, int fxIdx, const FXCell* resolved) {
   uint8_t tableIdx = table->tableIdx;
   if (tableIdx == EMPTY_VALUE_8) return;
   Project* p = state->p;
 
   int tableRow = table->rows[fxIdx];
-  FXId fxType = p->tables[tableIdx].rows[tableRow].fx[fxIdx].command;
+  FXCell cell = resolved ? *resolved :
+    playbackRepeatFX(&table->repeat[fxIdx], p->tables[tableIdx].rows[tableRow].fx[fxIdx]);
+  table->currentFX[fxIdx] = cell;
+  FXId fxType = cell.command;
   table->heldFX[fxIdx].isOn = 0;
   if (fxType == fxTBL) {
-    tableInit(state, trackIdx, &state->tracks[trackIdx].note.instrumentTable, p->tables[tableIdx].rows[tableRow].fx[fxIdx][1], 0, 1);
+    tableInit(state, trackIdx, &state->tracks[trackIdx].note.instrumentTable, cell.value, 0, 1);
   } else if (fxType == fxTBX) {
-    tableInit(state, trackIdx, &state->tracks[trackIdx].note.auxTable, p->tables[tableIdx].rows[tableRow].fx[fxIdx][1], 0, 1);
+    tableInit(state, trackIdx, &state->tracks[trackIdx].note.auxTable, cell.value, 0, 1);
   } else {
-    initFX(state, trackIdx, &p->tables[tableIdx].rows[tableRow].fx[fxIdx], table, fxIdx);
+    initFX(state, trackIdx, &cell, table, fxIdx);
     if (fxType == fxSTA) fxType = fxSST;
     if (fxType >= fxTotalCount || fxType == fxRET || fxType == fxDEL ||
         fxType == fxOFF || fxType == fxKIL || (fxType >= fxMC1 && fxType <= fxMC4)) return;
@@ -212,7 +288,7 @@ void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* 
     if (fxType >= fxOAR && fxType <= fxLEN) {
       held = {};
       held.isOn = 1;
-      held.fxValue = p->tables[tableIdx].rows[tableRow].fx[fxIdx].value;
+      held.fxValue = cell.value;
     } else {
       held = state->tracks[trackIdx].note.fx[fxType];
     }
@@ -261,8 +337,11 @@ static void tableProgress(PlaybackState* state, int trackIdx, struct PlaybackTab
       }
 
       // Check HOP on current row pointing to same row
-      FXId fxType = p->tables[table->tableIdx].rows[row].fx[i].command;
-      uint8_t fxValue = p->tables[table->tableIdx].rows[row].fx[i][1];
+      FXCell current = p->tables[table->tableIdx].rows[row].fx[i];
+      if (current.command == fxREP || current.command == fxRTO ||
+          (current.command == FX_ID_EMPTY && table->repeat[i].active)) current = table->currentFX[i];
+      FXId fxType = current.command;
+      uint8_t fxValue = current.value;
 
       if (fxType == fxHOP && (fxValue & 0xf) == row) {
         if (fxValue & 0xf0) {
@@ -308,8 +387,15 @@ static void tableProgress(PlaybackState* state, int trackIdx, struct PlaybackTab
       }
 
       // Check HOP on new row
-      fxType = p->tables[table->tableIdx].rows[row].fx[i].command;
-      fxValue = p->tables[table->tableIdx].rows[row].fx[i][1];
+      FXCell cell = playbackRepeatFX(&table->repeat[i], p->tables[table->tableIdx].rows[row].fx[i]);
+      fxType = cell.command;
+      fxValue = cell.value;
+
+      if (fxType == fxTHO) {
+        table->rows[i] = fxValue & 0xf;
+        tableReadFX(state, trackIdx, table, i);
+        continue;
+      }
 
       if (fxType == fxHOP) {
         uint8_t hopTarget = fxValue & 0xf;
@@ -336,7 +422,7 @@ static void tableProgress(PlaybackState* state, int trackIdx, struct PlaybackTab
       }
 
       // No hop - read FX from current row
-      tableReadFX(state, trackIdx, table, i);
+      tableReadFX(state, trackIdx, table, i, &cell);
     }
   }
 }
@@ -347,6 +433,7 @@ void handleNoteOff(PlaybackState* state, int trackIdx) {
 
   track->achchidGateTicks = 0;
   track->achchidGateCounter = 0;
+  track->euclidean.active = 0;
 
   if (track->note.instrument == EMPTY_VALUE_8) return;
 
@@ -358,7 +445,7 @@ void handleNoteOff(PlaybackState* state, int trackIdx) {
 
   int isModernVoice = instType == InstrumentType::Braids ||
     instType == InstrumentType::SoundFont || instType == InstrumentType::Plaits || instType == InstrumentType::PlaitsAlt || instType == InstrumentType::Sample ||
-    instType == InstrumentType::DrumSynth || instType == InstrumentType::MME || instType == InstrumentType::Sintered ||
+    instType == InstrumentType::DrumSynth || instType == InstrumentType::DigiSophie || instType == InstrumentType::MME || instType == InstrumentType::Sintered ||
     instType == InstrumentType::AudioIn;
 
   int hasVolumeADSR = 0;
@@ -404,7 +491,7 @@ static void initModulations(PlaybackState* state, int trackIdx, uint8_t oldInstr
 
     // Free and structural LFOs, and rhythmic gates with matching triggers,
     // keep their phase across notes.
-    int keepsPhase = (modulationIsTickLFO(mod->type) &&
+    int keepsPhase = mod->type == ModulationType::Audio || (modulationIsTickLFO(mod->type) &&
                       (mod->p2 == static_cast<uint8_t>(LFOTrigger::free) ||
                        mod->p2 == static_cast<uint8_t>(LFOTrigger::phrase) ||
                        mod->p2 == static_cast<uint8_t>(LFOTrigger::chain))) ||
@@ -538,9 +625,20 @@ static int rnnLastValueChanged(PlaybackTrackState* track, uint8_t value) {
   return track->rnnLastValue != value;
 }
 
-void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRow, int skipDelCheck) {
+void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRow, int skipDelCheck, int resolved) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
   Project* p = state->p;
+  PhraseRow effective;
+  if (!resolved) {
+    effective = skipDelCheck ? track->currentPhraseRow : resolvePhraseFX(track, phraseRow, 1);
+    phraseRow = &effective;
+  }
+  if (!skipDelCheck) {
+    track->currentPhraseRow = *phraseRow;
+    if (phraseRow->note != EMPTY_VALUE_8 || phraseRow->instrument != EMPTY_VALUE_8 ||
+        rowHasFX(phraseRow, fxEUC)) track->euclidean.active = 0;
+    else progressEuclidean(state, trackIdx);
+  }
 
   uint8_t note = phraseRow->note;
   uint8_t instrument = phraseRow->instrument;
@@ -807,6 +905,16 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     track->note.sequenceVolume = (uint8_t)volume;
     if (!playbackSequenceBypasses(track, SequenceSource::volume)) track->note.volume = (uint8_t)volume;
   }
+  for (const auto& fx : phraseRow->fx) {
+    if (fx.command != fxEUC) continue;
+    auto& euclidean = track->euclidean;
+    euclidean.length = (fx.value & 0xf) + 1;
+    euclidean.pulses = std::min<int>(fx.value >> 4, euclidean.length);
+    euclidean.step = 0;
+    euclidean.active = euclidean.pulses != 0 && track->note.pitchBase != EMPTY_VALUE_8 &&
+      track->note.instrument != EMPTY_VALUE_8;
+    if (euclidean.active && note == EMPTY_VALUE_8) playbackRetriggerNote(state, trackIdx);
+  }
 }
 
 void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
@@ -815,8 +923,13 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
 
   // If using phrase row mode, use cached phrase row
   if (track->mode == PlaybackMode::phraseRow) {
-    if (!skipDelCheck && !phraseRowConditionsPass(track, &track->currentPhraseRow, track->phraseRow)) return;
-    readPhraseRowDirect(state, trackIdx, &track->currentPhraseRow, skipDelCheck);
+    PhraseRow effective = skipDelCheck ? track->currentPhraseRow :
+      resolvePhraseFX(track, &track->currentPhraseRow, 1);
+    if (!skipDelCheck && !phraseRowConditionsPass(track, &effective, track->phraseRow)) {
+      progressEuclidean(state, trackIdx);
+      return;
+    }
+    readPhraseRowDirect(state, trackIdx, &effective, skipDelCheck, 1);
     return;
   }
 
@@ -835,7 +948,12 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
       Phrase* phrase = &p->phrases[phraseIdx];
       PhraseRow* currentRow = &phrase->rows[phraseRow];
 
-      if (!skipDelCheck && !phraseRowConditionsPass(track, currentRow, phraseRow)) return;
+      PhraseRow effective = skipDelCheck ? track->currentPhraseRow : resolvePhraseFX(track, currentRow, 1);
+      currentRow = &effective;
+      if (!skipDelCheck && !phraseRowConditionsPass(track, currentRow, phraseRow)) {
+        progressEuclidean(state, trackIdx);
+        return;
+      }
 
       // Check for SNG command in Song mode
       if (track->mode == PlaybackMode::song) {
@@ -924,14 +1042,15 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
                 }
               }
               track->phraseRow = targetRow;
-              currentRow = &phrase->rows[targetRow];
+              effective = resolvePhraseFX(track, &phrase->rows[targetRow], 1);
+              currentRow = &effective;
             }
           }
           break;
         }
       }
 
-      readPhraseRowDirect(state, trackIdx, currentRow, skipDelCheck);
+      readPhraseRowDirect(state, trackIdx, currentRow, skipDelCheck, 1);
     } else {
       // Safeguard for phrase in chain
       resetTrack(state, trackIdx);
@@ -1110,6 +1229,7 @@ static void processModulationsForTrack(PlaybackState* state, PlaybackTrackState*
     // Skip if modulation not initialized or destination == 0 (no destination)
     if (!mod->modulation || mod->modulation->destination == 0 ||
         mod->modulation->type == ModulationType::FLFO ||
+        mod->modulation->type == ModulationType::Audio ||
         mod->modulation->type == ModulationType::Sequence) continue;
     playbackModNext(mod);
     if (modulationIsLiveStick(mod->modulation->type)) {
@@ -1162,6 +1282,7 @@ static void handleInstrument(PlaybackState* state, int trackIdx) {
   case InstrumentType::BYOWTBL:
   case InstrumentType::AChChid:
   case InstrumentType::DrumSynth:
+  case InstrumentType::DigiSophie:
   case InstrumentType::MME:
   case InstrumentType::Sintered:
   case InstrumentType::AudioIn:

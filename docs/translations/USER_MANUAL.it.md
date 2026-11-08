@@ -565,9 +565,9 @@ Nella schermata Modulation, premi **EDIT** su una sorgente per scegliere una fam
 
 ### Sintered
 
-**Sintered** è un synth per percussioni digitali one-shot nativo. Le note impostano il pitch fondamentale; i sei modelli sono `Knot`, `Shard`, `Burst`, `Comb`, `Logic` e `Melt`. Ogni modello ha **Decay**, **Mod** e **Motion**, più tre controlli specifici: Knot usa Ratio/Spread/Fold, Shard Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush e Melt Ratio/Chaos/Drive. **Mod** è sempre la profondità di accoppiamento interna.
+**Sintered** è un synth per percussioni digitali one-shot nativo. Le note impostano il pitch fondamentale; i sei modelli sono `Knot`, `Crease`, `Burst`, `Comb`, `Logic` e `Melt`. Ogni modello ha **Decay**, **Mod** e **Motion**, più tre controlli specifici: Knot usa Ratio/Spread/Fold, Crease Ratio/Feedback/Bite, Burst Noise/Color/Feedback, Comb Time/Damping/Regen, Logic Rate/Pattern/Crush e Melt Ratio/Chaos/Drive. **Mod** è sempre la profondità di accoppiamento interna.
 
-Motion è un macro inviluppo interno: valori sotto `80` usano forma AD, `80` lo disabilita e valori sopra `80` usano solo decay. Allontanarsi dal centro rende l’inviluppo più veloce. Le sue destinazioni sono fisse per modello, così Sintered resta prevedibile nei pattern tracker: Knot anima Mod/Fold; Shard Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Tutti i modelli resettano il loro stato al trigger della nota e limitano il feedback interno per colpi ripetibili.
+Motion è un macro inviluppo interno: valori sotto `80` usano forma AD, `80` lo disabilita e valori sopra `80` usano solo decay. Allontanarsi dal centro rende l’inviluppo più veloce. Le sue destinazioni sono fisse per modello, così Sintered resta prevedibile nei pattern tracker: Knot anima Mod/Fold; Crease Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive. Tutti i modelli resettano il loro stato al trigger della nota e limitano il feedback interno per colpi ripetibili.
 
 ### MonkSynth
 

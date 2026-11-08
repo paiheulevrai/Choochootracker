@@ -42,6 +42,7 @@ enum class InstrumentType : uint8_t {
   Monk = 29,
   AudioIn = 30,
   Layer = 31,
+  DigiSophie = 32,
   totalCount,
 };
 
@@ -82,8 +83,16 @@ enum class ModulationType : uint8_t {
   StickRate = 7,
   SlowLFO = 8,
   Sequence = 9,
+  Audio = 10,
   totalCount,
 };
+
+inline float modulationAudioTimeSeconds(uint8_t value) {
+  return value * value / 65025.0f;
+}
+
+enum class AudioModulationMode : uint8_t { envelope, wave, amplitude, ring, totalCount };
+const char* audioModulationModeName(AudioModulationMode mode);
 
 enum class SequenceSource : uint8_t {
   pitch = 0,
@@ -143,6 +152,11 @@ struct Modulation {
   uint8_t p4; // ADSR: R, AHD: -, LFO: -, Sequence Trance Gate: Rate/Length
   uint8_t p5; // LFO/SLFO/FLFO Wavetable, Sequence Trance Gate: Trigger/Accents
 };
+
+inline AudioModulationMode audioModulationMode(const Modulation& mod) {
+  return static_cast<AudioModulationMode>(mod.p5 < static_cast<uint8_t>(AudioModulationMode::totalCount) ? mod.p5 : 0);
+}
+bool audioModulationModeSupported(InstrumentType type, AudioModulationMode mode);
 
 uint8_t sequenceGatePattern(const Modulation* modulation);
 uint8_t sequenceGateRate(const Modulation* modulation);
@@ -692,6 +706,7 @@ int instrumentFXAvailableForInstrument(const Instrument* instrument, FXId fx);
 int instrumentFXAvailableInProject(const Project* project, uint8_t instrument, FXId fx);
 int instrumentModDestinationAvailable(const Instrument* instrument, int destination);
 int drumSynthMacroUsed(DrumSynthEngine engine, int macro);
+const char* digiSophieModelName(int model);
 InstrumentVoicePostSettings* instrumentVoicePostSettings(Instrument* instrument);
 InstrumentFMAmp* instrumentFMAmpSettings(Instrument* instrument);
 InstrumentFMTone* instrumentFMToneSettings(Instrument* instrument);

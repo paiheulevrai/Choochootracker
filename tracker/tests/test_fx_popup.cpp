@@ -3,6 +3,7 @@
 #include "corelib_gfx.h"
 #include "screens.h"
 #include "monk_patch.h"
+#include "help.h"
 #include "mocks/app_ui_mock.h"
 #include <set>
 #include <string>
@@ -97,7 +98,29 @@ TEST_CASE("Lane FX group spacing stays compact when switching help types") {
       if (blank) end = true;
       else CHECK_FALSE(end);
     }
+
   }
+}
+
+TEST_CASE("Extended sequencer IDs and DigiSophie have their own FX help") {
+  PopupSession session;
+  getInstrumentFunctions(InstrumentType::DigiSophie).init(&chipnomadState->project.instruments[0]);
+  for (FXId fx : {FXId(fxEUC), FXId(fxREP), FXId(fxRTO)}) {
+    REQUIRE(fx > 255);
+    FXCell cell{fx, 0x4f}, last{};
+    CHECK(std::string(helpFXHint(cell, 0, 0)).find("Kill") == std::string::npos);
+    CHECK(std::string(helpFXHint(cell, 0, 0)).find("table") == std::string::npos);
+    fxEditFullDraw(fx, 0, 0);
+    CHECK(std::string(mockGfxCells[1], 35).find(fx == fxEUC ? "Euclidean" : "Repeat") != std::string::npos);
+    editFXValue(CellEditAction::increase, &cell, &last, 0, 0);
+    CHECK(std::string(screenGetActiveMessage()).find(fx == fxEUC ? "EUC" : "Repeat") != std::string::npos);
+  }
+  for (FXId fx : {FXId(fxDMD), FXId(fxDTO), FXId(fxDNO), FXId(fxDFM), FXId(fxDDR)}) {
+    CHECK(std::string(helpFXDescription((FX)fx, 0)).find("DigiSophie") == 0);
+    CHECK(std::string(helpFXHint(FXCell{fx, 64}, 0, 0)).find("DigiSophie") == 0);
+  }
+  getInstrumentFunctions(InstrumentType::DrumSynth).init(&chipnomadState->project.instruments[0]);
+  CHECK(std::string(helpFXDescription(fxDTO, 0)).find("Bogie Tone") == 0);
 }
 
 TEST_CASE("Lane FX popup bounds context-dependent modulation and drum help") {
@@ -149,6 +172,8 @@ TEST_CASE("Lane FX long groups scroll and use the same grid for drawing and navi
   CHECK(mockCursorY <= 18);
   fxEditInput(keyEdit | keyRight, 1, &selected, &last);
   fxEditInput(keyEdit | keyRight, 1, &selected, &last);
+  fxEditInput(keyEdit | keyRight, 1, &selected, &last);
+  fxEditInput(keyEdit | keyRight, 1, &selected, &last);
   fxEditInput(0, 1, &selected, &last);
   CHECK(selected.command == fxRSN);
   CHECK(mockGfxCells[6][34] == ' '); // New group returns to the compact origin.
@@ -194,6 +219,6 @@ TEST_CASE("MONK exposes all sixteen controls together without a duplicate envelo
     FXCell selected{}, last{};
     fxEditInput(keyEdit | keyLeft, 1, &selected, &last);
     fxEditInput(0, 1, &selected, &last);
-    CHECK(selected.command == fxTPN); // No envelope entries before Trigger FX.
+    CHECK(selected.command == (table ? fxTPN : fxEUC)); // Track FX directly precedes Trigger FX.
   }
 }

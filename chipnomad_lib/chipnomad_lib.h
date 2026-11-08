@@ -121,6 +121,12 @@ struct ChipNomadState {
   uint8_t insertValues[PROJECT_MAX_TRACKS][2][8];
   uint8_t insertActive[PROJECT_MAX_TRACKS];
   uint8_t audioInputRoutedTrackMask;
+  uint8_t audioModTrackMask;
+  uint8_t audioWaveTrackMask;
+  uint8_t audioAmplitudeOwners[VOICE_OWNER_COUNT];
+  uint8_t audioWavePosition;
+  float audioWaveHistory[PROJECT_MAX_TRACKS][64];
+  float audioWaveSamples[PROJECT_MAX_TRACKS][64];
   float* insertBuffer;
   float* audioInputTrackCurrent;
   float* audioInputTrackPrevious;

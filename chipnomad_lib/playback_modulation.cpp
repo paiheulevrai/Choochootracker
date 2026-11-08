@@ -2,6 +2,7 @@
 #include "synth/multimode_filter.h"
 #include "utils.h"
 #include <math.h>
+#include <cmath>
 #include <stdint.h>
 
 // Modulation range: 255 * 127 = 32385
@@ -331,6 +332,7 @@ void playbackModInit(PlaybackModState* state, Modulation* mod) {
   state->data2 = 0;
   state->outValue = 0;
   state->phase = 0.0f;
+  if (mod->type == ModulationType::Audio) state->audio = {};
 
   // Cache type and p2 (LFO trigger mode) for change detection
   state->cachedType = GET_TYPE(state);
@@ -393,6 +395,8 @@ void playbackModNext(PlaybackModState* state) {
       break;
     case ModulationType::SLFO:
       handleLFO(state, (uint16_t)GET_P3(state) * (GET_P4(state) ? GET_P4(state) : 1));
+      break;
+    case ModulationType::Audio:
       break;
     default:
       state->outValue = 0;
@@ -480,6 +484,42 @@ void playbackModNextAudioFrames(PlaybackModState* state, float sampleRate, int f
 
 void playbackModNextAudio(PlaybackModState* state, float sampleRate) {
   playbackModNextAudioFrames(state, sampleRate, 1);
+}
+
+int playbackModAudioSource(const PlaybackModState* state) {
+  return clampInt(GET_P1(state), 0, PROJECT_MAX_TRACKS - 1);
+}
+
+AudioModulationMode playbackModAudioMode(const PlaybackModState* state) {
+  return audioModulationMode(*state->modulation);
+}
+
+float playbackModAudioSample(const PlaybackModState* state, float sample) {
+  const float input = std::isfinite(sample) ? sample * GET_P4(state) / 64.0f : 0.0f;
+  const int amount = GET_AMOUNT(state);
+  return fmaxf(-1.0f, fminf(1.0f, input)) * amount / (amount < 0 ? 128.0f : 127.0f);
+}
+
+void playbackModNextAudioEnvelope(PlaybackModState* state, float sampleRate, int frames, float peak) {
+  if (!state->modulation || GET_TYPE(state) != ModulationType::Audio ||
+      GET_DESTINATION(state) == 0 || sampleRate <= 0 || frames <= 0) return;
+  if (state->cachedType != ModulationType::Audio) playbackModInit(state, (Modulation*)state->modulation);
+  auto& follower = state->audio;
+  const uint8_t attack = GET_P2(state), release = GET_P3(state);
+  if (follower.sampleRate != sampleRate || follower.frames != frames ||
+      follower.attack != attack || follower.release != release) {
+    const float duration = frames / sampleRate;
+    follower.attackCoefficient = attack ? expf(-duration / modulationAudioTimeSeconds(attack)) : 0.0f;
+    follower.releaseCoefficient = release ? expf(-duration / modulationAudioTimeSeconds(release)) : 0.0f;
+    follower.sampleRate = sampleRate;
+    follower.frames = frames;
+    follower.attack = attack;
+    follower.release = release;
+  }
+  const float target = fminf(1.0f, fmaxf(0.0f, peak) * GET_P4(state) / 64.0f);
+  const float coefficient = target > follower.level ? follower.attackCoefficient : follower.releaseCoefficient;
+  follower.level = target + (follower.level - target) * coefficient;
+  state->outValue = (int16_t)(follower.level * MOD_MAX_RANGE_F * GET_AMOUNT(state) / 127.0f);
 }
 
 int16_t playbackModScaleToRange(int16_t modValue, int16_t maxAmplitude) {

@@ -170,8 +170,6 @@ static const char* contextualFXHint(const FXCell* fx,int table,uint8_t instrumen
     else snprintf(text,sizeof(text),"%s: %02X",native.label,fx->value);
     return text;
   }
-  // RNS/RNN carry full 16-bit commands that the legacy byte-based
-  // helpFXHint cannot represent, so format their value hints here.
   if (fx->command == fxRNS) {
     static const char* rnsModes[] = {"always random", "random per PLAY",
       "pick and keep"};
@@ -195,8 +193,7 @@ static const char* contextualFXHint(const FXCell* fx,int table,uint8_t instrumen
     return rnn;
   }
   if(fx->command<fxF11 || fx->command>fxF28) {
-    uint8_t legacy[] = {(uint8_t)fx->command, fx->value};
-    return helpFXHint(legacy, table, instrument);
+    return helpFXHint(*fx, table, instrument);
   }
   static char text[80];int a=fx->command-fxF11;
   const auto& c=chipnomadState->project.trackInserts[*pSongTrack][a/8];
@@ -210,7 +207,7 @@ static bool isFXAvailable(FXId fx, uint8_t instrumentIdx, int isTable) {
   if (!insertFXAvailable(fx)) return false;
   if(fx==fxFBR||(fx>=fxFET&&fx<=fxFLD))return false;
   if((fx>=fxFO1&&fx<=fxFO6)||fx==fxFFB)return false; // Retired personal commands.
-  if (isTable && (fx == fxSCL || fx == fxCRD || fx == fxRNS || fx == fxRNN)) return false;
+  if (isTable && (fx == fxSCL || fx == fxCRD || fx == fxRNS || fx == fxRNN || fx == fxEUC)) return false;
   // Note Lock pins note entry to the project scale, so SCL is not offered.
   if (fx == fxSCL && chipnomadState->project.scaleMode != 0) return false;
   InstrumentType instrumentType = getInstrumentType(instrumentIdx);
@@ -252,7 +249,7 @@ static int visibleFXCount(const FXGroup* group) {
         group->instType == InstrumentType::none &&
         group->fxList[i].fx >= fxEAT && group->fxList[i].fx <= fxESH) continue;
 
-    if (currentIsTable && (group->fxList[i].fx == fxSCL || group->fxList[i].fx == fxCRD)) continue;
+    if (currentIsTable && (group->fxList[i].fx == fxSCL || group->fxList[i].fx == fxCRD || group->fxList[i].fx == fxEUC)) continue;
     if (hideSCL && group->fxList[i].fx == fxSCL) continue;
     if (layerFXDuplicate(group, group->fxList[i].fx)) continue;
     if (group->instType != InstrumentType::none && instrument && !currentInstrumentHasFX(group->fxList[i].fx)) continue;
@@ -272,7 +269,7 @@ static const FXName* visibleFXAt(const FXGroup* group, int visibleIndex) {
         group->instType == InstrumentType::none &&
         group->fxList[i].fx >= fxEAT && group->fxList[i].fx <= fxESH) continue;
 
-    if (currentIsTable && (group->fxList[i].fx == fxSCL || group->fxList[i].fx == fxCRD)) continue;
+    if (currentIsTable && (group->fxList[i].fx == fxSCL || group->fxList[i].fx == fxCRD || group->fxList[i].fx == fxEUC)) continue;
     if (hideSCL && group->fxList[i].fx == fxSCL) continue;
     if (layerFXDuplicate(group, group->fxList[i].fx)) continue;
     if (group->instType != InstrumentType::none && instrument && !currentInstrumentHasFX(group->fxList[i].fx)) continue;

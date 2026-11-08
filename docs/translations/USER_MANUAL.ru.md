@@ -487,9 +487,9 @@ Cutoff и Decay редактируются логарифмически: **EDIT 
 
 ### Sintered
 
-**Sintered** — нативный однострочный цифровой перкуссионный синтезатор. Ноты задают фундаментальный тон; шесть моделей: `Knot`, `Shard`, `Burst`, `Comb`, `Logic` и `Melt`. У каждой модели есть **Decay**, **Mod** и **Motion**, плюс три уникальных параметра: Knot — Ratio/Spread/Fold, Shard — Ratio/Feedback/Bite, Burst — Noise/Color/Feedback, Comb — Time/Damping/Regen, Logic — Rate/Pattern/Crush, Melt — Ratio/Chaos/Drive. **Mod** всегда регулирует глубину внутренней связи.
+**Sintered** — нативный однострочный цифровой перкуссионный синтезатор. Ноты задают фундаментальный тон; шесть моделей: `Knot`, `Crease`, `Burst`, `Comb`, `Logic` и `Melt`. У каждой модели есть **Decay**, **Mod** и **Motion**, плюс три уникальных параметра: Knot — Ratio/Spread/Fold, Crease — Ratio/Feedback/Bite, Burst — Noise/Color/Feedback, Comb — Time/Damping/Regen, Logic — Rate/Pattern/Crush, Melt — Ratio/Chaos/Drive. **Mod** всегда регулирует глубину внутренней связи.
 
-Motion — внутренняя макро-огибающая: значения ниже `80` задают AD форму, `80` — выключает огибающую, значения выше `80` — decay-only форму. Удаление ползунка от центра ускоряет огибающую. К каждому параметру фиксированы назначения модуляции, чтобы сохранять предсказуемость в трекере: Knot анимирует Mod/Fold; Shard — Feedback/Bite; Burst — Noise/Color/Feedback; Comb — Damping/Regen; Logic — Rate/Crush; Melt — Chaos/Drive. Все модели сбрасывают состояние при запуске ноты и ограничивают внутреннюю обратную связь для повторяемости звуков.
+Motion — внутренняя макро-огибающая: значения ниже `80` задают AD форму, `80` — выключает огибающую, значения выше `80` — decay-only форму. Удаление ползунка от центра ускоряет огибающую. К каждому параметру фиксированы назначения модуляции, чтобы сохранять предсказуемость в трекере: Knot анимирует Mod/Fold; Crease — Feedback/Bite; Burst — Noise/Color/Feedback; Comb — Damping/Regen; Logic — Rate/Crush; Melt — Chaos/Drive. Все модели сбрасывают состояние при запуске ноты и ограничивают внутреннюю обратную связь для повторяемости звуков.
 
 ### MonkSynth
 

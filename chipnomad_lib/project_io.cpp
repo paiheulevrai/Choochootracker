@@ -957,7 +957,12 @@ static int projectLoadInternal(FILE* file, Project* project) {
     consumeLine(file);
   }
   line = peekLine(file);
-  if (line && sscanf(line, "- Delay: %hhu,%hhu,%hhu,%hhu,%hu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu", &p.delayReturn, &p.delayReverbSend,
+  if (line && sscanf(line, "- Delay: %hhu,%hhu,%hhu,%hhu,%hu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hu", &p.delayReturn, &p.delayReverbSend,
+                     &p.delayTicks, &p.delayFeedback, &p.delayFilterCutoffHz, &p.delayAlgorithm,
+                     &p.tapeDivision, &p.tapeHeads, &p.tapeTone, &p.tapeFlutter, &p.tapeSpring,
+                     &p.echoDiffuse, &p.echoAge, &p.echoHighpassCutoffHz) == 14) {
+    consumeLine(file);
+  } else if (line && sscanf(line, "- Delay: %hhu,%hhu,%hhu,%hhu,%hu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu", &p.delayReturn, &p.delayReverbSend,
                      &p.delayTicks, &p.delayFeedback, &p.delayFilterCutoffHz, &p.delayAlgorithm,
                      &p.tapeDivision, &p.tapeHeads, &p.tapeTone, &p.tapeFlutter, &p.tapeSpring) == 11) {
     consumeLine(file);
@@ -1007,7 +1012,8 @@ static int projectLoadInternal(FILE* file, Project* project) {
   if (p.delayReverbSend > 100) p.delayReverbSend = 100;
   if (p.delayFeedback > 95) p.delayFeedback = 95;
   if (p.delayTicks == 0) p.delayTicks = 1;
-  if (p.delayAlgorithm > 1) p.delayAlgorithm = 0;
+  if (p.delayAlgorithm > 2) p.delayAlgorithm = 0;
+  p.echoHighpassCutoffHz = std::max<uint16_t>(20, std::min<uint16_t>(20000, p.echoHighpassCutoffHz));
   if (p.tapeDivision > 6) p.tapeDivision = 2;
   if (p.tapeHeads > 6) p.tapeHeads = 6;
   if (p.tapeFlutter > 100) p.tapeFlutter = 100;
@@ -1729,9 +1735,10 @@ static int projectSaveInternal(FILE* file, Project* project) {
   fprintf(file, "- Reverb: %hhu,%hhu,%hhu,%hu,%hu,%hhu,%hhu,%hhu,%hu\n", project->reverbReturn, project->reverbTime,
     project->reverbDamping, project->reverbFilterCutoffHz, project->reverbHighpassCutoffHz,
     project->reverbAlgorithm, project->beadsReverbTime, project->beadsReverbTone, project->beadsReverbHighpassCutoffHz);
-  fprintf(file, "- Delay: %hhu,%hhu,%hhu,%hhu,%hu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu\n", project->delayReturn, project->delayReverbSend,
+  fprintf(file, "- Delay: %hhu,%hhu,%hhu,%hhu,%hu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hhu,%hu\n", project->delayReturn, project->delayReverbSend,
     project->delayTicks, project->delayFeedback, project->delayFilterCutoffHz, project->delayAlgorithm,
-    project->tapeDivision, project->tapeHeads, project->tapeTone, project->tapeFlutter, project->tapeSpring);
+    project->tapeDivision, project->tapeHeads, project->tapeTone, project->tapeFlutter, project->tapeSpring,
+    project->echoDiffuse, project->echoAge, project->echoHighpassCutoffHz);
   fprintf(file, "- Tilt pivot: %hu\n", project->tiltPivotHz);
   // Optional field (Phase 4): only written when set, so older versions of
   // the format stay byte-identical for projects without the preference.
