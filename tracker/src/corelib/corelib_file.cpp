@@ -6,9 +6,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
-#ifdef MACOS_BUILD
 #include <errno.h>
-#endif
 #ifdef _WIN32
 #include <windows.h>
 #endif
