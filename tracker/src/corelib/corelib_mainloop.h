@@ -38,5 +38,8 @@ void mainLoopTriggerQuit(void);
 void mainLoopSetTargetFps(int fps);
 int mainLoopGetTargetFps(void);
 int mainLoopGetFrameTimeUs(void);
+#if defined(PORTMASTER_BUILD) || defined(TEST_PORTMASTER_INPUT)
+uint32_t mainLoopGetTicks(void);
+#endif
 
 #endif

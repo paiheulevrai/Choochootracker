@@ -372,7 +372,9 @@ int settingsSave(void) {
   fprintf(file, "scwfPath: %s\n", appSettings.scwfPath);
   fprintf(file, "srWavetablePath: %s\n", appSettings.srWavetablePath);
 
-  fclose(file);
+  const bool writeFailed = ferror(file) != 0;
+  const int closeResult = fclose(file);
+  if (writeFailed || closeResult != 0) return 1;
 #ifdef WEB_BUILD
   // Emscripten's in-memory settings file becomes durable only after IDBFS sync.
   EM_ASM({ if (window.choochooSettingsSaved) window.choochooSettingsSaved(); });

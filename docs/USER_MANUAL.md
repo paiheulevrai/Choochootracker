@@ -369,6 +369,38 @@ ChooChooTracker works best with a gamepad that has a D-pad, 2 analogue sticks an
 
 Mappings can be changed in **Settings > Controls > Key mapping**, including on Android with an external gamepad. On PortMaster, save a
 remap with **Done**, then release the button before continuing in Settings.
+The calibration and tested-remapping workflow below is exclusive to
+**PortMaster and NextUI Pak** builds. Other builds keep the direct mapping
+editor without calibration, timed tests or startup recovery.
+
+On PortMaster and NextUI, before capturing a replacement, release all buttons. Keyboard and controller
+events from the same press are allowed to finish before the next step.
+Each change (including clearing a binding or resetting defaults) is tested:
+press and release the eight core controls when prompted. A changed motion
+control is tested too. You have 15 seconds per step; if the test cannot be
+completed, the previous mapping stays active. Only tested mappings can be
+saved with **Done**. `A`/`B` on handheld builds name keyboard inputs;
+`Pad A`/`Pad B` name SDL controller inputs, not extra physical buttons.
+When reassigning an already used input, swaps stay within its keyboard or
+controller path. If no equivalent binding exists, use **Calibrate controls**
+instead of removing another action's only controller binding.
+
+**Calibrate controls**, immediately above **Done** on the Key mapping screen, rebuilds the eight core
+controls from physical button presses, then tests them. Existing motion
+bindings are kept unless they conflict with the new controls.
+If you make a mistake during calibration or its test, hold any button for
+one second to restart from **Up**, then release all buttons before continuing.
+Repeating an incorrect assignment during the test cannot reveal that physical
+button-label mistake; use the restart gesture to correct it.
+
+If broken controls prevent reaching Settings, quit the app and create an
+empty file named `configure-controls` (no extension) next to `settings.txt`.
+On NextUI this is inside `Tools/tg5040/ChooChooTracker.pak`. Relaunch to enter
+calibration directly, without using the saved mapping. After all eight
+controls pass the test, the mapping is saved and the file is removed.
+On timeout, the old settings and the recovery file are kept so you can retry
+on the next launch. Sleep or exit also discards an unfinished test.
+
 Desktop layout defaults use QWERTZ only for QWERTZ regions; Polish keyboards
 keep the standard QWERTY defaults.
 

@@ -26,6 +26,7 @@
 #include "corelib_keymap.h"
 #include "corelib_power.h"
 #include "screens/screen_quick_help.h"
+#include "screens/screen_keymapping.h"
 #include "screens/screen_instrument.h"
 #include "midi/midi_router.h"
 #include "chipnomad_lib_live_stick.h"
@@ -847,6 +848,9 @@ void appSetup(void) {
 
   screensInitAll();
   screenSetup(&screenTitle, 0);
+#ifdef CCT_CONSOLE_CONTROLS
+  if (screenKeyMappingRecoveryRequested()) screenSetup(&screenKeyMapping, 1);
+#endif
 }
 
 int appHasProject(void) { return projectActive; }
@@ -1137,6 +1141,9 @@ void appOnEvent(MainLoopEventData eventData) {
     // Call raw input callback if set (for key mapping screen)
     if (inputRawCallback) {
       inputRawCallback(eventData.data.input, 1);
+#ifdef CCT_CONSOLE_CONTROLS
+      break;
+#endif
     }
 
     if (quickHelpSelectHeld && !rawInputActive && value != keyShift) quickHelpSelectAlone = 0;
@@ -1174,15 +1181,14 @@ void appOnEvent(MainLoopEventData eventData) {
       break;
     }
 
-    // PortMaster may expose the same physical control through gptokeyb and
-    // SDL's controller API. Ignore an unmapped controller duplicate even on
-    // the key-mapping screen: otherwise it can stay held while the mapped
-    // keyboard event switches screens, making every later D-pad press a
-    // combination and freezing navigation.
-#if defined(PORTMASTER_BUILD) || defined(TEST_PORTMASTER_INPUT)
-    if (eventData.data.input.deviceType == InputDeviceType::gamepad && value == keyUnmapped) break;
-#endif
+#ifdef CCT_CONSOLE_CONTROLS
+    if (value == keyUnmapped) {
+      if (currentScreen == &screenKeyMapping) screenKeyMappingUnmappedInput(eventData.data.input, 1);
+      break;
+    }
+#else
     if (value == keyUnmapped && currentScreen != &screenKeyMapping) break;
+#endif
 
     // Ignore duplicate downs. SDL keyboard repeat is filtered by the platform
     // loop, but this also protects tap detection from duplicate device events.
@@ -1241,6 +1247,9 @@ void appOnEvent(MainLoopEventData eventData) {
     // Call raw input callback if set (for key mapping screen)
     if (inputRawCallback) {
       inputRawCallback(eventData.data.input, 0);
+#ifdef CCT_CONSOLE_CONTROLS
+      break;
+#endif
     }
 
     if (!rawInputActive && (isMotionRecordTrigger(eventData.data.input) ||
@@ -1262,12 +1271,14 @@ void appOnEvent(MainLoopEventData eventData) {
       break;
     }
 
-    // See keyDown: PortMaster's unmapped SDL duplicate must never affect the
-    // held-button state, including if its release arrives after a screen swap.
-#if defined(PORTMASTER_BUILD) || defined(TEST_PORTMASTER_INPUT)
-    if (eventData.data.input.deviceType == InputDeviceType::gamepad && value == keyUnmapped) break;
-#endif
+#ifdef CCT_CONSOLE_CONTROLS
+    if (value == keyUnmapped) {
+      if (currentScreen == &screenKeyMapping) screenKeyMappingUnmappedInput(eventData.data.input, 0);
+      break;
+    }
+#else
     if (value == keyUnmapped && currentScreen != &screenKeyMapping) break;
+#endif
 
     pressedButtons &= ~value;
 
@@ -1292,6 +1303,9 @@ void appOnEvent(MainLoopEventData eventData) {
                               eventData.data.axes[2], eventData.data.axes[3]);
     break;
   case MainLoopEvent::tick: {
+#ifdef CCT_CONSOLE_CONTROLS
+    screenKeyMappingTick();
+#endif
     if (chipnomadState && chipnomadState->sampleRate > 0) {
     soundbankPoll();
     int motionRecordChanged = 0;
@@ -1509,11 +1523,21 @@ void appOnEvent(MainLoopEventData eventData) {
     refreshAudioDevices(true);
     break;
   case MainLoopEvent::exit:
+#ifdef CCT_CONSOLE_CONTROLS
+    if (currentScreen == &screenKeyMapping) screenKeyMappingCancel();
+#endif
     // Auto-save the current project and settings on exit
     autosaveProject();
     settingsSave();
     break;
   case MainLoopEvent::sleep: {
+#ifdef CCT_CONSOLE_CONTROLS
+    if (currentScreen == &screenKeyMapping) {
+      screenKeyMappingCancel();
+      currentScreen->fullRedraw();
+      screenMessage(MESSAGE_TIME, "Pending control changes cancelled");
+    }
+#endif
 #ifdef PORTMASTER_BUILD
     const char* nextui = getenv("CCT_NEXTUI");
     if (nextui && strcmp(nextui, "1") == 0) {

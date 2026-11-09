@@ -84,6 +84,7 @@ TRACKER_SRC_SOURCES = src/screens/instrument_monk.cpp src/soundbank_library.cpp 
                       src/piano_display.cpp \
                       src/screens/screen_settings.cpp \
                       src/screens/screen_settings_submenus.cpp \
+                      src/screens/screen_keymapping.cpp \
                       src/screens/screen_chain.cpp \
                       src/screens/screen_groovebox.cpp \
                       src/screens/screen_view_settings.cpp \

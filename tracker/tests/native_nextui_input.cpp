@@ -4,6 +4,7 @@ g++ -std=c++17 -DPORTMASTER_BUILD -I../chipnomad_lib -Isrc -Isrc/corelib \
   -Iplatforms/shared tests/native_nextui_input.cpp platforms/sdl2/corelib_input.cpp \
   $(pkg-config --cflags --libs sdl2) -o build/native-nextui-input
 */
+#define SDL_MAIN_HANDLED
 #include "common.h"
 #include "corelib_keymap.h"
 #include <cassert>
@@ -12,8 +13,15 @@ g++ -std=c++17 -DPORTMASTER_BUILD -I../chipnomad_lib -Isrc -Isrc/corelib \
 
 AppSettings appSettings = {};
 
-int main() {
+#ifdef main
+#undef main
+#endif
+int main(int, char**) {
+#ifdef _WIN32
+  _putenv_s("CCT_NEXTUI", "");
+#else
   unsetenv("CCT_NEXTUI");
+#endif
   inputInitDefaultKeyMapping();
   assert(appSettings.keyMapping.keyEdit[0].code == BTN_A);
   assert(appSettings.keyMapping.keyUp[1].deviceType == InputDeviceType::none);
@@ -23,7 +31,11 @@ int main() {
 
   // Upgrade an existing keyboard-only installation without losing its keys.
   appSettings.keyMapping.keyEdit[0].code = SDLK_c;
+#ifdef _WIN32
+  _putenv_s("CCT_NEXTUI", "1");
+#else
   setenv("CCT_NEXTUI", "1", 1);
+#endif
   inputInitNativeGamepadMapping();
   assert(appSettings.keyMapping.keyEdit[0].code == SDLK_c);
   assert(appSettings.keyMapping.keyUp[1].deviceType == InputDeviceType::gamepad);
@@ -47,4 +59,5 @@ int main() {
   assert(appSettings.keyMapping.keyEdit[0].code == BTN_A);
   assert(appSettings.keyMapping.keyEdit[1].code == SDL_CONTROLLER_BUTTON_A);
   assert(appSettings.keyMapping.keyOpt[1].deviceType == InputDeviceType::gamepad);
+  return 0;
 }

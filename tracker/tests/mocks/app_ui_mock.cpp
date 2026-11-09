@@ -62,7 +62,6 @@ void instrumentCommonDrawEnvelopePreview(uint8_t, uint8_t, uint8_t, uint8_t, uin
 int instrumentCommonDrawVoicePostCursor(int, int) { return 0; }
 int instrumentCommonDrawVoicePostField(int, int, CellState, const InstrumentVoicePostSettings*) { return 0; }
 int instrumentCommonOnEditVoicePost(int, int, CellEditAction, InstrumentVoicePostSettings*) { return 0; }
-const AppScreen screenKeyMapping = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenFileBrowser = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenColorTheme = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenTable = {nullptr, nullptr, noOp, noOp, ignoreInput};

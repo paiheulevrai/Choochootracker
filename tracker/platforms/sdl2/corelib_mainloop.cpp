@@ -40,6 +40,9 @@ void mainLoopSetTargetFps(int fps) {
 }
 int mainLoopGetTargetFps(void) { return requestedFps; }
 int mainLoopGetFrameTimeUs(void) { return frameTimeUs; }
+#ifdef PORTMASTER_BUILD
+uint32_t mainLoopGetTicks(void) { return SDL_GetTicks(); }
+#endif
 
 #ifdef PORTMASTER_BUILD
 static void nextuiSuspend(void (*onEvent)(MainLoopEventData)) {
