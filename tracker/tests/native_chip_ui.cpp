@@ -12,6 +12,7 @@
 #include "chipnomad_lib.h"
 #include "app.h"
 #include "screen_project.h"
+#include "screen_groovebox.h"
 #include "corelib_font.h"
 #include "corelib_gfx.h"
 #include "screens.h"
@@ -45,6 +46,8 @@
 #include <thread>
 #include <chrono>
 #include <cctype>
+#include "pattern_utils.h"
+#include "external/mutable/stmlib/utils/random.h"
 extern SDL_Renderer* renderer;
 static const char* output;
 #ifdef BMP_STREAM_TEST
@@ -66,6 +69,23 @@ static size_t trackerInkPixels(const std::vector<uint32_t>& pixels){size_t count
 static void capture(const char* name){appDraw();auto* s=SDL_CreateRGBSurfaceWithFormat(0,640,480,32,SDL_PIXELFORMAT_ARGB8888);require(s,"surface");require(SDL_RenderReadPixels(renderer,nullptr,s->format->format,s->pixels,s->pitch)==0,"pixels");char path[2048];snprintf(path,sizeof(path),"%s/%s.bmp",output,name);require(SDL_SaveBMP(s,path)==0,"capture");SDL_FreeSurface(s);}
 static void key(int down,int keys){appDraw();currentScreen->onInput(down,keys,1);appDraw();}
 static void tapEdit(){key(1,keyEdit);key(0,0);}
+static void appButton(int button, bool down) {
+  MainLoopEventData event = {};
+  event.type = down ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
+  event.data.input = {InputDeviceType::logical, button};
+  appOnEvent(event);
+  float audio[256 * 2];
+  chipnomadRender(chipnomadState, audio, 256);
+  appDraw();
+}
+static void appChord(int modifier, int button) {
+  // Independent gestures model an expired double-tap window, not instant consecutive taps.
+  appResetInputState();
+  if (modifier) appButton(modifier, true);
+  appButton(button, true);
+  appButton(button, false);
+  if (modifier) appButton(modifier, false);
+}
 static void useTheme(const std::string& filename) {
   const std::string path = "themes/" + filename;
   require(loadTheme(path.c_str()) == 0, "theme loaded");
@@ -290,6 +310,7 @@ static void captureHomepage() {
 }
 int main(int argc,char** argv){
   if(argc!=2&&argc!=3) return 1;
+  setvbuf(stdout, nullptr, _IONBF, 0);
   output=argv[1];initDefaultAppSettings();appSettings.screenWidth=640;appSettings.screenHeight=480;fontSetCurrent(fontGetDefault());require(!gfxSetup(&appSettings.screenWidth,&appSettings.screenHeight),"SDL dummy setup");
 #ifdef BMP_STREAM_TEST
   if(argc==3 && !strcmp(argv[2],"--bmp-stream-only")) {
@@ -1184,6 +1205,946 @@ int main(int argc,char** argv){
     chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
   }
   chipnomadInitChips(chipnomadState,48000,nullptr);chipnomadReserveRenderBuffers(chipnomadState,1024);screensInitAll();waveformDisplayInit();monitorDisplayInit();
+  if(argc==3 && !strcmp(argv[2],"--canonical-song-audio-only")) {
+    const char* fixture = std::getenv("CCT_COMPARE_FIXTURE");
+    const char* mode = std::getenv("CCT_COMPARE_MODE");
+    require(fixture && mode, "full-song comparison specifies fixture and mode");
+    require(!strcmp(mode, "classic") || !strcmp(mode, "canonical") || !strcmp(mode, "reip"),
+      "full-song comparison mode is valid");
+    std::srand(1); stmlib::Random::Seed(1);
+    auto* state = chipnomadCreate();
+    require(!projectLoad(&state->project,
+      (std::string("projects/arrangement-tests/") + fixture + ".cct").c_str()), "full-song fixture loads");
+    auto original = std::make_unique<Project>(state->project);
+    if (!strcmp(mode, "reip")) require(!convertChainsToPatterns(&state->project), "full-song Reip conversion succeeds");
+    canonicalSimplifiedActive = !strcmp(mode, "canonical");
+    chipnomadInitChips(state, 48000, nullptr);
+    chipnomadReserveRenderBuffers(state, 1024);
+    state->mixVolume = 1.0f;
+    const auto stem = std::filesystem::path(output) / (std::string(fixture) + "-" + mode + "-full");
+    FILE* pcm = fopen((stem.string() + ".f32").c_str(), "wb");
+    FILE* trace = fopen((stem.string() + ".trace").c_str(), "wb");
+    require(pcm && trace, "full-song PCM and trace open");
+    require(chipnomadQueuePlaybackStartSong(state, 0, 0, 0), "full-song playback starts without Song looping");
+    std::srand(1); stmlib::Random::Seed(1);
+    float audio[256 * 2];
+    int previous[PROJECT_MAX_TRACKS][4];
+    for (auto& position : previous) std::fill_n(position, 4, -1);
+    int reached[PROJECT_MAX_TRACKS];
+    std::fill_n(reached, PROJECT_MAX_TRACKS, -1);
+    bool started = false, ended = false;
+    int frames = 0, tailFrames = 0;
+    for (; frames < 48000 * 600; frames += 256) {
+      chipnomadRender(state, audio, 256);
+      require(fwrite(audio, sizeof(float), 512, pcm) == 512, "full-song PCM writes");
+      const auto* status = chipnomadGetPlaybackStatus(state);
+      for (int t = 0; t < state->project.tracksCount; ++t) {
+        const auto& track = status->tracks[t];
+        int position[] = {(int)track.mode, track.songRow, track.chainRow, track.phraseRow};
+        if (memcmp(previous[t], position, sizeof(position))) {
+          require(fprintf(trace, "%d %d %d %d %d %d\n", frames + 256, t,
+            position[0], position[1], position[2], position[3]) > 0, "full-song trace writes");
+          std::copy_n(position, 4, previous[t]);
+        }
+        if (track.mode == PlaybackMode::song)
+          reached[t] = std::max(reached[t], track.songRow);
+      }
+      started |= status->isPlaying != 0;
+      if (started && !status->isPlaying) ended = true;
+      if (ended && (tailFrames += 256) >= 48000 * 5) { frames += 256; break; }
+    }
+    require(fclose(pcm) == 0 && fclose(trace) == 0, "full-song outputs close");
+    require(started && ended && tailFrames >= 48000 * 5,
+      "full-song arrangement reaches natural stop within 10 minutes, plus five-second tail");
+    for (int t = 0; t < original->tracksCount; ++t) {
+      int last = -1;
+      for (int r = 0; r < PROJECT_MAX_LENGTH; ++r)
+        if (original->song[r][t] < PROJECT_MAX_CHAINS &&
+            original->chains[original->song[r][t]].rows[0].phrase < PROJECT_MAX_PHRASES) last = r;
+      printf("track %d: last arranged row=%d, highest played row=%d\n", t, last, reached[t]);
+      require(last < 0 || reached[t] >= last, "full-song playback reaches each track's final arranged row");
+    }
+    printf("%s %s: full arrangement and tail rendered, %.3f seconds (%d frames)\n",
+      fixture, mode, frames / 48000.0, frames);
+    chipnomadDestroy(state);
+    chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit(); return 0;
+  }
+  if(argc==3 && (!strcmp(argv[2],"--canonical-simple-only") || !strcmp(argv[2],"--canonical-audio-only"))) {
+    auto renderFixture = [&](const std::string& path, bool canonical, bool converted) {
+      std::srand(1);
+      stmlib::Random::Seed(1);
+      auto* state = chipnomadCreate();
+      require(!projectLoad(&state->project, path.c_str()), "comparison render loads fixture");
+      if (converted) require(!convertChainsToPatterns(&state->project), "Reip comparison converts fixture");
+      canonicalSimplifiedActive = canonical;
+      chipnomadInitChips(state, 48000, nullptr);
+      chipnomadReserveRenderBuffers(state, 1024);
+      state->mixVolume = 1.0f;
+      require(chipnomadQueuePlaybackStartSong(state, 0, 0, 0), "comparison queues canonical Song playback");
+      std::vector<float> samples(48000 * 3 * 2);
+      std::srand(1);
+      stmlib::Random::Seed(1);
+      for (int frame = 0; frame < 48000 * 3; frame += 1024)
+        chipnomadRender(state, samples.data() + frame * 2, std::min(1024, 48000 * 3 - frame));
+      chipnomadDestroy(state);
+      return samples;
+    };
+    auto phraseCount = [](Project& p) {
+      bool used[PROJECT_MAX_PHRASES] = {};
+      for (const auto& chain : p.chains)
+        for (const auto& row : chain.rows)
+          if (row.phrase < PROJECT_MAX_PHRASES) used[row.phrase] = true;
+      for (const auto& pattern : p.patterns)
+        for (const auto& bar : pattern.bars)
+          if (bar.phrase < PROJECT_MAX_PHRASES) used[bar.phrase] = true;
+      return std::count(std::begin(used), std::end(used), true);
+    };
+    if (!strcmp(argv[2], "--canonical-audio-only")) {
+      const char* fixture = std::getenv("CCT_COMPARE_FIXTURE");
+      const char* mode = std::getenv("CCT_COMPARE_MODE");
+      require(fixture && mode, "isolated audio comparison specifies fixture and mode");
+      require(!strcmp(mode, "classic") || !strcmp(mode, "canonical") || !strcmp(mode, "reip"),
+        "isolated audio comparison mode is valid");
+      auto samples = renderFixture(std::string("projects/arrangement-tests/") + fixture + ".cct",
+        !strcmp(mode, "canonical"), !strcmp(mode, "reip"));
+      const auto path = std::filesystem::path(output) / (std::string(fixture) + "-" + mode + ".f32");
+      FILE* file = fopen(path.string().c_str(), "wb");
+      require(file != nullptr, "comparison PCM opens");
+      require(fwrite(samples.data(), sizeof(float), samples.size(), file) == samples.size(), "comparison PCM writes");
+      require(fclose(file) == 0, "comparison PCM closes");
+      printf("%s %s: rendered %zu float samples at 48000 Hz\n", fixture, mode, samples.size());
+      chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit(); return 0;
+    }
+    for (const char* name : {"Ambient_01", "ChipTek", "ChooChooseAcid"}) {
+      const std::string path = std::string("projects/arrangement-tests/") + name + ".cct";
+      canonicalSimplifiedActive = grooveboxEditorActive = false;
+      require(!projectLoad(&chipnomadState->project, path.c_str()), "canonical fixture loads");
+      auto& p = chipnomadState->project;
+      auto original = std::make_unique<Project>(p);
+      require(p.viewMode == ViewMode::classic, "comparison fixtures are canonical Classic projects");
+      const int originalPhrases = phraseCount(p);
+      projectModified = false;
+      screenSetup(&screenViewSettings, 0); appDraw();
+      appChord(keyEdit, keyLeft);
+      require(canonicalSimplifiedActive && p.viewMode == ViewMode::classic && !projectModified,
+        "View enters Simple C directly without conversion or project modification");
+      int cells = 0, bars = 0, transposed = 0, shared = 0, retained = 0;
+      for (int row = 0; row < PROJECT_MAX_LENGTH; ++row) {
+        for (int t = 0; t < p.tracksCount; ++t) {
+          int chain = p.song[row][t];
+          if (chain >= PROJECT_MAX_CHAINS) continue;
+          ++cells;
+          int length = grooveboxTrackLength(&p, row, t);
+          bars += length;
+          for (int b = length; b < 16; ++b)
+            retained += p.chains[chain].rows[b].phrase < PROJECT_MAX_PHRASES;
+          for (int b = 0; b < std::max(1, length); ++b) {
+            *pSongRow = row; *pSongTrack = t; *pChainRow = b;
+            screenSetup(&screenPhrase, -1); appDraw();
+            require(currentScreen == &screenPhrase, "canonical Simple C uses real Phrase editor");
+            require(*pChainRow == b, "canonical browsing retains selected bar");
+            transposed += p.chains[chain].rows[b].transpose != 0;
+            shared += grooveboxCellShared(&p, row, t, b);
+          }
+        }
+      }
+      require(!projectModified && !memcmp(original.get(), &p, sizeof(Project)),
+        "all canonical bars can be browsed without allocation, transpose baking or reference changes");
+      *pSongRow = 0; *pSongTrack = 0; *pChainRow = 0;
+      screenSetup(&screenSong, -1); appDraw(); appChord(keyShift, keyRight);
+      require(currentScreen == &screenPhrase, "Simple C Song skips Chain");
+      capture((std::string(name) + "-canonical-simple").c_str());
+      appChord(keyShift, keyLeft);
+      require(currentScreen == &screenSong, "Simple C Phrase returns directly to Song");
+      screenSetup(&screenViewSettings, 0); appDraw(); appChord(keyEdit, keyRight);
+      require(!canonicalSimplifiedActive && !grooveboxEditorActive && p.viewMode == ViewMode::classic,
+        "Simple C returns to Classic directly");
+      appChord(keyEdit, keyLeft); appChord(keyEdit, keyLeft);
+      require(grooveboxEditorActive && !canonicalSimplifiedActive, "Simple C switches directly to Groovebox");
+      appChord(keyEdit, keyLeft);
+      require(currentScreen == &screenViewSettings && !grooveboxEditorActive &&
+        !canonicalSimplifiedActive && p.viewMode == ViewMode::classic,
+        "three-editor cycle returns to Classic without a conversion choice");
+      require(!memcmp(original.get(), &p, sizeof(Project)), "canonical mode roundtrip preserves entire project");
+      if (grooveboxCellShared(&p, 0, 0, 0)) {
+        canonicalSimplifiedActive = true;
+        screenPhrase.init(); screenSetup(&screenPhrase, -1); appDraw();
+        appChord(keyEdit, keyRight);
+        require(currentScreen == &screenPhrase, "shared Simplified edit stays in the editor without a popup");
+        require(!memcmp(p.song, original->song, sizeof(p.song)), "automatic bar isolation preserves every Song occurrence");
+        int sourceChain = original->song[0][0];
+        for (int c = 0; c < PROJECT_MAX_CHAINS; ++c) {
+          for (int b = 0; b < 16; ++b) {
+            require(p.chains[c].rows[b].transpose == original->chains[c].rows[b].transpose,
+              "automatic isolation retains every transpose");
+            if (c != sourceChain || b != 0)
+              require(p.chains[c].rows[b].phrase == original->chains[c].rows[b].phrase,
+                "automatic isolation changes only the edited bar reference");
+          }
+        }
+        int sourcePhrase = original->chains[sourceChain].rows[0].phrase;
+        if (p.chains[sourceChain].rows[0].phrase != sourcePhrase)
+          require(!memcmp(&p.phrases[sourcePhrase], &original->phrases[sourcePhrase], sizeof(Phrase)),
+            "automatic isolation preserves the shared source phrase");
+        require(phraseCount(p) <= originalPhrases + 1, "editing allocates at most one phrase, never a whole pattern");
+      }
+
+      require(!projectLoad(&p, path.c_str()), "reload source for original Reip comparison");
+      require(!convertChainsToPatterns(&p), "original Reip conversion succeeds");
+      const int convertedPhrases = phraseCount(p);
+      require(!convertPatternsToChains(&p), "original Reip reverse conversion succeeds");
+      const bool sameChains = !memcmp(p.chains, original->chains, sizeof(p.chains));
+      const bool sameSong = !memcmp(p.song, original->song, sizeof(p.song));
+      printf("%s: cells=%d bars=%d transposed=%d shared-bars=%d retained=%d; SimpleC added phrases=0; Reip added phrases=%d roundtrip Song=%s Chains=%s\n",
+        name, cells, bars, transposed, shared, retained, convertedPhrases - originalPhrases,
+        sameSong ? "same" : "changed", sameChains ? "same" : "changed");
+
+      require(!projectLoad(&p, path.c_str()), "reload source for edit workflow");
+      canonicalSimplifiedActive = true;
+      grooveboxEditorActive = false;
+      chipnomadInitChips(chipnomadState, 48000, nullptr);
+      chipnomadState->mixVolume = 1.0f;
+      int emptyScene = 0;
+      for (; emptyScene < PROJECT_MAX_LENGTH; ++emptyScene)
+        if (std::all_of(std::begin(p.song[emptyScene]), std::end(p.song[emptyScene]),
+            [](uint16_t c) { return c == EMPTY_VALUE_16; })) break;
+      require(emptyScene < PROJECT_MAX_LENGTH, "fixture has room for isolated editing");
+      screenPhrase.init(); screenSong.init();
+      *pSongRow = emptyScene; *pSongTrack = 0; *pChainRow = 0;
+      screenSetup(&screenSong, -1); appDraw(); appChord(0, keyEdit);
+      appChord(keyShift, keyRight);
+      require(currentScreen == &screenPhrase, "new canonical chain opens without conversion");
+      appChord(0, keyEdit);
+      int chain = p.song[emptyScene][0];
+      require(chain < PROJECT_MAX_CHAINS, "new Song occurrence has a valid canonical chain");
+      int phrase = p.chains[chain].rows[0].phrase;
+      require(phrase < PROJECT_MAX_PHRASES && p.phrases[phrase].rows[0].note != EMPTY_VALUE_8,
+        "new canonical note persists in a real phrase");
+      appChord(0, keyRight); appChord(keyEdit, keyRight);
+      require(p.phrases[phrase].rows[0].instrument == 1, "canonical instrument edits use Phrase controls");
+      appChord(0, keyRight); appChord(keyEdit, keyLeft);
+      require(p.phrases[phrase].rows[0].volume == PHRASE_VOLUME_MAX - 1, "canonical volume edits use Phrase controls");
+      appChord(0, keyRight); appChord(keyEdit, keyUp);
+      require(p.phrases[phrase].rows[0].fx[0].command != FX_ID_EMPTY, "canonical FX picker works");
+      appChord(keyShift, keyUp);
+      appChord(keyEdit, keyRight);
+      require(grooveboxTrackLength(&p, emptyScene, 0) == appSettings.defaultPatternLength + 1,
+        "canonical Length adds independent no-event bar");
+      appChord(keyEdit, keyLeft);
+      appChord(keyEdit, keyUp);
+      require(grooveboxTrackLength(&p, emptyScene, 0) == appSettings.defaultPatternLength * 2,
+        "canonical Length doubles using independent copies");
+      appChord(keyEdit, keyDown);
+      require(grooveboxTrackLength(&p, emptyScene, 0) == appSettings.defaultPatternLength,
+        "canonical Length halves using the existing structural helper");
+      appChord(0, keyRight); appChord(0, keyRight);
+      appChord(0, keyEdit);
+      require(p.playheadMode == PlayheadMode::loopActiveBar &&
+        currentScreen->getPlaybackLevel() == ScreenPlaybackLevel::phrase, "canonical BAR uses existing phrase loop");
+      float transportAudio[256 * 2];
+      auto settleTransport = [&] {
+        // Commands become visible on tracker ticks, not on every render block.
+        for (int frames = 0; frames < std::ceil(48000.0 / p.tickRate) + 256; frames += 256)
+          chipnomadRender(chipnomadState, transportAudio, 256);
+        appDraw();
+      };
+      settleTransport();
+      chipnomadQueuePlaybackStop(chipnomadState);
+      settleTransport();
+      appChord(0, keyPlay);
+      settleTransport();
+      require(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying &&
+        chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode == PlaybackMode::phrase &&
+        chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].loop,
+        "actual Start launches the BAR phrase loop");
+      appChord(0, keyPlay);
+      settleTransport();
+      require(!chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "actual Start stops the BAR loop");
+      appChord(0, keyEdit);
+      require(currentScreen->getPlaybackLevel() == ScreenPlaybackLevel::chain, "canonical PAT uses existing chain loop");
+      appChord(0, keyPlay);
+      settleTransport();
+      require(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying &&
+        chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode == PlaybackMode::chain &&
+        chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].loop,
+        "actual Start launches the PAT chain loop");
+      appChord(0, keyPlay);
+      settleTransport();
+      require(!chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "actual Start stops the PAT loop");
+      appChord(0, keyLeft);
+      const auto notesBeforeTranspose = p.phrases[phrase];
+      appChord(keyEdit, keyRight);
+      require(p.chains[chain].rows[0].transpose == 1 &&
+        !memcmp(&notesBeforeTranspose, &p.phrases[phrase], sizeof(Phrase)), "bar transpose is stored in chain, never baked into notes");
+      capture((std::string(name) + "-canonical-edited").c_str());
+      appChord(0, keyDown);
+      appChord(keyShift, keyRight);
+      require(currentScreen == &screenInstrument, "canonical SHIFT+RIGHT reaches Instrument");
+      appChord(keyShift, keyLeft);
+      require(currentScreen == &screenPhrase && canonicalSimplifiedActive, "Instrument returns to canonical pattern");
+      auto saved = std::make_unique<Project>(p);
+      const auto savePath = std::filesystem::path(output) / (std::string(name) + "-canonical-roundtrip.cct");
+      require(!projectSave(&p, savePath.string().c_str()), "canonical edited project saves");
+      require(!projectLoad(&p, savePath.string().c_str()), "canonical edited project reloads");
+      require(p.viewMode == ViewMode::classic &&
+        !memcmp(saved->song, p.song, sizeof(p.song)) &&
+        !memcmp(saved->chains, p.chains, sizeof(p.chains)) &&
+        !memcmp(saved->phrases, p.phrases, sizeof(p.phrases)), "save/reload retains all canonical events, transpose and references");
+      std::filesystem::remove(savePath);
+      canonicalSimplifiedActive = false;
+    }
+    auto& p = chipnomadState->project;
+    projectFree(&p); projectInitAY(&p);
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    canonicalSimplifiedActive = true;
+    grooveboxEditorActive = false;
+    p.song[0][0] = p.song[1][0] = 1;
+    p.song[0][1] = 2;
+    for (int b = 0; b < 4; ++b) p.chains[1].rows[b] = {12, 3};
+    p.chains[2].rows[0] = {12, 0};
+    p.phrases[12].rows[0].note = 48;
+    p.phrases[12].rows[0].instrument = 0;
+    p.phrases[12].rows[0].volume = PHRASE_VOLUME_MAX;
+    auto source = p.phrases[12];
+    *pSongRow = 0; *pSongTrack = 0; *pChainRow = 2;
+    screenPhrase.init(); screenSetup(&screenPhrase, -1); appDraw();
+    require(p.chains[1].rows[2].phrase == 12, "opening shared third bar does not clone");
+    appChord(keyEdit, keyRight);
+    int edited = p.chains[1].rows[2].phrase;
+    require(currentScreen == &screenPhrase && edited != 12 &&
+      p.phrases[edited].rows[0].note == 49, "first gesture edits third bar automatically without popup");
+    require(p.song[0][0] == 1 && p.song[1][0] == 1 &&
+      p.chains[1].rows[0].phrase == 12 && p.chains[1].rows[1].phrase == 12 &&
+      p.chains[1].rows[3].phrase == 12 && p.chains[2].rows[0].phrase == 12 &&
+      !memcmp(&source, &p.phrases[12], sizeof(Phrase)),
+      "A A B A preserves siblings, other chains and linked Song occurrences");
+    appChord(keyEdit, keyRight);
+    require(p.chains[1].rows[2].phrase == edited && p.phrases[edited].rows[0].note == 50,
+      "successive edits reuse the isolated phrase");
+    appChord(keyEdit, keyLeft); appChord(keyEdit, keyLeft);
+    require(p.chains[1].rows[2].phrase == 12 && phraseIsEmpty(&p, edited) &&
+      p.chains[1].rows[2].transpose == 3,
+      "returning to identical content reuses A and frees only the editor-created copy");
+    auto rawKey = [&](SDL_Keycode code, bool down) {
+      MainLoopEventData event = {};
+      event.type = down ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
+      event.data.input = {InputDeviceType::keyboard, (int)code};
+      appOnEvent(event); appDraw();
+    };
+    rawKey(SDLK_ESCAPE, true); rawKey(SDLK_ESCAPE, false);
+    rawKey(SDLK_x, true); rawKey(SDLK_x, false);
+    edited = p.chains[1].rows[2].phrase;
+    require(edited != 12 && p.phrases[edited].rows[0].note == 50 &&
+      !memcmp(&source, &p.phrases[12], sizeof(Phrase)),
+      "desktop key jazz also isolates only the edited bar");
+    rawKey(SDLK_ESCAPE, true); rawKey(SDLK_ESCAPE, false);
+    *pChainRow = 0;
+    screenPhrase.init(); screenSetup(&screenPhrase, -1); appDraw();
+    for (auto& phrase : p.phrases) phrase.rows[0].note = 48;
+    screenSetup(&screenPhrase, -1); appDraw();
+    auto fullPool = std::make_unique<Project>(p);
+    appChord(keyEdit, keyRight);
+    require(currentScreen == &screenPhrase && !memcmp(fullPool.get(), &p, sizeof(Project)),
+      "full phrase pool refuses the edit without popup or partial mutation");
+    int savedDefault = appSettings.defaultViewMode;
+    appSettings.defaultViewMode = 1;
+    // Keep SDL paused: this harness renders on the calling thread.
+    auto savedResume = audioManager.resume;
+    audioManager.resume = [] {};
+    projectCreateNewFromScreen(&screenSong);
+    require(canonicalSimplifiedActive && !grooveboxEditorActive &&
+      p.viewMode == ViewMode::classic &&
+      std::all_of(std::begin(p.song[0]), std::end(p.song[0]),
+        [](uint16_t c) { return c == EMPTY_VALUE_16; }),
+      "new Simplified projects start canonical and unallocated");
+    p.song[0][0] = 1;
+    p.chains[1].rows[0] = {12, 0};
+    p.phrases[12].rows[0].note = 48;
+    require(!convertChainsToPatterns(&p), "build historical Simplified import fixture");
+    const auto legacyPath = std::filesystem::path(output) / "legacy-simplified-import.cct";
+    require(!projectSave(&p, legacyPath.string().c_str()), "historical fixture saves");
+    require(!projectLoadFromPath(legacyPath.string().c_str()), "historical Simplified imports once on load");
+    require(p.viewMode == ViewMode::classic && canonicalSimplifiedActive &&
+      p.phrases[p.chains[p.song[0][0]].rows[0].phrase].rows[0].note == 48,
+      "historical import opens the only Simplified editor with preserved notes");
+    std::filesystem::remove(legacyPath);
+    auto failedImport = std::make_unique<Project>();
+    projectInitAY(failedImport.get());
+    failedImport->viewMode = ViewMode::simplified;
+    failedImport->song[0][0] = 1;
+    failedImport->patternToChainMap[1] = 1;
+    failedImport->chainToPatternMap[1] = 1;
+    failedImport->patterns[1].bars[0].phrase = 12;
+    failedImport->chains[1].rows[0].phrase = 13;
+    for (auto& phrase : failedImport->phrases) phrase.rows[0].note = 48;
+    failedImport->phrases[12].rows[0].note = 60;
+    const auto failedPath = std::filesystem::path(output) / "legacy-full-import.cct";
+    require(!projectSave(failedImport.get(), failedPath.string().c_str()), "full legacy import fixture saves");
+    auto beforeImport = std::make_unique<Project>(p);
+    require(projectLoadFromPath(failedPath.string().c_str()) != 0 &&
+      !memcmp(beforeImport.get(), &p, sizeof(Project)),
+      "failed legacy reconciliation does not replace the live project");
+    require(!projectLoad(failedImport.get(), failedPath.string().c_str()) &&
+      failedImport->viewMode == ViewMode::simplified &&
+      failedImport->phrases[12].rows[0].note == 60,
+      "failed legacy reconciliation leaves the source file intact");
+    projectFree(failedImport.get());
+    std::filesystem::remove(failedPath);
+    audioManager.stop();
+    audioManager.resume = savedResume;
+    appSettings.defaultViewMode = (uint8_t)savedDefault;
+    projectFree(&p); projectInitAY(&p);
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    *pSongRow = 0; *pSongTrack = 0; *pChainRow = 0;
+    p.song[0][0] = 0;
+    p.chains[0].rows[0] = {0, 2};
+    p.chains[0].rows[2] = {1, 0xff};
+    p.phrases[0].rows[0].note = 48; p.phrases[1].rows[0].note = 60;
+    screenPhrase.init(); screenSetup(&screenPhrase, -1); appDraw();
+    auto gapOriginal = std::make_unique<Project>(p);
+    appChord(keyShift, keyUp);
+    appChord(keyEdit, keyRight);
+    require(!memcmp(gapOriginal.get(), &p, sizeof(Project)),
+      "Length refuses to bridge a gap and implicitly activate retained bars");
+    appChord(0, keyDown);
+    appChord(keyOpt, keyDown);
+    require(*pChainRow == 0, "canonical bar navigation stops at the playback gap");
+    require(p.chains[0].rows[2].phrase == 1 && p.chains[0].rows[2].transpose == 0xff,
+      "retained reference and signed transpose survive browsing");
+    p.song[0][1] = 1;
+    p.chains[1].rows[2].phrase = 1;
+    appChord(keyOpt, keyRight);
+    require(*pSongTrack == 1 && *pChainRow == 0, "track navigation handles a leading gap without underflow");
+    appChord(0, keyEdit);
+    require(p.chains[1].rows[0].phrase == EMPTY_VALUE_16 && p.chains[1].rows[2].phrase == 1,
+      "editing a leading gap does not activate retained data");
+    p.song[0][1] = EMPTY_VALUE_16;
+    p.chains[0].rows[2].phrase = EMPTY_VALUE_16;
+    p.song[1][0] = p.song[2][0] = 0;
+    const Chain sourceChain = p.chains[0];
+    screenSong.init(); screenSetup(&screenSong, -1); appDraw();
+    auto selectTwo = [&] {
+      appChord(keyShift, keyOpt);
+      appChord(0, keyDown);
+    };
+    selectTwo(); appChord(keyOpt, keyUp);
+    int mergedChain = p.song[0][0];
+    require(mergedChain != 0 && mergedChain < PROJECT_MAX_CHAINS &&
+      p.song[1][0] == EMPTY_VALUE_16 && p.song[2][0] == 0,
+      "canonical merge changes only selected Song occurrences");
+    require(!memcmp(&sourceChain, &p.chains[0], sizeof(Chain)) &&
+      p.chains[mergedChain].rows[0].phrase == 0 && p.chains[mergedChain].rows[1].phrase == 0 &&
+      p.chains[mergedChain].rows[0].transpose == 2 && p.chains[mergedChain].rows[1].transpose == 2,
+      "repeated-chain merge preserves source, phrase IDs and row transposes");
+    p.song[0][0] = p.song[1][0] = 0;
+    for (int b = 0; b < 9; ++b) p.chains[0].rows[b] = {0, 2};
+    screenSong.init(); screenSetup(&screenSong, -1); appDraw(); selectTwo();
+    auto refused = std::make_unique<Project>(p);
+    appChord(keyOpt, keyUp);
+    require(!memcmp(refused.get(), &p, sizeof(Project)), "overlength canonical merge changes nothing");
+    chainClear(&p.chains[0]); p.chains[0].rows[0] = {0, 2};
+    p.song[0][1] = p.song[1][1] = 1;
+    chainClear(&p.chains[1]);
+    for (int b = 0; b < 9; ++b) p.chains[1].rows[b] = {0, 2};
+    screenSong.init(); screenSetup(&screenSong, -1); appDraw(); selectTwo(); appChord(0, keyRight);
+    *refused = p;
+    appChord(keyOpt, keyUp);
+    require(!memcmp(refused.get(), &p, sizeof(Project)), "one refused track prevents any partial multi-track merge");
+    p.song[0][1] = p.song[1][1] = EMPTY_VALUE_16;
+    p.chains[0].rows[2] = {1, 0xff};
+    screenSong.init(); screenSetup(&screenSong, -1); appDraw(); selectTwo();
+    *refused = p;
+    appChord(keyOpt, keyUp);
+    require(!memcmp(refused.get(), &p, sizeof(Project)), "canonical merge preserves and refuses retained bars after a gap");
+    p.chains[0].rows[2].phrase = EMPTY_VALUE_16;
+    for (int c = 0; c < PROJECT_MAX_CHAINS; ++c) p.song[c][7] = c;
+    screenSong.init(); screenSetup(&screenSong, -1); appDraw(); selectTwo();
+    *refused = p;
+    appChord(keyOpt, keyUp);
+    require(!memcmp(refused.get(), &p, sizeof(Project)), "exhausted-chain canonical merge changes nothing");
+    projectFree(&p); projectInitAY(&p);
+    p.song[0][0] = 0;
+    for (int f = 0; f < PROJECT_MAX_PHRASES; ++f) p.patterns[f / 16].bars[f % 16].phrase = f;
+    screenSong.init(); screenPhrase.init();
+    screenSetup(&screenPhrase, -1); appDraw();
+    *refused = p;
+    appChord(0, keyEdit);
+    require(!memcmp(refused.get(), &p, sizeof(Project)), "exhausted-phrase canonical first edit changes nothing");
+    projectFree(&p); projectInitAY(&p);
+    p.song[0][0] = 0;
+    screenSong.init(); screenPhrase.init();
+    screenSetup(&screenPhrase, -1); appDraw();
+    resetCopyBuffers();
+    *refused = p;
+    appChord(keyShift, keyEdit);
+    require(!memcmp(refused.get(), &p, sizeof(Project)), "empty Phrase clipboard allocates no canonical bars");
+    copyPhrase(1, 3, 0, 3, 0, 0);
+    require(!canPastePhrase(0), "FX-only clipboard is incompatible with the note column");
+    appChord(keyShift, keyEdit);
+    require(!memcmp(refused.get(), &p, sizeof(Project)), "incompatible Phrase clipboard allocates no canonical bars");
+    p.phrases[1].rows[0].note = 60;
+    copyPhrase(1, 0, 0, 0, 0, 0);
+    appChord(keyShift, keyEdit);
+    int pasted = grooveboxPhraseAt(&p, 0, 0, 0);
+    require(pasted >= 0 && pasted != 1 && p.phrases[pasted].rows[0].note == 60 &&
+      p.phrases[1].rows[0].note == 60 && grooveboxTrackLength(&p, 0, 0) == appSettings.defaultPatternLength,
+      "valid Phrase paste materializes the default bars and preserves its source");
+    canonicalSimplifiedActive = false;
+    printf("Canonical Simplified comparison, actual input editing and persistence passed for all three fixtures.\n");
+    chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit(); return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--groovebox-feedback-only")) {
+    auto& p = chipnomadState->project;
+    projectFree(&p); projectInitAY(&p);
+    for (int t = 0; t < 3; ++t) {
+      p.song[0][t] = (t + 1) * 16;
+      int length = t == 0 ? 1 : t == 1 ? 3 : 16;
+      for (int b = 0; b < length; ++b) {
+        int phrase = t * 128 + b;
+        p.chains[p.song[0][t]].rows[b].phrase = phrase;
+        p.phrases[phrase].rows[0].note = 48 + b;
+        p.phrases[phrase].rows[0].instrument = 0;
+      }
+    }
+    *pSongRow = *pSongTrack = *pChainRow = 0;
+    grooveboxEditorActive = true;
+    screenGroovebox.init();
+    screenSetup(&screenGroovebox, 0); appDraw();
+    auto original = std::make_unique<Project>(p);
+    const ColorScheme theme = appSettings.colorScheme;
+    auto cellPixels = [&](int x, int y, int width = 1) {
+      SDL_Rect region{x * gfxGetCharWidth(), y * gfxGetCharHeight(),
+        width * gfxGetCharWidth(), gfxGetCharHeight()};
+      std::vector<uint32_t> pixels(region.w * region.h);
+      require(SDL_RenderReadPixels(renderer, &region, SDL_PIXELFORMAT_ARGB8888,
+        pixels.data(), region.w * 4) == 0, "Groovebox cell pixels");
+      return pixels;
+    };
+    auto expectText = [&](int x, int y, const char* text, int color) {
+      auto actual = cellPixels(x, y, (int)strlen(text));
+      gfxSetFgColor(color); gfxPrint(x, y, text);
+      require(actual == cellPixels(x, y, (int)strlen(text)), "Groovebox displayed text and colour");
+    };
+    expectText(0, 5, "10", theme.textLabel);
+    expectText(2, 2, "0", theme.textTitles);
+    expectText(4, 2, "1", theme.textInfo);
+    expectText(2, 4, "o", theme.textTitles);
+    expectText(0, 1, "                                        ", theme.textInfo);
+    expectText(0, 17, "BAR 01                                  ", theme.textInfo);
+    expectText(0, 0, "PATTERN", theme.textTitles);
+    expectText(0, 11, "T1 STEP 00                              ", theme.textInfo);
+    auto& playheads = chipnomadState->uiPlaybackStatus;
+    playheads.isPlaying = 1;
+    for (int t = 0; t < 3; ++t) {
+      playheads.tracks[t].mode = PlaybackMode::song;
+      playheads.tracks[t].songRow = 0;
+      playheads.tracks[t].chainRow = 0;
+      playheads.tracks[t].phraseRow = 1 + t;
+    }
+    currentScreen->fullRedraw(); appDraw();
+    for (int t = 0; t < 3; ++t) {
+      expectText(2 + (1 + t) * 2, 3 + t, ".", theme.playMarkers);
+      const char label[] = {char('1' + t), 0};
+      expectText(2 + (1 + t) * 2, 2, label, theme.playMarkers);
+    }
+    playheads.tracks[1].songRow = 1;
+    currentScreen->fullRedraw(); appDraw();
+    expectText(6, 2, "2", theme.textInfo);
+    playheads.isPlaying = 0;
+    currentScreen->fullRedraw(); appDraw();
+    expectText(4, 2, "1", theme.textInfo);
+    capture("feedback-grid-sidebar");
+    appChord(keyShift, keyUp); appChord(0, keyLeft);
+    appChord(keyEdit, keyRight);
+    require(*pChainRow == 1 && *pSongTrack == 0, "Bar header scrolls beyond selected one-bar track");
+    expectText(2, 3, "o", theme.textEmpty);
+    expectText(8, 13, noteName(&p, 48), theme.textEmpty);
+    playheads.isPlaying = 1;
+    playheads.tracks[0].mode = PlaybackMode::song;
+    playheads.tracks[0].songRow = 0;
+    playheads.tracks[0].chainRow = 0;
+    playheads.tracks[0].phraseRow = 3;
+    currentScreen->fullRedraw(); appDraw();
+    expectText(8, 3, ".", theme.playMarkers);
+    expectText(8, 2, "3", theme.playMarkers);
+    playheads.isPlaying = 0;
+    currentScreen->fullRedraw(); appDraw();
+    capture("feedback-repeated-bar");
+    appChord(keyShift, keyDown);
+    appChord(0, keyEdit);
+    require(!memcmp(original.get(), &p, sizeof(Project)), "Repeated preview edit does not append or mutate source");
+    appChord(keyShift, keyUp); appChord(0, keyLeft);
+    for (int i = 0; i < 3; ++i) appChord(keyEdit, keyRight);
+    appChord(keyShift, keyDown); appChord(keyOpt, keyDown);
+    require(*pChainRow == 4 && *pSongTrack == 1, "Short track change retains global viewed bar");
+    appChord(keyShift, keyUp);
+    expectText(8, 13, noteName(&p, 49), theme.textEmpty);
+    require(!memcmp(original.get(), &p, sizeof(Project)), "Non-power-of-two repeated preview preserves canonical data");
+    appChord(keyOpt, keyUp);
+    appChord(0, keyLeft);
+    appChord(keyEdit, keyOpt); appChord(0, keyEdit);
+    appChord(keyShift, keyDown);
+    for (int i = 0; i < 16; ++i) appChord(keyOpt, keyRight);
+    require(*pChainRow == 2, "Grid edge advances bar beyond short selected track");
+    for (int i = 0; i < 16 * 14; ++i) appChord(keyOpt, keyRight);
+    require(*pChainRow == 0, "Grid wraps at longest track scene length");
+    appChord(keyOpt, keyLeft);
+    require(*pChainRow == 15, "Left grid edge wraps to final scene bar");
+    for (int i = 0; i < 3; ++i) appChord(keyOpt, keyDown);
+    require(*pSongTrack == 3, "Empty track can be selected");
+    appChord(keyOpt, keyRight);
+    require(*pChainRow == 0, "Empty track can scroll and wrap scene bars");
+    appChord(0, keyOpt);
+    require(currentScreen == &screenGroovebox, "OPT no longer opens a redundant Scenes overview");
+    appChord(keyShift, keyLeft);
+    require(currentScreen == &screenSong, "SHIFT LEFT opens canonical Scenes");
+    capture("feedback-scenes");
+    *pSongTrack = 0;
+    screenSetup(&screenSong, -1); appDraw();
+    appChord(keyShift, keyOpt);
+    appChord(0, keyOpt);
+    require(*pSongRow == 1, "Scenes copy moves below standard Song selection");
+    appChord(keyShift, keyEdit);
+    require(p.song[1][0] == p.song[0][0], "Scenes pastes canonical pattern reference");
+    appChord(keyShift, keyRight);
+    require(currentScreen == &screenGroovebox, "Scenes SHIFT RIGHT opens step editor");
+    chipnomadQueueProjectRefresh(chipnomadState);
+    appChord(keyShift, keyLeft);
+    appChord(keyEdit, keyPlay);
+    float audio[4096 * 2];
+    chipnomadRender(chipnomadState, audio, 4096);
+    require(chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode == PlaybackMode::live,
+      "Scenes EDIT PLAY launches scene using existing per-track live transport");
+    *pSongRow = 0; *pSongTrack = 3;
+    screenSetup(&screenSong, -1); appDraw();
+    auto beforeLaunch = std::make_unique<Project>(p);
+    appChord(keyEdit, keyPlay);
+    require(!memcmp(beforeLaunch.get(), &p, sizeof(Project)),
+      "Scenes EDIT PLAY on an empty track queues without first creating a pattern");
+    chipnomadQueuePlaybackStop(chipnomadState);
+    chipnomadRender(chipnomadState, audio, 4096);
+    *pSongRow = *pSongTrack = 0;
+    screenSetup(&screenSong, -1); appDraw();
+    currentScreen->onInput(1, keyOpt, 2);
+    currentScreen->onInput(0, 0, 2);
+    for (int i = 0; i < 30; ++i) appDraw();
+    expectText(0, 0, "SCENES LIVE", theme.textTitles);
+    appChord(0, keyPlay);
+    chipnomadRender(chipnomadState, audio, 4096);
+    require(chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode == PlaybackMode::live,
+      "SCENES LIVE PLAY launches selected track via Song live mode");
+    require(chipnomadGetPlaybackStatus(chipnomadState)->tracks[1].mode == PlaybackMode::stopped,
+      "SCENES LIVE does not launch unselected tracks");
+    currentScreen->onInput(1, keyOpt, 2);
+    currentScreen->onInput(0, 0, 2);
+    for (int i = 0; i < 30; ++i) appDraw();
+    expectText(0, 0, "SCENES     ", theme.textTitles);
+    appChord(0, keyPlay);
+    chipnomadRender(chipnomadState, audio, 4096);
+    require(!chipnomadGetPlaybackStatus(chipnomadState)->isPlaying,
+      "Leaving SCENES LIVE restores standard PLAY stop");
+    screenSetup(&screenGroovebox, 0); appDraw();
+    getInstrumentFunctions(InstrumentType::SID).init(&p.instruments[0]);
+    auto& status = chipnomadState->uiPlaybackStatus;
+    status.tracks[0].note.instrument = 0;
+    status.tracks[0].note.pitchFinal = 48;
+    auto& monitor = chipnomadState->voiceMonitors[0];
+    monitor.active = 0;
+    waveformDisplayInvalidate(); appDraw();
+    const auto idleWaveform = cellPixels(36, 3);
+    for (int i = 0; i < VOICE_MONITOR_SAMPLES; ++i) monitor.samples[i] = std::sin(i * 0.083f) * 0.7f;
+    monitor.active = 1;
+    waveformDisplayInvalidate(); appDraw();
+    require(cellPixels(36, 3) != idleWaveform, "Groovebox renders live shared waveform aligned with track row");
+    capture("feedback-live-sidebar");
+    grooveboxEditorActive = false;
+    printf("Groovebox feedback navigation, read-only repeats, colours, Scenes clipboard and launch passed.\n");
+    chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit(); return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--groovebox-only")) {
+    for (const char* name : {"Ambient_01", "ChipTek", "ChooChooseAcid"}) {
+      const std::string path = std::string("projects/arrangement-tests/") + name + ".cct";
+      require(!projectLoad(&chipnomadState->project, path.c_str()), "Groovebox project loaded");
+      auto original = std::make_unique<Project>(chipnomadState->project);
+      projectModified = 0;
+      *pSongRow = 0; *pSongTrack = 0; *pChainRow = 0;
+      screenGroovebox.init();
+      screenSetup(&screenSong, -1); appDraw();
+      screenSetup(&screenViewSettings, 0); appDraw();
+      key(1, keyEdit | keyLeft); key(0, 0);
+      require(canonicalSimplifiedActive, "View selects canonical Simplified without conversion");
+      key(1, keyEdit | keyLeft); key(0, 0);
+      require(grooveboxEditorActive, "View selects Groovebox without conversion");
+      screenSetup(&screenSong, -1); appDraw();
+      require(currentScreen == &screenSong && grooveboxEditorActive, "Canonical Scenes retains Song editing");
+      capture((std::string(name) + "-clips").c_str());
+      key(1, keyShift | keyRight); key(0, 0);
+      require(currentScreen == &screenGroovebox, "Scenes opens Groovebox with SHIFT+RIGHT");
+      capture(name);
+      require(trackerInkPixels(framePixels()) > 1000, "text grid is visible");
+      key(1, keyRight); key(0, 0);
+      key(1, keyDown); key(0, 0);
+      key(1, keyOpt | keyRight); key(0, keyOpt);
+      key(1, keyOpt | keyDown); key(0, 0);
+      require(*pSongRow == 0 && *pSongTrack == 1, "B moves grid track without changing scene");
+      capture((std::string(name) + "-step-editor").c_str());
+      key(1, keyOpt); key(0, 0);
+      require(currentScreen == &screenGroovebox, "OPT leaves editor open without redundant Scenes view");
+      key(1, keyShift | keyLeft); key(0, 0);
+      capture((std::string(name) + "-scenes").c_str());
+      key(1, keyShift | keyRight); key(0, 0);
+      key(1, keyShift | keyDown); key(0, 0);
+      key(1, keyShift | keyUp); key(0, 0);
+      key(1, keyRight); key(0, 0); key(1, keyEdit); key(0, 0);
+      require(currentScreen == &screenSelectionPopup, "Groovebox tools opened");
+      capture((std::string(name) + "-tools").c_str());
+      key(1, keyOpt); key(0, 0);
+      require(currentScreen == &screenGroovebox, "tools cancellation returns without conversion");
+      key(1, keyOpt); key(0, 0);
+      key(1, keyShift | keyDown); key(0, 0);
+      key(1, keyOpt | keyDown); key(0, 0);
+      key(1, keyShift | keyLeft); key(0, 0);
+      require(currentScreen == &screenSong && grooveboxEditorActive,
+        "SHIFT+LEFT returns to CLIPS without changing mode");
+      key(1, keyShift | keyLeft); key(0, 0);
+      require(currentScreen == &screenMixer, "CLIPS SHIFT+LEFT reaches Mixer");
+      key(1, keyShift | keyRight); key(0, 0);
+      require(currentScreen == &screenSong && grooveboxEditorActive, "Mixer SHIFT+RIGHT returns to CLIPS");
+      for (const AppScreen* target : {&screenChain, &screenPhrase}) {
+        screenSetup(target, -1); appDraw();
+        require(currentScreen == &screenGroovebox, "ancillary returns cannot reopen Classic editors");
+      }
+      require(!projectModified && !memcmp(original.get(), &chipnomadState->project, sizeof(Project)),
+        "view switching and navigation preserve the complete project");
+      grooveboxEditorActive = false;
+    }
+    if (const char* repro = std::getenv("CCT_GROOVEBOX_REPRO_PROJECT")) {
+      require(!projectLoad(&chipnomadState->project, repro), "console reproduction project loads");
+      auto& p = chipnomadState->project;
+      if (p.viewMode == ViewMode::simplified)
+        require(!convertPatternsToChains(&p), "console reproduction converts via existing Reip code");
+      chipnomadInitChips(chipnomadState, 48000, nullptr);
+      *pSongRow = 0; *pSongTrack = 0; *pChainRow = 0;
+      grooveboxEditorActive = true;
+      screenGroovebox.init(); screenSetup(&screenGroovebox, 0); appDraw();
+      const int sourceChain = p.song[0][0];
+      const int sourcePhrase = p.chains[sourceChain].rows[0].phrase;
+      const Phrase source = p.phrases[sourcePhrase];
+      require(grooveboxCellShared(&p, 0, 0, 0), "console project reproduces shared edit lock");
+      appChord(keyEdit, keyRight);
+      require(currentScreen == &screenSelectionPopup, "shared edit offers explicit independence instead of dead shortcut");
+      capture("shared-edit-choice");
+      appChord(0, keyOpt);
+      require(currentScreen == &screenGroovebox && p.song[0][0] == sourceChain &&
+        !memcmp(&source, &p.phrases[sourcePhrase], sizeof(Phrase)), "cancel preserves shared references and phrase");
+      appChord(keyEdit, keyRight);
+      require(currentScreen == &screenSelectionPopup, "a later edit offers independence again");
+      appChord(0, keyEdit);
+      require(currentScreen == &screenGroovebox &&
+        !grooveboxCellShared(&p, 0, 0, 0), "confirmed independence unlocks selected track");
+      const int newPhrase = grooveboxPhraseAt(&p, 0, 0, 0);
+      appChord(keyOpt, keyRight);
+      appChord(keyOpt, keyRight);
+      appChord(0, keyEdit);
+      appChord(keyEdit, keyRight);
+      require(p.phrases[newPhrase].rows[2].note != EMPTY_VALUE_8, "console project independent note can be edited");
+      appChord(0, keyRight);
+      appChord(keyEdit, keyUp);
+      require(p.phrases[newPhrase].rows[2].fx[0].command != FX_ID_EMPTY, "console project independent FX can be edited");
+      require(!memcmp(&source, &p.phrases[sourcePhrase], sizeof(Phrase)), "independence and edits preserve original shared phrase");
+      grooveboxEditorActive = false;
+    }
+    auto& project = chipnomadState->project;
+    projectFree(&project); projectInitAY(&project);
+    getInstrumentFunctions(InstrumentType::AY1).init(&project.instruments[0]);
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    chipnomadState->mixVolume = 1.0f;
+    *pSongRow = 0; *pSongTrack = 0; *pChainRow = 0;
+    screenGroovebox.init();
+    screenSetup(&screenSong, -1); appDraw();
+    grooveboxEditorActive = true;
+    screenSetup(&screenSong, -1); appDraw();
+    key(1, keyShift | keyRight); key(0, 0);
+    require(currentScreen == &screenGroovebox, "empty Song cell enters Groovebox");
+    appChord(0, keyEdit);
+    int initialPhrase = project.chains[project.song[0][0]].rows[0].phrase;
+    require(project.phrases[initialPhrase].rows[0].note != EMPTY_VALUE_8, "actual EDIT press inserts note");
+    require(chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode == PlaybackMode::phraseRow,
+      "note edit uses standard row preview instead of starting the song");
+    std::vector<float> previewAudio(1024 * 2);
+    chipnomadRender(chipnomadState, previewAudio.data(), 1024);
+    require(std::any_of(previewAudio.begin(), previewAudio.end(), [](float v) { return std::abs(v) > 0.000001f; }),
+      "default AY note editing produces audible preview samples");
+    appChord(keyEdit, keyRight);
+    appChord(0, keyRight);
+    appChord(keyEdit, keyUp);
+    require(project.phrases[initialPhrase].rows[0].fx[0].command != FX_ID_EMPTY,
+      "actual EDIT+UP chooses FX and commits on release");
+    appChord(0, keyRight);
+    const int fxBefore = project.phrases[initialPhrase].rows[0].fx[0].value;
+    appChord(keyEdit, keyRight);
+    require(project.phrases[initialPhrase].rows[0].fx[0].value != fxBefore,
+      "actual EDIT+RIGHT changes FX value");
+    appChord(0, keyLeft); appChord(0, keyLeft);
+    appChord(0, keyDown);
+    appChord(0, keyEdit);
+    appChord(keyEdit, keyRight);
+    require(project.phrases[initialPhrase].rows[0].instrument == 1, "actual instrument field EDIT+RIGHT increments");
+    appChord(keyEdit, keyOpt);
+    require(project.phrases[initialPhrase].rows[0].instrument == EMPTY_VALUE_8, "actual instrument field clear");
+    appChord(0, keyEdit);
+    require(project.phrases[initialPhrase].rows[0].instrument == 1, "actual instrument tap restores remembered value");
+    appChord(0, keyDown);
+    appChord(keyEdit, keyLeft);
+    require(project.phrases[initialPhrase].rows[0].volume == PHRASE_VOLUME_MAX - 1, "actual volume small decrease");
+    appChord(keyEdit, keyDown);
+    require(project.phrases[initialPhrase].rows[0].volume == PHRASE_VOLUME_MAX - 17, "actual volume big decrease");
+    appChord(keyEdit, keyOpt);
+    require(project.phrases[initialPhrase].rows[0].volume == EMPTY_VALUE_16, "actual volume clear");
+    appChord(0, keyEdit);
+    require(project.phrases[initialPhrase].rows[0].volume == PHRASE_VOLUME_MAX - 17, "actual volume restores remembered value");
+    appChord(0, keyRight);
+    appChord(keyEdit, keyUp);
+    require(project.phrases[initialPhrase].rows[0].fx[2].command != FX_ID_EMPTY, "actual FX3 picker works");
+    appChord(0, keyRight);
+    appChord(keyEdit, keyRight);
+    appChord(0, keyUp);
+    appChord(0, keyLeft);
+    appChord(keyEdit, keyUp);
+    require(project.phrases[initialPhrase].rows[0].fx[1].command != FX_ID_EMPTY, "actual FX2 picker works");
+    appChord(0, keyLeft); appChord(0, keyUp);
+    capture("all-step-fields-edited");
+    appChord(keyOpt, keyRight);
+    appChord(0, keyEdit);
+    require(project.phrases[initialPhrase].rows[1].note != EMPTY_VALUE_8, "actual B navigation then EDIT adds next note");
+    appChord(keyOpt, keyDown);
+    appChord(0, keyEdit);
+    const int secondPhrase = grooveboxPhraseAt(&project, 0, 1, 0);
+    require(project.phrases[secondPhrase].rows[1].note != EMPTY_VALUE_8, "actual B track navigation then EDIT adds note");
+    appChord(keyOpt, keyUp); appChord(keyOpt, keyLeft);
+    auto toolsChoice = [&](int index) {
+      appChord(keyShift, keyUp);
+      appChord(0, keyRight);
+      appChord(0, keyEdit);
+      require(currentScreen == &screenSelectionPopup, "Length header RIGHT then EDIT opens Tools");
+      for (int i = 0; i < index; ++i) appChord(0, keyDown);
+      appChord(0, keyEdit);
+      require(currentScreen == &screenGroovebox, "Tools returns to lower step editor");
+    };
+    const PhraseRow copiedStep = project.phrases[initialPhrase].rows[0];
+    toolsChoice(14);
+    appChord(keyOpt, keyRight);
+    appChord(keyShift, keyEdit);
+    require(!memcmp(&copiedStep, &project.phrases[initialPhrase].rows[1], sizeof(PhraseRow)),
+      "step clipboard preserves note/instrument/volume and all FX");
+    toolsChoice(8);
+    require(memcmp(&copiedStep, &project.phrases[initialPhrase].rows[1], sizeof(PhraseRow)),
+      "step paste supports bounded undo");
+    appChord(keyOpt, keyLeft);
+    const auto savedPath = std::filesystem::path(output) / "groovebox-edited-roundtrip.cct";
+    require(!projectSave(&project, savedPath.string().c_str()), "edited Groovebox saves");
+    auto loadedProject = std::make_unique<Project>();
+    projectInit(loadedProject.get());
+    require(!projectLoad(loadedProject.get(), savedPath.string().c_str()), "edited Groovebox reloads");
+    require(!memcmp(&loadedProject->phrases[initialPhrase], &project.phrases[initialPhrase], sizeof(Phrase)),
+      "roundtrip preserves note/instrument/volume and all FX");
+    for (int t = 0; t < project.tracksCount; ++t)
+      require(grooveboxTrackLength(loadedProject.get(), 0, t) == grooveboxTrackLength(&project, 0, t),
+        "roundtrip preserves referenced empty bars and track lengths");
+    projectFree(loadedProject.get());
+    std::filesystem::remove(savedPath);
+    for (int t = 0; t < project.tracksCount; ++t) {
+      require(project.song[0][t] == (t + 1) * 0x10, "empty scene prepared with one-based track banks");
+      require(grooveboxTrackLength(&project, 0, t) == appSettings.defaultPatternLength,
+        "empty scene uses configured default bar length");
+    }
+    capture("new-empty-scene");
+    key(1, keyShift | keyUp); key(0, 0);
+    capture("length-header");
+    key(1, keyEdit | keyRight); key(0, 0);
+    require(grooveboxTrackLength(&project, 0, 0) == appSettings.defaultPatternLength + 1,
+      "Length header adds a bar to selected track");
+    require(grooveboxTrackLength(&project, 0, 1) == appSettings.defaultPatternLength,
+      "Length header preserves other track lengths");
+    key(1, keyEdit | keyLeft); key(0, 0);
+    key(1, keyShift | keyDown); key(0, 0);
+    key(1, keyEdit); key(0, 0);
+    require(projectModified && project.song[0][0] < PROJECT_MAX_CHAINS, "editing creates canonical chain");
+    toolsChoice(2);
+    require(currentScreen == &screenGroovebox && *pChainRow == 1,
+      "OFF tool focuses the appended bar");
+    const int chain = project.song[0][0];
+    require(grooveboxTrackLength(&project,0,0) == 2 &&
+      project.phrases[project.chains[chain].rows[1].phrase].rows[0].note == NOTE_OFF,
+      "OFF tool creates the declared canonical event");
+    toolsChoice(8);
+    require(grooveboxTrackLength(&project,0,0) == 1, "Tools undo restores the original length");
+    key(1, keyShift | keyRight); key(0, 0);
+    require(currentScreen == &screenInstrument && grooveboxEditorActive, "SHIFT+RIGHT opens instrument without changing mode");
+    key(1, keyShift | keyLeft); key(0, 0);
+    require(currentScreen == &screenGroovebox && grooveboxEditorActive, "instrument returns to Groovebox not Phrase");
+    std::vector<float> transportAudio(1024 * 2);
+    auto startButton = [&] {
+      MainLoopEventData event = {};
+      event.data.input = {InputDeviceType::logical, keyPlay};
+      event.type = MainLoopEvent::keyDown;
+      appOnEvent(event);
+      chipnomadRender(chipnomadState, transportAudio.data(), 1024);
+      appDraw();
+      event.type = MainLoopEvent::keyUp;
+      appOnEvent(event);
+    };
+    require(chipnomadQueueProjectRefresh(chipnomadState), "publish transport fixture");
+    chipnomadRender(chipnomadState, transportAudio.data(), 1024);
+    chipnomadQueuePlaybackStop(chipnomadState);
+    chipnomadRender(chipnomadState, transportAudio.data(), 1024);
+    require(!chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "transport test begins stopped after previews");
+    appResetInputState();
+    startButton();
+    require(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "Groovebox Start starts standard playback");
+    startButton();
+    require(!chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "Groovebox second Start stops rather than queueing");
+    key(1, keyShift | keyLeft); key(0, 0);
+    startButton();
+    require(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "Scenes Start starts playback");
+    startButton();
+    require(!chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "Scenes Start stops playback");
+    require(currentScreen == &screenSong, "return to CLIPS before transport check");
+    startButton();
+    require(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "CLIPS Start starts playback");
+    startButton();
+    require(!chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "CLIPS Start stops playback");
+    key(1, keyShift | keyLeft); key(0, 0);
+    require(currentScreen == &screenMixer, "navigate to Mixer during transport check");
+    startButton();
+    require(chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "Mixer Start starts playback");
+    startButton();
+    require(!chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "Mixer Start stops playback");
+    key(1, keyShift | keyRight); key(0, 0);
+    require(currentScreen == &screenSong && grooveboxEditorActive, "Mixer returns to CLIPS without changing mode");
+    *pSongRow = 3; *pSongTrack = 0;
+    screenSetup(&screenSong, -1); appDraw();
+    tapEdit();
+    require(project.song[3][0] == 0x11, "CLIPS creates next track-one chain in the 10 bank");
+    key(1, keyRight); key(0, 0); tapEdit();
+    require(project.song[3][1] == 0x21, "CLIPS creates next track-two chain in the 20 bank");
+    key(1, keyShift | keyRight); key(0, 0);
+    tapEdit();
+    require(project.chains[0x21].rows[0].phrase == 0x81, "grid retains phrase bank for track two");
+    appChord(keyShift, keyUp); appChord(0, keyRight); appChord(0, keyEdit);
+    for (int i = 0; i < 11; ++i) appChord(0, keyDown);
+    appChord(0, keyEdit);
+    require(currentScreen == &screenViewSettings && grooveboxEditorActive, "Tools opens explicit View choice");
+    key(1, keyEdit | keyRight); key(0, 0);
+    require(canonicalSimplifiedActive && !grooveboxEditorActive && project.viewMode == ViewMode::classic,
+      "View switches from Groovebox to canonical Simplified without conversion");
+    key(1, keyEdit | keyRight); key(0, 0);
+    require(!canonicalSimplifiedActive && project.viewMode == ViewMode::classic, "View switches back to Classic");
+    screenSetup(&screenSong, -1); appDraw();
+    require(currentScreen == &screenSong, "Classic navigation restored after explicit View change");
+    printf("Three Groovebox project captures and navigation/allocation integration passed\n");
+    chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit(); return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--capture-homepage")) {
     captureHomepage();
     chipnomadDestroy(chipnomadState);SDL_Quit();return 0;

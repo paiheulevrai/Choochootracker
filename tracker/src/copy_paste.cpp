@@ -209,7 +209,14 @@ void copyPhrase(int phraseIdx, int startCol, int startRow, int endCol, int endRo
   }
 }
 
+int canPastePhrase(int startCol) {
+  return canPasteFX(8, startCol) || (cpBufPhraseRows > 0 &&
+    (startCol == cpBufPhraseStartCol ||
+    (startCol >= 3 && startCol <= 8 && cpBufPhraseStartCol >= 3 && cpBufPhraseStartCol <= 8)));
+}
+
 int pastePhrase(int phraseIdx, int startCol, int startRow) {
+  if (!canPastePhrase(startCol)) return 0;
   if (canPasteFX(8, startCol)) {
     int rowsPasted = 0;
     for (int row = 0; row < cpBufFXRows && startRow + row < 16; ++row) {
@@ -218,12 +225,6 @@ int pastePhrase(int phraseIdx, int startCol, int startRow) {
     }
     return rowsPasted;
   }
-  // Check if we can paste - same column or FX to FX
-  int canPaste = (startCol == cpBufPhraseStartCol) ||
-  (startCol >= 3 && startCol <= 8 && cpBufPhraseStartCol >= 3 && cpBufPhraseStartCol <= 8);
-
-  if (!canPaste) return 0;
-
   int rowsPasted = 0;
   for (int row = 0; row < cpBufPhraseRows && startRow + row < 16; row++) {
     rowsPasted++;

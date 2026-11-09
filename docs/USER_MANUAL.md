@@ -2,6 +2,232 @@
 
 ChooChooTracker is an 8-track music tracker for handheld consoles.
 
+## Three-view text prototype
+
+Project -> View -> Mode cycles through Classic, Groovebox and Simplified with
+EDIT + LEFT/RIGHT. There is one Simplified behaviour: bars isolate automatically
+when edited, directly in the canonical Song/Chains/Phrases arrangement.
+Changing editor does not convert the project.
+The Groovebox choice is session-only; Default mode remains Classic/Simplified.
+
+### Simplified: on-the-fly bar editing
+
+Simplified reuses Reip's Phrase editor navigation and header, but each
+pattern is an existing chain and each bar is a chain row. The project remains
+Classic internally. Classic, Simplified and Groovebox switch directly without
+rewriting Song, changing phrase IDs, baking transposes, or allocating on browse.
+Historical Pattern-format projects are reconciled to chains once when loaded,
+using the existing importer. A failed import leaves the current project and
+source file unchanged. The combined writer still retains historical arrays/maps.
+
+- Song SHIFT + RIGHT opens the pattern/Phrase editor directly, skipping Chain.
+  SHIFT + LEFT returns to Song; SHIFT + RIGHT opens Instrument/Table as usual.
+- Note, Instrument, Volume, FX, selection and clipboard use Phrase controls.
+  B + UP/DOWN changes bars; B + LEFT/RIGHT changes tracks.
+- SHIFT + UP focuses Length. LEFT/RIGHT cycles the single-row header:
+  Length, TR and Loop (pattern ID is labelled Pattern). The second header row stays empty; the bottom helper
+  remains available for editing guidance.
+  The navigation map is MSPIT, with no unused Chain position.
+  UP/DOWN returns to notes; a second SHIFT + UP opens Groove.
+- Length: EDIT + LEFT/RIGHT removes/adds a bar, EDIT + UP/DOWN doubles/halves,
+  B + A resets the default. Limits are 1..16. Added bars reference independent
+  no-event phrases; no-event does not force silence. New empty patterns are
+  materialized at the configured default length on the first edit, not browse.
+  Doubling copies bar references; each bar isolates automatically on editing.
+  Length edits affect every Song occurrence of the same pattern.
+- Loop BAR uses the existing phrase loop; PAT uses the existing chain loop.
+  Song transport remains unchanged. Loop is not a new shared bar clock.
+- TR edits the current chain row's signed pitch-table-step transpose directly;
+  notes and phrase references are unchanged.
+- Song selection + B + UP merges selected patterns per track into a fresh chain,
+  keeping phrase IDs and transposes. Source chains and occurrences outside the
+  selection remain intact, including when the same chain is selected twice.
+  At least two populated occurrences per track are required. Every affected
+  track is checked before mutation; overlength, gaps with retained references,
+  or exhaustion refuse the operation. New chain IDs may affect conditional FX.
+- Opening a bar changes nothing. Editing a shared phrase copies only that bar,
+  without a popup or a whole-pattern copy. A pattern `A A A A` becomes `A A B A`;
+  other patterns using A stay unchanged. Song occurrences of the same pattern
+  remain linked. Classic still allows deliberate shared-phrase editing.
+- At the end of an editing gesture, the edited bar can reuse an existing
+  referenced phrase with exactly identical stored content. Its transpose stays
+  unchanged. Only a known editor-created copy is cleared, and only if no retained
+  reference needs it; other unreferenced authored data is left intact.
+  Phrase identity can affect MOD visit counters. No note transposition is baked.
+- To make a whole Song occurrence independent, the existing manual deep clone
+  remains available: in Song selection, hold SHIFT and press EDIT twice.
+
+Length stops at the first absent phrase, matching Classic playback. References
+after that gap remain stored; extending across the gap is refused.
+Resource exhaustion does not partially apply the shared structural operations.
+Simplified is an editor choice, not another arrangement or file mode;
+saved projects retain Classic backing and the combined prototype's writer.
+
+The header remains Pattern / Length / TR / Loop, without a permanent
+copy/status control. Slot exhaustion cancels the edit with an error message.
+
+In Groovebox mode, **SCENES** replaces Song in the navigation, using the same
+canonical arrangement and all its selection, copy/paste, clone and row-editing
+functions. There is no separate scene overview inside the step editor.
+SHIFT + LEFT/RIGHT follows the usual screen navigation:
+Mixer <-> SCENES <-> Groovebox step editor <-> Instrument. The editor supports
+all eight track positions and sixteen
+bars, with differing track lengths and existing transpose values preserved:
+
+- The text screen is split into the upper grid and the lower step editor,
+  adapted from `study/groovebox`. Focus stays in the lower editor.
+  Text uses the active app theme: titles, field labels, named and numeric
+  values, empty cells, focused fields, cursor and playback markers keep their
+  usual roles. Sharing warnings use the theme warning colour; helpers use
+  the information colour. Steps 0, 4, 8 and C use the title colour as beat
+  accents. The right-hand track numbers, mute/solo, waveforms and sounding notes
+  align with their grid rows. Bar counts on the left are hexadecimal (10 = 16).
+  The lower panel shows source bar, effective instrument and playback
+  position instead of permanent shortcut explanations. Free-slot counters and
+  phrase IDs are not shown in the Groovebox editor.
+  No fixed Groovebox-only palette is imposed.
+  The editor title is PATTERN; internal chain IDs are hidden. Each track's
+  visible playhead uses the playback colour, including on repeated bars.
+  The step header highlights all currently visible track playhead positions.
+- Arrows: move spatially between Note/Instrument/Volume on the left and the
+  three FX command/value pairs on the right. Transpose is below Volume.
+- B (OPT) + arrows: move the selected step/track in the upper grid without
+  changing the lower field. LEFT/RIGHT past the grid edge moves to the previous/
+  next bar; passing the first/last scene bar wraps. The longest active track
+  defines the viewed range, even when the selected track is short or empty.
+  Shorter tracks show their cyclically repeated source bars in the empty
+  colour. These are read-only previews: return to the source bar to edit them,
+  or explicitly extend the track using Length/Tools. Browsing adds no bars.
+  Repetition is structural; HOP, grooves and differing speeds do not become
+  a shared playback clock.
+- SHIFT + UP: focus the Length header, as in Simplified; SHIFT + DOWN returns
+  to step editing. A second SHIFT + UP opens Groove.
+- In the Length header, EDIT + LEFT/RIGHT removes/adds one bar on the selected
+  track; EDIT + UP/DOWN doubles/halves its length. EDIT + OPT resets to the
+  default length. Limits are 1..16 bars; halving needs an even length.
+  Doubling makes independent copies, which can change ID-dependent FX.
+  The other tracks retain their individual lengths. LEFT selects the Bar
+  header; EDIT + arrows chooses the viewed bar using the same scene-wide range
+  and wrapping. RIGHT returns to Length.
+  RIGHT from Length selects TOOLS; EDIT opens its action menu.
+- Select scene rows in SCENES. Transpose uses the project's
+  pitch-table steps, not necessarily semitones.
+- EDIT / EDIT + arrows: edit the selected field; EDIT + OPT clears it.
+  On Note, clear also resets Instrument/Volume; clearing an empty note inserts
+  OFF. FX are retained. For FX commands, EDIT + UP/DOWN opens the existing
+  picker; release all held buttons to confirm. EDIT + LEFT/RIGHT steps commands.
+  EDIT on an empty FX also opens the picker when no previous FX is remembered,
+  instead of silently inserting nothing.
+  FX values use the existing instrument-aware editor and need a command first.
+  Instrument double EDIT selects a free instrument, as in Phrase; small changes
+  use steps of 1, large changes steps of 16. Volume uses the same steps, capped
+  at 127; clearing restores inherited volume. Note edits use the pitch table's
+  octave size. Handled note/instrument/volume/FX edits use the standard row
+  pre-listen without interrupting running song playback.
+  Note Lock follows Phrase, including per-track gating and exemptions for
+  sliced samples and non-12-TET pitch tables.
+- SHIFT + LEFT opens SCENES; UP/DOWN selects a scene and LEFT/RIGHT a track.
+  All 256 historical Song positions remain accessible with standard scrolling;
+  the approximate 32-scene liveset target is not a destructive import limit.
+- SHIFT + EDIT: paste the existing Phrase clipboard at the selected step/field,
+  like Phrase. Tools is accessible in the header, not on this paste shortcut.
+  Each Tools action explains its effect before selection.
+  Partial field/FX copies obey the same column compatibility rules as Phrase;
+  an incompatible or empty clipboard reports an error without allocating data.
+- SHIFT + LEFT: return to SCENES; another SHIFT + LEFT opens Mixer.
+- SHIFT + RIGHT: open the effective instrument, as in the study. Returning
+  LEFT from Instrument returns to the step editor; RIGHT from Mixer returns
+  to SCENES. These screen changes do not change the selected view mode.
+- Tools -> View settings / change mode: deliberately select Classic or
+  Simplified. SHIFT + arrows never change the active editor mode.
+- START (PLAY): the existing app transport, press to start, press again to
+  stop, in SCENES, the step editor and Mixer. Double START does
+  not launch another scene. SHIFT + PLAY retains the existing app behaviour.
+  EDIT + PLAY explicitly queues the selected track at its chain end;
+  double EDIT + PLAY requests its next phrase end.
+  In SCENES, EDIT + PLAY queues the complete selected scene at each track's
+  chain end; double EDIT + PLAY requests each track's next phrase end.
+  Double OPT in SCENES toggles SCENES LIVE, using Song's existing live mode:
+  PLAY queues the selected track(s), double PLAY requests an urgent launch.
+  Double OPT again restores normal start/stop transport. Triple OPT retains
+  Song's cell highlighting rather than toggling live mode.
+  Tools -> Queue scene at chain/phrase end provides an explicit all-track
+  launch without overloading START.
+- OPT + SHIFT: toggle selected-track mute. OPT + PLAY: toggle solo.
+
+The text grid distinguishes a note (`o`), OFF (`-`), other event data such as
+FX or instrument/volume (`+`), no events in a referenced bar (`.`), and no
+active pattern (blank). Short tracks show repeated bars in the empty colour.
+Track labels show their individual structural bar count in hexadecimal.
+The detail panel preserves full notes, instruments, volume and all three FX.
+Lengths are not inferred durations: HOP, grooves and signed SPD still use
+the original engine. Scene launch boundaries are **per track**, not a new
+shared bar clock: unequal lengths/speeds can cause tracks to change scene at
+different times. SCENES retains Song's active and queued row markers.
+Empty destination cells stop their track.
+
+Tools offer:
+
+- Make track independent: explicitly copies the selected Song occurrence's
+  chain and every referenced bar, including material after gaps. Each bar
+  becomes independently editable; other occurrences remain unchanged.
+- Append a no-event bar, or append an OFF bar. No-event is not guaranteed
+  silence: sustained notes may continue. OFF releases notes but retains
+  effect tails. HOP is preserved as an ordinary FX, not a special duration.
+- Append an independent copy of the selected bar, or double the track's
+  length with independent copies, up to sixteen bars.
+- Remove the last active bar. This changes playback length; the phrase
+  content remains stored. References after gaps are never silently replaced.
+- Copy/paste a scene as **linked references**, only into an empty destination.
+  This consumes no new chain/phrase slots and retains tracker sharing.
+- Undo the last editing/structure action. This is one bounded, editor-local
+  undo, including allocated slots, references and scene highlights; it is
+  cleared on leaving Groovebox, not a new global undo system.
+- Open the existing instrument or mixer editor.
+- Open View settings to explicitly change editor mode.
+- Queue the scene at individual chain/phrase boundaries.
+- Copy the selected step, including all FX, to the existing Phrase clipboard,
+  or paste that clipboard at the selected step. Paste supports editor undo.
+
+Independence and bar copies introduce new phrase IDs; conditions that depend
+on IDs may therefore sound different. These are deliberate editing operations,
+not a claim of sound-equivalent conversion. Their tools explain the change;
+undo restores the original IDs and references.
+
+Tracks marked `*` have shared data or are unavailable. Shared chains, phrases
+and phrases retained in Reip's pattern pool are read-only here: explicitly
+make the occurrence independent in Tools, or use Classic at the corresponding
+position. Attempting an edit opens an explicit Make track independent / Cancel
+choice after buttons are released. Confirmation copies the track; repeat the
+edit afterward. Cancelling preserves all references. Copies require free
+chain/phrase slots and can affect ID-dependent FX. A dim cell is not muted.
+Browsing existing material allocates nothing.
+Opening an entirely new SCENES row for editing automatically prepares all active
+tracks with independent chains and no-event bars at the configured default
+length. Exclusive, still-empty chains created in SCENES are reused. A shared
+empty chain or any existing bar is not automatically expanded. Preparation
+reserves all slots before mutation and can be undone as one Tools action.
+No-event bars do not force silence: held notes and effect tails may continue.
+Editing a missing bar may
+append only the next bar; gaps and more complex extensions must be handled
+in Classic. New chains prefer one-based hexadecimal track banks:
+track 1 `10-1F`, track 2 `20-2F`, ... track 8 `80-8F`.
+Occupied/referenced slots are skipped. Overflow prefers `90-9F` for track 1,
+`A0-AF` for track 2, ... `F0-FE` for track 7, `00-0F` for track 8,
+then any free slot. `FF` is not a valid chain.
+Phrases retain 128-slot banks: track 1 `000-07F`, track 2 `080-0FF`,
+... track 5 `200-27F`, with free-slot fallback. These are independent ID
+pools, not a decimal numbering scheme. Existing IDs are never renumbered.
+The free chain/phrase meters exclude referenced empty bars and retained
+material. Multi-slot actions reserve everything before committing; pool
+exhaustion changes nothing. No automatic deduplication or clone-on-browse.
+
+This prototype adds no Groovebox section to the file format. The combined
+build nevertheless retains Reip's extended CCT writer and its conversion
+limitations: files saved here are not guaranteed to load in standard CCT.
+Work on project copies. A universally compatible save/import implementation
+is not part of this prototype.
+
 It follows the classic LSDj workflow and navigation system, with several sound design options:
 
 - AY chip emulation
@@ -1740,6 +1966,38 @@ Both modes share the same root, scale, **Custom** note editing and track checkbo
 - ChooChooTracker saves projects as `.cct`. This format is not compatible with ChipNomad.
 
 Use **Save** before changing instrument types or loading another project.
+
+### View window
+
+The View row opens the view window, which controls how the Song screen is
+interpreted:
+
+- **Mode** is the active project view: **Classic** (LSDJ-style
+  Song → Chain → Phrase) or **Simplified** (Song rows are patterns of 1–16
+  bars). Switching the mode opens a warning screen — a conversion rewrites
+  the whole song structure and might damage it. Choose **Save and proceed**
+  (saves the project first, asking for a filename if it has none yet),
+  **Proceed without saving**, or **Cancel**. While the conversion runs the
+  status line shows `Converting...`, afterwards `Converted!`.
+
+  Conversion preserves the music: in classic → simplified each chain becomes
+  a pattern with the same number (or the closest free one), containing the
+  chain's phrases as bars in order, with chain transposes baked into the
+  notes. In simplified → classic each pattern becomes a chain whose phrase
+  numbers follow the pattern number (skipping occupied numbers), and bars
+  with identical content share one phrase. The conversion scans for changes:
+  chains and patterns that are unchanged since the last conversion keep
+  their converted state exactly, while ones edited (or added) since are
+  rebuilt from the current content — so edits made in either mode carry
+  across, and untouched parts are never disturbed.
+- **Default mode** is the view new projects start in (a global setting,
+  remembered in `settings.txt`).
+- **Default length** (visible in Simplified mode) is the length of newly
+  created patterns. It applies when you type a pattern number onto an
+  empty Song row (the pattern starts that long) and when clearing the
+  Length field on the Phrase screen header.
+- **Playhead** (visible in Simplified mode) chooses between looping the bar
+  the cursor views and playing the whole pattern.
 
 ### Ableton Link
 

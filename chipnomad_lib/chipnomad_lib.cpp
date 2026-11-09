@@ -293,6 +293,14 @@ class AudioCommandQueue {
         case kQueuePhrase: playbackQueuePhrase(playback, command.a, command.b, command.c); break;
         case kStartLiveChain: playbackStartLiveChain(playback, command.a, command.b); break;
         case kQueueLiveChain: playbackQueueLiveChain(playback, command.a, command.b, command.c); break;
+        case kQueueLiveScene:
+          for (int t = 0; t < playback->p->tracksCount; ++t) {
+            int c = playback->p->song[command.a][t];
+            bool absent = c == EMPTY_VALUE_16 ||
+              playback->p->chains[c].rows[0].phrase == EMPTY_VALUE_16;
+            playbackQueueLiveChain(playback, t, absent ? -1 : command.a, command.b);
+          }
+          break;
         case kPreviewNote: playbackPreviewNote(playback, command.a, (uint8_t)command.b, (uint8_t)command.c); break;
         case kMonkPreview:
           state->monkPreview->kill();
@@ -406,7 +414,7 @@ class AudioCommandQueue {
   struct AudioCommand { uint8_t type; int a, b, c, d; PhraseRow row; InstrumentOPLL patch; InstrumentOPL opl; InstrumentSimpleChip simple; InstrumentDX7 dx7; InstrumentFourOp fourOp; InstrumentSID sid; InstrumentMonk monk; };
   // kStartPhraseRowFull is appended after upstream's preview commands so the
   // raw command IDs 14/15/16 used by applyCommands keep their meaning.
-  enum CommandType { kStartSong, kStartChain, kStartPhrase, kStartPhraseRow, kQueuePhrase, kPreviewNote, kStopPreview, kClearTrackFX, kStartLiveChain, kQueueLiveChain, kSetScale, kChipPreview, kOPLPreview, kSimplePreview, kStartPhraseRowFull = 17, kStartSongIfStopped, kMonkPreview };
+  enum CommandType { kStartSong, kStartChain, kStartPhrase, kStartPhraseRow, kQueuePhrase, kPreviewNote, kStopPreview, kClearTrackFX, kStartLiveChain, kQueueLiveChain, kSetScale, kChipPreview, kOPLPreview, kSimplePreview, kStartPhraseRowFull = 17, kStartSongIfStopped, kMonkPreview, kQueueLiveScene };
   static constexpr unsigned int kSlotCount = 3;
   static constexpr unsigned int kCommandCapacity = 64;
 
@@ -1801,6 +1809,17 @@ int chipnomadQueuePlaybackStartLiveChain(ChipNomadState* state, int trackIdx, in
 }
 int chipnomadQueuePlaybackQueueLiveChain(ChipNomadState* state, int trackIdx, int songRow, int urgent) {
   return state && state->audioCommands ? state->audioCommands->pushCommand(9, trackIdx, songRow, urgent) : 0;
+}
+int chipnomadQueuePlaybackQueueLiveScene(ChipNomadState* state, int songRow, int urgent) {
+  if (!state || !state->audioCommands || songRow < 0 || songRow >= PROJECT_MAX_LENGTH ||
+      state->project.viewMode != ViewMode::classic) return 0;
+  for (int t = 0; t < state->project.tracksCount; ++t) {
+    int c = state->project.song[songRow][t];
+    if (c != EMPTY_VALUE_16 && (c >= PROJECT_MAX_CHAINS ||
+        (state->project.chains[c].rows[0].phrase != EMPTY_VALUE_16 &&
+         state->project.chains[c].rows[0].phrase >= PROJECT_MAX_PHRASES))) return 0;
+  }
+  return state->audioCommands->pushCommand(20, songRow, urgent);
 }
 int chipnomadQueuePlaybackPreviewNote(ChipNomadState* state, int trackIdx, uint8_t note, uint8_t instrument) {
   return state && state->audioCommands ? state->audioCommands->pushCommand(5, trackIdx, note, instrument) : 0;

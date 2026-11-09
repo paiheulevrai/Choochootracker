@@ -8,6 +8,13 @@
 #define PROJECT_MAX_LENGTH (256)
 #define PROJECT_MAX_CHAINS (255)
 #define PROJECT_MAX_PHRASES (1024)
+
+// Simplified view: a "pattern" is a sequence of up to
+// PROJECT_MAX_PATTERN_LENGTH bars (each bar = one phrase + a per-bar table
+// override). Patterns live in their own pool, parallel to chains.
+#define PROJECT_MAX_PATTERNS        (PROJECT_MAX_CHAINS)  // 255; 0x00-0xFE
+#define PROJECT_MAX_PATTERN_LENGTH  (16)                   // 1..16 bars
+#define PROJECT_DEFAULT_PATTERN_LENGTH (1)                 // for new patterns
 #define PROJECT_MAX_GROOVES (32)
 #define PROJECT_MAX_INSTRUMENTS (128)
 #define PROJECT_MAX_TABLES (255)

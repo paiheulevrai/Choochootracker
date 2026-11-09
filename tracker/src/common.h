@@ -166,6 +166,12 @@ struct AppSettings {
   uint8_t backgroundSpeed;
   uint8_t backgroundReaction;
   BackgroundResolution backgroundResolution;
+  // Simplified "patterns" view. The per-project viewMode is stored in the
+  // .cnm header; defaultPatternLength only controls the length for new
+  // patterns and defaultViewMode the mode new projects start in (the active
+  // mode can be switched later in the View window with a full conversion).
+  uint8_t defaultPatternLength;  // 1..16 — default length for new patterns
+  uint8_t defaultViewMode;       // 0 classic, 1 simplified — mode for new projects
   KeyMapping keyMapping;
   ColorScheme colorScheme;
   char themeName[THEME_NAME_LENGTH + 1];

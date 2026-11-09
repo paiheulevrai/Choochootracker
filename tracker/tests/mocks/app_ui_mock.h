@@ -4,6 +4,7 @@
 #include <vector>
 
 extern char mockGfxCells[20][40];
+extern int mockGfxColors[20][40];
 extern int mockTextRight, mockTextBottom;
 extern int mockCursorX, mockCursorY, mockCursorWidth;
 extern int mockQuitTriggered;

@@ -11,9 +11,11 @@
 #include "app.h"
 #include "startup_timing.h"
 #include "screens.h"
+#include "screens/screen_groovebox.h"
 #include "screens/selection_popup.h"
 #include "chipnomad_lib.h"
 #include "project_utils.h"
+#include "pattern_utils.h"
 #include "waveform_display.h"
 #include "piano_display.h"
 #include "monitor_display.h"
@@ -535,8 +537,16 @@ static int inputPlayback(int keys, int tapCount) {
         chipnomadQueuePlaybackStartChain(chipnomadState, *pSongTrack, *pSongRow, startRow, 1);
       applyLoopRange();
     } else if (playbackLevel == ScreenPlaybackLevel::phrase) {
-      if (!queueLinkAlignedStart(*pSongRow, *pChainRow, 1, playbackLevel, *pSongTrack))
+      if (chipnomadState->project.viewMode == ViewMode::simplified) {
+        // Simplified pattern view: PLAY follows the project's playhead mode
+        // through the chain-mode walker — "Loop: PAT" walks the whole
+        // pattern, "Loop: BAR" loops the viewed bar. (Phrase-level playback
+        // would loop a single phrase and ignore the playhead mode.)
+        if (!queueLinkAlignedStart(*pSongRow, *pChainRow, 1, ScreenPlaybackLevel::chain, *pSongTrack))
+          chipnomadQueuePlaybackStartChain(chipnomadState, *pSongTrack, *pSongRow, *pChainRow, 1);
+      } else if (!queueLinkAlignedStart(*pSongRow, *pChainRow, 1, playbackLevel, *pSongTrack)) {
         chipnomadQueuePlaybackStartPhrase(chipnomadState, *pSongTrack, *pSongRow, *pChainRow, 1);
+      }
       applyLoopRange();
     }
     return 1;
@@ -593,10 +603,37 @@ static bool inputBranchNavigation(int keys) {
            (currentScreen == &screenInsertFX && !screenInsertFXIsMaster())) column = 4;
   else if (currentScreen == &screenAYWavetable) column = 5;
   if (column < 0) return false;
-  const AppScreen* spine[] = {&screenMixer, &screenSong, &screenChain,
-                             &screenPhrase, &screenInstrument, &screenTable};
+  // In the simplified view there is no Chain screen: the spine skips it so
+  // SHIFT+RIGHT/LEFT never lands on chain-screen artifacts (bug report: the
+  // "C" map node led to garbage values). Classic spine:
+  //   Mixer, Song, Chain, Phrase, Instrument, Table
+  // Simplified spine (Chain slot re-routes to Song):
+  //   Mixer, Song, Song*, Phrase, Instrument, Table — stepping from
+  //   Mixer→Song→Phrase works because the Song screen's own SHIFT+RIGHT goes
+  //   straight to Phrase in simplified view; stepping LEFT from Phrase lands
+  //   on Song (its own SHIFT+LEFT also returns to Song).
+  // Classic extra guard: the Chain screen indexes chains[] with
+  // song[*pSongRow][*pSongTrack], so stepping into it while the Song cursor
+  // sits on an EMPTY cell (e.g. SHIFT+UP to Project from an empty song row,
+  // then SHIFT+RIGHT) dereferences chains[32767] and shows the "CHAIN 7FFF"
+  // garbage screen (bug report: nonexistent chain filled with 000 phrases).
+  // Re-route to Song in that case — the Song screen's own SHIFT+RIGHT
+  // already blocks empty cells with "Enter a chain".
+  const bool simplified =
+      chipnomadState->project.viewMode == ViewMode::simplified || canonicalSimplifiedActive;
+  const AppScreen* spine[] = {&screenMixer, &screenSong,
+                              simplified ? &screenSong : &screenChain,
+                              &screenPhrase, &screenInstrument, &screenTable};
   column += keys & keyRight ? 1 : -1;
   if (column > 5) column = 5;
+  if (!simplified && spine[column] == &screenChain && pSongRow && pSongTrack &&
+      *pSongRow >= 0 && *pSongRow < PROJECT_MAX_LENGTH && *pSongTrack >= 0 &&
+      *pSongTrack < PROJECT_MAX_TRACKS &&
+      chipnomadState->project.song[*pSongRow][*pSongTrack] == EMPTY_VALUE_16) {
+    // Empty cell under the Song cursor: the Chain screen has nothing to
+    // show. Land on the Song screen instead.
+    spine[column] = &screenSong;
+  }
   chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
   screenMessage(0, "");
   screenSetup(spine[column], column >= 4 ? cInstrument : -1);
@@ -773,11 +810,18 @@ int appContinueProject(void) {
   projectInit(&replacement);
   // Restore only after CONTINUE. Never autosave a placeholder from the title.
   int projectLoaded = 0;
+  bool legacySimplified = false;
   FILE* autosaveCheck = fopen(getAutosavePath(), "rb");
   int autosaveExists = autosaveCheck != NULL;
   if (autosaveCheck) fclose(autosaveCheck);
   if (projectLoad(&replacement, getAutosavePath()) == 0) {
     projectLoaded = 1;
+    legacySimplified = replacement.viewMode == ViewMode::simplified;
+    if (legacySimplified &&
+        convertPatternsToChains(&replacement) != 0) {
+      snprintf(projectFileError, 40, "Simplified import: slots full");
+      projectLoaded = 0;
+    }
   }
   // Only a genuine parse failure is worth warning about - no autosave yet
   // (first launch) is normal and falls through to the demo silently.
@@ -799,8 +843,16 @@ int appContinueProject(void) {
     extractFilenameWithoutExtension(defaultProject, appSettings.projectFilename, FILENAME_LENGTH + 1);
   }
   if (!projectLoaded) projectInitAY(&replacement);
+  legacySimplified = legacySimplified || replacement.viewMode == ViewMode::simplified;
+  if (replacement.viewMode == ViewMode::simplified && convertPatternsToChains(&replacement) != 0) {
+    snprintf(projectFileError, 40, "Simplified import: slots full");
+    projectFree(&replacement);
+    return 1;
+  }
   unopenedAutosave = false;
   audioManager.replaceProject(&replacement);
+  grooveboxEditorActive = false;
+  canonicalSimplifiedActive = legacySimplified || appSettings.defaultViewMode == 1;
   screensInitAll();
   return 0;
 }
@@ -906,7 +958,8 @@ void appCleanup(void) {
 void appDraw(void) {
   const ColorScheme cs = appSettings.colorScheme;
 
-  const bool trackerBackground = currentScreen && currentScreen != &screenTitle;
+  const bool trackerBackground = currentScreen && currentScreen != &screenTitle &&
+    currentScreen != &screenGroovebox;
   monitorDisplaySetActive(monitorNeeded() || (trackerBackground && backgroundNeedsAudio()));
   mainLoopSetTargetFps(monitorDisplayActive() ? appSettings.waveformRefreshHz : 30);
   monitorDisplayUpdate();
@@ -924,14 +977,19 @@ void appDraw(void) {
 
   if (!chipnomadState) return;
 
-  scopeDisplayDraw();
-  pianoDisplayDraw();
+  const bool groovebox = currentScreen == &screenGroovebox;
+  if (!groovebox) {
+    scopeDisplayDraw();
+    pianoDisplayDraw();
+  }
   waveformDisplayRefresh();
 
   ScreenOverlayCoordinates sidebar;
   const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
-  drawBatteryInfo();
-  drawPlaybackCounter(playback);
+  if (!groovebox) {
+    drawBatteryInfo();
+    drawPlaybackCounter(playback);
+  }
 
   // Tracks
   char digit[2] = "0";

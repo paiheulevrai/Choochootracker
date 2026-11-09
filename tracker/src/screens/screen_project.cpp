@@ -6,6 +6,8 @@
 #include "utils.h"
 #include "chipnomad_lib.h"
 #include "project_utils.h"
+#include "pattern_utils.h"
+#include "screen_groovebox.h"
 #include "pitch_table_utils.h"
 #include "version.h"
 #include "audio_manager.h"
@@ -135,8 +137,15 @@ int projectLoadFromPath(const char* path) {
     loadResult = projectLoad(&replacement, path);
   }
 
+  bool legacySimplified = loadResult == 0 && replacement.viewMode == ViewMode::simplified;
+  if (legacySimplified && convertPatternsToChains(&replacement) != 0) {
+    snprintf(projectFileError, 40, "Simplified import: slots full");
+    loadResult = 1;
+  }
   if (loadResult == 0) {
     audioManager.replaceProject(&replacement);
+    grooveboxEditorActive = false;
+    canonicalSimplifiedActive = legacySimplified || appSettings.defaultViewMode == 1;
     autosaveLoadFailed = 0;
     projectModified = 0; // Clear modified flag after loading
 
@@ -237,19 +246,6 @@ static void doLoadProject(void) {
   screenSetup(&screenFileBrowser, 0);
 }
 
-static void doNewProject(void) {
-  Project replacement;
-  projectInitAY(&replacement);
-  instrumentEQInitPresets(&replacement);
-  audioManager.replaceProject(&replacement);
-  projectModified = 0;
-  appSettings.projectFilename[0] = 0;
-  exportResetFolderTracking();
-  settingsSave();
-  screensInitAll();
-  screenSetup(projectReturnScreen, 0);
-}
-
 void projectOpenFromScreen(const AppScreen* returnScreen) {
   projectReturnScreen = returnScreen ? returnScreen : &screenProject;
   doLoadProject();
@@ -260,6 +256,23 @@ void projectOpenFromScreenAtPath(const AppScreen* returnScreen, const char* path
   fileBrowserSetup("LOAD PROJECT", PROJECT_LOAD_EXTENSIONS, path,
     onProjectLoaded, onProjectCancelled);
   screenSetup(&screenFileBrowser, 0);
+}
+
+// All new projects use canonical chains; the default chooses only the editor.
+static void doNewProject(void) {
+  Project replacement;
+  projectInitAY(&replacement);
+  instrumentEQInitPresets(&replacement);
+  replacement.viewMode = ViewMode::classic;
+  audioManager.replaceProject(&replacement);
+  grooveboxEditorActive = false;
+  canonicalSimplifiedActive = appSettings.defaultViewMode == 1;
+  projectModified = 0;
+  appSettings.projectFilename[0] = 0;
+  exportResetFolderTracking();
+  settingsSave();
+  screensInitAll();
+  screenSetup(projectReturnScreen, 0);
 }
 
 void projectCreateNewFromScreen(const AppScreen* returnScreen) {
@@ -365,8 +378,8 @@ void projectCommonDrawStatic(void) {
   gfxPrint(0, 10, "Tempo");
   gfxPrint(0, 11, "Sync");
   gfxPrint(0, 12, "Sync out");
-  gfxPrint(0, 14, "Link");
-  gfxPrint(0, 15, "Transport");
+  gfxPrint(0, 13, "Link");
+  gfxPrint(0, 14, "Transport");
 }
 
 void projectCommonDrawCursor(int col, int row) {
@@ -389,7 +402,7 @@ void projectCommonDrawCursor(int col, int row) {
     // Linear pitch
     gfxCursor(13, 9, 3);
   } else if (row >= 5 && row <= 9) {
-    static const int y[] = {10, 11, 12, 14, 15};
+    static const int y[] = {10, 11, 12, 13, 14};
     const int width = row == 5 ? 3 : row == 8 ? (linkClientIsEnabled(chipnomadState->linkClient) ? 12 : 9) : 4;
     gfxCursor(13, y[row - 5], width);
   }
@@ -424,7 +437,7 @@ void projectCommonDrawField(int col, int row, CellState state) {
     // Linear pitch
     gfxPrint(13, 9, chipnomadState->project.linearPitch ? "ON " : "OFF");
   } else if (row >= 5 && row <= 9) {
-    static const int y[] = {10, 11, 12, 14, 15};
+    static const int y[] = {10, 11, 12, 13, 14};
     const int line = y[row - 5];
     gfxClearRect(13, line, 27, 1);
     if (row == 5) {
@@ -486,8 +499,8 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
         screenSetup(&screenFileBrowser, 0);
       }
     } else if (col == 2) {
-      // New project
-      projectReturnScreen = &screenProject;
+      // New project — opens the mode chooser (Classic/Simplified) which
+      // builds the new project on confirm.
       if (projectModified) {
         confirmSetup("Lose unsaved changes?", doNewProject, cancelConfirm);
         screenSetup(&screenConfirm, 0);

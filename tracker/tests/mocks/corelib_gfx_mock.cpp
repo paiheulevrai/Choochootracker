@@ -8,6 +8,8 @@
 #include <algorithm>
 
 char mockGfxCells[20][40];
+int mockGfxColors[20][40];
+static int foreground;
 int mockTextRight, mockTextBottom;
 int mockCursorX, mockCursorY, mockCursorWidth;
 int mockBitmapDrawCount, mockBitmapDrawRow;
@@ -15,7 +17,7 @@ std::vector<uint8_t> mockScopePixels;
 
 int gfxSetup(int *screenWidth, int* screenHeight) { return 0; }
 void gfxCleanup(void) {}
-void gfxSetFgColor(int rgb) {}
+void gfxSetFgColor(int rgb) { foreground = rgb; }
 void gfxSetCursorColor(int rgb) {}
 void gfxSetCursorBrackets(int brackets) {}
 void gfxSetBgColor(int rgb) {}
@@ -42,7 +44,10 @@ void gfxPrint(int x, int y, const char* text) {
     mockTextBottom = std::max(mockTextBottom, y);
   }
   if (y < 0 || y >= 20) return;
-  for (; *text && x < 40; ++text, ++x) if (x >= 0) mockGfxCells[y][x] = *text;
+  for (; *text && x < 40; ++text, ++x) if (x >= 0) {
+    mockGfxCells[y][x] = *text;
+    mockGfxColors[y][x] = foreground;
+  }
 }
 void gfxPrintf(int x, int y, const char* format, ...) {
   char text[256];

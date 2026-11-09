@@ -5,6 +5,9 @@
 #include "utils.h"
 #include "chipnomad_lib.h"
 #include "project_utils.h"
+#include "pattern_utils.h"
+#include "screen_groovebox.h"
+#include "pattern_clone_utils.h"
 #include "audio_manager.h"
 #include "app.h"
 
@@ -13,6 +16,17 @@
 
 // Screen state variables
 static uint16_t lastChainValue = 0;
+static bool sceneEditPending = false;
+static int sceneEditTaps = 1;
+
+// Defined below (before onInput): merge-up machinery.
+static void songMergeSelectedPatternsUp(void);
+
+
+// Defined below (before onInput): merge-up machinery.
+static void songMergeSelectedPatternsUp(void);
+static void songMergeSelectedChainsUp(void);
+
 
 // Track mute/solo state machine
 typedef enum {
@@ -133,6 +147,7 @@ static int livePlay(int tapCount) {
 
 static void init(void) {
   lastChainValue = 0;
+  sceneEditPending = false;
   screen.cursorRow = 0;
   screen.cursorCol = 0;
   screen.topRow = 0;
@@ -149,6 +164,7 @@ static void init(void) {
 }
 
 static void setup(int input) {
+  sceneEditPending = false;
   screen.selectMode = 0;
   liveTogglePending = 0;
   liveToggledEarly = 0;
@@ -160,7 +176,9 @@ static void applyPendingLiveToggle(void) {
   liveToggledEarly = appTapSequenceOpen(keyOpt);
   liveMode ^= 1;
   drawStatic();
-  screenMessage(MESSAGE_TIME, liveMode ? "Live: PLAY queue, double urgent" : "Song mode");
+  screenMessage(MESSAGE_TIME, grooveboxEditorActive &&
+    chipnomadState->project.viewMode == ViewMode::classic && !liveMode ? "Scenes: START plays/stops" :
+    liveMode ? "Live: PLAY queue, double urgent" : "Song mode");
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -173,20 +191,26 @@ static int getColumnCount(int row) {
 }
 
 static void drawStatic(void) {
+  gfxSetBgColor(appSettings.colorScheme.background);
+  gfxClearRect(0, 0, 11, 1);
   gfxSetFgColor(appSettings.colorScheme.textTitles);
-  gfxPrint(0, 0, liveMode ? "LIVE" : "SONG");
+  gfxPrint(0, 0, grooveboxEditorActive &&
+    chipnomadState->project.viewMode == ViewMode::classic ?
+    liveMode ? "SCENES LIVE" : "SCENES" : liveMode ? "LIVE" : "SONG");
 }
 
 static void drawField(int col, int row, CellState state) {
   if (row < screen.topRow || row >= (screen.topRow + screenVisibleRows())) return; // Don't draw outside of the viewing area
 
   int chain = chipnomadState->project.song[row][col];
-  int isHighlighted = chipnomadState->project.songHighlight[row][col];
+
+
+ int isHighlighted = chipnomadState->project.songHighlight[row][col];
 
   if (isHighlighted) {
     gfxSetFgColor(appSettings.colorScheme.textTitles);
   } else {
-    setCellColor(state, chain == EMPTY_VALUE_16, chain != EMPTY_VALUE_16 && chainHasNotes(&chipnomadState->project, chain));
+    setCellColor(state, chain == EMPTY_VALUE_16, chain != EMPTY_VALUE_16 && viewModeHasNotes(&chipnomadState->project, chain));
   }
   gfxPrint(3 + col * 3, 3 + row - screen.topRow, chain == EMPTY_VALUE_16 ? "--" : byteToHex(chain));
 }
@@ -234,6 +258,7 @@ static void draw(void) {
   if (liveTogglePending && ((int32_t)(songFrame - liveToggleFrame) >= 0 || !appTapSequenceOpen(keyOpt)))
     applyPendingLiveToggle();
 
+
   for (int c = 0; c < chipnomadState->project.tracksCount; c++) {
     gfxClearRect(2 + c * 3, 3, 1, screenVisibleRows());
     const PlaybackTrackState* track = &chipnomadGetPlaybackStatus(chipnomadState)->tracks[c];
@@ -279,12 +304,20 @@ static int inputScreenNavigation(int keys, int tapCount) {
     return 1;
   }
 
-  // Go to Chain screen
+  // Go to Chain screen (classic) or Phrase/pattern screen (simplified —
+  // there is no Chain screen in the simplified view).
   if (keys == (keyRight | keyShift)) {
+    if (grooveboxEditorActive && chipnomadState->project.viewMode == ViewMode::classic) {
+      screenSetup(&screenGroovebox, screen.cursorRow);
+      return 1;
+    }
     int chain = chipnomadState->project.song[screen.cursorRow][screen.cursorCol];
 
     if (chain == EMPTY_VALUE_16) {
-      screenMessage(0, "Enter a chain");
+      screenMessage(0, chipnomadState->project.viewMode == ViewMode::simplified
+        ? "Enter a pattern" : "Enter a chain");
+    } else if (chipnomadState->project.viewMode == ViewMode::simplified || canonicalSimplifiedActive) {
+      screenSetup(&screenPhrase, -1);
     } else {
       screenSetup(&screenChain, -1);
     }
@@ -307,13 +340,31 @@ static int inputScreenNavigation(int keys, int tapCount) {
 }
 
 static int editCell(int col, int row, CellEditAction action) {
+  bool groovebox = (grooveboxEditorActive || canonicalSimplifiedActive) &&
+    chipnomadState->project.viewMode == ViewMode::classic;
+  if (groovebox && action == CellEditAction::tap &&
+      chipnomadState->project.song[row][col] == EMPTY_VALUE_16) {
+    int slot = grooveboxFindFreeChain(&chipnomadState->project, col);
+    if (slot == EMPTY_VALUE_16) screenMessage(MESSAGE_TIME_ERROR, "No free chains");
+    else {
+      chipnomadState->project.song[row][col] = slot;
+      lastChainValue = slot;
+    }
+    return 1;
+  }
   if (action == CellEditAction::doubleTap) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
-      int nextEmpty = findEmptyChain(&chipnomadState->project, current + 1);
+      int nextEmpty = groovebox ? grooveboxFindFreeChain(&chipnomadState->project, col) :
+        viewModeFindEmpty(&chipnomadState->project, current + 1);
       if (nextEmpty != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = nextEmpty;
         lastChainValue = nextEmpty;
+        if (patternMaterializeIfPristine(&chipnomadState->project, nextEmpty,
+          row, col)) {
+          projectModified = 1;
+          chipnomadQueueProjectRefresh(chipnomadState);
+        }
       } else {
         screenMessage(MESSAGE_TIME, "No free chains");
       }
@@ -333,7 +384,7 @@ static int editCell(int col, int row, CellEditAction action) {
   } else if (action == CellEditAction::shallowClone) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
-      int cloned = cloneChainToNext(current);
+      int cloned = viewModeCloneToNext(&chipnomadState->project, current);
       if (cloned != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = cloned;
         lastChainValue = cloned;
@@ -342,10 +393,12 @@ static int editCell(int col, int row, CellEditAction action) {
     }
     return 0;
   } else if (action == CellEditAction::deepClone) {
+    if (canonicalSimplifiedActive && chipnomadState->project.viewMode == ViewMode::classic)
+      return grooveboxAction(GrooveboxAction::makeIndependent, row, col);
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
-      // Deep clone the phrases in the existing chain (don't create a new chain)
-      if (deepCloneChain(current)) {
+      // Deep clone the phrases in the existing cell (don't create a new one)
+      if (viewModeDeepClone(&chipnomadState->project, current)) {
         return 1;
       }
     }
@@ -430,8 +483,201 @@ static int onEdit(int col, int row, CellEditAction action) {
   return 0;
 }
 
+// ── Merge-up (simplified view, selection active, OPT+UP) ───────────────────
+// All selected patterns merge upward: lower rows' bars append to the
+// topmost selected pattern (per column, top-to-bottom), sources are
+// cleared. Refused (animated helper text) when the merged pattern would
+// exceed 16 bars.
+#define MERGE_REFUSAL_TEXT "Pattern too long to merge"
+
+static void songMergeSelectedPatternsUp(void) {
+  Project* p = &chipnomadState->project;
+  if (p->viewMode != ViewMode::simplified) return;
+  if (screen.selectMode != 1) return;
+  int merged = 0, refused = 0;
+
+  int startCol, startRow, endCol, endRow;
+  getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
+
+  // Per-column merge into that column's topmost selected pattern.
+  for (int col = startCol; col <= endCol; col++) {
+    // Collect the column's selected rows (ascending) with non-empty cells.
+    int rows[PROJECT_MAX_LENGTH];
+    int count = 0;
+    for (int r = startRow; r <= endRow; r++) {
+      uint16_t cell = p->song[r][col];
+      if (cell == EMPTY_VALUE_16 || cell >= PROJECT_MAX_PATTERNS) continue;
+      rows[count++] = r;
+    }
+    if (count < 1) continue;
+
+    // Length check BEFORE mutating: sum of all selected patterns ≤ 16.
+    int total = 0;
+    for (int i = 0; i < count; i++) {
+      Pattern* pat = &p->patterns[p->song[rows[i]][col]];
+      int len = pat->length;
+      if (len < 1) len = 1;
+      total += len;
+    }
+    if (total > PROJECT_MAX_PATTERN_LENGTH) {
+      refused = 1;
+      continue;  // refuse this column
+    }
+
+    // Merge ascending into the first selected pattern; clear the sources.
+    int target = p->song[rows[0]][col];
+    for (int i = 1; i < count; i++) {
+      int src = p->song[rows[i]][col];
+      if (patternAppendPattern(p, target, src) < 0) {
+        // Cannot happen after the length check; guard anyway.
+        refused = 1;
+        continue;
+      }
+      patternClear(&p->patterns[src]);
+      // The merged source's row is emptied — the pattern is gone from the
+      // song grid.
+      p->song[rows[i]][col] = EMPTY_VALUE_16;
+    }
+    // If the topmost selected row was empty, point it at the merged
+    // pattern so the result is visible at the top of the selection.
+    for (int r = startRow; r <= endRow; r++) {
+      if (p->song[r][col] == target) break;
+      if (p->song[r][col] == EMPTY_VALUE_16) {
+        p->song[r][col] = (uint16_t)target;
+        break;
+      }
+    }
+    merged = 1;
+  }
+
+  projectModified = 1;
+  chipnomadQueueProjectRefresh(chipnomadState);
+  screenFullRedraw(&screen);
+  if (merged) screenMessage(MESSAGE_TIME, "Patterns merged");
+  else if (refused) screenMessage(MESSAGE_TIME, MERGE_REFUSAL_TEXT);
+}
+
+static void songMergeCanonicalUp() {
+  int firstCol, firstRow, lastCol, lastRow;
+  getSelectionBounds(&screen, &firstCol, &firstRow, &lastCol, &lastRow);
+  if (grooveboxMergePatternsUp(firstRow, lastRow, firstCol, lastCol))
+    screenFullRedraw(&screen);
+}
+
+// ── Merge-up (classic view, selection active, OPT+UP) ──────────────────────
+// The chains of all selected rows merge into the topmost selected chain
+// (per column): each lower chain's phrase rows (phrase + transpose) append
+// to the target's first empty row onward, up to 16 rows total; source
+// chains are cleared and their song cells emptied. Refused when the merged
+// chain would exceed 16 phrase rows.
+#define CHAIN_MERGE_REFUSAL_TEXT "Chain too long to merge"
+
+static void songMergeSelectedChainsUp(void) {
+  Project* p = &chipnomadState->project;
+  if (p->viewMode != ViewMode::classic) return;
+  if (screen.selectMode != 1) return;
+  int merged = 0, refused = 0;
+
+  int startCol, startRow, endCol, endRow;
+  getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
+
+  for (int col = startCol; col <= endCol; col++) {
+    // Collect the column's selected rows (ascending) with non-empty chain
+    // cells.
+    int rows[PROJECT_MAX_LENGTH];
+    int count = 0;
+    for (int r = startRow; r <= endRow; r++) {
+      uint16_t cell = p->song[r][col];
+      if (cell == EMPTY_VALUE_16 || cell >= PROJECT_MAX_CHAINS) continue;
+      rows[count++] = r;
+    }
+    if (count < 1) continue;
+
+    // Length check BEFORE mutating: total phrase rows across all selected
+    // chains must fit in one chain (16 rows).
+    int target = p->song[rows[0]][col];
+    int targetUsed = 0;
+    for (int d = 0; d < 16; d++)
+      if (p->chains[target].rows[d].phrase != EMPTY_VALUE_16) targetUsed++;
+    int total = targetUsed;
+    for (int i = 1; i < count; i++) {
+      Chain* src = &p->chains[p->song[rows[i]][col]];
+      for (int d = 0; d < 16; d++)
+        if (src->rows[d].phrase != EMPTY_VALUE_16) total++;
+    }
+    if (total > 16) {
+      refused = 1;
+      continue;  // refuse this column
+    }
+
+    // Append ascending into the target's first empty row onward; clear the
+    // source chains and empty their song cells.
+    int write = 0;
+    while (write < 16 && p->chains[target].rows[write].phrase != EMPTY_VALUE_16) write++;
+    for (int i = 1; i < count; i++) {
+      int srcIdx = p->song[rows[i]][col];
+      Chain* src = &p->chains[srcIdx];
+      for (int d = 0; d < 16 && write < 16; d++) {
+        if (src->rows[d].phrase == EMPTY_VALUE_16) continue;
+        p->chains[target].rows[write] = src->rows[d];
+        write++;
+      }
+      chainClear(src);
+      p->song[rows[i]][col] = EMPTY_VALUE_16;
+    }
+    // If the topmost selected row was empty, point it at the merged chain
+    // so the result is visible at the top of the selection.
+    for (int r = startRow; r <= endRow; r++) {
+      if (p->song[r][col] == (uint16_t)target) break;
+      if (p->song[r][col] == EMPTY_VALUE_16) {
+        p->song[r][col] = (uint16_t)target;
+        break;
+      }
+    }
+    merged = 1;
+  }
+
+  projectModified = 1;
+  chipnomadQueueProjectRefresh(chipnomadState);
+  screenFullRedraw(&screen);
+  if (merged) screenMessage(MESSAGE_TIME, "Chains merged");
+  else if (refused) screenMessage(MESSAGE_TIME, CHAIN_MERGE_REFUSAL_TEXT);
+}
+
 static int onInput(int isKeyDown, int keys, int tapCount) {
   int handled = 0;
+  if (grooveboxEditorActive && chipnomadState->project.viewMode == ViewMode::classic &&
+      screen.selectMode == 0) {
+    // Wait for release so EDIT+PLAY cannot create a pattern before queuing.
+    if (isKeyDown && keys == keyEdit) {
+      sceneEditPending = true;
+      sceneEditTaps = tapCount;
+      return 1;
+    }
+    if (!isKeyDown && keys == 0 && sceneEditPending) {
+      sceneEditPending = false;
+      screenInput(&screen, 1, keyEdit, sceneEditTaps);
+      return screenInput(&screen, 0, 0, sceneEditTaps);
+    }
+  }
+  if (isKeyDown || keys == 0) sceneEditPending = false;
+  if (canonicalSimplifiedActive && chipnomadState->project.viewMode == ViewMode::classic &&
+      isKeyDown && keys == (keyOpt | keyUp) && screen.selectMode == 1) {
+    songMergeCanonicalUp();
+    return 1;
+  }
+
+  // Merge-up: OPT+UP with an active selection. Simplified view merges
+  // patterns; classic view merges chains (identical gesture, matching
+  // helper description per view). OPT+UP has no other binding on the Song
+  // screen (mute/solo machine does not consume it), so this is a free chord.
+  if (isKeyDown && keys == (keyOpt | keyUp) && screen.selectMode == 1) {
+    if (chipnomadState->project.viewMode == ViewMode::simplified)
+      songMergeSelectedPatternsUp();
+    else
+      songMergeSelectedChainsUp();
+    return 1;
+  }
 
   if (isKeyDown) {
     int thirdOptTap = keys == keyOpt && tapCount == 3;
@@ -454,6 +700,15 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     if (wait < LIVE_TOGGLE_MIN_WAIT_FRAMES) wait = LIVE_TOGGLE_MIN_WAIT_FRAMES;
     liveToggleFrame = songFrame + wait;
     liveTogglePending = 1;
+    return 1;
+  }
+  if (isKeyDown && !liveMode && keys == keyPlay && grooveboxEditorActive &&
+      chipnomadState->project.viewMode == ViewMode::classic) return 0;
+  if (isKeyDown && keys == (keyEdit | keyPlay) && grooveboxEditorActive &&
+      chipnomadState->project.viewMode == ViewMode::classic) {
+    chipnomadQueueClearLoopRange(chipnomadState);
+    if (!chipnomadQueuePlaybackQueueLiveScene(chipnomadState, screen.cursorRow, tapCount >= 2))
+      screenMessage(MESSAGE_TIME_ERROR, "Scene launch failed: invalid/full queue");
     return 1;
   }
   if (isKeyDown && liveMode && keys == keyPlay) return livePlay(tapCount);
@@ -752,6 +1007,13 @@ int songKeyJazzHandleRawKey(InputCode input, int isDown) {
     lastChainValue = (uint16_t)value;
     keyJazzEditRow = row;
     keyJazzEditCol = col;
+    // Simplified view: typing a pattern number onto a previously-empty row
+    // materializes it at the app's default length (View window setting).
+    if (current == EMPTY_VALUE_16 &&
+        patternMaterializeIfPristine(&chipnomadState->project, value, row, col)) {
+      projectModified = 1;
+      chipnomadQueueProjectRefresh(chipnomadState);
+    }
     drawField(col, row, CellState::normal);
   }
   return 1;
