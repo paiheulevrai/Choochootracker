@@ -1232,6 +1232,42 @@ int main(int argc,char** argv){
     printf("All delay time visual hints passed\n");
     chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
   }
+  if(argc==3 && !strcmp(argv[2],"--song-empty-cut-only")) {
+    for(bool keyboard:{false,true}) {
+    auto& song=chipnomadState->project.song;
+    for(int row=0;row<PROJECT_MAX_LENGTH;++row)
+      for(int col=0;col<PROJECT_MAX_TRACKS;++col) song[row][col]=(row+col)%PROJECT_MAX_CHAINS;
+    resetCopyBuffers();
+    *pSongRow=*pSongTrack=0;
+    screenSetup(&screenSong,0);appDraw();
+    if(keyboard) require(songKeyJazzHandleRawKey({InputDeviceType::keyboard,SDLK_ESCAPE},1),"enable Song key jazz");
+    for(int pass=0;pass<2;++pass) {
+      key(1,keyShift|keyOpt);key(0,0);
+      key(1,keyRight);key(0,0);
+      key(1,keyDown);key(0,0);
+      key(1,keyDown);key(0,0);
+      if(keyboard) {
+        SDL_SetModState(KMOD_CTRL);
+        require(songKeyJazzHandleRawKey({InputDeviceType::keyboard,SDLK_x},1),"Ctrl+X handled");
+        SDL_SetModState(KMOD_NONE);
+        key(1,keyUp);key(0,0);
+        key(1,keyUp);key(0,0);
+        key(1,keyLeft);key(0,0);
+      } else { key(1,keyOpt|keyEdit);key(0,0); }
+      require(*pSongRow==0&&*pSongTrack==0,"cursor at selection start for next cut");
+      require(song[0][0]==(pass?3:EMPTY_VALUE_16),"first cut clears; second removes the empty gap");
+    }
+    require(song[0][1]==4,"all selected columns shift");
+    require(song[0][2]==2,"unselected columns stay in place");
+    require(song[PROJECT_MAX_LENGTH-1][0]==EMPTY_VALUE_16,"shifted bottom is empty");
+    require(pasteSong(3,10)==3,"empty cut retains the three-row clipboard");
+    require(song[10][3]==0&&song[12][4]==3,"original chains remain pasteable");
+    if(keyboard) require(songKeyJazzHandleRawKey({InputDeviceType::keyboard,SDLK_ESCAPE},1),"disable Song key jazz");
+    }
+    capture("song-empty-cut");
+    printf("Song OPT+EDIT and Ctrl+X cut content then remove an empty rectangle without losing clipboard\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--bogie-clap-only")) {
     auto& instrument=prepareHomepageInstrument(InstrumentType::DrumSynth,"Noise Clap");
     screenSetup(&screenInstrument,0);appDraw();

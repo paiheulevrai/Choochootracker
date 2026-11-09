@@ -95,6 +95,24 @@ int pasteGroove(int grooveIdx, int startRow) {
 }
 
 void copySong(int startCol, int startRow, int endCol, int endRow, int isCut) {
+  if (isCut) {
+    bool empty = true;
+    for (int row = startRow; row <= endRow && empty; ++row)
+      for (int col = startCol; col <= endCol; ++col)
+        if (chipnomadState->project.song[row][col] != EMPTY_VALUE_16) {
+          empty = false;
+          break;
+        }
+    if (empty) {
+      // Removing an empty gap must not replace the chains just cut to the clipboard.
+      const int count = endRow - startRow + 1;
+      for (int row = startRow; row < PROJECT_MAX_LENGTH; ++row)
+        for (int col = startCol; col <= endCol; ++col)
+          chipnomadState->project.song[row][col] = row < PROJECT_MAX_LENGTH - count ?
+            chipnomadState->project.song[row + count][col] : EMPTY_VALUE_16;
+      return;
+    }
+  }
   cpBufSongRows = endRow - startRow + 1;
   cpBufSongCols = endCol - startCol + 1;
 

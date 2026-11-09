@@ -4,6 +4,96 @@
 #include "screens.h"
 
 #include <cstring>
+#include <initializer_list>
+#include <memory>
+
+namespace {
+struct SongClipboardFixture {
+  std::unique_ptr<ChipNomadState> state{new ChipNomadState{}};
+  ChipNomadState* previous = chipnomadState;
+  SongClipboardFixture() {
+    chipnomadState = state.get();
+    projectInit(&state->project);
+    resetCopyBuffers();
+  }
+  ~SongClipboardFixture() {
+    resetCopyBuffers();
+    chipnomadState = previous;
+  }
+};
+}
+
+TEST_CASE("Song cuts content then removes the same empty rectangle without losing the clipboard") {
+  SongClipboardFixture fixture;
+  auto& song = fixture.state->project.song;
+  for (int row = 0; row < PROJECT_MAX_LENGTH; ++row)
+    for (int col = 0; col < PROJECT_MAX_TRACKS; ++col)
+      song[row][col] = (row + col) % PROJECT_MAX_CHAINS;
+  copySong(2, 8, 4, 15, 1);
+  for (int row = 8; row <= 15; ++row)
+    for (int col = 2; col <= 4; ++col) CHECK(song[row][col] == EMPTY_VALUE_16);
+  CHECK(song[16][2] == 18);
+  copySong(2, 8, 4, 15, 1);
+  for (int row = 0; row < PROJECT_MAX_LENGTH; ++row) {
+    for (int col = 0; col < PROJECT_MAX_TRACKS; ++col) {
+      const bool shifted = row >= 8 && col >= 2 && col <= 4;
+      const uint16_t expected = shifted && row >= PROJECT_MAX_LENGTH - 8 ? EMPTY_VALUE_16 :
+        (row + (shifted ? 8 : 0) + col) % PROJECT_MAX_CHAINS;
+      CHECK(song[row][col] == expected);
+    }
+  }
+  CHECK(pasteSong(0, 0) == 8);
+  for (int row = 0; row < 8; ++row)
+    for (int col = 0; col < 3; ++col) CHECK(song[row][col] == row + 8 + col + 2);
+}
+
+TEST_CASE("Song mixed selections are cut without shifting any columns") {
+  SongClipboardFixture fixture;
+  auto& song = fixture.state->project.song;
+  song[5][2] = 0;
+  song[6][1] = 9;
+  song[7][1] = 10;
+  copySong(1, 4, 2, 6, 1);
+  CHECK(song[7][1] == 10);
+  for (int row = 4; row <= 6; ++row)
+    for (int col = 1; col <= 2; ++col) CHECK(song[row][col] == EMPTY_VALUE_16);
+  CHECK(pasteSong(3, 10) == 3);
+  CHECK(song[10][3] == EMPTY_VALUE_16);
+  CHECK(song[11][4] == 0);
+  CHECK(song[12][3] == 9);
+}
+
+TEST_CASE("Song copying an empty range still copies silence without shifting") {
+  SongClipboardFixture fixture;
+  auto& song = fixture.state->project.song;
+  song[2][0] = 7;
+  copySong(0, 0, 0, 1, 0);
+  CHECK(song[2][0] == 7);
+  song[4][1] = 8;
+  CHECK(pasteSong(1, 4) == 2);
+  CHECK(song[4][1] == EMPTY_VALUE_16);
+  CHECK(song[5][1] == EMPTY_VALUE_16);
+  CHECK(song[6][1] == 8);
+}
+
+TEST_CASE("Song removes empty ranges at the top bottom and full length") {
+  for (int start : {0, PROJECT_MAX_LENGTH - 1}) {
+    SongClipboardFixture fixture;
+    auto& song = fixture.state->project.song;
+    song[0][1] = 99;
+    if (start == 0) song[1][0] = 7;
+    copySong(0, start, 0, start, 1);
+    CHECK(song[0][0] == (start == 0 ? 7 : EMPTY_VALUE_16));
+    CHECK(song[PROJECT_MAX_LENGTH - 1][0] == EMPTY_VALUE_16);
+    CHECK(song[0][1] == 99);
+    CHECK(pasteSong(2, 0) == 0);
+  }
+  SongClipboardFixture fixture;
+  copySong(0, 0, PROJECT_MAX_TRACKS - 1, PROJECT_MAX_LENGTH - 1, 1);
+  for (const auto& row : fixture.state->project.song)
+    for (uint16_t cell : row) CHECK(cell == EMPTY_VALUE_16);
+  CHECK(pasteSong(0, 0) == 0);
+}
 
 TEST_CASE("FX clipboard moves Phrase FX into Table lanes and truncates") {
   ChipNomadState state = {};

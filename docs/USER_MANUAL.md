@@ -334,6 +334,8 @@ It is common to reserve 1 chain for empty phrases, usually `00` or `FE`.
 
 You can keep multiple sub-songs in a project by creating "islands": sections separated by empty rows.
 
+**OPT + EDIT** on a selected rectangle cuts its chain references, leaving empty cells. Select the same empty rectangle and press **OPT + EDIT** again to remove the gap: everything below moves up by the selection's height, only in the selected columns, and the bottom cells become empty. The whole selection must be empty; a mixed selection is cut without shifting. Removing an empty selection preserves the previous clipboard, so the chains you cut can still be pasted. Song's **Ctrl+X** in Key Jazz mode follows the same rule. Select all tracks to keep their arrangement aligned; selecting only some columns shifts only those tracks.
+
 #### Live Mode
 
 Double-tap **OPT** to enter or leave Live Mode; `LIVE` replaces the Song title. The switch happens a moment after the second tap, so tapping **OPT** 3 times adds a highlight without entering or leaving Live Mode. In Live Mode, **PLAY** queues the selected chain for the next chain boundary. A playing track finishes its own chain; a stopped track waits for the first active track (lowest track number) to finish its chain. When no track is playing, playback starts immediately. Selected stopped tracks launch together on their reference boundary. Press **PLAY** twice for an urgent change at the next phrase boundary instead. A selected empty Song cell queues a quantised stop on a playing track, or cancels a stopped track's pending launch. `+` marks a queued chain, `!` an urgent chain and `-` a queued stop.

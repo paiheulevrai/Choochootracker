@@ -12,6 +12,7 @@ void copyGroove(int grooveIdx, int startRow, int endRow, int isCut);
 int pasteGroove(int grooveIdx, int startRow);
 
 // Song copy/paste
+// Cutting an entirely empty range removes the gap without replacing the clipboard.
 void copySong(int startCol, int startRow, int endCol, int endRow, int isCut);
 int pasteSong(int startCol, int startRow);
 void shiftSongColumnUp(int col, int startRow);
