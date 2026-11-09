@@ -4,7 +4,7 @@ ChooChooTracker is an 8-track music tracker for handheld consoles.
 
 ## Three-view text prototype
 
-Project -> View -> Mode cycles through Classic, Groovebox and Simplified with
+Project -> View mode - Editing style -> Mode cycles through Classic, Groovebox and Simplified with
 EDIT + LEFT/RIGHT. There is one Simplified behaviour: bars isolate automatically
 when edited, directly in the canonical Song/Chains/Phrases arrangement.
 Changing editor does not convert the project.
@@ -1969,7 +1969,7 @@ Use **Save** before changing instrument types or loading another project.
 
 ### View window
 
-The View row opens the view window, which controls how the Song screen is
+The View mode - Editing style row opens the view window, which controls how the Song screen is
 interpreted:
 
 - **Mode** is the active project view: **Classic** (LSDJ-style

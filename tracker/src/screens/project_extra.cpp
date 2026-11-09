@@ -4,6 +4,8 @@
 #include "chipnomad_lib.h"
 #include "common.h"
 
+static const char viewLabel[] = "View mode - Editing style";
+
 static int getColumnCount(int row) {
   if (row < SCR_PROJECT_ROWS) return projectCommonColumnCount(row);
   return 1;
@@ -14,7 +16,7 @@ static void drawStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, 16, "Pitch table");
   gfxPrint(0, 17, "Scale");
-  gfxPrint(0, 18, "View");
+  gfxPrint(0, 18, viewLabel);
 }
 
 static void drawCursor(int col, int row) {
@@ -24,7 +26,7 @@ static void drawCursor(int col, int row) {
   } else if (row == SCR_PROJECT_ROWS + 1) {
     gfxCursor(0, 17, 5);
   } else if (row == SCR_PROJECT_ROWS + 2) {
-    gfxCursor(0, 18, 4);
+    gfxCursor(0, 18, sizeof(viewLabel) - 1);
   }
 }
 
@@ -39,7 +41,7 @@ static void drawField(int col, int row, CellState state) {
   } else if (row == SCR_PROJECT_ROWS + 1) {
     gfxPrint(0, 17, "Scale");
   } else if (row == SCR_PROJECT_ROWS + 2) {
-    gfxPrint(0, 18, "View");
+    gfxPrint(0, 18, viewLabel);
   }
 }
 
