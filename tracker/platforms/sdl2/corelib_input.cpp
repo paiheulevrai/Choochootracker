@@ -112,7 +112,7 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyMotionErase[0] = (InputCode){InputDeviceType::keyboard, BTN_R2};
   appSettings.keyMapping.keyEdit[0] = (InputCode){InputDeviceType::keyboard, BTN_A};
 
-#if defined(DESKTOP_BUILD) || defined(ANDROID_BUILD) || defined(WEB_BUILD) || defined(MIYOOPORTS_BUILD)
+#if defined(DESKTOP_BUILD) || defined(ANDROID_BUILD) || defined(WEB_BUILD) || defined(MIYOOPORTS_BUILD) || defined(VITA_BUILD)
   // Gamepad mappings for targets with SDL/browser controller support.
   appSettings.keyMapping.keyUp[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_DPAD_UP};
   appSettings.keyMapping.keyDown[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_DPAD_DOWN};
@@ -123,8 +123,14 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyPlay[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_START};
   appSettings.keyMapping.keyShift[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_BACK};
   appSettings.keyMapping.keyMotionLive[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER};
+#ifdef VITA_BUILD
+  // The Vita has no analog triggers: Square records, Triangle erases.
+  appSettings.keyMapping.keyMotionRecord[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_X};
+  appSettings.keyMapping.keyMotionErase[1] = (InputCode){InputDeviceType::gamepad, SDL_CONTROLLER_BUTTON_Y};
+#else
   appSettings.keyMapping.keyMotionRecord[1] = (InputCode){InputDeviceType::gamepad, gamepadTriggerLeft};
   appSettings.keyMapping.keyMotionErase[1] = (InputCode){InputDeviceType::gamepad, gamepadTriggerRight};
+#endif
 #else
   // PortMaster: keyboard only
   appSettings.keyMapping.keyUp[1] = (InputCode){InputDeviceType::none, 0};

@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "scanf_compat.h"  // keep last: redefines sscanf on Vita
 
 // Load AY1 instrument data (legacy format - version 1.0)
 static int loadInstrumentAY1Legacy(FILE* file, Instrument* instrument) {

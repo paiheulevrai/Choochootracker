@@ -24,6 +24,7 @@
 #include "synth/sample_voice.h"
 #include "synth/sr_wavetable_loader.h"
 #include "utils.h"
+#include "scanf_compat.h"  // keep last: redefines sscanf on Vita
 
 // Shared state
 char projectFileError[41];

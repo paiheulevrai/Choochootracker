@@ -18,6 +18,9 @@
   It writes `releases/choochootracker.zip`; validate it with
   `unzip -t releases/choochootracker.zip`. Final releases still require a
   hardware check on the target console.
+- PS Vita (experimental): needs VitaSDK (`VITASDK` set, `vdpm install sdl2`);
+  from `tracker` run `make -j4 -f Makefile.vita Vita-deploy`. Writes
+  `releases/ChooChooTracker-<version>-Vita.vpk`. See `docs/build-notes.md`.
 - Linux AppImage: run `make -j4 -f Makefile.linux appimage` from `tracker`.
   Writes `releases/ChooChooTracker-<date>-<version>-x86_64.AppImage`. See
   `docs/build-notes.md` for what it bundles and why.

@@ -59,7 +59,13 @@ void initDefaultAppSettings(void) {
   appSettings.keyRepeatSpeed = 2;
 #endif
   appSettings.mixVolume = 1.0f;
+#ifdef VITA_BUILD
+  // 444 MHz Cortex-A9: start from the cheapest synth quality; the user can
+  // raise it in Settings once they know what the project needs.
+  appSettings.quality = (int)ChipNomadQuality::low;
+#else
   appSettings.quality = (int)ChipNomadQuality::medium;
+#endif
   appSettings.braidsBits = 6;
   appSettings.braidsDrift = 0;
   appSettings.braidsSignature = 0;

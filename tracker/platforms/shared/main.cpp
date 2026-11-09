@@ -8,12 +8,18 @@
 #include "app.h"
 #include "common.h"
 #include "startup_timing.h"
-#ifdef MACOS_BUILD
+#if defined(MACOS_BUILD) || defined(VITA_BUILD)
 #include "corelib_assets.h"
+#endif
+#ifdef VITA_BUILD
+void vitaPlatformInit(void);
 #endif
 
 int main(int argv, char** args) {
-#ifdef MACOS_BUILD
+#ifdef VITA_BUILD
+  vitaPlatformInit();
+#endif
+#if defined(MACOS_BUILD) || defined(VITA_BUILD)
   if (assetsInit() != 0) return 1;
 #endif
   { StartupTiming timing("settings"); settingsLoad(); }
