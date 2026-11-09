@@ -35,7 +35,15 @@ jobs:
         with:
           submodules: true
       - name: Install SDL2 for the Vita
-        run: yes | vdpm install sdl2
+        # The package comes from a GitHub release download that now and then
+        # times out ("Operation too slow"); retry instead of failing the run.
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if yes | vdpm install sdl2; then exit 0; fi
+            echo "vdpm attempt $attempt failed; retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          exit 1
       - name: Build VPK
         working-directory: tracker
         run: |
