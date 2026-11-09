@@ -4,6 +4,7 @@
 #include "chipnomad_lib.h"
 #include "corelib/corelib_input.h"
 #include "corelib_mainloop.h"
+#include "midi/midi_recording.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -147,6 +148,8 @@ struct AppSettings {
   uint8_t midiSendTransport;
   uint8_t linkTransport;
   uint8_t midiOutputDelayMs;
+  uint8_t midiAutoChannel; // 0 = off, 1-16 = selected instrument, before channel mapping.
+  MidiRecordMode midiRecordMode;
   // Saved to settings.txt: which instrument a MIDI-in note on a given
   // channel (0-15) plays during preview, e.g. channel 0 -> instrument 5.
   // -1 = channel not assigned (falls back to the currently selected

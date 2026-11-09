@@ -126,6 +126,11 @@ struct PlaybackTrackState {
   uint8_t pendingGrooveIdx; // For GGR synchronization
 
   int frameCounter;
+  uint8_t midiHeld;
+  uint8_t midiPending; // 1 = Note On, 2 = Note Off.
+  uint8_t midiPitch;
+  uint8_t midiInstrument;
+  uint8_t midiVelocity;
 
   InsertAutomation inserts;
   uint32_t insertReset;
@@ -375,6 +380,8 @@ void playbackStop(PlaybackState* state);
  * @param instrument Instrument to use
  */
 void playbackPreviewNote(PlaybackState* state, int trackIdx, uint8_t note, uint8_t instrument);
+// External notes override the sound, never the sequencer's position or transport.
+void playbackMidiInput(PlaybackState* state, int trackIdx, uint8_t note, uint8_t instrument, uint8_t velocity);
 
 /**
  * Stops preview playback on a specific track

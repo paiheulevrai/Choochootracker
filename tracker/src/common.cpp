@@ -91,6 +91,8 @@ void initDefaultAppSettings(void) {
   appSettings.midiSendTransport = 0;
   appSettings.linkTransport = 1; // Preserve transport following from older settings.
   appSettings.midiOutputDelayMs = 0;
+  appSettings.midiAutoChannel = 16;
+  appSettings.midiRecordMode = MidiRecordMode::quantized;
   for (int i = 0; i < MIDI_CHANNEL_COUNT; i++) appSettings.midiChannelInstrument[i] = -1;
   appSettings.persistentWaveform = 0;
 #ifdef ANDROID_BUILD
@@ -294,6 +296,8 @@ int settingsSave(void) {
   fprintf(file, "midiSendTransport: %d\n", appSettings.midiSendTransport);
   fprintf(file, "linkTransport: %d\n", appSettings.linkTransport);
   fprintf(file, "midiOutputDelayMs: %d\n", appSettings.midiOutputDelayMs);
+  fprintf(file, "midiAutoChannel: %u\n", appSettings.midiAutoChannel);
+  fprintf(file, "midiRecordMode: %s\n", appSettings.midiRecordMode == MidiRecordMode::free ? "FREE" : "QUANTIZED");
   fprintf(file, "clockSource: %d\n", (int)appSettings.clockSource);
   fprintf(file, "midiClockMode: %d\n",
     appSettings.clockSource == ClockSource::midiClock ? 1 : 0);
@@ -551,6 +555,13 @@ int settingsLoad(void) {
       int value = 0;
       if (sscanf(line + 19, "%d", &value) == 1 && (value == 0 || value == 1))
         appSettings.midiSendTransport = (uint8_t)value;
+    } else if (strncmp(line, "midiAutoChannel: ", 17) == 0) {
+      int value = 0;
+      if (sscanf(line + 17, "%d", &value) == 1 && value >= 0 && value <= 16)
+        appSettings.midiAutoChannel = (uint8_t)value;
+    } else if (strncmp(line, "midiRecordMode: ", 16) == 0) {
+      if (strcmp(line + 16, "FREE") == 0) appSettings.midiRecordMode = MidiRecordMode::free;
+      else if (strcmp(line + 16, "QUANTIZED") == 0) appSettings.midiRecordMode = MidiRecordMode::quantized;
     } else if (strncmp(line, "midiOutputDelayMs: ", 19) == 0) {
       int value = 0;
       if (sscanf(line + 19, "%d", &value) == 1 && value >= 0 && value <= 200)

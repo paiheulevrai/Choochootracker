@@ -68,6 +68,56 @@ const int8_t kNoChannelMap[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 
 TEST_SUITE("MIDI router") {
 
+TEST_CASE("Auto channel overrides mapping and Note Off stays on the original track") {
+  resetFake();
+  midiRouterSetBackend(&kFakeBackend);
+  MidiRouterState* router = midiRouterCreate();
+  int8_t mapping[16];
+  std::memcpy(mapping, kNoChannelMap, sizeof(mapping));
+  mapping[15] = 7;
+  mapping[0] = 3;
+  midiRouterSetChannelInstrumentMap(router, mapping);
+  std::vector<MidiPreviewIntent> received;
+  auto receive = [](void* data, const MidiPreviewIntent& intent) {
+    static_cast<std::vector<MidiPreviewIntent>*>(data)->push_back(intent);
+  };
+  g_incoming.push_back({1234, 0x90, 15, 60, 93});
+  midiRouterProcessInput(router, 5, 0, 15, receive, &received);
+  REQUIRE(received.size() == 1);
+  CHECK(received[0].instrument == 5);
+  CHECK(received[0].autoChannel);
+  CHECK(received[0].velocity == 93);
+  CHECK(received[0].timestampMicros == 1234);
+  pushIncoming(0x90, 0, 64, 80);
+  midiRouterProcessInput(router, 6, 1, 15, receive, &received);
+  CHECK(received.back().instrument == 3);
+  CHECK_FALSE(received.back().autoChannel);
+  pushIncoming(0x90, 15, 60, 0);
+  midiRouterProcessInput(router, 6, 1, 15, receive, &received);
+  REQUIRE(received.size() == 3);
+  CHECK(received.back().stop);
+  CHECK(received.back().track == 0);
+  midiRouterResetHeldNotes(router);
+  midiRouterProcessInput(router, 6, 1, 15, receive, &received);
+  CHECK(received.back().stop);
+  CHECK(received.back().track == 1);
+  midiRouterDestroy(router);
+}
+
+TEST_CASE("Streaming MIDI input retains bursts larger than the preview buffer") {
+  resetFake();
+  midiRouterSetBackend(&kFakeBackend);
+  MidiRouterState* router = midiRouterCreate();
+  for (int i = 0; i < 40; ++i) pushIncoming(0x90, 15, 60 + i, 100);
+  int count = 0;
+  midiRouterProcessInput(router, 0, 0, 15,
+    [](void* data, const MidiPreviewIntent& intent) {
+      if (intent.noteOn) ++*static_cast<int*>(data);
+    }, &count);
+  CHECK(count == 40);
+  midiRouterDestroy(router);
+}
+
 TEST_CASE("Backend access request and status are forwarded") {
   g_accessRequests = 0;
   midiRouterSetBackend(&kFakeBackend);

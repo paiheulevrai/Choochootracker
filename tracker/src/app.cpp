@@ -28,6 +28,7 @@
 #include "screens/screen_quick_help.h"
 #include "screens/screen_instrument.h"
 #include "midi/midi_router.h"
+#include "chipnomad_lib_live_stick.h"
 #include "link/link_client.h"
 #include "midi/midi_backend_desktop.h"
 #include <math.h>
@@ -62,6 +63,7 @@ static int tapCount;
 /** Frame counter for key repeats */
 static int keyRepeatCount;
 static int motionRecordHeld;
+static int midiAuditionInstrument = 0;
 static int motionEraseHeld;
 // One bit per mapped input, plus one for logical input. Overlapping delivery
 // of the same press must be released completely before toggling again.
@@ -395,6 +397,7 @@ static int applyMotionRecordEvent(const MotionRecordEvent& event) {
     row->fx[column] = {FX_ID_EMPTY, 0};
     return 1;
   }
+
   if (column < 0)
     for (int i = 2; i >= 0; --i) if (row->fx[i].command == FX_ID_EMPTY) { column = i; break; }
   if (column < 0) {
@@ -410,6 +413,50 @@ static int isMotionRecordTrigger(InputCode input) {
   for (int i = 0; i < 3; i++)
     if (appSettings.keyMapping.keyMotionRecord[i].deviceType == input.deviceType && appSettings.keyMapping.keyMotionRecord[i].code == input.code) return 1;
   return 0;
+}
+
+static void receiveMidiNote(void* userdata, const MidiPreviewIntent& intent) {
+  const auto& playback = **static_cast<const PlaybackStatus**>(userdata);
+  if (intent.track >= chipnomadState->project.tracksCount) return;
+  if (!intent.stop && (instrumentIsEmpty(&chipnomadState->project, intent.instrument) ||
+      intent.note >= chipnomadState->project.pitchTable.length)) return;
+  const auto mode = playback.tracks[intent.track].mode;
+  const bool playing = mode != PlaybackMode::none && mode != PlaybackMode::stopped && mode != PlaybackMode::phraseRow;
+  const bool record = chipnomadMotionMode() == 1 && (intent.noteOn || (intent.stop && intent.timestampMicros));
+  if (record && intent.noteOn && !playing && intent.autoChannel && currentScreen == &screenPhrase &&
+      phraseScreenRecordMidi(intent.note, (uint8_t)intent.instrument, intent.velocity)) {
+    audioProjectDirty = 1;
+  }
+  if (record && intent.noteOn && !playing && !intent.autoChannel && currentScreen == &screenPhrase)
+    screenMessage(MESSAGE_TIME_ERROR, "Step REC: CH%02d, Auto is %02d", intent.channel + 1, appSettings.midiAutoChannel);
+  if (!chipnomadQueueMidiInput(chipnomadState, intent.track, intent.note, (uint8_t)intent.instrument,
+      intent.stop ? 0 : intent.velocity, intent.timestampMicros, record && playing, appSettings.midiRecordMode))
+    screenMessage(MESSAGE_TIME_ERROR, "MIDI input queue full");
+}
+
+static void updateMidiAuditionInstrument(void) {
+  if (!chipnomadState || !pSongTrack || !currentScreen) return;
+  int instrument = EMPTY_VALUE_8;
+  if (currentScreen == &screenInstrumentPool) instrument = instrumentPoolMidiInstrument();
+  else if (currentScreen == &screenTable) instrument = tableScreenMidiInstrument();
+  else if (currentScreen == &screenPhrase ||
+           (currentScreen == &screenInsertFX && !screenInsertFXIsMaster())) {
+    const auto& track = chipnomadGetPlaybackStatus(chipnomadState)->tracks[*pSongTrack];
+    bool playing = track.mode != PlaybackMode::none && track.mode != PlaybackMode::stopped &&
+                   track.mode != PlaybackMode::phraseRow;
+    if (playing && track.songRow >= 0 && track.songRow < PROJECT_MAX_LENGTH &&
+        track.chainRow >= 0 && track.chainRow < 16 && track.phraseRow >= 0 && track.phraseRow < 16)
+      instrument = lookupInstrument(&chipnomadState->project, track.songRow, track.chainRow, track.phraseRow, *pSongTrack);
+    else if (currentScreen == &screenPhrase) instrument = phraseScreenMidiInstrument();
+    else instrument = lookupInstrument(&chipnomadState->project, *pSongRow, *pChainRow, 0, *pSongTrack);
+  } else if (currentScreen == &screenInstrument || currentScreen == &screenModulation ||
+             currentScreen == &screenFMEdit || currentScreen == &screenSIDEdit ||
+             currentScreen == &screenMonkEdit || currentScreen == &screenInstrumentEQ ||
+             currentScreen == &screenSampleSettings || currentScreen == &screenSoundFontEdit ||
+             currentScreen == &screenAYWavetable) instrument = cInstrument;
+  if (instrument >= 0 && instrument < PROJECT_MAX_INSTRUMENTS &&
+      !instrumentIsEmpty(&chipnomadState->project, instrument))
+    midiAuditionInstrument = instrument;
 }
 
 static int motionLiveInputMask(InputCode input) {
@@ -434,6 +481,7 @@ static int isMotionEraseTrigger(InputCode input) {
 
 static void updateMotionRecordMode(void) {
   chipnomadSetMotionRecordMode(motionRecordHeld, motionEraseHeld);
+  chipnomadSetMidiEraseTrack(chipnomadState, motionEraseHeld && pSongTrack ? *pSongTrack : -1);
   chipnomadSetLiveStickEnabled(motionLiveActive() || motionRecordHeld || motionEraseHeld);
 }
 
@@ -861,6 +909,7 @@ void appActivateProject(void) {
   StartupTiming timing("engine and audio/MIDI devices");
   if (projectActive) return;
   projectActive = true;
+  midiAuditionInstrument = cInstrument;
   autosaveCounter = 0;
 
   playbackInit(&chipnomadState->playbackState, &chipnomadState->project);
@@ -969,6 +1018,7 @@ void appDraw(void) {
     else currentScreen->fullRedraw();
   }
   screenDraw();
+  updateMidiAuditionInstrument();
 
   if (charEditIsOpen()) return;
 
@@ -1031,7 +1081,8 @@ void appDraw(void) {
   }
 
   int realtimeOverflow = chipnomadGetMotionRecordOverflow() ||
-    chipnomadGetCommandOverflow(chipnomadState) || chipnomadGetRenderBufferOverflow(chipnomadState);
+    chipnomadGetCommandOverflow(chipnomadState) || chipnomadGetRenderBufferOverflow(chipnomadState) ||
+    chipnomadGetMidiRecordOverflow(chipnomadState);
   if (motionEraseHeld) {
     gfxSetFgColor(cs.warning);
     gfxPrint(39, 19, "x");
@@ -1247,49 +1298,33 @@ void appOnEvent(MainLoopEventData eventData) {
     MotionRecordEvent motionRecordEvent;
     while (chipnomadConsumeMotionRecordEvent(&motionRecordEvent))
       motionRecordChanged |= applyMotionRecordEvent(motionRecordEvent);
+    MidiRecordEvent midiRecordEvent;
+    while (chipnomadConsumeMidiRecordEvent(chipnomadState, &midiRecordEvent)) {
+      if (!midiRecordApply(chipnomadState->project.phrases[midiRecordEvent.phrase].rows[midiRecordEvent.row], midiRecordEvent)) {
+        chipnomadSetMotionRecordOverflow();
+        screenMessage(MESSAGE_TIME_ERROR, "MIDI record: no free FX slot for DEL");
+      } else motionRecordChanged = 1;
+    }
+    if (chipnomadGetMidiRecordOverflow(chipnomadState))
+      screenMessage(MESSAGE_TIME_ERROR, "MIDI record overflow: notes lost");
     if (motionRecordChanged) {
       projectModified = 1;
       audioProjectDirty = 1;
       if (currentScreen == &screenPhrase) currentScreen->fullRedraw();
     }
+    chipnomadSetMidiEraseTrack(chipnomadState, motionEraseHeld ? *pSongTrack : -1);
     if (audioProjectDirty && chipnomadQueueProjectRefresh(chipnomadState)) audioProjectDirty = 0;
 
 #if defined(ANDROID_BUILD) || defined(WEB_BUILD)
     refreshDynamicMidiConnections();
 #endif
 
-    // MIDI-in sound preview: an external MIDI keyboard auditions a sound on
-    // the current track - not note entry into the song - the same way the
-    // on-screen Edit+Play preview shortcut does on the Instrument screen.
-    // Available on every screen so a multi-channel keyboard (channel mapping
-    // is Settings > MIDI > Channel mapping) can be played live regardless of
-    // what's on screen. Channel routing, last-note-priority legato and the
-    // held-note stack all live in the router now (see midi/midi_router.h);
-    // this just applies the resulting intents to the current track.
-    //
-    // midiRouterTick always drains the backend's poll queue even when we
-    // won't act on the result (below), so a keyboard held/played while the
-    // song is actually playing doesn't back up in the backend's own queue
-    // and dump a burst of stale notes once the song stops. Previewing itself
-    // puts the track in PlaybackMode::phraseRow, which must stay "safe"
-    // here - gating on the track being merely "not stopped" (e.g.
-    // chipnomadGetPlaybackStatus's isPlaying) would block every note after
-    // the first, since the first note's own preview never fully lets go of
-    // the track between key presses.
     {
-      PlaybackMode trackMode = chipnomadGetPlaybackStatus(chipnomadState)->tracks[*pSongTrack].mode;
-      int previewSafe = trackMode == PlaybackMode::stopped || trackMode == PlaybackMode::phraseRow;
-      MidiPreviewIntent intents[16];
-      int intentCount = midiRouterTick(chipnomadState->midiRouter, cInstrument, intents, 16);
-      if (previewSafe) {
-        for (int i = 0; i < intentCount; i++) {
-          if (intents[i].stop) {
-            chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
-          } else if (!instrumentIsEmpty(&chipnomadState->project, intents[i].instrument)) {
-            chipnomadQueuePlaybackPreviewNote(chipnomadState, *pSongTrack, intents[i].note, intents[i].instrument);
-          }
-        }
-      }
+      const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
+      updateMidiAuditionInstrument();
+      midiRouterProcessInput(chipnomadState->midiRouter, midiAuditionInstrument, *pSongTrack,
+        appSettings.midiAutoChannel ? appSettings.midiAutoChannel - 1 : -1,
+        receiveMidiNote, &playback);
 
       // MIDI clock slave mode: transport (Start/Continue/Stop) always
       // drives song playback - there is deliberately no separate UI toggle

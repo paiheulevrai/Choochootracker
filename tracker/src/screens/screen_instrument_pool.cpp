@@ -10,6 +10,7 @@
 
 static int cursorRow = 0;
 static int topRow = 0;
+uint8_t instrumentPoolMidiInstrument(void) { return (uint8_t)cursorRow; }
 
 typedef enum {
   POOL_NORMAL,

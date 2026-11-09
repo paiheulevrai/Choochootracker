@@ -11,6 +11,7 @@
 #include "midi/midi_router.h"
 #include "audio_manager.h"
 #include "selection_popup.h"
+#include "screen_instrument.h"
 
 #include <chrono>
 #include <cstring>
@@ -132,6 +133,26 @@ struct StickLiveFixture {
     if (!realSettingsPath.empty()) std::filesystem::remove(realSettingsPath);
   }
 };
+
+struct MidiNoteInput {
+  std::deque<MidiEvent> events;
+  MidiBackend backend{};
+  uint64_t now = 1000000;
+  MidiNoteInput() {
+    backend.userdata = this;
+    backend.pollInput = [](void* data, MidiEvent* event) {
+      auto& pending = static_cast<MidiNoteInput*>(data)->events;
+      if (pending.empty()) return 0;
+      *event = pending.front();
+      pending.pop_front();
+      return 1;
+    };
+    backend.nowMicros = [](void* data) { return static_cast<MidiNoteInput*>(data)->now; };
+    backend.scheduleOutput = [](void*, const MidiEvent*, uint64_t) {};
+    midiRouterSetBackend(&backend);
+  }
+  ~MidiNoteInput() { midiRouterSetBackend(nullptr); }
+};
 }
 
 TEST_CASE_FIXTURE(StickLiveFixture, "Shift horizontal navigation exits branch screens to the spine") {
@@ -171,6 +192,155 @@ TEST_CASE_FIXTURE(StickLiveFixture, "Shift horizontal navigation exits branch sc
 }
 
 TEST_SUITE("Stick live") {
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI Auto Channel plays the phrase instrument with REC off") {
+  MidiNoteInput midi;
+  int savedInstrument = cInstrument;
+  auto savedPhraseInstrument = mockPhraseMidiInstrument;
+  cInstrument = 1;
+  mockPhraseMidiInstrument = 2;
+  auto& project = chipnomadState->project;
+  projectInitAY(&project);
+  project.instruments[1].type = project.instruments[2].type = InstrumentType::AY1;
+  chipnomadInitChips(chipnomadState, 48000, nullptr);
+  REQUIRE(chipnomadQueueProjectRefresh(chipnomadState));
+  float audio[4096]{};
+  chipnomadRender(chipnomadState, audio, 2048);
+  *pSongTrack = 0;
+  currentScreen = &screenPhrase;
+  projectModified = 0;
+  midi.events.push_back({1000, 0x90, 15, 60, 100});
+  appOnEvent({MainLoopEvent::tick});
+  chipnomadRender(chipnomadState, audio, 2048);
+  CHECK(chipnomadState->playbackState.tracks[0].note.instrument == 2);
+  CHECK(chipnomadState->playbackState.tracks[0].note.pitchBase == 48);
+  CHECK(projectModified == 0);
+  MidiRecordEvent recorded{};
+  CHECK_FALSE(chipnomadConsumeMidiRecordEvent(chipnomadState, &recorded));
+  midi.events.push_back({2000, 0x80, 15, 60, 0});
+  appOnEvent({MainLoopEvent::tick});
+  chipnomadRender(chipnomadState, audio, 2048);
+  currentScreen = &screenInstrument;
+  midi.events.push_back({3000, 0x90, 15, 64, 90});
+  appOnEvent({MainLoopEvent::tick});
+  chipnomadRender(chipnomadState, audio, 2048);
+  CHECK(chipnomadState->playbackState.tracks[0].note.instrument == 1);
+  CHECK(chipnomadState->playbackState.tracks[0].note.pitchBase == 52);
+  CHECK(projectModified == 0);
+  auto play = [&](const AppScreen* screen, int expectedInstrument) {
+    currentScreen = screen;
+    midi.events.push_back({4000, 0x90, 15, 67, 90});
+    appOnEvent({MainLoopEvent::tick});
+    chipnomadRender(chipnomadState, audio, 2048);
+    CHECK(chipnomadState->playbackState.tracks[0].note.instrument == expectedInstrument);
+  };
+  cInstrument = 2;
+  play(&screenModulation, 2);
+  cInstrument = 1;
+  play(&screenMixer, 2);
+  mockTableMidiInstrument = 1;
+  play(&screenTable, 1);
+  play(&screenMixer, 1);
+  mockPoolMidiInstrument = 2;
+  play(&screenInstrumentPool, 2);
+  mockPoolMidiInstrument = 1;
+  play(&screenInstrumentPool, 1);
+  play(&screenMixer, 1);
+  mockTableMidiInstrument = mockPoolMidiInstrument = EMPTY_VALUE_8;
+  cInstrument = savedInstrument;
+  mockPhraseMidiInstrument = savedPhraseInstrument;
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI REC records only the final release on its original track") {
+  MidiNoteInput midi;
+  auto savedPhraseInstrument = mockPhraseMidiInstrument;
+  mockPhraseMidiInstrument = 0;
+  auto& project = chipnomadState->project;
+  projectInitAY(&project);
+  project.tickRate = 48;
+  project.instruments[0].type = InstrumentType::AY1;
+  project.song[0][0] = 0;
+  project.chains[0].rows[0].phrase = 0;
+  project.phrases[0].rows[0].instrument = 0;
+  chipnomadInitChips(chipnomadState, 48000, nullptr);
+  playbackInit(&chipnomadState->playbackState, &chipnomadState->audioProject);
+  REQUIRE(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1));
+  float audio[2000]{};
+  auto render = [&] {
+    chipnomadRender(chipnomadState, audio, 1000);
+    midi.now += 20833;
+  };
+  render();
+  REQUIRE(chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode == PlaybackMode::song);
+  currentScreen = &screenPhrase;
+  *pSongTrack = 0;
+  motion(keyMotionRecord, true);
+  REQUIRE(chipnomadMotionMode() == 1);
+  auto send = [&](uint8_t type, uint8_t note, uint8_t velocity) {
+    midi.events.push_back({midi.now, type, 15, note, velocity});
+    appOnEvent({MainLoopEvent::tick});
+    render();
+  };
+  MidiRecordEvent recorded{};
+  send(0x90, 60, 100);
+  INFO("MIDI instrument: ", chipnomadState->playbackState.tracks[0].note.instrument,
+    ", mode: ", (int)chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode,
+    ", record overflow: ", chipnomadGetMidiRecordOverflow(chipnomadState));
+  REQUIRE(chipnomadConsumeMidiRecordEvent(chipnomadState, &recorded));
+  CHECK(recorded.note == 48);
+  send(0x90, 64, 90);
+  REQUIRE(chipnomadConsumeMidiRecordEvent(chipnomadState, &recorded));
+  CHECK(recorded.note == 52);
+  send(0x80, 64, 0);
+  CHECK_FALSE(chipnomadConsumeMidiRecordEvent(chipnomadState, &recorded));
+  for (int i = 0; i < 6; ++i) render();
+  *pSongTrack = 1;
+  send(0x80, 60, 0);
+  appOnEvent({MainLoopEvent::tick});
+  CHECK(project.phrases[0].rows[1].note == NOTE_OFF);
+  CHECK(project.phrases[0].rows[1].instrument == EMPTY_VALUE_8);
+  CHECK(project.phrases[0].rows[1].volume == EMPTY_VALUE_16);
+  CHECK(projectModified);
+  motion(keyMotionRecord, false);
+  mockPhraseMidiInstrument = savedPhraseInstrument;
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI Auto Channel and recording mode persist and reject invalid settings") {
+  CHECK(appSettings.midiAutoChannel == 16);
+  CHECK(appSettings.midiRecordMode == MidiRecordMode::quantized);
+  appSettings.midiAutoChannel = 12;
+  appSettings.midiRecordMode = MidiRecordMode::free;
+  REQUIRE(settingsSave() == 0);
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.midiAutoChannel == 12);
+  CHECK(appSettings.midiRecordMode == MidiRecordMode::free);
+  std::ofstream(realSettingsPath) << "midiAutoChannel: 17\nmidiRecordMode: INVALID\n";
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.midiAutoChannel == 16);
+  CHECK(appSettings.midiRecordMode == MidiRecordMode::quantized);
+  std::ofstream(realSettingsPath) << "midiAutoChannel: 0\nmidiRecordMode: FREE\n";
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.midiAutoChannel == 0);
+  CHECK(appSettings.midiRecordMode == MidiRecordMode::free);
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI menu exposes saved Auto Channel and Quantized Free controls") {
+  screenMidi.fullRedraw();
+  REQUIRE(mockScreenData);
+  auto* screen = mockScreenData;
+  CHECK(screen->rows == 9);
+  screen->drawField(0, 7, CellState::focus);
+  CHECK(std::string(mockGfxCells[12], 12) == "Auto channel");
+  screen->drawField(0, 8, CellState::focus);
+  CHECK(std::string(mockGfxCells[13] + 16, 9) == "QUANTIZED");
+  CHECK(screen->onEdit(0, 8, CellEditAction::tap));
+  CHECK(appSettings.midiRecordMode == MidiRecordMode::free);
+  CHECK(screen->onEdit(0, 7, CellEditAction::decrease));
+  CHECK(appSettings.midiAutoChannel == 15);
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.midiAutoChannel == 15);
+  CHECK(appSettings.midiRecordMode == MidiRecordMode::free);
+}
+
 TEST_CASE_FIXTURE(StickLiveFixture, "FM motion records one native command without a selector") {
   auto& row=chipnomadState->project.phrases[0].rows[0];
   phraseClear(&chipnomadState->project.phrases[0]);
@@ -926,7 +1096,7 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI mute and solo toggle on presses while 
 TEST_CASE_FIXTURE(StickLiveFixture, "screenMidi shows device rows and links to channel mapping") {
   screenMidi.fullRedraw();
   REQUIRE(mockScreenData != nullptr);
-  CHECK(mockScreenData->rows == 7);
+  CHECK(mockScreenData->rows == 9);
   auto* screen = mockScreenData;
 
   screen->drawField(0, 0, CellState::focus);

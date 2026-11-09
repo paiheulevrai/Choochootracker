@@ -244,6 +244,11 @@ void fxEditFullDraw(FXId currentFX, uint8_t instrumentIdx, int isTable);
 void fxEditRedraw(void);
 
 // Key jazz (desktop): lets screen_phrase.cpp own its toggle/note-entry state
+int phraseScreenRecordMidi(uint8_t note, uint8_t instrument, uint8_t velocity);
+uint8_t phraseScreenMidiInstrument(void);
+uint8_t tableScreenMidiInstrument(void);
+uint8_t instrumentPoolMidiInstrument(void);
+
 // while app.cpp only needs to route raw keyboard events to it. Returns 1 if
 // the key was consumed by key jazz, 0 to let normal input processing continue.
 #ifdef DESKTOP_BUILD

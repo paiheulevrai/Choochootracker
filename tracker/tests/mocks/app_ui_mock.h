@@ -12,6 +12,8 @@ extern ScreenData* mockScreenData;
 extern const char* mockBrowserTitle;
 extern const char* mockBrowserExtension;
 extern int mockLastInputKeys;
+extern uint8_t mockPhraseMidiInstrument;
+extern uint8_t mockTableMidiInstrument, mockPoolMidiInstrument;
 extern int mockEnvelopePreviewCount;
 extern int mockBitmapDrawCount, mockBitmapDrawRow;
 extern std::vector<uint8_t> mockScopePixels;

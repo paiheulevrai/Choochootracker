@@ -35,7 +35,9 @@ static void drawField(int col, int row, CellState state) {
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
   gfxClearRect(23, y, 24, 1);
   int8_t instrument = appSettings.midiChannelInstrument[row];
-  if (instrument < 0) {
+  if (appSettings.midiAutoChannel == row + 1) {
+    gfxPrint(23, y, "AUTO");
+  } else if (instrument < 0) {
     gfxPrint(23, y, "OFF");
   } else {
     gfxPrintf(23, y, "%s: %s", byteToHex((uint8_t)instrument), instrumentName(&chipnomadState->project, (uint8_t)instrument));

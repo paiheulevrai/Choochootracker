@@ -42,6 +42,8 @@
 #include "synth/sample_transient.h"
 #include "synth/sr_wavetable_loader.h"
 #include "audio_manager.h"
+#include "midi/midi_router.h"
+#include "chipnomad_lib_live_stick.h"
 #include <fstream>
 #include <thread>
 #include <chrono>
@@ -378,6 +380,100 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+  if(argc==3 && !strcmp(argv[2],"--midi-recording-only")) {
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+    projectInitAY(&chipnomadState->project);
+    auto& p = chipnomadState->project;
+    getInstrumentFunctions(InstrumentType::AY1).init(&p.instruments[0]);
+    p.song[0][0] = 0;
+    p.chains[0].rows[0].phrase = 0;
+    phraseClear(&p.phrases[0]);
+    *pSongRow = *pSongTrack = *pChainRow = 0;
+    cInstrument = 0;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    require(chipnomadQueueProjectRefresh(chipnomadState), "MIDI fixture snapshot");
+    float audio[4096]{};
+    chipnomadRender(chipnomadState, audio, 2048);
+    screenSetup(&screenPhrase, 0);
+    for (int i = 0; i < 5; ++i) { key(1, keyDown); key(0, 0); }
+    appSettings.midiAutoChannel = 1;
+    struct Input { MidiEvent event{}; bool pending = false; } midi;
+    MidiBackend backend{};
+    backend.userdata = &midi;
+    backend.pollInput = [](void* data, MidiEvent* event) {
+      auto& input = *static_cast<Input*>(data);
+      if (!input.pending) return 0;
+      *event = input.event; input.pending = false; return 1;
+    };
+    backend.scheduleOutput = [](void*, const MidiEvent*, uint64_t) {};
+    midiRouterSetBackend(&backend);
+    MainLoopEventData rec{};
+    rec.type = MainLoopEvent::keyDown;
+    rec.data.input = {InputDeviceType::logical, keyMotionRecord};
+    appOnEvent(rec);
+    require(chipnomadMotionMode() == 1, "REC active at stop");
+    auto send = [&](uint8_t type, uint8_t note, uint8_t velocity, uint8_t channel = 0) {
+      midi.event = {midiRouterNowMicros(), type, channel, note, velocity};
+      midi.pending = true;
+      appOnEvent({MainLoopEvent::tick});
+      chipnomadRender(chipnomadState, audio, 2048);
+    };
+    send(0x90, 60, 100);
+    require(p.phrases[0].rows[5].note == 48, "stopped MIDI writes at cursor row 5");
+    send(0x80, 60, 0);
+    require(p.phrases[0].rows[6].note == EMPTY_VALUE_8, "stopped release does not consume step");
+    send(0x90, 64, 90);
+    require(p.phrases[0].rows[6].note == 52, "next stopped MIDI advances one row");
+    send(0x80, 64, 0);
+    chipnomadQueuePlaybackStop(chipnomadState);
+    require(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1), "start before stopping");
+    chipnomadRender(chipnomadState, audio, 2048);
+    require(chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].mode == PlaybackMode::song,
+      "song started before stop regression");
+    chipnomadQueuePlaybackStop(chipnomadState);
+    chipnomadRender(chipnomadState, audio, 2048);
+    require(!chipnomadGetPlaybackStatus(chipnomadState)->isPlaying, "song stopped before step input");
+    send(0x90, 67, 80);
+    require(p.phrases[0].rows[7].note == 55, "step entry still works after song stop");
+    send(0x80, 67, 0);
+    send(0x90, 72, 80, 2);
+    require(p.phrases[0].rows[8].note == EMPTY_VALUE_8, "dedicated channel only auditions when stopped");
+    require(strstr(screenGetActiveMessage(), "CH03, Auto is 01") != nullptr,
+      "stopped REC reports actual incoming channel and configured Auto Channel");
+    send(0x80, 72, 0, 2);
+    appSettings.midiAutoChannel = 3;
+    send(0x90, 72, 80, 2);
+    require(p.phrases[0].rows[8].note == 60, "matching Auto Channel enables stopped recording");
+    send(0x80, 72, 0, 2);
+    rec.type = MainLoopEvent::keyUp; appOnEvent(rec);
+    for (int track = 0; track < 2; ++track) {
+      p.song[0][track] = track;
+      p.chains[track].rows[0].phrase = track;
+      p.phrases[track].rows[0] = p.phrases[0].rows[5];
+      p.phrases[track].rows[0].fx[0] = {fxPAN, 80};
+      p.phrases[track].rows[0].fx[2] = {fxDEL, 2};
+    }
+    require(chipnomadQueueProjectRefresh(chipnomadState), "erase fixture snapshot");
+    rec.type = MainLoopEvent::keyDown;
+    rec.data.input.code = keyMotionErase;
+    appOnEvent(rec);
+    require(chipnomadMotionMode() == 2, "MOTION ERASE active");
+    chipnomadQueuePlaybackStop(chipnomadState);
+    require(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1), "start erase song");
+    chipnomadRender(chipnomadState, audio, 2048);
+    appOnEvent({MainLoopEvent::tick});
+    const auto& erased = p.phrases[0].rows[0];
+    require(erased.note == EMPTY_VALUE_8 && erased.instrument == EMPTY_VALUE_8 &&
+      erased.volume == EMPTY_VALUE_16, "erase clears selected-track note fields without stick mappings");
+    require(erased.fx[0].command == fxPAN && erased.fx[2].command == FX_ID_EMPTY,
+      "erase removes DEL but preserves unrelated FX");
+    require(p.phrases[1].rows[0].note == 48, "erase leaves neighboring track untouched");
+    rec.type = MainLoopEvent::keyUp; appOnEvent(rec);
+    midiRouterSetBackend(nullptr);
+    chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit();
+    printf("MIDI production UI passed: stopped entry, actual channel mismatch, cursor advance, song stop and selected-track erase\n");
+    return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--bass808-only")) {
     screensInitAll();waveformDisplayInit();monitorDisplayInit();cInstrument=0;
     Instrument& instrument=prepareHomepageInstrument(InstrumentType::Bass808,"Fatty UI check");

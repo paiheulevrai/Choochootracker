@@ -4,6 +4,7 @@
 #include <string.h>
 #include <initializer_list>
 #include <algorithm>
+#include <climits>
 #include "playback_internal.h"
 #include "synth/sample_voice.h"
 
@@ -229,6 +230,7 @@ static void resetTrack(PlaybackState* state, int trackIdx) {
   track->chainRow = 0;
   track->phraseRow = 0;
   track->frameCounter = 0;
+  track->midiHeld = track->midiPending = 0;
   track->grooveIdx = 0;
   track->grooveRow = 0;
   track->pendingGrooveIdx = 0;
@@ -698,6 +700,7 @@ static int rnnLastValueChanged(PlaybackTrackState* track, uint8_t value) {
 
 void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRow, int skipDelCheck, int resolved) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
+  if (track->midiHeld) return;
   Project* p = state->p;
   PhraseRow effective;
   if (!resolved) {
@@ -990,6 +993,7 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
 
 void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
+  if (!skipDelCheck) track->frameCounter = 0;
   Project* p = state->p;
 
   // If using phrase row mode, use cached phrase row
@@ -2093,6 +2097,43 @@ void playbackPreviewNote(PlaybackState* state, int trackIdx, uint8_t note, uint8
   playbackStartPhraseRow(state, trackIdx, &phraseRow);
 }
 
+void playbackMidiInput(PlaybackState* state, int trackIdx, uint8_t note, uint8_t instrument, uint8_t velocity) {
+  if (trackIdx < 0 || trackIdx >= state->p->tracksCount) return;
+  auto& track = state->tracks[trackIdx];
+  if (!velocity) {
+    if (track.midiHeld) track.midiPending = 2;
+    return;
+  }
+  if (note >= state->p->pitchTable.length || instrument >= PROJECT_MAX_INSTRUMENTS ||
+      state->p->instruments[instrument].type == InstrumentType::none) return;
+  if (track.mode == PlaybackMode::stopped && track.queue.mode == PlaybackMode::none)
+    playbackPreviewNote(state, trackIdx, note, instrument);
+  track.midiHeld = 1;
+  track.midiPending = 1;
+  track.midiPitch = note;
+  track.midiInstrument = instrument;
+  track.midiVelocity = velocity;
+}
+
+static void applyMidiInput(PlaybackState* state, int trackIdx) {
+  auto& track = state->tracks[trackIdx];
+  if (!track.midiPending) return;
+  uint8_t pending = track.midiPending;
+  track.midiPending = 0;
+  track.midiHeld = 0;
+  if (pending == 2) {
+    handleNoteOff(state, trackIdx);
+    return;
+  }
+  PhraseRow row{};
+  row.note = track.midiPitch;
+  row.instrument = track.midiInstrument;
+  row.volume = track.midiVelocity;
+  for (auto& fx : row.fx) fx = {FX_ID_EMPTY, 0};
+  readPhraseRowDirect(state, trackIdx, &row, 0, 1);
+  track.midiHeld = 1;
+}
+
 void playbackStop(PlaybackState* state) {
   for (auto& track : state->tracks) {
     memset(&track.inserts, 0, sizeof(track.inserts));
@@ -2141,6 +2182,7 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
     }
 
     PlaybackTrackState* track = &state->tracks[trackIdx];
+    if (track->frameCounter < INT_MAX) ++track->frameCounter;
 
     // Check queued play event for stopped track or when a track is in phrase row playback mode
     if ((track->mode == PlaybackMode::stopped && track->queue.mode != PlaybackMode::none &&
@@ -2209,6 +2251,7 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
       }
     }
 
+    applyMidiInput(state, trackIdx);
     nextFrame(state, trackIdx, chipIdx);
     syncLayerTracks(state, trackIdx);
 

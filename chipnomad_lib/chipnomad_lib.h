@@ -33,6 +33,8 @@ class AudioCommandQueue;
 struct PreparedInstrumentVoices;
 class TrackAudioVocoder;
 struct MidiRouterState;
+struct MidiRecordEvent;
+enum class MidiRecordMode : uint8_t;
 struct LinkClientState;
 class AudioMonitor;
 
@@ -263,6 +265,11 @@ int chipnomadQueuePlaybackQueueLiveChain(ChipNomadState* state, int trackIdx, in
 // end). Empty destination cells stop their track. This is not a global bar clock.
 int chipnomadQueuePlaybackQueueLiveScene(ChipNomadState* state, int songRow, int urgent);
 int chipnomadQueuePlaybackPreviewNote(ChipNomadState* state, int trackIdx, uint8_t note, uint8_t instrument);
+int chipnomadQueueMidiInput(ChipNomadState* state, int track, uint8_t note, uint8_t instrument,
+                            uint8_t velocity, uint64_t timestamp, int record, MidiRecordMode mode);
+int chipnomadConsumeMidiRecordEvent(ChipNomadState* state, MidiRecordEvent* event);
+int chipnomadGetMidiRecordOverflow(ChipNomadState* state);
+void chipnomadSetMidiEraseTrack(ChipNomadState* state, int track);
 // Copies the bounded native patch into the existing audio command queue.
 int chipnomadQueueSimpleChipPreview(ChipNomadState* state,int track,InstrumentType type,const InstrumentSimpleChip* patch);
 int chipnomadQueueFourOpPreview(ChipNomadState* state,int track,InstrumentType type,const InstrumentFourOp* patch);

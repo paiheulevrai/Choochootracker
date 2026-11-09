@@ -157,6 +157,12 @@ struct MidiPreviewIntent {
   uint8_t note;
   int instrument;
   int stop; // 1 = stop preview (note/instrument unused), 0 = play note on instrument
+  uint64_t timestampMicros;
+  uint8_t track;
+  uint8_t velocity;
+  uint8_t noteOn; // Physical Note On, not a held note resumed by legato.
+  uint8_t autoChannel;
+  uint8_t channel;
 };
 
 struct MidiCCIntent {
@@ -205,6 +211,10 @@ uint64_t midiRouterGetClockPulseCount(const MidiRouterState* router);
 // mode only needs to also decide a track index, not reach into engine
 // internals to do it.
 int midiRouterTick(MidiRouterState* router, int fallbackInstrument, MidiPreviewIntent* outIntents, int maxIntents);
+// Streaming input avoids losing recordable notes when a UI frame receives a burst.
+// autoChannel is 0-15, or -1 to retain the legacy mapping/fallback behavior.
+void midiRouterProcessInput(MidiRouterState* router, int fallbackInstrument, int selectedTrack,
+                            int autoChannel, void (*receive)(void*, const MidiPreviewIntent&), void* userdata);
 // Returns whether this exact CC has been received, and optionally its value
 // and the serial of that receipt.  A zero value is meaningful, so callers
 // must not confuse an unseen CC with a CC explicitly sent at zero.

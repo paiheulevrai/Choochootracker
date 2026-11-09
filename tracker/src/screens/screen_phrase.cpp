@@ -89,6 +89,9 @@ static void drawCursor(int col, int row);
 static void drawSelection(int col1, int row1, int col2, int row2);
 static int onEdit(int col, int row, CellEditAction action);
 static LoopRange getLoopRange(void);
+static uint8_t noteLockSnap(uint8_t note, int up);
+static bool canonicalWritable(bool phraseEdit);
+static void canonicalFinishEdit();
 
 static int columnX[] = {3, 7, 10, 13, 16, 19, 22, 25, 28, 31};
 
@@ -290,6 +293,31 @@ static void drawStatic(void) {
 static void fullRedraw(void) {
   if (isFxEdit) fxEditRedraw();
   else screenFullRedraw(&screen);
+}
+
+int phraseScreenRecordMidi(uint8_t note, uint8_t instrument, uint8_t velocity) {
+  if (isFxEdit || screen.selectMode > 0 || !phraseRows) {
+    screenMessage(MESSAGE_TIME_ERROR, "Exit phrase selection/FX edit to record");
+    return 0;
+  }
+  if (!canonicalWritable(true)) return 0;
+  if (!hasPhrase) {
+    screenMessage(MESSAGE_TIME_ERROR, "No phrase at cursor");
+    return 0;
+  }
+  note = noteLockSnap(note, 0);
+  midiRecordStep(chipnomadState->project.phrases[phraseIdx], screen.cursorRow, note, instrument, velocity);
+  lastNote = note;
+  lastInstrument = instrument;
+  lastVolume = velocity;
+  projectModified = 1;
+  canonicalFinishEdit();
+  fullRedraw();
+  return 1;
+}
+
+uint8_t phraseScreenMidiInstrument(void) {
+  return lookupInstrument(&chipnomadState->project, *pSongRow, *pChainRow, screen.cursorRow, *pSongTrack);
 }
 
 static void drawField(int col, int row, CellState state) {

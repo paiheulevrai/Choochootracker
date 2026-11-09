@@ -27,6 +27,8 @@ static uint8_t getTableInstrumentIdx() {
   return instrumentNum;
 }
 
+uint8_t tableScreenMidiInstrument(void) { return getTableInstrumentIdx(); }
+
 static int getColumnCount(int row);
 static void drawStatic(void);
 static void drawField(int col, int row, CellState state);

@@ -34,6 +34,7 @@
 #include "synth/four_op_voice.h"
 #include "synth/master_effects.h"
 #include "midi/midi_router.h"
+#include "midi/midi_recording.h"
 #include "link/link_client.h"
 #include "track_bounce.h"
 #include <math.h>
@@ -88,6 +89,25 @@ static int effectivePan(ChipNomadState*, int, bool);
 class AudioCommandQueue {
   using VocoderPool = TrackAudioVocoderPool<VOICE_OWNER_COUNT * 4>;
  public:
+  MidiRecording midiRecording;
+  int pushMidiInput(int track, uint8_t note, uint8_t instrument, uint8_t velocity,
+                    uint64_t timestamp, int record, MidiRecordMode mode) {
+    int flags = velocity | (record ? (mode == MidiRecordMode::free ? 0x200 : 0x100) : 0);
+    if (pushCommand(kMidiInput, track, note, instrument, flags, nullptr, nullptr,
+                    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, timestamp)) return 1;
+    midiReleaseMask_.fetch_or(1u << track, std::memory_order_release);
+    return 0;
+  }
+  void recordMidiTick(const PlaybackState& playback, uint64_t dueMicros) {
+    midiRecording.observe(playback, dueMicros);
+    for (unsigned i = 0; i < midiRecordCount_; ++i) {
+      const auto& command = midiRecords_[i];
+      midiRecording.record(command.a, (command.d & 0x7f) ? (uint8_t)command.b : NOTE_OFF, (uint8_t)command.c,
+        command.d & 0x7f, command.timestamp,
+        command.d & 0x200 ? MidiRecordMode::free : MidiRecordMode::quantized);
+    }
+    midiRecordCount_ = 0;
+  }
   bool hasSoundbank(uint32_t handle) const {
     for (const auto& slot : projectSlots_)
       if (slot.state.load() != kFree)
@@ -169,7 +189,7 @@ class AudioCommandQueue {
   }
 
   int pushCommand(uint8_t type, int a = 0, int b = 0, int c = 0, int d = 0,
-                  const PhraseRow* row = NULL, const InstrumentOPLL* patch = NULL, const InstrumentOPL* opl = NULL, const InstrumentSimpleChip* simple = NULL, const InstrumentDX7* dx7 = NULL, const InstrumentFourOp* fourOp = NULL,const InstrumentSID* sid = NULL, const InstrumentMonk* monk = NULL) {
+                  const PhraseRow* row = NULL, const InstrumentOPLL* patch = NULL, const InstrumentOPL* opl = NULL, const InstrumentSimpleChip* simple = NULL, const InstrumentDX7* dx7 = NULL, const InstrumentFourOp* fourOp = NULL,const InstrumentSID* sid = NULL, const InstrumentMonk* monk = NULL, uint64_t timestamp = 0) {
     unsigned int head = commandHead_.load(std::memory_order_relaxed);
     unsigned int next = (head + 1) % kCommandCapacity;
     if (next == commandTail_.load(std::memory_order_acquire)) {
@@ -178,6 +198,7 @@ class AudioCommandQueue {
     }
     AudioCommand& command = commands_[head];
     command.type = type; command.a = a; command.b = b; command.c = c; command.d = d;
+    command.timestamp = timestamp;
     if (row) command.row = *row;
     if (patch) command.patch = *patch;
     if (opl) command.opl = *opl;
@@ -302,6 +323,12 @@ class AudioCommandQueue {
           }
           break;
         case kPreviewNote: playbackPreviewNote(playback, command.a, (uint8_t)command.b, (uint8_t)command.c); break;
+        case kMidiInput:
+          playbackMidiInput(playback, command.a, (uint8_t)command.b, (uint8_t)command.c, command.d & 0x7f);
+          if ((command.d & 0x300) && midiRecordCount_ < kCommandCapacity) {
+            midiRecords_[midiRecordCount_++] = {command.a, command.b, command.c, command.d, command.timestamp};
+          }
+          break;
         case kMonkPreview:
           state->monkPreview->kill();
           state->sidPreview->kill(); state->fourOpPreview->kill(); state->dx7Preview->kill();
@@ -365,6 +392,9 @@ class AudioCommandQueue {
       tail = (tail + 1) % kCommandCapacity;
     }
     commandTail_.store(tail, std::memory_order_release);
+    unsigned release = midiReleaseMask_.exchange(0, std::memory_order_acq_rel);
+    for (int t = 0; t < playback->p->tracksCount; ++t)
+      if (release & (1u << t)) playbackMidiInput(playback, t, 0, 0, 0);
   }
 
   void publishStatus(const PlaybackState* playback, uint64_t linkPhaseTicks, uint64_t linkPhaseTickMicros) {
@@ -411,12 +441,16 @@ class AudioCommandQueue {
     BeadsPool::Handle beads[BeadsPool::capacity];
     VocoderPool::Handle vocoders[VOICE_OWNER_COUNT * 4];
   };
-  struct AudioCommand { uint8_t type; int a, b, c, d; PhraseRow row; InstrumentOPLL patch; InstrumentOPL opl; InstrumentSimpleChip simple; InstrumentDX7 dx7; InstrumentFourOp fourOp; InstrumentSID sid; InstrumentMonk monk; };
+  struct AudioCommand { uint8_t type; int a, b, c, d; uint64_t timestamp; PhraseRow row; InstrumentOPLL patch; InstrumentOPL opl; InstrumentSimpleChip simple; InstrumentDX7 dx7; InstrumentFourOp fourOp; InstrumentSID sid; InstrumentMonk monk; };
   // kStartPhraseRowFull is appended after upstream's preview commands so the
   // raw command IDs 14/15/16 used by applyCommands keep their meaning.
-  enum CommandType { kStartSong, kStartChain, kStartPhrase, kStartPhraseRow, kQueuePhrase, kPreviewNote, kStopPreview, kClearTrackFX, kStartLiveChain, kQueueLiveChain, kSetScale, kChipPreview, kOPLPreview, kSimplePreview, kStartPhraseRowFull = 17, kStartSongIfStopped, kMonkPreview, kQueueLiveScene };
+  enum CommandType { kStartSong, kStartChain, kStartPhrase, kStartPhraseRow, kQueuePhrase, kPreviewNote, kStopPreview, kClearTrackFX, kStartLiveChain, kQueueLiveChain, kSetScale, kChipPreview, kOPLPreview, kSimplePreview, kStartPhraseRowFull = 17, kStartSongIfStopped, kMonkPreview, kQueueLiveScene, kMidiInput };
   static constexpr unsigned int kSlotCount = 3;
   static constexpr unsigned int kCommandCapacity = 64;
+  struct MidiRecordCommand { int a, b, c, d; uint64_t timestamp; };
+  MidiRecordCommand midiRecords_[kCommandCapacity]{};
+  unsigned midiRecordCount_ = 0;
+  std::atomic<unsigned> midiReleaseMask_{0};
 
   template <typename T> static int findFree(Slot<T> slots[kSlotCount]) {
     for (unsigned int i = 0; i < kSlotCount; ++i) {
@@ -1557,6 +1591,7 @@ void chipnomadInstallInstrumentVoices(ChipNomadState* state, PreparedInstrumentV
 
 void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory factory) {
   if (!state) return;
+  state->audioCommands->midiRecording.clear();
   state->stopTransition = {};
   state->audioProject = state->project;
   state->playbackState.p = &state->audioProject;
@@ -1824,6 +1859,20 @@ int chipnomadQueuePlaybackQueueLiveScene(ChipNomadState* state, int songRow, int
 int chipnomadQueuePlaybackPreviewNote(ChipNomadState* state, int trackIdx, uint8_t note, uint8_t instrument) {
   return state && state->audioCommands ? state->audioCommands->pushCommand(5, trackIdx, note, instrument) : 0;
 }
+int chipnomadQueueMidiInput(ChipNomadState* state, int track, uint8_t note, uint8_t instrument,
+                            uint8_t velocity, uint64_t timestamp, int record, MidiRecordMode mode) {
+  if (!state || !state->audioCommands || track < 0 || track >= state->project.tracksCount) return 0;
+  return state->audioCommands->pushMidiInput(track, note, instrument, velocity, timestamp, record, mode);
+}
+int chipnomadConsumeMidiRecordEvent(ChipNomadState* state, MidiRecordEvent* event) {
+  return state && state->audioCommands && event ? state->audioCommands->midiRecording.consume(event) : 0;
+}
+int chipnomadGetMidiRecordOverflow(ChipNomadState* state) {
+  return state && state->audioCommands ? state->audioCommands->midiRecording.overflow() : 0;
+}
+void chipnomadSetMidiEraseTrack(ChipNomadState* state, int track) {
+  if (state && state->audioCommands) state->audioCommands->midiRecording.setEraseTrack(track);
+}
 int chipnomadQueuePlaybackStopPreview(ChipNomadState* state, int trackIdx) {
   return state && state->audioCommands ? state->audioCommands->pushCommand(6, trackIdx) : 0;
 }
@@ -1999,6 +2048,7 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
   state->frameSampleCounter += state->sampleRate / state->audioProject.tickRate;
   int allTracksStopped = playbackNextFrame(state);
+  state->audioCommands->recordMidiTick(state->playbackState, dueMicros);
   state->layerVoiceTrackMask |= state->playbackState.layerTrackMask;
   updateVoiceOwnerCount(state);
   if (!wasPlaying && playbackIsPlaying(&state->playbackState) && state->masterInsertChain)

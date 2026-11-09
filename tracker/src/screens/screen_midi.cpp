@@ -69,6 +69,8 @@ static void drawCursor(int col, int row) {
     gfxCursor(16, row + 4, 3);
   } else if (row == 6 && col == 0) {
     gfxCursor(16, 10, 6);
+  } else if ((row == 7 || row == 8) && col == 0) {
+    gfxCursor(16, row + 5, row == 7 ? 3 : 9);
   }
 }
 
@@ -115,10 +117,28 @@ static void drawField(int col, int row, CellState state) {
     gfxPrint(0, 10, "MIDI delay");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
     gfxPrintf(16, 10, "%03u ms", appSettings.midiOutputDelayMs);
+  } else if ((row == 7 || row == 8) && col == 0) {
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxPrint(0, row + 5, row == 7 ? "Auto channel" : "MIDI record");
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxClearRect(16, row + 5, 24, 1);
+    if (row == 8) gfxPrint(16, 13, appSettings.midiRecordMode == MidiRecordMode::free ? "FREE" : "QUANTIZED");
+    else if (appSettings.midiAutoChannel) gfxPrintf(16, 12, "%02u", appSettings.midiAutoChannel);
+    else gfxPrint(16, 12, "OFF");
   }
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
+  if ((row == 7 || row == 8) && col == 0) {
+    uint8_t value = row == 7 ? appSettings.midiAutoChannel : (uint8_t)appSettings.midiRecordMode;
+    action = convertMultiAction(action);
+    if (row == 8 && (action == CellEditAction::tap || action == CellEditAction::doubleTap)) value = !value;
+    else if (!edit8noLast(action, &value, 1, 0, row == 7 ? 16 : 1)) return 0;
+    if (row == 7) appSettings.midiAutoChannel = value;
+    else appSettings.midiRecordMode = (MidiRecordMode)value;
+    if (settingsSave()) screenMessage(MESSAGE_TIME_ERROR, "Could not save MIDI settings");
+    return 1;
+  }
   if (row == 6 && col == 0) {
     uint8_t value = appSettings.midiOutputDelayMs;
     if (!edit8noLast(convertMultiAction(action), &value, 10, 0, 200)) return 0;
@@ -185,7 +205,7 @@ static int onEdit(int col, int row, CellEditAction action) {
 }
 
 static ScreenData screenMidiData = {
-  .rows = 7,
+  .rows = 9,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,

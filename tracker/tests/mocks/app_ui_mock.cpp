@@ -44,7 +44,15 @@ AudioManager audioManager = {startAudio, reconfigureAudio, restartAudio, refresh
 const AppScreen screenSong = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenTitle = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenPhrase = {nullptr, nullptr, noOp, noOp, ignoreInput};
+int phraseScreenRecordMidi(uint8_t, uint8_t, uint8_t) { return 1; }
+uint8_t mockPhraseMidiInstrument = EMPTY_VALUE_8;
+uint8_t phraseScreenMidiInstrument(void) { return mockPhraseMidiInstrument; }
+uint8_t mockTableMidiInstrument = EMPTY_VALUE_8;
+uint8_t mockPoolMidiInstrument = EMPTY_VALUE_8;
+uint8_t tableScreenMidiInstrument(void) { return mockTableMidiInstrument; }
+uint8_t instrumentPoolMidiInstrument(void) { return mockPoolMidiInstrument; }
 const AppScreen screenInstrument = {nullptr, nullptr, noOp, noOp, ignoreInput};
+const AppScreen screenSampleSettings = {nullptr, nullptr, noOp, noOp, ignoreInput};
 int cInstrument = 0;
 // Instrument screen boundaries for exercising the real native preview helper.
 int mockEnvelopePreviewCount;
