@@ -9,7 +9,7 @@ extern "C" {
 void fileBrowserSetup(const char* title, const char* extension, const char* startPath, void (*fileCallback)(const char*), void (*cancelCallback)(void));
 void fileBrowserSetupWithPreview(const char* title, const char* extension,
   const char* startPath, void (*fileCallback)(const char*),
-  void (*cancelCallback)(void), void (*previewCallback)(const char*));
+  void (*cancelCallback)(void), void (*previewCallback)(const char*), int midiOscillator = -1);
 void fileBrowserSetupFolderMode(const char* title, const char* startPath, const char* filename, const char* extension, void (*folderCallback)(const char*), void (*cancelCallback)(void));
 
 void fileBrowserSetPath(const char* path);
@@ -19,6 +19,9 @@ int fileBrowserGetAdjacentPath(const char* currentPath, const char* extension,
 
 #ifdef __cplusplus
 }
+struct MidiPreviewIntent;
+bool fileBrowserHasMidiPreview(void);
+void fileBrowserMidiInput(const MidiPreviewIntent& intent);
 #endif
 
 #endif

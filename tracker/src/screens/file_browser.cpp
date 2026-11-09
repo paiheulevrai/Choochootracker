@@ -1,5 +1,8 @@
 #include "screens.h"
 #include "file_browser.h"
+#include "audio_manager.h"
+#include "screen_instrument.h"
+#include "midi/midi_router.h"
 #include "corelib/corelib_file.h"
 #include "corelib_gfx.h"
 #include "screen_create_folder.h"
@@ -35,6 +38,30 @@ static int isFolderMode = 0;
 static void (*onFileSelected)(const char* path);
 static void (*onCancelled)(void);
 static void (*onPreview)(const char* path);
+static int previewOscillator = -1;
+static char midiPreviewPath[2048];
+static int getEntryIndex(void);
+
+bool fileBrowserHasMidiPreview(void) {
+  return currentScreen == &screenFileBrowser && onPreview && previewOscillator >= 0;
+}
+
+void fileBrowserMidiInput(const MidiPreviewIntent& intent) {
+  if (intent.stop) { audioManager.previewMidiNote(0, 0); return; }
+  int index = getEntryIndex();
+  if (index < 0 || index >= entryCount || entries[index].isDirectory) return;
+  char path[2048];
+  snprintf(path, sizeof(path), "%s%s%s", currentPath, PATH_SEPARATOR_STR, entries[index].name);
+  if (strcmp(path, midiPreviewPath)) {
+    if (audioManager.preparePreviewFile(path, &chipnomadState->project.instruments[cInstrument], previewOscillator)) {
+      screenMessage(MESSAGE_TIME_ERROR, "Cannot preview WAV");
+      midiPreviewPath[0] = 0;
+      return;
+    }
+    strcpy(midiPreviewPath, path);
+  }
+  audioManager.previewMidiNote(intent.note, intent.velocity);
+}
 static char pendingSavePath[2048];
 static ScrollState scrollState = {-1, 0, 0, 1};
 static bool optHeld = false;
@@ -193,7 +220,10 @@ int fileBrowserGetAdjacentPath(const char* currentPath, const char* extension,
 
 void fileBrowserSetupWithPreview(const char* title, const char* extension,
     const char* startPath, void (*fileCallback)(const char*),
-    void (*cancelCallback)(void), void (*previewCallback)(const char*)) {
+    void (*cancelCallback)(void), void (*previewCallback)(const char*), int midiOscillator) {
+  resetScrollStateOnSelectionChange();
+  previewOscillator = midiOscillator;
+  midiPreviewPath[0] = 0;
   strncpy(browserTitle, title, 31);
   browserTitle[31] = 0;
   strncpy(fileExtension, extension, sizeof(fileExtension) - 1);
@@ -223,6 +253,7 @@ void fileBrowserSetupFolderMode(const char* title, const char* startPath, const 
   onFileSelected = folderCallback;
   onCancelled = cancelCallback;
   onPreview = NULL;
+  previewOscillator = -1;
 
   fileBrowserSetStartPath(startPath);
   fileBrowserRefresh();
@@ -285,6 +316,10 @@ static void resetScrollState(void) {
 }
 
 static void resetScrollStateOnSelectionChange(void) {
+  if (midiPreviewPath[0]) {
+    audioManager.stopSamplePreview();
+    midiPreviewPath[0] = 0;
+  }
   scrollState.lastSelectedIndex = -1;
   resetScrollState();
 }
@@ -571,6 +606,7 @@ static int fileBrowserInput(int keys, int tapCount) {
       char fullPath[2048];
       snprintf(fullPath, sizeof(fullPath), "%s%s%s", currentPath,
         PATH_SEPARATOR_STR, entries[entryIdx].name);
+      midiPreviewPath[0] = 0;
       onPreview(fullPath);
     }
     return 1;
@@ -588,6 +624,7 @@ void fileBrowserSetPath(const char* path) {
 // AppScreen interface
 
 static void setup(int input) {
+  resetScrollStateOnSelectionChange();
   optHeld = false;
   optLongHandled = false;
 }
@@ -597,6 +634,8 @@ static void fullRedraw(void) {
 }
 
 static void draw(void) {
+  if (midiPreviewPath[0] && chipnomadGetPlaybackStatus(chipnomadState)->transportPlaying)
+    resetScrollStateOnSelectionChange();
   if (optHeld && !optLongHandled &&
       std::chrono::steady_clock::now() - optPressedAt >= std::chrono::milliseconds(OPT_HOLD_MS)) {
     fileBrowserGoUp();

@@ -9,6 +9,7 @@
 #include "audio_input_manager.h"
 #include "output_safety_limiter.h"
 #include "corelib_audio.h"
+#include "screens/screens.h"
 
 #include "chipnomad_lib.h"
 #include "playback.h"
@@ -34,6 +35,8 @@ static ChipNomadState* ayPreviewState;
 static int previewMode;
 static int byowtblPreviewOscillator;
 static uint64_t byowtblPreviewFrames;
+static bool midiPreview;
+static float previewPitch = 3600.0f, previewGain = 1.0f;
 static float* floatBuffer;
 static float* samplePreviewBuffer;
 static OutputSafetyLimiter outputLimiter;
@@ -68,11 +71,14 @@ static void stopSamplePreview(void) {
   ayPreviewState = NULL;
   previewMode = PREVIEW_NONE;
   byowtblPreviewFrames = 0;
+  midiPreview = false;
+  previewPitch = 3600.0f;
+  previewGain = 1.0f;
 }
 
 static void configureSCWFPreview(const InstrumentSCWF* instrument, const uint16_t* frameSize,
                                  const uint8_t* frameIndex) {
-  scwfPreviewVoice.configure(instrument, 3600.0f, 1.0f,
+  scwfPreviewVoice.configure(instrument, previewPitch, previewGain,
     scwfDetuneCents(instrument->detune), instrument->mix,
     instrument->filterCutoffHz, instrument->filterResonance,
     frameSize, frameIndex);
@@ -84,6 +90,7 @@ static void renderPreview(float* buffer, int frames) {
   else if (previewMode == PREVIEW_AY && ayPreviewState) chipnomadRender(ayPreviewState, buffer, frames);
   else if (previewMode == PREVIEW_SCWF) scwfPreviewVoice.render(buffer, frames);
   else if (previewMode == PREVIEW_BYOWTBL) {
+    if (midiPreview) { scwfPreviewVoice.render(buffer, frames); return; }
     for (int i = 0; i < frames; ++i) {
       const double phase = (double)(byowtblPreviewFrames + i) / aSampleRate;
       scwfPreviewVoice.setWavetablePosition(byowtblPreviewOscillator,
@@ -418,7 +425,7 @@ static void stopSamplePreviewLocked(void) {
   resume();
 }
 
-static int previewSample(const char* path) {
+static int previewSampleFile(const char* path, bool play) {
   pause();
   stopSamplePreview();
   char error[64];
@@ -428,14 +435,17 @@ static int previewSample(const char* path) {
     samplePreview.sustain = 255;
     samplePreview.filterCutoffHz = 20000;
     samplePreviewVoice.configure(&samplePreview, 0.0f, 1.0f, 100.0f, 0, 255, 0, 20000, 0);
-    samplePreviewVoice.noteOn();
+    if (play) samplePreviewVoice.noteOn();
+    midiPreview = !play;
     previewMode = PREVIEW_PCM;
   }
   resume();
   return result;
 }
 
-static int previewAYSample(const char* path, const InstrumentAYSample* settings) {
+static int previewSample(const char* path) { return previewSampleFile(path, true); }
+
+static int previewAYSampleFile(const char* path, const InstrumentAYSample* settings, bool play) {
   if (!settings) return 1;
   pause();
   stopSamplePreview();
@@ -462,26 +472,31 @@ static int previewAYSample(const char* path, const InstrumentAYSample* settings)
   sample->sampleStart = 0;
   sample->sampleLoopStart = length;
   ayPreviewState->aySampleDithering = chipnomadState->aySampleDithering;
-  chipnomadInitChips(ayPreviewState, aSampleRate, NULL);
+  chipnomadInitChips(ayPreviewState, aSampleRate, NULL, 1);
   if (chipnomadReserveRenderBuffers(ayPreviewState, aBufferSize)) {
     chipnomadDestroy(ayPreviewState);
     ayPreviewState = NULL;
     resume();
     return 1;
   }
-  playbackPreviewNote(&ayPreviewState->playbackState, 0, 36, 0);
+  if (play) playbackPreviewNote(&ayPreviewState->playbackState, 0, 36, 0);
+  midiPreview = !play;
   previewMode = PREVIEW_AY;
   resume();
   return 0;
 }
 
+static int previewAYSample(const char* path, const InstrumentAYSample* settings) {
+  return previewAYSampleFile(path, settings, true);
+}
+
 static int previewSCWFCommon(const char* path, const InstrumentSCWF* settings,
-                             int oscillator, int byowtbl) {
+                             int oscillator, int byowtbl, bool play = true) {
   if (!settings || oscillator < 0 || oscillator > 1) return 1;
   pause();
   // SCWF previews are intentionally toggled by START: the second press stops
   // the currently sounding oscillator/table without reloading the WAV.
-  if ((byowtbl && previewMode == PREVIEW_BYOWTBL) || (!byowtbl && previewMode == PREVIEW_SCWF)) {
+  if (play && ((byowtbl && previewMode == PREVIEW_BYOWTBL) || (!byowtbl && previewMode == PREVIEW_SCWF))) {
     stopSamplePreview();
     resume();
     return 0;
@@ -514,7 +529,8 @@ static int previewSCWFCommon(const char* path, const InstrumentSCWF* settings,
     configureSCWFPreview(preview, NULL, NULL);
     previewMode = PREVIEW_SCWF;
   }
-  scwfPreviewVoice.noteOn();
+  if (play) scwfPreviewVoice.noteOn();
+  midiPreview = !play;
   resume();
   return 0;
 }
@@ -525,6 +541,71 @@ static int previewSCWF(const char* path, const InstrumentSCWF* settings, int osc
 
 static int previewBYOWTBL(const char* path, const InstrumentBYOWTBL* settings, int oscillator) {
   return previewSCWFCommon(path, settings, oscillator, 1);
+}
+
+static int preparePreviewFile(const char* path, const Instrument* instrument, int oscillator) {
+  if (!instrument) return 1;
+  switch (instrument->type) {
+    case InstrumentType::Sample: return previewSampleFile(path, false);
+    case InstrumentType::AYSample: return previewAYSampleFile(path, &instrument->chip.aySample, false);
+    case InstrumentType::SCWF: return previewSCWFCommon(path, &instrument->chip.scwf, oscillator, 0, false);
+    case InstrumentType::BYOWTBL: return previewSCWFCommon(path, &instrument->chip.byowtbl, oscillator, 1, false);
+    default: return 1;
+  }
+}
+
+static int preparePreviewInstrument(const Project* source, int instrument, const Instrument* patch) {
+  if (!source || instrument < 0 || instrument >= PROJECT_MAX_INSTRUMENTS ||
+      source->instruments[instrument].type == InstrumentType::none) return 1;
+  pause();
+  stopSamplePreview();
+  ayPreviewState = chipnomadCreate();
+  if (!ayPreviewState) { resume(); return 1; }
+  ayPreviewState->ownsProjectResources = 0; // Browser retains borrowed PCM until preview stops.
+  auto& project = ayPreviewState->project;
+  const auto& context = chipnomadState->project; // Preset-only projects have no clock or tuning.
+  project.tracksCount = project.chipsCount = 1;
+  project.tickRate = context.tickRate;
+  project.chipType = context.chipType;
+  project.chipSetup = context.chipSetup;
+  project.linearPitch = context.linearPitch;
+  project.pitchTable = context.pitchTable;
+  project.instruments[0] = patch ? *patch : source->instruments[instrument];
+  memcpy(project.tables, source->tables, sizeof(project.tables));
+  project.tables[0] = source->tables[instrument];
+  memcpy(project.ayWavetables, source->ayWavetables, sizeof(project.ayWavetables));
+  chipnomadInitChips(ayPreviewState, aSampleRate, NULL, 1);
+  int result = chipnomadReserveRenderBuffers(ayPreviewState, aBufferSize);
+  if (result) stopSamplePreview();
+  else { previewMode = PREVIEW_AY; midiPreview = true; }
+  resume();
+  return result;
+}
+
+static void previewMidiNote(uint8_t note, uint8_t velocity) {
+  audioLock();
+  previewPitch = (note + 12) * 100.0f;
+  previewGain = velocity / 127.0f;
+  if (previewMode == PREVIEW_PCM) {
+    if (!velocity) samplePreviewVoice.noteOff();
+    else {
+      samplePreviewVoice.configure(&samplePreview, (note - 36) * 100.0f, previewGain,
+        100.0f, 0, 255, 0, 20000, 0);
+      samplePreviewVoice.noteOn();
+    }
+  } else if (previewMode == PREVIEW_SCWF || previewMode == PREVIEW_BYOWTBL) {
+    if (!velocity) scwfPreviewVoice.noteOff();
+    else {
+      if (previewMode == PREVIEW_BYOWTBL)
+        configureSCWFPreview(&byowtblPreview, byowtblPreview.frameSize, byowtblPreview.frameIndex);
+      else configureSCWFPreview(&scwfPreview, nullptr, nullptr);
+      scwfPreviewVoice.noteOn();
+    }
+  } else if (previewMode == PREVIEW_AY && ayPreviewState) {
+    if (!chipnomadQueueMidiInput(ayPreviewState, 0, note, 0, velocity, 0, 0, MidiRecordMode::quantized))
+      screenMessage(MESSAGE_TIME_ERROR, "MIDI preview queue full");
+  }
+  audioUnlock();
 }
 
 
@@ -549,4 +630,7 @@ struct AudioManager audioManager = {
   .previewSCWF = previewSCWF,
   .previewBYOWTBL = previewBYOWTBL,
   .stopSamplePreview = stopSamplePreviewLocked,
+  .preparePreviewFile = preparePreviewFile,
+  .preparePreviewInstrument = preparePreviewInstrument,
+  .previewMidiNote = previewMidiNote,
 };

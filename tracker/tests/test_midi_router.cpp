@@ -68,6 +68,61 @@ const int8_t kNoChannelMap[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 
 TEST_SUITE("MIDI router") {
 
+TEST_CASE("Browser Auto notes keep separate ownership from dedicated notes on the same track") {
+  resetFake();
+  midiRouterSetBackend(&kFakeBackend);
+  auto* router = midiRouterCreate();
+  int8_t mapping[16];
+  std::memcpy(mapping, kNoChannelMap, sizeof(mapping));
+  mapping[1] = 3;
+  midiRouterSetChannelInstrumentMap(router, mapping);
+  std::vector<MidiPreviewIntent> received;
+  auto receive = [](void* data, const MidiPreviewIntent& intent) {
+    static_cast<std::vector<MidiPreviewIntent>*>(data)->push_back(intent);
+  };
+  auto poll = [&](bool browser) {
+    midiRouterProcessInput(router, 2, 0, 0, receive, &received, nullptr, browser);
+  };
+  pushIncoming(0x90, 0, 60, 75);
+  pushIncoming(0x90, 1, 65, 110);
+  pushIncoming(0x90, 0, 64, 90);
+  poll(true);
+  REQUIRE(received.size() == 3);
+  CHECK(received[0].browserPreview);
+  CHECK_FALSE(received[1].browserPreview);
+  CHECK(received[1].instrument == 3);
+  CHECK(received[2].browserPreview);
+  pushIncoming(0x80, 0, 64, 0);
+  poll(true);
+  REQUIRE(received.size() == 4);
+  CHECK(received.back().browserPreview);
+  CHECK_FALSE(received.back().stop);
+  CHECK(received.back().note == 48);
+  CHECK(received.back().velocity == 75);
+  // Closing the popup must not redirect either release to the other voice.
+  pushIncoming(0x90, 0, 60, 0);
+  poll(false);
+  CHECK(received.back().browserPreview);
+  CHECK(received.back().stop);
+  pushIncoming(0x80, 1, 65, 0);
+  poll(false);
+  CHECK_FALSE(received.back().browserPreview);
+  CHECK(received.back().stop);
+  pushIncoming(0x90, 0, 70, 100);
+  pushIncoming(0x90, 1, 72, 100);
+  poll(true);
+  received.clear();
+  midiRouterResetHeldNotes(router);
+  poll(false);
+  REQUIRE(received.size() == 2);
+  CHECK(received[0].browserPreview);
+  CHECK(received[0].stop);
+  CHECK_FALSE(received[1].browserPreview);
+  CHECK(received[1].stop);
+  midiRouterDestroy(router);
+  midiRouterSetBackend(nullptr);
+}
+
 TEST_CASE("Auto channel overrides mapping and Note Off stays on the original track") {
   resetFake();
   midiRouterSetBackend(&kFakeBackend);

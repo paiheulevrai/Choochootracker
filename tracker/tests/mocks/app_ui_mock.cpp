@@ -40,7 +40,7 @@ static void replaceProject(Project* replacement) {
   appActivateProject();
 }
 AudioManager audioManager = {startAudio, reconfigureAudio, restartAudio, refreshAudio, noOp, noOp, replaceProject, nullptr, nullptr, mutateProject, noOp,
-                             nullptr, nullptr, cpuLoad};
+                             nullptr, nullptr, cpuLoad, nullptr, nullptr, nullptr, nullptr, noOp};
 const AppScreen screenSong = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenTitle = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenPhrase = {nullptr, nullptr, noOp, noOp, ignoreInput};
@@ -88,6 +88,9 @@ void mainLoopSetTargetFps(int) {}
 int mainLoopGetTargetFps(void) { return 60; }
 int mainLoopGetFrameTimeUs(void) { return 0; }
 void screenDraw(void) {}
+void screenApplyPending(void) {}
+bool fileBrowserHasMidiPreview(void) { return false; }
+void fileBrowserMidiInput(const MidiPreviewIntent&) {}
 static char activeMessage[42]{};
 int mockMessageFrames = 0;
 void screenMessage(int frames, const char* format, ...) {

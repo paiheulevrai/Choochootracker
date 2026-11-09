@@ -3,9 +3,129 @@
 #include "soundbank_browser.h"
 #include "mocks/app_ui_mock.h"
 #include "corelib_gfx.h"
+#include "chipnomad_lib.h"
+#include "project_utils.h"
+#include "audio_manager.h"
+#include "midi/midi_router.h"
 #include <string>
 #include <chrono>
 #include <thread>
+
+namespace {
+std::vector<int> midiPrepared;
+std::vector<std::pair<int, int>> midiPlayed;
+int midiPrepareResult, midiStops;
+struct MidiPopupFixture {
+  ChipNomadState* savedState = chipnomadState;
+  const AppScreen* savedScreen = currentScreen;
+  AudioManager savedAudio = audioManager;
+  SelectionItem items[2] = {{"One", 0}, {"Two", 1}};
+  MidiPopupFixture() {
+    chipnomadState = chipnomadCreate();
+    projectInitAY(&chipnomadState->project);
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    REQUIRE(chipnomadReserveRenderBuffers(chipnomadState, 2048) == 0);
+    currentScreen = &screenSelectionPopup;
+    midiPrepared.clear(); midiPlayed.clear(); midiStops = 0; midiPrepareResult = 1;
+    audioManager.stopSamplePreview = [] { ++midiStops; };
+    audioManager.previewMidiNote = [](uint8_t note, uint8_t velocity) {
+      midiPlayed.emplace_back(note, velocity);
+    };
+    selectionPopupSetup("MIDI", items, 2, 0, nullptr, nullptr, false, nullptr,
+      false, false, nullptr, false, [](int value) {
+        midiPrepared.push_back(value); return midiPrepareResult;
+      });
+    midiStops = 0;
+  }
+  ~MidiPopupFixture() {
+    selectionPopupSetup("", items, 2, 0, nullptr, nullptr);
+    chipnomadDestroy(chipnomadState);
+    chipnomadState = savedState; currentScreen = savedScreen; audioManager = savedAudio;
+  }
+  void note(int pitch = 48, int velocity = 93) {
+    MidiPreviewIntent intent{};
+    intent.note = pitch; intent.velocity = velocity; intent.noteOn = 1;
+    selectionPopupMidiInput(intent);
+  }
+  void release() {
+    MidiPreviewIntent intent{}; intent.stop = 1; selectionPopupMidiInput(intent);
+  }
+};
+}
+
+TEST_CASE("MIDI popup prepares only highlighted candidates and preserves pitch velocity and release") {
+  MidiPopupFixture f;
+  CHECK(selectionPopupHasMidiPreview());
+  f.note(); f.note(55, 60);
+  REQUIRE(midiPrepared.size() == 1);
+  CHECK(midiPrepared[0] == 0);
+  REQUIRE(midiPlayed.size() == 2);
+  CHECK(midiPlayed[0] == std::make_pair(48, 93));
+  CHECK(midiPlayed[1] == std::make_pair(55, 60));
+  f.release();
+  CHECK(midiPlayed.back().second == 0);
+  screenSelectionPopup.onInput(1, keyDown, 1);
+  CHECK(midiStops == 1);
+  f.note();
+  CHECK(midiPrepared.back() == 1);
+  currentScreen = &screenInstrument;
+  CHECK_FALSE(selectionPopupHasMidiPreview());
+  screenSelectionPopup.draw();
+  CHECK(midiStops == 2);
+}
+
+TEST_CASE("Pending MIDI bank audition cancels on release navigation exit and transport") {
+  MidiPopupFixture f;
+  midiPrepareResult = 0;
+  f.note();
+  CHECK(midiPlayed.empty());
+  f.release();
+  midiPrepareResult = 1;
+  screenSelectionPopup.draw();
+  CHECK(midiPlayed.size() == 1); // Only the release, never a delayed Note On.
+  f.note();
+  REQUIRE(midiPlayed.size() == 2);
+  CHECK(midiPlayed.back().second == 93);
+  midiPrepareResult = 0;
+  screenSelectionPopup.onInput(1, keyDown, 1);
+  f.note();
+  screenSelectionPopup.onInput(1, keyUp, 1);
+  midiPrepareResult = 1;
+  screenSelectionPopup.draw();
+  CHECK(midiPlayed.size() == 2);
+  midiPrepareResult = 0;
+  f.note();
+  currentScreen = &screenInstrument;
+  midiPrepareResult = 1;
+  screenSelectionPopup.draw();
+  CHECK(midiPlayed.size() == 2);
+  currentScreen = &screenSelectionPopup;
+  midiPrepareResult = 0;
+  f.note();
+  chipnomadState->project.song[0][0] = 0;
+  chipnomadState->project.chains[0].rows[0].phrase = 0;
+  REQUIRE(chipnomadQueueProjectRefresh(chipnomadState));
+  REQUIRE(chipnomadQueuePlaybackStartPhrase(chipnomadState, 0, 0, 0, 1));
+  float audio[4096];
+  chipnomadRender(chipnomadState, audio, 2048);
+  REQUIRE(chipnomadGetPlaybackStatus(chipnomadState)->transportPlaying);
+  midiPrepareResult = 1;
+  screenSelectionPopup.draw();
+  CHECK(midiPlayed.size() == 2);
+}
+
+TEST_CASE("Returning to a MIDI popup invalidates its destroyed preview engine") {
+  MidiPopupFixture f;
+  f.note(); f.release();
+  currentScreen = &screenInstrument;
+  audioManager.stopSamplePreview();
+  currentScreen = &screenSelectionPopup;
+  screenSelectionPopup.setup(0);
+  f.note();
+  REQUIRE(midiPrepared.size() == 2);
+  REQUIRE(midiPlayed.size() == 3);
+  CHECK(midiPlayed.back() == std::make_pair(48, 93));
+}
 
 TEST_CASE("Collection preset selection stays below all eight track previews") {
   SelectionItem presets[24]{};

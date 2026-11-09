@@ -349,10 +349,15 @@ TEST_CASE_FIXTURE(VisualFixture, "Playback counter holds at stop and resets on t
   gfxClear();
   auto& status = chipnomadState->uiPlaybackStatus;
   status.isPlaying = 0;
+  status.transportPlaying = 0;
   appDraw();
   CHECK(std::string(mockGfxCells[2] + 34, 6) == "000:0 ");
 
   status.isPlaying = 1;
+  status.linkPhaseTickMicros = 500000;
+  appDraw();
+  CHECK(std::string(mockGfxCells[2] + 34, 6) == "000:0 ");
+  status.transportPlaying = 1;
   status.linkPhaseTicks = 0;
   status.linkPhaseTickMicros = 1000000;
   appDraw();
@@ -372,6 +377,7 @@ TEST_CASE_FIXTURE(VisualFixture, "Playback counter holds at stop and resets on t
   appDraw();
   CHECK(std::string(mockGfxCells[2] + 34, 6) == "00:03 ");
   status.isPlaying = 0;
+  status.transportPlaying = 0;
   status.linkPhaseTicks = 0;
   status.linkPhaseTickMicros = 6000000;
   appDraw();
@@ -381,6 +387,7 @@ TEST_CASE_FIXTURE(VisualFixture, "Playback counter holds at stop and resets on t
   CHECK(std::string(mockGfxCells[2] + 34, 6) == "00:05 ");
 
   status.isPlaying = 1;
+  status.transportPlaying = 1;
   status.linkPhaseTickMicros = 10000000;
   appDraw();
   CHECK(std::string(mockGfxCells[2] + 34, 6) == "00:00 ");

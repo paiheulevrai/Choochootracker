@@ -666,6 +666,10 @@ static void setup(int input) {
   redraw();
 }
 static void syncPosition() { *pSongRow = scene; *pSongTrack = track; *pChainRow = bar; }
+
+uint8_t grooveboxMidiInstrument(void) {
+  return lookupInstrument(&chipnomadState->project, scene, bar, step, track);
+}
 static void closeTools() {
   returningFromTools = true;
   syncPosition();

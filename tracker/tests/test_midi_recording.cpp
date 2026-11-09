@@ -4,6 +4,8 @@
 #include "midi/midi_router.h"
 #include "pitch_table_utils.h"
 #include "project_utils.h"
+#include "synth/braids_voice.h"
+#include "synth/mme_voice.h"
 #include <cstring>
 #include <vector>
 #include <chrono>
@@ -74,6 +76,29 @@ struct AudioFixture {
 }
 
 TEST_SUITE("MIDI recording") {
+TEST_CASE("MIDI browser engines prepare one track without shrinking normal voice pools") {
+  auto* state = chipnomadCreate();
+  projectInitAY(&state->project);
+  state->project.tracksCount = state->project.chipsCount = 1;
+  for (auto type : {InstrumentType::Braids, InstrumentType::OPLL, InstrumentType::DX7}) {
+    getInstrumentFunctions(state->project.instruments[0].type).free(&state->project.instruments[0]);
+    getInstrumentFunctions(type).init(&state->project.instruments[0]);
+    for (int tracks : {1, PROJECT_MAX_TRACKS}) {
+      if (tracks == 1) chipnomadInitChips(state, 48000, nullptr, 1);
+      else chipnomadInitChips(state, 48000, nullptr);
+      for (int track = 0; track < PROJECT_MAX_TRACKS; ++track) {
+        for (int slot = 0; slot < CHORD_MAX_VOICES; ++slot) {
+          const bool allocated = type == InstrumentType::Braids ? state->braidsVoices[track][slot] != nullptr :
+            type == InstrumentType::OPLL ? state->opllVoices[track][slot] != nullptr :
+            state->dx7Voices[track][slot] != nullptr;
+          CHECK(allocated == (track < tracks));
+        }
+      }
+    }
+  }
+  chipnomadDestroy(state);
+}
+
 TEST_CASE_FIXTURE(RecordingFixture, "Quantized recording uses the timestamp's row, not the current playhead") {
   tick(100000, 0, 0);
   tick(120000, 0, 1);
@@ -331,10 +356,65 @@ TEST_CASE_FIXTURE(AudioFixture, "MIDI note preview does not start transport and 
   render();
   CHECK(state->playbackState.tracks[0].mode == PlaybackMode::phraseRow);
   CHECK(state->playbackState.tracks[0].midiHeld);
+  for (int i = 0; i < 8; ++i) render();
+  CHECK_FALSE(chipnomadGetPlaybackStatus(state)->transportPlaying);
+  CHECK(chipnomadGetPlaybackStatus(state)->linkPhaseTicks == 0);
   chipnomadQueuePlaybackStop(state);
   render();
   CHECK_FALSE(state->playbackState.tracks[0].midiHeld);
   CHECK(state->playbackState.tracks[0].mode == PlaybackMode::stopped);
+}
+
+TEST_CASE_FIXTURE(AudioFixture, "Stopped MIDI audition switches instruments and releases volume ADSR without recording") {
+  for (int instrument = 0; instrument < 2; ++instrument) {
+    auto& inst = state->project.instruments[instrument];
+    getInstrumentFunctions(InstrumentType::AY1).init(&inst);
+    inst.modulation[0] = {ModulationType::ADSR, 1, 127, 0, 0, 255, 2, 0};
+  }
+  REQUIRE(chipnomadQueueProjectRefresh(state));
+  auto& track = state->playbackState.tracks[0];
+  for (int instrument : {1, 0, 1}) {
+    REQUIRE(chipnomadQueueMidiInput(state, 0, 48, instrument, 100, now, 0, MidiRecordMode::quantized));
+    for (int i = 0; i < 8; ++i) render();
+    CHECK(track.note.instrument == instrument);
+    CHECK(track.note.modulation[0].outValue > 0);
+    REQUIRE(chipnomadQueueMidiInput(state, 0, 0, 0, 0, now, 0, MidiRecordMode::quantized));
+    for (int i = 0; i < 8; ++i) render();
+    CHECK_FALSE(track.midiHeld);
+    CHECK(track.note.modulation[0].outValue == 0);
+    MidiRecordEvent recorded{};
+    CHECK_FALSE(chipnomadConsumeMidiRecordEvent(state, &recorded));
+  }
+}
+
+TEST_CASE_FIXTURE(AudioFixture, "Stopped MIDI audition releases Braids and MME internal ADSR") {
+  for (auto type : {InstrumentType::Braids, InstrumentType::MME}) {
+    CAPTURE((int)type);
+    auto& p = state->project;
+    getInstrumentFunctions(type).init(&p.instruments[1]);
+    InstrumentVoicePostSettings& envelope = type == InstrumentType::Braids
+      ? static_cast<InstrumentVoicePostSettings&>(p.instruments[1].chip.braids)
+      : static_cast<InstrumentVoicePostSettings&>(p.instruments[1].chip.mme);
+    envelope.attack = envelope.decay = 0;
+    envelope.sustain = 255;
+    envelope.release = 16;
+    p.linearPitch = 1;
+    calculateLinearPitchTable12TET(&p);
+    chipnomadInitChips(state, 48000, nullptr);
+    REQUIRE(chipnomadQueueMidiInput(state, 0, 48, 1, 100, now, 0, MidiRecordMode::quantized));
+    for (int i = 0; i < 8; ++i) render();
+    auto level = [&]() {
+      return type == InstrumentType::Braids ? state->braidsVoices[0][0]->envelopeLevel()
+                                           : state->mmeVoices[0][0]->envelopeLevel();
+    };
+    REQUIRE(level() > .5f);
+    REQUIRE(chipnomadQueueMidiInput(state, 0, 0, 0, 0, now, 0, MidiRecordMode::quantized));
+    for (int i = 0; i < 8; ++i) render();
+    CHECK_FALSE(state->playbackState.tracks[0].midiHeld);
+    CHECK(level() == 0);
+    chipnomadQueuePlaybackStop(state);
+    render();
+  }
 }
 
 TEST_CASE_FIXTURE(AudioFixture, "Recorded note instrument velocity and DEL survive project save and load") {

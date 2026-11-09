@@ -13,7 +13,9 @@
 #include "screens.h"
 #include "screens/screen_groovebox.h"
 #include "screens/selection_popup.h"
+#include "screens/file_browser.h"
 #include "chipnomad_lib.h"
+#include "playback_internal.h"
 #include "project_utils.h"
 #include "pattern_utils.h"
 #include "waveform_display.h"
@@ -65,6 +67,7 @@ static int tapCount;
 static int keyRepeatCount;
 static int motionRecordHeld;
 static int midiAuditionInstrument = 0;
+static bool midiAuditionFollowsInstrument;
 static int motionEraseHeld;
 // One bit per mapped input, plus one for logical input. Overlapping delivery
 // of the same press must be released completely before toggling again.
@@ -168,7 +171,7 @@ static void drawBatteryInfo(void) {
 }
 
 static void drawPlaybackCounter(const PlaybackStatus* status) {
-  if (status->isPlaying) {
+  if (status->transportPlaying) {
     if (!playbackCounterWasPlaying || status->linkPhaseTicks < playbackCounterPreviousTicks) {
       playbackCounterStartMicros = status->linkPhaseTickMicros;
       playbackCounterMicros = 0;
@@ -179,7 +182,7 @@ static void drawPlaybackCounter(const PlaybackStatus* status) {
   } else if (playbackCounterWasPlaying && status->linkPhaseTickMicros >= playbackCounterStartMicros) {
     playbackCounterMicros = status->linkPhaseTickMicros - playbackCounterStartMicros;
   }
-  playbackCounterWasPlaying = status->isPlaying != 0;
+  playbackCounterWasPlaying = status->transportPlaying != 0;
   playbackCounterPreviousTicks = status->linkPhaseTicks;
 
   if (appSettings.playbackCounterMode == 2) {
@@ -418,6 +421,15 @@ static int isMotionRecordTrigger(InputCode input) {
 
 static void receiveMidiNote(void* userdata, const MidiPreviewIntent& intent) {
   const auto& playback = **static_cast<const PlaybackStatus**>(userdata);
+  if (intent.browserPreview) {
+    if (intent.stop) {
+      selectionPopupMidiInput(intent);
+    } else if (playback.transportPlaying) {
+      screenMessage(MESSAGE_TIME_ERROR, "Stop song to audition browser");
+    } else if (selectionPopupHasMidiPreview()) selectionPopupMidiInput(intent);
+    else if (fileBrowserHasMidiPreview()) fileBrowserMidiInput(intent);
+    return;
+  }
   if (intent.track >= chipnomadState->project.tracksCount) return;
   if (!intent.stop && (instrumentIsEmpty(&chipnomadState->project, intent.instrument) ||
       intent.note >= chipnomadState->project.pitchTable.length)) return;
@@ -436,12 +448,18 @@ static void receiveMidiNote(void* userdata, const MidiPreviewIntent& intent) {
 }
 
 static void updateMidiAuditionInstrument(void) {
+  // MIDI may arrive between a navigation request and the next redraw.
+  screenApplyPending();
   if (!chipnomadState || !pSongTrack || !currentScreen) return;
   int instrument = EMPTY_VALUE_8;
+  bool followsInstrument = true;
+  bool hasContext = true;
   if (currentScreen == &screenInstrumentPool) instrument = instrumentPoolMidiInstrument();
   else if (currentScreen == &screenTable) instrument = tableScreenMidiInstrument();
-  else if (currentScreen == &screenPhrase ||
+  else if (currentScreen == &screenPhrase || currentScreen == &screenSong || currentScreen == &screenChain ||
+           currentScreen == &screenGroovebox || currentScreen == &screenGrooveboxAfterConversion ||
            (currentScreen == &screenInsertFX && !screenInsertFXIsMaster())) {
+    followsInstrument = false;
     const auto& track = chipnomadGetPlaybackStatus(chipnomadState)->tracks[*pSongTrack];
     bool playing = track.mode != PlaybackMode::none && track.mode != PlaybackMode::stopped &&
                    track.mode != PlaybackMode::phraseRow;
@@ -449,15 +467,64 @@ static void updateMidiAuditionInstrument(void) {
         track.chainRow >= 0 && track.chainRow < 16 && track.phraseRow >= 0 && track.phraseRow < 16)
       instrument = lookupInstrument(&chipnomadState->project, track.songRow, track.chainRow, track.phraseRow, *pSongTrack);
     else if (currentScreen == &screenPhrase) instrument = phraseScreenMidiInstrument();
-    else instrument = lookupInstrument(&chipnomadState->project, *pSongRow, *pChainRow, 0, *pSongTrack);
+    else if (currentScreen == &screenGroovebox || currentScreen == &screenGrooveboxAfterConversion)
+      instrument = grooveboxMidiInstrument();
+    else instrument = lookupInstrument(&chipnomadState->project, *pSongRow,
+      currentScreen == &screenSong ? 0 : *pChainRow, 0, *pSongTrack);
   } else if (currentScreen == &screenInstrument || currentScreen == &screenModulation ||
              currentScreen == &screenFMEdit || currentScreen == &screenSIDEdit ||
              currentScreen == &screenMonkEdit || currentScreen == &screenInstrumentEQ ||
              currentScreen == &screenSampleSettings || currentScreen == &screenSoundFontEdit ||
              currentScreen == &screenAYWavetable) instrument = cInstrument;
+  else hasContext = false;
+  if (hasContext) midiAuditionFollowsInstrument = followsInstrument;
   if (instrument >= 0 && instrument < PROJECT_MAX_INSTRUMENTS &&
-      !instrumentIsEmpty(&chipnomadState->project, instrument))
+      !instrumentIsEmpty(&chipnomadState->project, instrument)) {
     midiAuditionInstrument = instrument;
+  }
+}
+
+static int midiAuditionTrack(void*, int instrument, int selectedTrack) {
+  if (!midiAuditionFollowsInstrument || instrument < 0 || instrument >= PROJECT_MAX_INSTRUMENTS)
+    return selectedTrack;
+  auto& project = chipnomadState->project;
+  bool sources[PROJECT_MAX_INSTRUMENTS]{};
+  sources[instrument] = true;
+  for (int i = 0; i < PROJECT_MAX_INSTRUMENTS; ++i)
+    if (project.instruments[i].type == InstrumentType::Layer)
+      for (const auto& entry : project.instruments[i].chip.layer.entries)
+        if (entry.instrument == instrument) sources[i] = true;
+  int8_t phraseMatches[PROJECT_MAX_PHRASES];
+  memset(phraseMatches, -1, sizeof(phraseMatches));
+  int associated = -1;
+  // Resolve only on Note On, and inspect each referenced cell/phrase once.
+  for (int track = 0; track < project.tracksCount; ++track) {
+    bool seen[PROJECT_MAX_CHAINS]{};
+    bool found = false;
+    for (int row = 0; row < PROJECT_MAX_LENGTH && !found; ++row) {
+      int cell = project.song[row][track];
+      if (cell >= PROJECT_MAX_CHAINS || seen[cell]) continue;
+      seen[cell] = true;
+      for (int bar = 0; bar < 16 && !found; ++bar) {
+        int phrase = playbackResolvePhraseAt(&project, row, track, bar);
+        if (phrase >= PROJECT_MAX_PHRASES) continue;
+        if (phraseMatches[phrase] < 0) {
+          phraseMatches[phrase] = 0;
+          for (const auto& step : project.phrases[phrase].rows)
+            if (step.instrument < PROJECT_MAX_INSTRUMENTS && sources[step.instrument]) {
+              phraseMatches[phrase] = 1;
+              break;
+            }
+        }
+        found = phraseMatches[phrase] != 0;
+      }
+    }
+    if (found) {
+      if (associated >= 0) return selectedTrack;
+      associated = track;
+    }
+  }
+  return associated >= 0 ? associated : selectedTrack;
 }
 
 static int motionLiveInputMask(InputCode input) {
@@ -914,6 +981,7 @@ void appActivateProject(void) {
   if (projectActive) return;
   projectActive = true;
   midiAuditionInstrument = cInstrument;
+  midiAuditionFollowsInstrument = false;
   autosaveCounter = 0;
 
   playbackInit(&chipnomadState->playbackState, &chipnomadState->project);
@@ -1338,7 +1406,8 @@ void appOnEvent(MainLoopEventData eventData) {
       updateMidiAuditionInstrument();
       midiRouterProcessInput(chipnomadState->midiRouter, midiAuditionInstrument, *pSongTrack,
         appSettings.midiAutoChannel ? appSettings.midiAutoChannel - 1 : -1,
-        receiveMidiNote, &playback);
+        receiveMidiNote, &playback, midiAuditionTrack,
+        selectionPopupHasMidiPreview() || fileBrowserHasMidiPreview());
 
       // MIDI clock slave mode: transport (Start/Continue/Stop) always
       // drives song playback - there is deliberately no separate UI toggle

@@ -163,6 +163,7 @@ struct MidiPreviewIntent {
   uint8_t noteOn; // Physical Note On, not a held note resumed by legato.
   uint8_t autoChannel;
   uint8_t channel;
+  uint8_t browserPreview;
 };
 
 struct MidiCCIntent {
@@ -214,7 +215,9 @@ int midiRouterTick(MidiRouterState* router, int fallbackInstrument, MidiPreviewI
 // Streaming input avoids losing recordable notes when a UI frame receives a burst.
 // autoChannel is 0-15, or -1 to retain the legacy mapping/fallback behavior.
 void midiRouterProcessInput(MidiRouterState* router, int fallbackInstrument, int selectedTrack,
-                            int autoChannel, void (*receive)(void*, const MidiPreviewIntent&), void* userdata);
+                            int autoChannel, void (*receive)(void*, const MidiPreviewIntent&), void* userdata,
+                            int (*autoTrack)(void*, int instrument, int selectedTrack) = nullptr,
+                            bool browserPreview = false);
 // Returns whether this exact CC has been received, and optionally its value
 // and the serial of that receipt.  A zero value is meaningful, so callers
 // must not confuse an unseen CC with a CC explicitly sent at zero.

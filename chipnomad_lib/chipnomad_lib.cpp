@@ -146,6 +146,29 @@ class AudioCommandQueue {
     auto& snapshot = projectSlots_[slot].value;
     attachBeads(state, snapshot);
     attachVocoders(state, snapshot.vocoders);
+    auto refreshModulations = [&](PlaybackTrackState& track) {
+      if (track.note.instrument >= PROJECT_MAX_INSTRUMENTS) return;
+      for (int i = 0; i < 4; ++i) {
+        auto& runtime = track.note.modulation[i];
+        const auto* old = runtime.modulation;
+        if (!old) continue;
+        auto& next = snapshot.project.instruments[track.note.instrument].modulation[i];
+        if (old->type == next.type && old->destination == next.destination &&
+            !(next.type == ModulationType::Audio && (old->p1 != next.p1 || old->p5 != next.p5)) &&
+            !(next.type == ModulationType::Sequence && old->p1 != next.p1) &&
+            !(modulationIsTickLFO(next.type) && old->p2 != next.p2)) continue;
+        const auto* wavetables = runtime.ayWavetables;
+        playbackModInit(&runtime, &next);
+        runtime.ayWavetables = wavetables;
+        // Keep the stable audio-project address, not the recyclable snapshot.
+        runtime.modulation = old;
+      }
+    };
+    for (int t = 0; t < PROJECT_MAX_TRACKS; ++t) {
+      refreshModulations(state->playbackState.tracks[t]);
+      if (state->playbackState.layerTrackMask & (1u << t))
+        for (auto& child : state->playbackState.layerTracks[t]) refreshModulations(child);
+    }
     state->audioProject = snapshot.project;
     for (auto& handle : snapshot.beads) handle = {};
     for (auto& handle : snapshot.vocoders) handle = {};
@@ -414,6 +437,7 @@ class AudioCommandQueue {
       }
     memcpy(status.trackEnabled, playback->trackEnabled, sizeof(status.trackEnabled));
     status.isPlaying = playbackIsPlaying(const_cast<PlaybackState*>(playback));
+    status.transportPlaying = playbackTransportIsPlaying(playback);
     status.linkPhaseTicks = linkPhaseTicks;
     status.linkPhaseTickMicros = linkPhaseTickMicros;
     statusSlots_[slot].state.store(kPublished, std::memory_order_release);
@@ -1382,9 +1406,9 @@ void chipnomadDestroy(ChipNomadState* state) {
 }
 
 template <typename Voice>
-static void syncVoicePool(Voice* (&pool)[VOICE_OWNER_COUNT][CHORD_MAX_VOICES], bool directNeeded, bool layerNeeded, float rate) {
+static void syncVoicePool(Voice* (&pool)[VOICE_OWNER_COUNT][CHORD_MAX_VOICES], bool directNeeded, bool layerNeeded, float rate, int voiceTracks) {
   for (int owner = 0; owner < VOICE_OWNER_COUNT; ++owner) for (auto*& voice : pool[owner]) {
-    const bool needed = owner < PROJECT_MAX_TRACKS ? directNeeded : layerNeeded;
+    const bool needed = owner < PROJECT_MAX_TRACKS ? directNeeded && owner < voiceTracks : layerNeeded;
     if (!needed) { delete voice; voice = nullptr; }
     else {
       if (!voice) voice = new Voice();
@@ -1589,8 +1613,9 @@ void chipnomadInstallInstrumentVoices(ChipNomadState* state, PreparedInstrumentV
   delete prepared;
 }
 
-void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory factory) {
+void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory factory, int voiceTracks) {
   if (!state) return;
+  assert(voiceTracks > 0 && voiceTracks <= PROJECT_MAX_TRACKS);
   state->audioCommands->midiRecording.clear();
   state->stopTransition = {};
   state->audioProject = state->project;
@@ -1663,35 +1688,35 @@ void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory facto
   state->audioCrossSmoothing = 1.0f - expf(-1.0f / (0.005f * rate));
   state->audioCrossDC = expf(-6.283185307f * 5.0f / rate);
   memset(state->audioCrossState, 0, sizeof(state->audioCrossState));
-  syncVoicePool(state->braidsVoices, has(InstrumentType::Braids), inLayer(InstrumentType::Braids), rate);
+  syncVoicePool(state->braidsVoices, has(InstrumentType::Braids), inLayer(InstrumentType::Braids), rate, voiceTracks);
   if (state->braidsVoices[0][0]) chipnomadSetBraidsSettings(state, state->braidsBits,
     state->braidsDrift, state->braidsSignature, state->braidsSignatureSeed);
-  syncVoicePool(state->soundbankVoices, has(InstrumentType::SoundFont), inLayer(InstrumentType::SoundFont), rate);
-  syncVoicePool(state->sampleVoices, has(InstrumentType::Sample), inLayer(InstrumentType::Sample), rate);
-  syncVoicePool(state->audioInputVoices, has(InstrumentType::AudioIn), inLayer(InstrumentType::AudioIn), rate);
-  syncVoicePool(state->scwfVoices, has(InstrumentType::SCWF) || has(InstrumentType::BYOWTBL), inLayer(InstrumentType::SCWF) || inLayer(InstrumentType::BYOWTBL), rate);
-  syncVoicePool(state->plaitsVoices, has(InstrumentType::Plaits), inLayer(InstrumentType::Plaits), rate);
-  syncVoicePool(state->plaitsAltVoices, has(InstrumentType::PlaitsAlt), inLayer(InstrumentType::PlaitsAlt), rate);
-  syncVoicePool(state->achchidVoices, has(InstrumentType::AChChid), inLayer(InstrumentType::AChChid), rate);
+  syncVoicePool(state->soundbankVoices, has(InstrumentType::SoundFont), inLayer(InstrumentType::SoundFont), rate, voiceTracks);
+  syncVoicePool(state->sampleVoices, has(InstrumentType::Sample), inLayer(InstrumentType::Sample), rate, voiceTracks);
+  syncVoicePool(state->audioInputVoices, has(InstrumentType::AudioIn), inLayer(InstrumentType::AudioIn), rate, voiceTracks);
+  syncVoicePool(state->scwfVoices, has(InstrumentType::SCWF) || has(InstrumentType::BYOWTBL), inLayer(InstrumentType::SCWF) || inLayer(InstrumentType::BYOWTBL), rate, voiceTracks);
+  syncVoicePool(state->plaitsVoices, has(InstrumentType::Plaits), inLayer(InstrumentType::Plaits), rate, voiceTracks);
+  syncVoicePool(state->plaitsAltVoices, has(InstrumentType::PlaitsAlt), inLayer(InstrumentType::PlaitsAlt), rate, voiceTracks);
+  syncVoicePool(state->achchidVoices, has(InstrumentType::AChChid), inLayer(InstrumentType::AChChid), rate, voiceTracks);
   syncVoicePool(state->drumSynthVoices, has(InstrumentType::DrumSynth) || has(InstrumentType::DigiSophie),
-    inLayer(InstrumentType::DrumSynth) || inLayer(InstrumentType::DigiSophie), rate);
-  syncVoicePool(state->mmeVoices, has(InstrumentType::MME), inLayer(InstrumentType::MME), rate);
-  syncVoicePool(state->sidVoices, has(InstrumentType::SID), inLayer(InstrumentType::SID), rate);
-  syncVoicePool(state->simpleChipVoices, has(InstrumentType::SegaPSG) || has(InstrumentType::GBPulse) || has(InstrumentType::GBNoise), inLayer(InstrumentType::SegaPSG), rate);
-  syncVoicePool(state->fourOpVoices, has(InstrumentType::GenesisFM) || has(InstrumentType::ArcadeFM), inLayer(InstrumentType::GenesisFM), rate);
-  syncVoicePool(state->oplVoices, has(InstrumentType::OPL2) || has(InstrumentType::OPL3), inLayer(InstrumentType::OPL2), rate);
-  syncVoicePool(state->opllVoices, has(InstrumentType::OPLL) || has(InstrumentType::VRC7), inLayer(InstrumentType::OPLL), rate);
-  syncVoicePool(state->sinteredVoices, has(InstrumentType::Sintered), inLayer(InstrumentType::Sintered), rate);
+    inLayer(InstrumentType::DrumSynth) || inLayer(InstrumentType::DigiSophie), rate, voiceTracks);
+  syncVoicePool(state->mmeVoices, has(InstrumentType::MME), inLayer(InstrumentType::MME), rate, voiceTracks);
+  syncVoicePool(state->sidVoices, has(InstrumentType::SID), inLayer(InstrumentType::SID), rate, voiceTracks);
+  syncVoicePool(state->simpleChipVoices, has(InstrumentType::SegaPSG) || has(InstrumentType::GBPulse) || has(InstrumentType::GBNoise), inLayer(InstrumentType::SegaPSG), rate, voiceTracks);
+  syncVoicePool(state->fourOpVoices, has(InstrumentType::GenesisFM) || has(InstrumentType::ArcadeFM), inLayer(InstrumentType::GenesisFM), rate, voiceTracks);
+  syncVoicePool(state->oplVoices, has(InstrumentType::OPL2) || has(InstrumentType::OPL3), inLayer(InstrumentType::OPL2), rate, voiceTracks);
+  syncVoicePool(state->opllVoices, has(InstrumentType::OPLL) || has(InstrumentType::VRC7), inLayer(InstrumentType::OPLL), rate, voiceTracks);
+  syncVoicePool(state->sinteredVoices, has(InstrumentType::Sintered), inLayer(InstrumentType::Sintered), rate, voiceTracks);
   // The Bass808 handoff added the instrument type and its on-demand
   // ensureInstrumentVoices path, but never registered the pool here — any
   // FRESH state (offline exporter/bounce, chip reinit) had a NULL voice
   // pool, and applyVoiceEvents dereferenced it on the first note (segfault
   // when bouncing a Fatty project, or stressing parameters that force a
   // chip reinit).
-  syncVoicePool(state->bass808Voices, has(InstrumentType::Bass808), inLayer(InstrumentType::Bass808), rate);
+  syncVoicePool(state->bass808Voices, has(InstrumentType::Bass808), inLayer(InstrumentType::Bass808), rate, voiceTracks);
   const bool directDX7 = has(InstrumentType::DX7), layerDX7 = inLayer(InstrumentType::DX7);
   for (int i = 0; i < VOICE_OWNER_COUNT; ++i) {
-    const bool needed = i < PROJECT_MAX_TRACKS ? directDX7 : layerDX7;
+    const bool needed = i < PROJECT_MAX_TRACKS ? directDX7 && i < voiceTracks : layerDX7;
     if (!needed) { delete state->dx7Parts[i]; state->dx7Parts[i] = nullptr; }
     else {
       if (!state->dx7Parts[i]) state->dx7Parts[i] = new DX7Part();
@@ -1993,6 +2018,7 @@ static void updateAudioRateModulations(ChipNomadState* state, int frames) {
 
 static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   const int wasPlaying = playbackIsPlaying(&state->playbackState);
+  const int transportWasPlaying = playbackTransportIsPlaying(&state->playbackState);
   state->audioCommands->applyProject(state);
   state->playbackState.p = &state->audioProject;
   // Timed playback start: a queued start-at-time fires on the first
@@ -2058,12 +2084,7 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
       state->insertChains[t]->trigger();
   const int isPlaying = playbackIsPlaying(&state->playbackState);
   // Auditioning a note/row is not a transport start for external gear.
-  int transportPlaying = 0;
-  for (int t = 0; t < state->audioProject.tracksCount; ++t) {
-    const auto mode = state->playbackState.tracks[t].mode;
-    if (mode != PlaybackMode::stopped && mode != PlaybackMode::phraseRow)
-      transportPlaying = 1;
-  }
+  const int transportPlaying = playbackTransportIsPlaying(&state->playbackState);
   midiRouterMasterTick(state->midiRouter, transportPlaying, dueMicros);
   // Mute/solo changes gate the mix in either direction. Correct their output
   // boundary just like a stop, without altering voice or transport state.
@@ -2071,8 +2092,8 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   if ((wasPlaying && !isPlaying && !state->playbackState.stopRange.enabled) ||
       (trackMaskChanged && (isPlaying || state->opllPreviewTrack >= 0)))
     state->stopTransition.begin(state->sampleRate);
-  if (!isPlaying) state->linkPhaseTicks = 0;
-  else if (wasPlaying) state->linkPhaseTicks++;
+  if (!transportPlaying || !transportWasPlaying) state->linkPhaseTicks = 0;
+  else state->linkPhaseTicks++;
   motionRecordFrame(state);
   if (allTracksStopped) playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
   // Only engines that report live controls may keep a bar moving. A track

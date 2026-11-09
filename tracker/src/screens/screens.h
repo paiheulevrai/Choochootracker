@@ -146,6 +146,7 @@ extern const AppScreen screenTitle;
 extern const AppScreen* currentScreen;
 
 void screenSetup(const AppScreen* screen, int input);
+void screenApplyPending(void);
 void screenDraw(void);
 void screenMessage(int time, const char* format, ...);
 // Current message text set by screenMessage(), or "" if none is active.

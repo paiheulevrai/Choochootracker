@@ -142,6 +142,31 @@ TEST_CASE("Audio source-only tapping is bit-identical to the unmodulated audible
   CHECK(tapped.state->audioModTrackMask == 1);
 }
 
+TEST_CASE("Changing a modulation source resets its runtime state including Layer children") {
+  for (bool layers : {false, true}) {
+    CAPTURE(layers);
+    AudioModFixture fixture(true, layers);
+    float output[1024];
+    for (int i = 0; i < 8; ++i) fixture.render(output, 512);
+    auto* s = fixture.state.get();
+    auto& definition = s->project.instruments[1].modulation[0];
+    auto& runtime = layers ? s->playbackState.layerTracks[1][0].note.modulation[0]
+                           : s->playbackState.tracks[1].note.modulation[0];
+    REQUIRE(runtime.outValue < 0);
+    runtime.amountOffset = -127;
+    runtime.phase = .75f;
+    definition = {ModulationType::FLFO, 0, 127, 0, 0, 0, 0, 0};
+    REQUIRE(chipnomadQueueProjectRefresh(s));
+    for (int i = 0; i < 4; ++i) fixture.render(output, 512);
+    CHECK(runtime.cachedType == ModulationType::FLFO);
+    CHECK(runtime.outValue == 0);
+    CHECK(runtime.phase == 0);
+    CHECK(runtime.amountOffset == 0);
+    CHECK(std::isfinite(output[1000]));
+    CHECK(output[1000] > 0);
+  }
+}
+
 TEST_CASE("Muted Audio modulation sources keep their processed signal but not their return or sends") {
   for (int sourceKind = 0; sourceKind < 4; ++sourceKind) {
     CAPTURE(sourceKind);

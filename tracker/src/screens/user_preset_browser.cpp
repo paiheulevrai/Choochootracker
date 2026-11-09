@@ -73,6 +73,7 @@ bool setupBrowserLibrary(UserPresets& target) {
 constexpr int backValue = -2, emptyValue = -3;
 void show();
 void stop() {
+  audioManager.stopSamplePreview();
   if (type == InstrumentType::Monk) chipnomadQueueMonkPreview(chipnomadState, *pSongTrack, nullptr);
   else if (type == InstrumentType::DX7) chipnomadQueueDX7Preview(chipnomadState, *pSongTrack, nullptr);
   else if (type == InstrumentType::SID) chipnomadQueueSIDPreview(chipnomadState, *pSongTrack, nullptr);
@@ -81,6 +82,25 @@ void stop() {
   else if (isFourOp(type)) chipnomadQueueFourOpPreview(chipnomadState, *pSongTrack, type, nullptr);
   else chipnomadQueueSimpleChipPreview(chipnomadState, *pSongTrack, type, nullptr);
   if (audition) { projectFree(audition.get()); audition.reset(); }
+}
+int prepareMidi(int value) {
+  stop();
+  if (value < 0 || (userColumns ? size_t(value) >= userReferences.size() :
+      size_t(value) >= library->items().size() || library->items()[value].kind != UserPresets::Kind::preset))
+    return -1;
+  audition = std::make_unique<Project>();
+  projectInit(audition.get());
+  std::string error;
+  if (!(userColumns ? library->load(userReferences[value], audition.get(), 0, error) :
+                      library->load(value, audition.get(), 0, error))) {
+    screenMessage(MESSAGE_TIME_ERROR, "%s", error.c_str());
+    return -1;
+  }
+  if (audioManager.preparePreviewInstrument(audition.get(), 0, nullptr)) {
+    screenMessage(MESSAGE_TIME_ERROR, "Cannot prepare preset audition");
+    return -1;
+  }
+  return 1;
 }
 void preview(int value, bool held) {
   stop();
@@ -187,7 +207,7 @@ void showUserColumns() {
   if (groups.empty()) choices.push_back({"(No presets)", emptyValue, nullptr, 0, nullptr});
   char title[32]; snprintf(title, sizeof(title), "%s %s", instrumentTypeName(type), allSelected() ? "ALL" : "USER");
   selectionPopupSetup(title, choices.data(), int(choices.size()), selected,
-                      select, back, false, preview, true);
+                      select, back, false, preview, true, false, nullptr, false, prepareMidi);
   screenSetup(&screenSelectionPopup, 0);
   if (!error.empty()) screenMessage(MESSAGE_TIME_ERROR, "%s", error.c_str());
 }
@@ -211,7 +231,7 @@ void show() {
     for (size_t i = 0; i < library->items().size(); ++i)
       if (library->items()[i].name == chipnomadState->project.instruments[cInstrument].name) selected = int(i);
   selectionPopupSetup(title, choices.data(), int(choices.size()), selected,
-                      select, back, true, preview);
+                      select, back, true, preview, false, false, nullptr, false, prepareMidi);
   screenSetup(&screenSelectionPopup, 0);
 }
 }

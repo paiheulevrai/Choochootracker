@@ -12,6 +12,8 @@
 #include "audio_manager.h"
 #include "selection_popup.h"
 #include "screen_instrument.h"
+#include "synth/braids_voice.h"
+#include "synth/mme_voice.h"
 
 #include <chrono>
 #include <cstring>
@@ -63,6 +65,7 @@ struct MidiButtonInput {
 
 struct StickLiveFixture {
   AppSettings savedSettings = appSettings;
+  int savedInstrument = cInstrument;
   ChipNomadState* savedState = chipnomadState;
   std::filesystem::path originalPath = std::filesystem::current_path();
   std::filesystem::path testPath = std::filesystem::temp_directory_path() /
@@ -126,6 +129,7 @@ struct StickLiveFixture {
     mockAudioRestartResult = 0;
     chipnomadState = savedState;
     appSettings = savedSettings;
+    cInstrument = savedInstrument;
     chipnomadSetLiveStickEnabled(0);
     chipnomadSetMotionRecordMode(0, 0);
     std::filesystem::current_path(originalPath);
@@ -192,6 +196,112 @@ TEST_CASE_FIXTURE(StickLiveFixture, "Shift horizontal navigation exits branch sc
 }
 
 TEST_SUITE("Stick live") {
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI Auto routes unique instrument associations and preserves release ownership") {
+  MidiNoteInput midi;
+  auto& p = chipnomadState->project;
+  projectInitAY(&p);
+  for (auto& row : p.song) for (auto& cell : row) cell = EMPTY_VALUE_16;
+  getInstrumentFunctions(InstrumentType::AY1).init(&p.instruments[1]);
+  getInstrumentFunctions(InstrumentType::AY1).init(&p.instruments[2]);
+  p.song[0][1] = 1;
+  p.chains[1].rows[0].phrase = 1;
+  p.patterns[1].length = 1;
+  p.patterns[1].bars[0].phrase = 1;
+  p.phrases[1].rows[0].instrument = 1;
+  chipnomadInitChips(chipnomadState, 48000, nullptr);
+  float audio[4096]{};
+  auto send = [&](bool down, uint8_t channel = 15) {
+    midi.events.push_back({midi.now, (uint8_t)(down ? 0x90 : 0x80), channel, 60, (uint8_t)(down ? 100 : 0)});
+    appOnEvent({MainLoopEvent::tick});
+    chipnomadRender(chipnomadState, audio, 2048);
+  };
+  for (auto view : {ViewMode::classic, ViewMode::simplified}) {
+    p.viewMode = view;
+    REQUIRE(chipnomadQueueProjectRefresh(chipnomadState));
+    *pSongTrack = 0;
+    cInstrument = 1;
+    currentScreen = &screenInstrument;
+    send(true);
+    CHECK(chipnomadState->playbackState.tracks[1].midiHeld);
+    CHECK(chipnomadState->playbackState.tracks[1].note.instrument == 1);
+    CHECK(*pSongTrack == 0);
+    *pSongTrack = 2;
+    currentScreen = &screenMixer;
+    send(false);
+    CHECK_FALSE(chipnomadState->playbackState.tracks[1].midiHeld);
+    *pSongTrack = 0;
+    currentScreen = &screenPhrase;
+    const auto savedPhraseInstrument = mockPhraseMidiInstrument;
+    mockPhraseMidiInstrument = 1;
+    send(true);
+    CHECK(chipnomadState->playbackState.tracks[0].midiHeld);
+    send(false);
+    mockPhraseMidiInstrument = savedPhraseInstrument;
+    currentScreen = &screenInstrument;
+    int8_t mapping[16];
+    memset(mapping, -1, sizeof(mapping));
+    mapping[0] = 1;
+    midiRouterSetChannelInstrumentMap(chipnomadState->midiRouter, mapping);
+    send(true, 0);
+    CHECK(chipnomadState->playbackState.tracks[0].midiHeld);
+    send(false, 0);
+    getInstrumentFunctions(InstrumentType::Layer).init(&p.instruments[3]);
+    p.instruments[3].chip.layer.entries[0].instrument = 1;
+    p.phrases[1].rows[0].instrument = 3;
+    send(true);
+    CHECK(chipnomadState->playbackState.tracks[1].midiHeld);
+    send(false);
+    p.phrases[1].rows[0].instrument = 1;
+    p.song[0][2] = 1;
+    *pSongTrack = 0;
+    currentScreen = &screenInstrument;
+    send(true);
+    CHECK(chipnomadState->playbackState.tracks[0].midiHeld);
+    send(false);
+    p.song[0][2] = EMPTY_VALUE_16;
+    cInstrument = 2;
+    send(true);
+    CHECK(chipnomadState->playbackState.tracks[0].note.instrument == 2);
+    send(false);
+  }
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI Auto auditions Braids and MME with release and REC off") {
+  MidiNoteInput midi;
+  auto& p = chipnomadState->project;
+  projectInitAY(&p);
+  *pSongTrack = 0;
+  cInstrument = 1;
+  currentScreen = &screenInstrument;
+  float audio[4096]{};
+  for (auto type : {InstrumentType::Braids, InstrumentType::MME}) {
+    CAPTURE((int)type);
+    getInstrumentFunctions(type).init(&p.instruments[1]);
+    InstrumentVoicePostSettings& envelope = type == InstrumentType::Braids
+      ? static_cast<InstrumentVoicePostSettings&>(p.instruments[1].chip.braids)
+      : static_cast<InstrumentVoicePostSettings&>(p.instruments[1].chip.mme);
+    envelope.attack = envelope.decay = 0;
+    envelope.sustain = 255;
+    envelope.release = 16;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    midi.events.push_back({midi.now, 0x90, 15, 60, 100});
+    appOnEvent({MainLoopEvent::tick});
+    chipnomadRender(chipnomadState, audio, 2048);
+    REQUIRE(chipnomadState->playbackState.tracks[0].note.instrument == 1);
+    REQUIRE(chipnomadState->playbackState.tracks[0].midiHeld);
+    auto level = [&]() {
+      return type == InstrumentType::Braids ? chipnomadState->braidsVoices[0][0]->envelopeLevel()
+                                           : chipnomadState->mmeVoices[0][0]->envelopeLevel();
+    };
+    REQUIRE(level() > .5f);
+    midi.events.push_back({midi.now, 0x80, 15, 60, 0});
+    appOnEvent({MainLoopEvent::tick});
+    for (int i = 0; i < 4; ++i) chipnomadRender(chipnomadState, audio, 2048);
+    CHECK_FALSE(chipnomadState->playbackState.tracks[0].midiHeld);
+    CHECK(level() == 0);
+  }
+}
+
 TEST_CASE_FIXTURE(StickLiveFixture, "MIDI Auto Channel plays the phrase instrument with REC off") {
   MidiNoteInput midi;
   int savedInstrument = cInstrument;

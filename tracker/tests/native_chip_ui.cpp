@@ -38,10 +38,14 @@
 #include "soundbank_library.h"
 #include "soundbank_runtime.h"
 #include "synth/sample_voice.h"
+#include "synth/braids_voice.h"
+#include "synth/mme_voice.h"
 #include "synth/instrument_eq.h"
 #include "synth/sample_transient.h"
 #include "synth/sr_wavetable_loader.h"
 #include "audio_manager.h"
+#include "corelib_audio.h"
+#include "file_browser.h"
 #include "midi/midi_router.h"
 #include "chipnomad_lib_live_stick.h"
 #include <fstream>
@@ -53,6 +57,17 @@
 extern SDL_Renderer* renderer;
 static const char* output;
 #ifdef BMP_STREAM_TEST
+static bool captureAudioCallback;
+static AudioCallback* previewAudioCallback;
+extern "C" int __real_audioSetup(AudioCallback*, int, int);
+extern "C" void __real_audioPause(int);
+extern "C" int __wrap_audioSetup(AudioCallback* callback, int rate, int frames) {
+  if (captureAudioCallback) previewAudioCallback = callback;
+  return __real_audioSetup(callback, rate, frames);
+}
+extern "C" void __wrap_audioPause(int paused) {
+  __real_audioPause(captureAudioCallback ? 1 : paused);
+}
 static const char* virtualBMPPath = "/ChooChooTracker/__bmp_stream_test__.bmp";
 static std::string virtualBMPBacking;
 static int virtualBMPOpens;
@@ -380,6 +395,244 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+#ifdef BMP_STREAM_TEST
+  if(argc==3 && !strcmp(argv[2],"--midi-browser-only")) {
+    namespace fs = std::filesystem;
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+    projectFree(&chipnomadState->project); projectInitAY(&chipnomadState->project);
+    auto& p = chipnomadState->project;
+    cInstrument = *pSongTrack = *pSongRow = *pChainRow = 0;
+    p.song[0][0] = 0; p.chains[0].rows[0].phrase = 0;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    captureAudioCallback = true;
+    require(!audioManager.start(48000, 512) && previewAudioCallback, "browser audio callback captured");
+    auto render = [&](int blocks) {
+      std::vector<int16_t> audio(size_t(blocks) * 1024);
+      for (int n = 0; n < blocks; ++n) previewAudioCallback(audio.data() + n * 1024, 512);
+      return audio;
+    };
+    auto energy = [](const std::vector<int16_t>& audio) {
+      double sum = 0; for (int16_t x : audio) sum += double(x) * x; return sum / audio.size();
+    };
+    auto crossings = [](const std::vector<int16_t>& audio) {
+      int count = 0;
+      for (size_t n = 2; n < audio.size(); n += 2)
+        if (audio[n - 2] <= 0 && audio[n] > 0) ++count;
+      return count;
+    };
+    struct Input { MidiEvent event{}; bool pending = false; } midi;
+    MidiBackend backend{}; backend.userdata = &midi;
+    backend.pollInput = [](void* data, MidiEvent* event) {
+      auto& input = *static_cast<Input*>(data);
+      if (!input.pending) return 0;
+      *event = input.event; input.pending = false; return 1;
+    };
+    backend.scheduleOutput = [](void*, const MidiEvent*, uint64_t) {};
+    midiRouterSetBackend(&backend); appSettings.midiAutoChannel = 1;
+    auto send = [&](uint8_t type, uint8_t note, uint8_t velocity, uint8_t channel = 0) {
+      midi.event = {midiRouterNowMicros(), type, channel, note, velocity}; midi.pending = true;
+      appOnEvent({MainLoopEvent::tick});
+    };
+    MainLoopEventData rec{}; rec.type = MainLoopEvent::keyDown;
+    rec.data.input = {InputDeviceType::logical, keyMotionRecord}; appOnEvent(rec);
+    require(chipnomadMotionMode() == 1, "REC enabled during browser audition");
+    const auto files = fs::absolute(fs::path(output) / "midi-browser-fixtures");
+    require(!fs::exists(files), "browser fixture directory is isolated");
+    fs::create_directories(files / "folder");
+    std::vector<int16_t> pcm(32768);
+    for (size_t n = 0; n < pcm.size(); ++n) pcm[n] = int16_t(3000 * sin(n * 6.283185307179586 / 256));
+    InstrumentSample sample{}; sample.data = pcm.data(); sample.frameCount = pcm.size();
+    sample.sampleRate = 48000; sample.channels = 1;
+    char error[128];
+    require(!sampleSaveWav16(&sample, (files / "a.wav").string().c_str(), error, sizeof(error)), "browser PCM fixture");
+    require(!sampleSaveWav16(&sample, (files / "b.wav").string().c_str(), error, sizeof(error)), "second browser PCM fixture");
+    snprintf(appSettings.samplePath, sizeof(appSettings.samplePath), "%s", files.string().c_str());
+    snprintf(appSettings.scwfPath, sizeof(appSettings.scwfPath), "%s", files.string().c_str());
+    snprintf(appSettings.srWavetablePath, sizeof(appSettings.srWavetablePath), "%s", files.string().c_str());
+    auto checkUnchanged = [&](const Project& before) {
+      require(!memcmp(&before, &p, sizeof(Project)) && !projectModified,
+        "audition never changes instruments phrases or dirty state even with REC");
+      require(!chipnomadGetPlaybackStatus(chipnomadState)->transportPlaying,
+        "browser audition leaves sequencer stopped");
+    };
+    for (auto type : {InstrumentType::Sample, InstrumentType::AYSample, InstrumentType::SCWF, InstrumentType::BYOWTBL}) {
+      printf("Checking WAV browser engine %d\n", int(type));
+      if (type == InstrumentType::SCWF) {
+        sample.frameCount = 2048;
+        for (size_t n = 0; n < sample.frameCount; ++n)
+          pcm[n] = int16_t(3000 * sin(n * 6.283185307179586 / sample.frameCount));
+        require(!sampleSaveWav16(&sample, (files / "a.wav").string().c_str(), error, sizeof(error)), "single-cycle fixture");
+        require(!sampleSaveWav16(&sample, (files / "b.wav").string().c_str(), error, sizeof(error)), "second single-cycle fixture");
+      }
+      getInstrumentFunctions(p.instruments[0].type).free(&p.instruments[0]);
+      getInstrumentFunctions(type).init(&p.instruments[0]);
+      chipnomadInitChips(chipnomadState, 48000, nullptr); render(1);
+      screenSetup(&screenInstrument, 0); appDraw();
+      auto before = std::make_unique<Project>(p); projectModified = 0;
+      if (type == InstrumentType::AYSample) screenInstrumentAYSample.onEdit(0, 3, CellEditAction::tap);
+      else {
+        ScreenData* editor = type == InstrumentType::Sample ? &screenInstrumentSample :
+          type == InstrumentType::SCWF ? &screenInstrumentSCWF : &screenInstrumentBYOWTBL;
+        editor->cursorCol = 0; editor->cursorRow = 3;
+        editor->onInput(1, keyEdit, 1); editor->onInput(0, 0, 1);
+      }
+      appDraw(); require(fileBrowserHasMidiPreview(), "actual WAV picker enables Auto MIDI");
+      // Folders are sorted first. They must never play the previous candidate.
+      send(0x90, 48, 100); require(energy(render(4)) == 0, "folder has no preview");
+      send(0x80, 48, 0); key(1, keyDown); key(1, keyDown);
+      send(0x90, 48, 100);
+      const auto low = render(4);
+      require(energy(low) > 1, "highlighted WAV is audible without loading");
+      send(0x80, 48, 0); render(48);
+      require(energy(render(4)) < .1, "WAV audition Note Off reaches silence");
+      send(0x90, 60, 100);
+      const auto high = render(4);
+      require(energy(high) > 1, "second WAV pitch is audible");
+      if (type == InstrumentType::Sample || type == InstrumentType::SCWF || type == InstrumentType::BYOWTBL) {
+        printf("browser type %d pitch crossings %d -> %d\n", int(type), crossings(low), crossings(high));
+        require(crossings(high) > crossings(low) * 1.7 && crossings(high) < crossings(low) * 2.3 + 2,
+          "MIDI octave changes actual preview pitch");
+      }
+      send(0x80, 60, 0); render(48);
+      send(0x90, 48, 35);
+      require(energy(render(4)) < energy(low) * .75, "WAV audition responds to MIDI velocity");
+      send(0x80, 48, 0); render(48);
+      key(1, keyPlay);
+      send(0x90, 48, 100);
+      require(energy(render(4)) > 1, "MIDI reloads candidate after legacy PLAY preview");
+      send(0x80, 48, 0); render(48);
+      key(1, keyDown); send(0x90, 48, 100);
+      require(energy(render(4)) > 1, "moving to next WAV prepares new candidate");
+      key(1, keyOpt); key(0, 0);
+      render(16);
+      require(energy(render(4)) < .1, "leaving WAV picker stops audition");
+      send(0x80, 48, 0); checkUnchanged(*before);
+    }
+    for (auto type : {InstrumentType::OPL2, InstrumentType::OPLL}) {
+      getInstrumentFunctions(p.instruments[0].type).free(&p.instruments[0]);
+      getInstrumentFunctions(type).init(&p.instruments[0]);
+      chipnomadInitChips(chipnomadState, 48000, nullptr); render(1);
+      screenSetup(&screenInstrument, 0); appDraw();
+      projectModified = 0; auto before = std::make_unique<Project>(p);
+      if (type == InstrumentType::OPL2) screenInstrumentOPL.onEdit(0, 4, CellEditAction::tap);
+      else {
+        screenInstrumentOPLL.cursorRow = 3;
+        screenInstrumentOPLL.onInput(1, keyEdit, 1); screenInstrumentOPLL.onInput(0, 0, 1);
+      }
+      appDraw(); require(selectionPopupHasMidiPreview(), "actual FM preset picker enables MIDI");
+      if (type == InstrumentType::OPL2) key(1, keyRight);
+      send(0x90, 60, 100); require(energy(render(12)) > 1, "uncommitted FM candidate is audible");
+      send(0x80, 60, 0); render(200);
+      require(energy(render(4)) < .1, "FM preset responds to Note Off");
+      key(1, keyDown); send(0x90, 64, 80);
+      require(energy(render(12)) > 1, "next highlighted FM candidate is audible");
+      key(1, keyOpt); key(0, 0); send(0x80, 64, 0);
+      render(16);
+      require(energy(render(4)) < .1, "leaving FM picker stops preview");
+      checkUnchanged(*before);
+    }
+    UserPresets userLibrary;
+    require(setupUserPresetLibrary(userLibrary, InstrumentType::OPLL), "USER library path");
+    fs::create_directories(userLibrary.rootPath());
+    const auto userFile = fs::path(userLibrary.rootPath()) / "__midi_ui_audition.cni";
+    require(!fs::exists(userFile), "USER audition fixture is isolated");
+    p.instruments[0].chip.opll.program = 1;
+    require(!instrumentSave(&p, userFile.string().c_str(), 0), "USER audition preset saved");
+    std::string userError;
+    require(userLibrary.refresh(userError), "USER audition fixture indexed");
+    bool foundUser = false;
+    for (size_t n = 0; n < userLibrary.items().size(); ++n)
+      if (userLibrary.items()[n].path == userFile.filename().string()) {
+        rememberUserPreset(userLibrary.reference(n)); foundUser = true;
+      }
+    require(foundUser, "USER audition fixture located");
+    projectModified = 0;
+    {
+      auto before = std::make_unique<Project>(p);
+      openUserPresetBrowser(); appDraw();
+      require(selectionPopupHasMidiPreview(), "USER preset popup enables MIDI");
+      send(0x90, 60, 100);
+      require(energy(render(12)) > 1, "USER preset preview retains its loaded project");
+      send(0x80, 60, 0); render(200);
+      require(energy(render(4)) < .1, "USER preset Note Off releases audio");
+      key(1, keyOpt); key(0, 0);
+      checkUnchanged(*before);
+    }
+    fs::remove(userFile);
+    getInstrumentFunctions(p.instruments[0].type).free(&p.instruments[0]);
+    getInstrumentFunctions(InstrumentType::SoundFont).init(&p.instruments[0]);
+    chipnomadInitChips(chipnomadState, 48000, nullptr); render(1);
+    const auto bankRoot = files / "banks";
+    fs::create_directory(bankRoot);
+    for (const char* name : {"tone.sf2", "layers.sfz", "tone.exs", "tone.wav"})
+      fs::copy_file(fs::path("..") / ".." / "tests" / "fixtures" / "soundbanks" / name, bankRoot / name);
+    _putenv_s("CHOOCHOO_SOUNDBANKS", bankRoot.string().c_str());
+    soundbankShutdown();
+    auto waitBank = [&] {
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+      while (soundbankBusy() && std::chrono::steady_clock::now() < deadline) {
+        soundbankPoll(); std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+      require(!soundbankBusy(), "bank audition preparation completes");
+    };
+    projectModified = 0; auto before = std::make_unique<Project>(p);
+    soundbankRescan(); waitBank();
+    screenSetup(&screenInstrument, 0); appDraw();
+    screenInstrumentSoundFont.cursorCol = 0; screenInstrumentSoundFont.cursorRow = 4;
+    screenInstrumentSoundFont.onInput(1, keyEdit, 1); screenInstrumentSoundFont.onInput(0, 0, 1);
+    appDraw(); require(selectionPopupHasMidiPreview(), "actual bank picker enables MIDI");
+    key(1, keyRight);
+    send(0x90, 60, 100); send(0x80, 60, 0);
+    waitBank(); appDraw();
+    require(energy(render(4)) == 0, "bank popup cancels pending note before decoding completes");
+    send(0x90, 60, 100); appDraw();
+    require(energy(render(12)) > 1, "bank popup auditions uncommitted highlighted preset");
+    require(chipnomadQueuePlaybackStartPhrase(chipnomadState, 0, 0, 0, 1), "start transport during bank audition");
+    render(4);
+    require(chipnomadGetPlaybackStatus(chipnomadState)->transportPlaying, "transport started before cancel check");
+    appDraw(); render(16);
+    require(energy(render(4)) < .1, "starting transport cancels active bank preview");
+    send(0x90, 64, 100);
+    require(strstr(screenGetActiveMessage(), "Stop song to audition") != nullptr &&
+      energy(render(4)) < .1, "browser Auto notes are blocked during playback");
+    send(0x80, 64, 0); send(0x80, 60, 0);
+    chipnomadQueuePlaybackStop(chipnomadState); render(4);
+    require(!chipnomadGetPlaybackStatus(chipnomadState)->transportPlaying, "transport stopped before re-audition");
+    appDraw();
+    send(0x90, 60, 100);
+    require(energy(render(12)) > 1, "audition can prepare again after transport stops");
+    key(1, keyOpt); key(0, 0); send(0x80, 60, 0);
+    render(16);
+    require(energy(render(4)) < .1, "leaving bank popup stops audition");
+    checkUnchanged(*before);
+    for (auto bank : {"tone.sf2", "layers.sfz", "tone.exs"}) {
+      uint32_t handle = 0;
+      const char* preset = !strcmp(bank, "tone.sf2") ? "0:0" : !strcmp(bank, "layers.sfz") ? "sfz" : "exs";
+      require(soundbankPreparePreview(bank, preset, &handle) == 0, "unloaded bank prepares asynchronously");
+      waitBank();
+      require(soundbankPreparePreview(bank, preset, &handle) == 1 && handle, "bank audition publishes temporary handle");
+      Instrument patch = p.instruments[0]; patch.chip.soundfont.prepared = handle;
+      require(!audioManager.preparePreviewInstrument(&p, 0, &patch), "bank preview engine prepared");
+      audioManager.previewMidiNote(48, 100);
+      require(energy(render(12)) > 1, "SF2 SFZ EXS preview renders actual audio");
+      audioManager.previewMidiNote(0, 0); render(200);
+      require(energy(render(4)) < .1, "bank preview honors Note Off");
+      audioManager.stopSamplePreview(); checkUnchanged(*before);
+    }
+    soundbankShutdown(); _putenv_s("CHOOCHOO_SOUNDBANKS", "");
+    rec.type = MainLoopEvent::keyUp; appOnEvent(rec);
+    midiRouterSetBackend(nullptr); audioManager.stop();
+    for (const auto& entry : fs::directory_iterator(bankRoot)) {
+      require(entry.is_regular_file(), "bank fixtures contain only generated files");
+      fs::remove(entry.path());
+    }
+    fs::remove(bankRoot);
+    fs::remove(files / "a.wav"); fs::remove(files / "b.wav"); fs::remove(files / "folder"); fs::remove(files);
+    chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit();
+    printf("MIDI browser audio/UI passed: WAV, AY, SCWF, wavetable, FM, SF2/SFZ/EXS, pitch, velocity, release, cancellation, REC safety\n");
+    return 0;
+  }
+#endif
   if(argc==3 && !strcmp(argv[2],"--midi-recording-only")) {
     screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
     projectInitAY(&chipnomadState->project);
@@ -469,9 +722,48 @@ int main(int argc,char** argv){
       "erase removes DEL but preserves unrelated FX");
     require(p.phrases[1].rows[0].note == 48, "erase leaves neighboring track untouched");
     rec.type = MainLoopEvent::keyUp; appOnEvent(rec);
+    chipnomadQueuePlaybackStop(chipnomadState);
+    chipnomadRender(chipnomadState, audio, 2048);
+    for (auto& row : p.song) for (auto& cell : row) cell = EMPTY_VALUE_16;
+    p.song[0][0] = 0;
+    p.phrases[0].rows[0].instrument = 0;
+    getInstrumentFunctions(InstrumentType::Braids).init(&p.instruments[1]);
+    getInstrumentFunctions(InstrumentType::MME).init(&p.instruments[2]);
+    for (auto* envelope : {static_cast<InstrumentVoicePostSettings*>(&p.instruments[1].chip.braids),
+                           static_cast<InstrumentVoicePostSettings*>(&p.instruments[2].chip.mme)}) {
+      envelope->attack = envelope->decay = 0;
+      envelope->sustain = 255; envelope->release = 16;
+    }
+    appSettings.midiAutoChannel = 1;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    screenSetup(&screenInstrument, 0);
+    send(0x90, 60, 100); send(0x80, 60, 0);
+    key(1, keyOpt | keyRight); key(0, 0);
+    require(cInstrument == 1, "actual instrument navigation selects Braids");
+    send(0x90, 60, 100);
+    require(chipnomadState->playbackState.tracks[0].note.instrument == 1,
+      "stopped Auto follows actual Instrument navigation");
+    require(chipnomadState->braidsVoices[0][0]->envelopeLevel() > .5f, "Braids audition sustains");
+    send(0x80, 60, 0);
+    for (int i = 0; i < 4; ++i) chipnomadRender(chipnomadState, audio, 2048);
+    require(chipnomadState->braidsVoices[0][0]->envelopeLevel() == 0,
+      "Braids audition MIDI release reaches ADSR with REC off");
+    key(1, keyOpt | keyRight); key(0, 0);
+    send(0x90, 60, 100);
+    require(chipnomadState->playbackState.tracks[0].note.instrument == 2, "stopped Auto follows MME selection");
+    send(0x80, 60, 0);
+    for (int i = 0; i < 4; ++i) chipnomadRender(chipnomadState, audio, 2048);
+    require(chipnomadState->mmeVoices[0][0]->envelopeLevel() == 0, "MME audition MIDI release reaches ADSR");
+    screenSetup(&screenPhrase, 0);
+    send(0x90, 60, 100);
+    require(chipnomadState->playbackState.tracks[0].note.instrument == 0,
+      "stopped Auto follows actual Phrase navigation");
+    require(!chipnomadGetPlaybackStatus(chipnomadState)->transportPlaying &&
+      chipnomadGetPlaybackStatus(chipnomadState)->linkPhaseTicks == 0, "audition never advances the transport counter");
+    send(0x80, 60, 0);
     midiRouterSetBackend(nullptr);
     chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit();
-    printf("MIDI production UI passed: stopped entry, actual channel mismatch, cursor advance, song stop and selected-track erase\n");
+    printf("MIDI production UI passed: recording, actual navigation, Braids/MME release, counter and erase\n");
     return 0;
   }
   if(argc==3 && !strcmp(argv[2],"--bass808-only")) {
@@ -769,6 +1061,20 @@ int main(int argc,char** argv){
     }
     appSettings.persistentWaveform=0;
     auto& instrument=prepareHomepageInstrument(InstrumentType::Sintered,"Insert names");
+    instrument.modulation[0] = {ModulationType::LFO, 1, -127, 0, 0, 6, 0, 0};
+    instrument.modulation[1] = {ModulationType::LFO, 2, 64, 0, 0, 6, 0, 0};
+    screenSetup(&screenModulation,0);appDraw();
+    key(1,keyEdit|keyLeft);key(0,0);
+    require(instrument.modulation[0].type==ModulationType::AHD &&
+      instrument.modulation[0].destination==0 && instrument.modulation[0].amount==0,
+      "source change cancels previous modulation route and depth");
+    require(instrument.modulation[1].destination==2 && instrument.modulation[1].amount==64,
+      "source change leaves other slots intact");
+    instrument.modulation[0] = {ModulationType::Audio, 1, -127, 0, 16, 80, 64, 0};
+    key(1,keyEdit|keyRight);key(0,0);
+    require(instrument.modulation[0].p5==(uint8_t)AudioModulationMode::wave &&
+      instrument.modulation[0].destination==0 && instrument.modulation[0].amount==0,
+      "Audio source family change cancels previous modulation");
     screenSetup(&screenModulation,0);appDraw();key(1,keyDown);key(0,0);
     for(int module=1;module<insertModuleCount;++module) {
       insertSelect(&chipnomadState->project.trackInserts[0][0],module);

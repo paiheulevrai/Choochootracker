@@ -69,6 +69,7 @@ struct PlaybackStatus {
   PlaybackLayerStatus layerTracks[PROJECT_MAX_TRACKS][INSTRUMENT_LAYER_COUNT];
   uint8_t trackEnabled[PROJECT_MAX_TRACKS];
   uint8_t isPlaying;
+  uint8_t transportPlaying;
   // Audio-thread tick counter and the host timestamp of that tick. They are
   // published with the status snapshot so the UI can follow Link phase
   // without racing the audio callback.
@@ -219,8 +220,10 @@ void chipnomadDestroy(ChipNomadState* state);
 * @param state ChipNomad state
 * @param sampleRate Audio sample rate
 * @param factory Chip factory function, or NULL to use default implementations
+* @param voiceTracks Direct voice tracks to prepare; browser previews need only one
 */
-void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory factory);
+void chipnomadInitChips(ChipNomadState* state, int sampleRate, ChipFactory factory,
+                       int voiceTracks = PROJECT_MAX_TRACKS);
 bool chipnomadCanSwitchInstrumentLive(InstrumentType type);
 PreparedInstrumentVoices* chipnomadPrepareInstrumentVoices(ChipNomadState* state, InstrumentType type);
 // Install a prepared pool while the audio callback is locked. Takes ownership.

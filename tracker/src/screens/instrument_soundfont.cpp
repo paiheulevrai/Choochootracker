@@ -9,6 +9,7 @@
 #include "soundbank_library.h"
 #include "soundbank_browser.h"
 #include "project_utils.h"
+#include "audio_manager.h"
 #include <iterator>
 
 namespace {
@@ -51,6 +52,21 @@ void preview(int value, bool held) {
     chipnomadQueuePlaybackPreviewNote(chipnomadState,*pSongTrack,
       instrumentFirstNote(&chipnomadState->project,cInstrument),cInstrument);
 }
+int prepareMidi(int value) {
+  if (value < 0 || size_t(value) >= references.size()) return -1;
+  const auto& ref = references[value];
+  const auto& bank = soundbankEntries()[ref.bank];
+  uint32_t handle = 0;
+  int result = soundbankPreparePreview(bank.id, bank.presets[ref.preset].first, &handle);
+  if (result != 1) return result;
+  Instrument patch = current();
+  patch.chip.soundfont.prepared = handle;
+  if (audioManager.preparePreviewInstrument(&chipnomadState->project, cInstrument, &patch)) {
+    screenMessage(MESSAGE_TIME_ERROR, "Cannot prepare bank audition");
+    return -1;
+  }
+  return 1;
+}
 const char* loadingStatus() {
   static std::string message;
   message=soundbankBusy()?soundbankLoadingStatus():soundbankInstrumentError(cInstrument);
@@ -73,7 +89,7 @@ void show() {
   }
   if(browserCollections.empty())choices.push_back({soundbankBusy()?"Scanning...":"No presets",-3,nullptr,0,nullptr});
   else if(selected==-2) selected=-1000;
-  selectionPopupSetup("SOUNDFONT PRESETS",choices.data(),int(choices.size()),selected,select,up,false,preview,true,true,loadingStatus,true);
+  selectionPopupSetup("SOUNDFONT PRESETS",choices.data(),int(choices.size()),selected,select,up,false,preview,true,true,loadingStatus,true,prepareMidi,&screenSoundbankBrowser);
   screenSetup(&screenSoundbankBrowser,0);
 }
 void setup(int n) { screenSelectionPopup.setup(n);lastStatus=soundbankStatus();lastBusy=soundbankBusy(); }
@@ -81,7 +97,7 @@ void draw() {
   const bool busy=soundbankBusy();
   // Keep the browsed selection while preparation is in flight. Re-focus on the
   // active preset only after the load/scan completes.
-  if(!busy && (lastBusy || lastStatus!=soundbankStatus())){show();return;}
+  if(!busy && !soundbankPreviewActive() && (lastBusy || lastStatus!=soundbankStatus())){show();return;}
   lastBusy=busy;
   screenSelectionPopup.draw();
 }

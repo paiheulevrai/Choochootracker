@@ -85,7 +85,7 @@ $(NATIVE_SCREENSHOT_GFX_OBJECT): platforms/sdl2/corelib_gfx.cpp $(HEADER_STAMP) 
 .PHONY: native-chip-screenshots
 native-chip-screenshots: $(NATIVE_SCREENSHOT_OBJECTS)
 	@$(file >$(BUILD)/native-chip-screenshots-objects.rsp,$(subst $(space),$(newline),$(NATIVE_SCREENSHOT_OBJECTS)))
-	$(CXX) $(WINDOWS_CFLAGS) @$(BUILD)/native-chip-screenshots-objects.rsp $(XTRA_LIBS) -Wl,--wrap=fopen -o $(NATIVE_SCREENSHOT_TARGET)
+	$(CXX) $(WINDOWS_CFLAGS) @$(BUILD)/native-chip-screenshots-objects.rsp $(XTRA_LIBS) -Wl,--wrap=fopen,--wrap=audioSetup,--wrap=audioPause -o $(NATIVE_SCREENSHOT_TARGET)
 
 # Docker-based Windows build (internal target)
 .PHONY: .windows-docker

@@ -1894,6 +1894,15 @@ int playbackIsPlaying(PlaybackState* state) {
   return 0;
 }
 
+int playbackTransportIsPlaying(const PlaybackState* state) {
+  for (int t = 0; t < state->p->tracksCount; ++t) {
+    const auto mode = state->tracks[t].mode;
+    if (mode != PlaybackMode::none && mode != PlaybackMode::stopped && mode != PlaybackMode::phraseRow)
+      return 1;
+  }
+  return 0;
+}
+
 void playbackSetLoopRange(PlaybackState* state, LoopRange range) {
   state->loopRange = range;
   if (range.enabled)

@@ -354,7 +354,7 @@ static int onEdit(int col, int row, CellEditAction action) {
     if (col == 0) {
       // Load sample
       fileBrowserSetupWithPreview("LOAD SAMPLE", ".wav", appSettings.samplePath,
-        onSampleLoaded, onSampleCancelled, onSamplePreview);
+        onSampleLoaded, onSampleCancelled, onSamplePreview, 0);
       screenSetup(&screenFileBrowser, 0);
     } else if (col == 1) {
       // Lift sample to zero

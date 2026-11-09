@@ -14,6 +14,8 @@
 #include "copy_paste.h"
 #include "screen_instrument.h"
 #include "screen_groovebox.h"
+#include "audio_manager.h"
+#include "file_browser.h"
 
 const AppScreen* currentScreen = NULL;
 static ScreenData* touchScreenData = NULL;
@@ -129,8 +131,11 @@ void screenSetup(const AppScreen* screen, int input) {
   pendingScreenInput = input;
 }
 
-void screenDraw() {
+void screenApplyPending() {
   if (pendingScreen != NULL) {
+    if (pendingScreen != currentScreen &&
+        (selectionPopupHasMidiPreview() || fileBrowserHasMidiPreview()))
+      audioManager.stopSamplePreview();
     currentScreen = pendingScreen;
     gfxSetContentRowOffset(screenScopeRows(currentScreen));
     currentScreen->setup(pendingScreenInput);
@@ -144,7 +149,10 @@ void screenDraw() {
 
     pendingScreen = NULL;
   }
+}
 
+void screenDraw() {
+  screenApplyPending();
   // The character picker owns the whole canvas.  Live screen updates (for
   // example an instrument waveform during playback) must not paint over it.
   if (charEditIsOpen()) return;

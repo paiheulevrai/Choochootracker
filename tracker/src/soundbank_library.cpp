@@ -49,11 +49,30 @@ size_t cacheLimit() {
 soundbank::SampleCache cache(cacheLimit());
 std::map<std::string, std::string> failed;
 std::string scanError;
+std::string previewBank, previewPreset, previewError;
+std::shared_ptr<const soundbank::PreparedPreset> previewPrepared;
+uint32_t previewHandle = 0;
 #ifdef __EMSCRIPTEN__
 constexpr auto launchPolicy = std::launch::deferred;
 #else
 constexpr auto launchPolicy = std::launch::async;
 #endif
+std::future<Result> prepareBank(const std::string& bank, const std::string& preset) {
+  auto root = soundbankRoot();
+  return std::async(launchPolicy, [root, bank, preset]() {
+    Result r;
+    soundbank::LoadProgressScope progress([](soundbank::LoadStage stage) {
+      loadingStage.store(stage, std::memory_order_relaxed);
+    });
+    try {
+      auto b = soundbank::parseBank(soundbank::BankIndex(root).resolve(bank));
+      r.preset = cache.prepare(b, preset);
+    } catch (const std::exception& e) {
+      r.error = e.what();
+    }
+    return r;
+  });
+}
 }  // namespace
 std::string soundbankRoot() {
   if (const char* root = getenv("CHOOCHOO_SOUNDBANKS"))
@@ -75,7 +94,8 @@ std::string soundbankRoot() {
 const std::vector<soundbank::BankEntry>& soundbankEntries() { return entries; }
 bool soundbankBusy() { return job.valid(); }
 bool soundbankScanned() { return scanned; }
-bool soundbankScanning() { return job.valid() && target < 0; }
+bool soundbankScanning() { return job.valid() && target == -1; }
+bool soundbankPreviewActive() { return target == -2; }
 const std::string& soundbankStatus() { return status; }
 std::string soundbankLoadingStatus() {
   if (!soundbankBusy()) return {};
@@ -171,6 +191,7 @@ void soundbankLoad(int instrument, const std::string& bank, const std::string& p
     status = "Bank/preset path too long";
     return;
   }
+  audioManager.stopSamplePreview();
   audioManager.pause();
   chipnomadCollectSoundbanks(chipnomadState);
   audioManager.resume();
@@ -185,21 +206,50 @@ void soundbankLoad(int instrument, const std::string& bank, const std::string& p
   expectedHandle = i.chip.soundfont.prepared;
   status = "Preparing preset...";
   loadingStage.store(soundbank::LoadStage::reading, std::memory_order_relaxed);
-  auto root = soundbankRoot();
   preparationFrames = 2;
-  job = std::async(launchPolicy, [root, bank, preset]() {
-    Result r;
-    soundbank::LoadProgressScope progress([](soundbank::LoadStage stage) {
-      loadingStage.store(stage, std::memory_order_relaxed);
-    });
-    try {
-      auto b = soundbank::parseBank(soundbank::BankIndex(root).resolve(bank));
-      r.preset = cache.prepare(b, preset);
-    } catch (const std::exception& e) {
-      r.error = e.what();
+  job = prepareBank(bank, preset);
+}
+
+int soundbankPreparePreview(const std::string& bank, const std::string& preset, uint32_t* handle) {
+  if (previewBank == bank && previewPreset == preset) {
+    if (!previewError.empty()) {
+      screenMessage(MESSAGE_TIME_ERROR, "%s", previewError.c_str());
+      return -1;
     }
-    return r;
-  });
+    if (previewPrepared) {
+      if (!soundbank::prepared(previewHandle)) {
+        audioManager.pause();
+        try {
+          previewHandle = soundbank::publish(previewPrepared);
+        } catch (const std::exception& e) {
+          audioManager.resume();
+          screenMessage(MESSAGE_TIME_ERROR, "%s", e.what());
+          return -1;
+        }
+        audioManager.resume();
+      }
+      *handle = previewHandle;
+      return 1;
+    }
+    if (job.valid() && target == -2) return 0;
+  }
+  if (job.valid()) return 0;
+  audioManager.stopSamplePreview();
+  audioManager.pause();
+  chipnomadCollectSoundbanks(chipnomadState);
+  audioManager.resume();
+  previewPrepared.reset();
+  cache.trim();
+  previewBank = bank;
+  previewPreset = preset;
+  previewError.clear();
+  previewHandle = 0;
+  target = -2;
+  preparationFrames = 2;
+  status = "Preparing audition...";
+  loadingStage.store(soundbank::LoadStage::reading, std::memory_order_relaxed);
+  job = prepareBank(bank, preset);
+  return 0;
 }
 void soundbankCycle(int instrument, int direction) {
   if (!chipnomadState || instrument < 0 || instrument >= PROJECT_MAX_INSTRUMENTS) return;
@@ -242,6 +292,12 @@ void soundbankPoll() {
     if (ready == std::future_status::deferred && preparationFrames-- > 0) return;
     if (ready != std::future_status::ready && ready != std::future_status::deferred) return;
     auto r = job.get();
+    if (target == -2) {
+      previewPrepared = std::move(r.preset);
+      previewError = std::move(r.error);
+      status = previewError.empty() ? "Audition ready" : previewError;
+      return;
+    }
     // Only the latest requested preset is published when cycling outruns decoding.
     if (pendingInstrument == target && target >= 0) {
       loadPending();
@@ -298,7 +354,10 @@ void soundbankPoll() {
 }
 
 void soundbankShutdown() {
+  if (audioManager.stopSamplePreview) audioManager.stopSamplePreview();
   if (job.valid()) job.get();
+  previewPrepared.reset();
+  previewBank.clear(); previewPreset.clear(); previewError.clear(); previewHandle = 0;
   pendingInstrument=-1; entries.clear(); scanned=false; status.clear(); scanError.clear();
   failed.clear(); refreshPending=false;
   soundbank::collect([](uint32_t) { return false; });

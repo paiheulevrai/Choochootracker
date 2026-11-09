@@ -34,6 +34,9 @@ struct AudioManager {
   int (*previewSCWF)(const char* path, const InstrumentSCWF* settings, int oscillator);
   int (*previewBYOWTBL)(const char* path, const InstrumentBYOWTBL* settings, int oscillator);
   void (*stopSamplePreview)(void);
+  int (*preparePreviewFile)(const char* path, const Instrument* instrument, int oscillator);
+  int (*preparePreviewInstrument)(const Project* project, int instrument, const Instrument* patch);
+  void (*previewMidiNote)(uint8_t note, uint8_t velocity);
   uint8_t trackStates[PROJECT_MAX_TRACKS];
 };
 

@@ -305,6 +305,7 @@ void playbackInit(PlaybackState* state, Project* project);
  * @return 1 if any track is playing, 0 if all tracks are stopped
  */
 int playbackIsPlaying(PlaybackState* state);
+int playbackTransportIsPlaying(const PlaybackState* state);
 
 /**
  * Starts song playback from the specified position

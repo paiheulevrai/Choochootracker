@@ -19,3 +19,6 @@ std::string soundbankInstrumentRange(int instrument);
 std::string soundbankRoot();
 
 void soundbankShutdown();
+// 1 ready, 0 still preparing, -1 failed. Does not modify a project instrument.
+int soundbankPreparePreview(const std::string& bank, const std::string& preset, uint32_t* handle);
+bool soundbankPreviewActive();

@@ -5,6 +5,7 @@
 #include "opll_presets.h"
 #include "chipnomad_lib.h"
 #include "utils.h"
+#include "audio_manager.h"
 #include <cstring>
 
 static int presetButtonDown;
@@ -23,10 +24,20 @@ static void selectPreset(int program) {
   screenSetup(&screenInstrument, cInstrument);
 }
 static void cancelPreset() { previewPreset(0, false); screenSetup(&screenInstrument, cInstrument); }
+static int prepareMidiPreset(int program) {
+  Instrument patch = *current();
+  if (!opllApplyPreset(&patch, program)) return -1;
+  if (audioManager.preparePreviewInstrument(&chipnomadState->project, cInstrument, &patch)) {
+    screenMessage(MESSAGE_TIME_ERROR, "Cannot prepare preset audition");
+    return -1;
+  }
+  return 1;
+}
 static void openPresets() {
   for (int i = 0; i < 15; ++i) programs[i] = {opllPresetName(current()->type, i + 1), i + 1, nullptr, 0};
   selectionPopupSetup(current()->type == InstrumentType::VRC7 ? "VRC7 PROGRAMS" : "YM2413 PROGRAMS",
-    programs, 15, current()->chip.opll.program, selectPreset, cancelPreset, true, previewPreset);
+    programs, 15, current()->chip.opll.program, selectPreset, cancelPreset, true, previewPreset,
+    false, false, nullptr, false, prepareMidiPreset);
   screenSetup(&screenSelectionPopup, 0);
 }
 static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) : row == 4 || row == 5 ? 2 : row == 7 ? 5 : 1; }

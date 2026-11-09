@@ -5,6 +5,7 @@
 #include "corelib_audio.h"
 #include "corelib_file.h"
 #include "chipnomad_lib.h"
+#include "audio_manager.h"
 #include "opl_patch.h"
 #include "four_op_patch.h"
 #include "dx7_patch.h"
@@ -121,6 +122,18 @@ void preview(int index,bool held){
   else stopPreview();
   audioUnlock();
 }
+int prepareMidi(int index) {
+  Instrument patch{};
+  if (!candidate(index, patch)) {
+    screenMessage(MESSAGE_TIME_ERROR, "Preset could not load");
+    return -1;
+  }
+  if (audioManager.preparePreviewInstrument(&chipnomadState->project, cInstrument, &patch)) {
+    screenMessage(MESSAGE_TIME_ERROR, "Cannot prepare preset audition");
+    return -1;
+  }
+  return 1;
+}
 void cancel(){stopPreview();if(importing)bankFilter=bankBeforeImport;importing=false;screenSetup(&screenInstrument,cInstrument);}
 void cancelSounds(){cancel();}
 bool matchesCollection(int index){
@@ -183,7 +196,7 @@ void showSounds(){
       list.push_back({userSounds[i].name.c_str(),int(catalog.size()+i),nullptr,0});
     if(list.empty())list.push_back({"(No compatible presets)",-1,nullptr,0});
     char title[32];snprintf(title,sizeof(title),"%s PRESETS",instrumentTypeName(current()->type));
-    selectionPopupSetup(title,list.data(),int(list.size()),selected(),select,cancelSounds,true,preview);
+    selectionPopupSetup(title,list.data(),int(list.size()),selected(),select,cancelSounds,true,preview,false,false,nullptr,false,prepareMidi);
     screenSetup(&screenSelectionPopup,0);return;
   }
   categoryNames={"All"};
@@ -196,7 +209,7 @@ void showSounds(){
     if(c==0||categoryNames[c]=="Unsorted")sounds[c].push_back({userSounds[i].name.c_str(),int(catalog.size()+i),nullptr,0,userSounds[i].path.c_str()});
   for(size_t c=0;c<categoryNames.size();++c)categoryItems.push_back({categoryNames[c].c_str(),-1,sounds[c].data(),int(sounds[c].size())});
   char title[32];snprintf(title,sizeof(title),"%s PRESETS",instrumentTypeName(importing?InstrumentType::DX7:current()->type));
-  selectionPopupSetup(title,categoryItems.data(),categoryItems.size(),selected(),select,cancelSounds,false,preview);screenSetup(&screenSelectionPopup,0);
+  selectionPopupSetup(title,categoryItems.data(),categoryItems.size(),selected(),select,cancelSounds,false,preview,false,false,nullptr,false,prepareMidi);screenSetup(&screenSelectionPopup,0);
 }
 int sidField(int col,int row){
  if(row==5)return col?sidPulse:sidWave;

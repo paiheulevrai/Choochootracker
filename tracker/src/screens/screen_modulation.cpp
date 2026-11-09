@@ -65,7 +65,10 @@ static void cycleDestination(Instrument* instrument, Modulation* mod, int direct
 static void setModulationType(Modulation* mod, ModulationType type, int modIndex) {
   ModulationType oldType = mod->type;
   mod->type = type;
-  if (oldType == type || (modulationIsLiveStick(oldType) && modulationIsLiveStick(type))) return;
+  if (oldType == type) return;
+  mod->destination = 0;
+  mod->amount = 0;
+  if (modulationIsLiveStick(oldType) && modulationIsLiveStick(type)) return;
   mod->p1 = modulationIsLiveStick(type) ? modIndex : 0;
   mod->p2 = type == ModulationType::StickRate ? 24 : 0;
   mod->p3 = type == ModulationType::ADSR ? 255 :
@@ -81,6 +84,7 @@ static void setModulationType(Modulation* mod, ModulationType type, int modIndex
 
 static void sourceSelected(int value) {
   Modulation* mod = &chipnomadState->project.instruments[cInstrument].modulation[editedModIndex];
+  const Modulation previous = *mod;
   if (value == audioEnvelopeSelection || value == audioSignalSelection) {
     setModulationType(mod, ModulationType::Audio, editedModIndex);
     if (value == audioEnvelopeSelection) mod->p5 = (uint8_t)AudioModulationMode::envelope;
@@ -93,6 +97,11 @@ static void sourceSelected(int value) {
     if (mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate)) sequenceGateDefaults(mod);
   } else {
     setModulationType(mod, static_cast<ModulationType>(value), editedModIndex);
+  }
+  if ((mod->type == ModulationType::Audio && previous.p5 != mod->p5) ||
+      (mod->type == ModulationType::Sequence && previous.p1 != mod->p1)) {
+    mod->destination = 0;
+    mod->amount = 0;
   }
   projectModified = 1;
   screenSetup(&screenModulation, cInstrument);
@@ -689,6 +698,8 @@ static int onEdit(int col, int row, enum CellEditAction action) {
         if ((up && audioModulationMode(*mod) == AudioModulationMode::envelope) ||
             (down && audioModulationMode(*mod) != AudioModulationMode::envelope)) {
           mod->p5 = (uint8_t)(up ? AudioModulationMode::wave : AudioModulationMode::envelope);
+          mod->destination = 0;
+          mod->amount = 0;
           screenFullRedraw(&screenData);
           handled = 1;
           break;

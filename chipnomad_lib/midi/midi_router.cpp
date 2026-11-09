@@ -32,8 +32,10 @@ struct MidiRouterState {
   int heldInstrument[MIDI_ROUTER_HELD_NOTES_MAX];
   uint8_t heldTracks[MIDI_ROUTER_HELD_NOTES_MAX];
   uint8_t heldVelocity[MIDI_ROUTER_HELD_NOTES_MAX];
+  uint8_t heldBrowser[MIDI_ROUTER_HELD_NOTES_MAX];
   int heldCount;
   unsigned resetTracks;
+  bool resetBrowser;
   uint8_t ccValues[16][128];
   uint32_t ccSerials[16][128];
   uint32_t ccPressCounts[16][128];
@@ -222,7 +224,8 @@ void midiRouterSetChannelInstrumentMap(MidiRouterState* router, const int8_t cha
 void midiRouterResetHeldNotes(MidiRouterState* router) {
   if (!router) return;
   for (int i = 0; i < router->heldCount; ++i)
-    router->resetTracks |= 1u << router->heldTracks[i];
+    if (router->heldBrowser[i]) router->resetBrowser = true;
+    else router->resetTracks |= 1u << router->heldTracks[i];
   router->heldCount = 0;
 }
 
@@ -288,8 +291,15 @@ static void handleClockTick(MidiRouterState* router, uint64_t arrival) {
 }
 
 void midiRouterProcessInput(MidiRouterState* router, int fallbackInstrument, int selectedTrack,
-                            int autoChannel, void (*receive)(void*, const MidiPreviewIntent&), void* userdata) {
+                            int autoChannel, void (*receive)(void*, const MidiPreviewIntent&), void* userdata,
+                            int (*autoTrack)(void*, int instrument, int selectedTrack), bool browserPreview) {
   if (!router || !receive) return;
+  if (router->resetBrowser) {
+    MidiPreviewIntent intent{};
+    intent.stop = intent.browserPreview = 1;
+    receive(userdata, intent);
+    router->resetBrowser = false;
+  }
   for (int t = 0; t < PROJECT_MAX_TRACKS; ++t) if (router->resetTracks & (1u << t)) {
     MidiPreviewIntent intent{};
     intent.track = (uint8_t)t;
@@ -357,11 +367,14 @@ void midiRouterProcessInput(MidiRouterState* router, int fallbackInstrument, int
     if (messageType == 0x90 && event.data2 > 0) {
       int note = (int)event.data1 - 12;
       if (note < 0 || note >= 128) continue;
-      if (selectedTrack < 0 || selectedTrack >= PROJECT_MAX_TRACKS) continue;
+      bool browser = isAuto && browserPreview;
+      int destination = browser ? 0 : isAuto && autoTrack ? autoTrack(userdata, instrument, selectedTrack) : selectedTrack;
+      if (destination < 0 || destination >= PROJECT_MAX_TRACKS) continue;
       if (router->heldCount == MIDI_ROUTER_HELD_NOTES_MAX) {
         midiRouterResetHeldNotes(router);
         MidiPreviewIntent intent{};
-        intent.track = (uint8_t)selectedTrack;
+        intent.track = (uint8_t)destination;
+        intent.browserPreview = browser;
         intent.stop = 1;
         receive(userdata, intent);
         continue;
@@ -370,15 +383,17 @@ void midiRouterProcessInput(MidiRouterState* router, int fallbackInstrument, int
       router->heldNotes[held] = (uint8_t)note;
       router->heldChannels[held] = channel;
       router->heldInstrument[held] = instrument;
-      router->heldTracks[held] = (uint8_t)selectedTrack;
+      router->heldTracks[held] = (uint8_t)destination;
       router->heldVelocity[held] = event.data2;
+      router->heldBrowser[held] = browser;
       MidiPreviewIntent intent{};
       intent.note = (uint8_t)note;
       intent.instrument = instrument;
-      intent.track = (uint8_t)selectedTrack;
+      intent.track = (uint8_t)destination;
       intent.velocity = event.data2;
       intent.noteOn = 1;
       intent.autoChannel = isAuto;
+      intent.browserPreview = browser;
       intent.channel = channel;
       intent.timestampMicros = event.timestampMicros ? event.timestampMicros : midiRouterNowMicros();
       receive(userdata, intent);
@@ -390,23 +405,27 @@ void midiRouterProcessInput(MidiRouterState* router, int fallbackInstrument, int
       }
       if (foundIdx < 0) continue;
       uint8_t track = router->heldTracks[foundIdx];
+      uint8_t browser = router->heldBrowser[foundIdx];
       int wasCurrent = 1;
       for (int i = foundIdx + 1; i < router->heldCount; ++i)
-        if (router->heldTracks[i] == track) wasCurrent = 0;
+        if (router->heldTracks[i] == track && router->heldBrowser[i] == browser) wasCurrent = 0;
       for (int i = foundIdx; i < router->heldCount - 1; i++) {
         router->heldNotes[i] = router->heldNotes[i + 1];
         router->heldChannels[i] = router->heldChannels[i + 1];
         router->heldInstrument[i] = router->heldInstrument[i + 1];
         router->heldTracks[i] = router->heldTracks[i + 1];
         router->heldVelocity[i] = router->heldVelocity[i + 1];
+        router->heldBrowser[i] = router->heldBrowser[i + 1];
       }
       router->heldCount--;
       if (!wasCurrent) continue;
       MidiPreviewIntent intent{};
       intent.track = track;
+      intent.browserPreview = browser;
       intent.stop = 1;
       intent.timestampMicros = event.timestampMicros ? event.timestampMicros : midiRouterNowMicros();
-      for (int i = router->heldCount - 1; i >= 0; --i) if (router->heldTracks[i] == track) {
+      for (int i = router->heldCount - 1; i >= 0; --i)
+        if (router->heldTracks[i] == track && router->heldBrowser[i] == browser) {
         intent.note = router->heldNotes[i];
         intent.instrument = router->heldInstrument[i];
         intent.velocity = router->heldVelocity[i];

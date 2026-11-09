@@ -141,7 +141,7 @@ static int input(int isKeyDown, int keys, int) {
   if (input == PopupEditInput::hold) return 1;
   if (input == PopupEditInput::open) {
     loadSlot = row - 3;
-    fileBrowserSetupWithPreview("LOAD SR WAVETABLE", ".wav", appSettings.srWavetablePath, loaded, cancelled, preview);
+    fileBrowserSetupWithPreview("LOAD SR WAVETABLE", ".wav", appSettings.srWavetablePath, loaded, cancelled, preview, loadSlot);
     screenSetup(&screenFileBrowser, 0); return 1;
   }
   return 0;

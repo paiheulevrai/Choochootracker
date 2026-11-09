@@ -2,6 +2,8 @@
 
 #include "corelib_gfx.h"
 #include "chipnomad_lib.h"
+#include "audio_manager.h"
+#include "midi/midi_router.h"
 #include <string.h>
 #include <chrono>
 #include <algorithm>
@@ -28,6 +30,57 @@ static void (*onSelected)(int);
 static void (*onCancelled)(void);
 static void (*onPreview)(int, bool);
 static bool previewHeld, editPending;
+static int (*onPrepareMidi)(int);
+static const AppScreen* previewOwner;
+static int midiValue = -1;
+static MidiPreviewIntent midiIntent{};
+static bool midiPending;
+
+bool selectionPopupHasMidiPreview(void) {
+  return currentScreen == previewOwner && onPrepareMidi;
+}
+
+static void stopMidiPreview() {
+  const bool prepared = midiValue >= 0;
+  midiPending = false;
+  midiValue = -1;
+  if (prepared && audioManager.stopSamplePreview) audioManager.stopSamplePreview();
+}
+
+static void serviceMidiPreview() {
+  if (!selectionPopupHasMidiPreview() ||
+      (chipnomadState && chipnomadGetPlaybackStatus(chipnomadState)->transportPlaying)) {
+    stopMidiPreview();
+    return;
+  }
+  if (!midiPending) return;
+  int result = onPrepareMidi(midiValue);
+  if (result == 0) return; // Asynchronous bank preparation is still pending.
+  midiPending = false;
+  if (result < 0) { midiValue = -1; return; }
+  audioManager.previewMidiNote(midiIntent.note, midiIntent.velocity);
+}
+
+void selectionPopupMidiInput(const MidiPreviewIntent& intent) {
+  if (intent.stop) {
+    if (midiPending) midiValue = -1;
+    midiPending = false;
+    audioManager.previewMidiNote(0, 0);
+    return;
+  }
+  if (rootCount <= 0 || !selectionPopupHasMidiPreview()) return;
+  const auto* category = &rootItems[categoryIndex];
+  int value = activePanel == 1 && category->childCount ? category->children[itemIndex].value : category->value;
+  if (value < 0) { stopMidiPreview(); return; }
+  midiIntent = intent;
+  if (value != midiValue) {
+    stopMidiPreview();
+    midiValue = value;
+    midiPending = true;
+    serviceMidiPreview();
+  } else if (midiPending) serviceMidiPreview();
+  else audioManager.previewMidiNote(intent.note, intent.velocity);
+}
 static std::chrono::steady_clock::time_point selectionSince;
 static size_t marqueeOffset;
 static void resetMarquee() { selectionSince=std::chrono::steady_clock::now();marqueeOffset=0; }
@@ -56,7 +109,11 @@ static void selectCurrentValue() {
 
 void selectionPopupSetup(const char* popupTitle, const SelectionItem* items,
                          int count, int selectedValue,
-                         void (*selected)(int), void (*cancelled)(void), bool wide, void (*preview)(int, bool), bool collections, bool focusPreset, const char* (*loadingStatus)(), bool folders) {
+                         void (*selected)(int), void (*cancelled)(void), bool wide, void (*preview)(int, bool), bool collections, bool focusPreset, const char* (*loadingStatus)(), bool folders,
+                         int (*prepareMidi)(int), const AppScreen* owner) {
+  stopMidiPreview();
+  onPrepareMidi = prepareMidi;
+  previewOwner = owner ? owner : &screenSelectionPopup;
   onStatus=loadingStatus; folderNavigation=folders; statusText.clear();
   collectionLayout=collections;
   resetMarquee();
@@ -77,7 +134,7 @@ void selectionPopupSetup(const char* popupTitle, const SelectionItem* items,
 
 bool selectionPopupIsFullWidth(void) { return fullWidth; }
 
-static void setup(int input) {}
+static void setup(int input) { stopMidiPreview(); }
 
 static void fullRedraw() {
   gfxClear();
@@ -158,6 +215,7 @@ static void fullRedraw() {
 }
 
 static void draw() {
+  serviceMidiPreview();
   if(!collectionLayout || rootCount<=0)return;
   const auto* category=currentCategory();
   const char* label=activePanel==1 && category->childCount ? category->children[itemIndex].label : category->label;
@@ -174,6 +232,8 @@ static void draw() {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  if (isKeyDown && (keys == keyUp || keys == keyDown || keys == keyLeft || keys == keyRight ||
+      keys == keyOpt || keys == keyEdit || keys == (keyEdit | keyPlay))) stopMidiPreview();
   if (collectionLayout && (keys == keyPlay || keys == (keyShift | keyPlay))) return 0;
   if (onPreview && keys == (keyEdit | keyPlay) && isKeyDown) {
     const auto* category = currentCategory();
