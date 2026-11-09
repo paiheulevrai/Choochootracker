@@ -1,5 +1,42 @@
 # ChooChooTracker changelog
 
+## v1.0.24-alpha (draft)
+
+Changes since v1.0.23-alpha.
+
+- Add MIDI note recording using REC: stopped Phrase step entry, live Quantized
+  and Free recording, velocity, NOTE OFF and note erasure. Auto Channel follows
+  editor context and unique instrument/track associations without moving the UI.
+- Audition highlighted samples, wavetables, native/FM presets and SoundFont/SFZ/EXS
+  presets through Auto MIDI while stopped, without committing selections or
+  writing phrases. Preserve pitch, velocity, release and cancellation.
+- Unify Simplified editing around automatic bar isolation in the canonical
+  arrangement. Switch Classic/Simplified/Groovebox without converting projects;
+  add pattern length defaults and merge-up actions in Song and Chain.
+- Add track audio envelope following and WAVE, AM, RING, DIODE, FOLD, XOR,
+  COMPARE and formant-preserving VOCODER cross-modulation. Muted sources remain
+  available to modulation; changing a source clears its old route and depth.
+- Add Fatty, the modern 808 bass engine, and DigiSophie drum models. Improve
+  Fatty transient handling, release and bounce stability; redesign Bogie Clap
+  with retriggered hands and an independent tail.
+- Add diffusing Echoverb, looping EUC and persistent REP/RTO sequencer commands,
+  contextual FX hints and cross-platform export controls, including Web.
+- Fix stopped MIDI audition transport counters, pending editor navigation,
+  volume-slide scaling, slow-tempo WAV export, insert transitions, Song
+  selections and playback sequencing.
+- Improve handheld remapping and console-only stick calibration; fix ROCKNIX
+  Select input, Android working-folder BMP loading and F-Droid source builds.
+- Add experimental universal Intel/Apple Silicon macOS packages, validated on
+  both architectures. Improve PortMaster asset extraction and Library packaging,
+  preserve writable macOS resources and reduce unnecessary Layer processing.
+- Align application, NextUI Pak and Android version names at 1.0.24-alpha;
+  increment Android version code to 24.
+
+Compatibility: existing Bogie Clap presets still load but sound different;
+their Noise and FM/ToneMix controls now mean Width and Slaps. Experimental
+projects using the removed engine-specific audio FM/PM modes are rejected
+explicitly rather than silently changing sound. Back up projects before upgrading.
+
 ## v1.0.23-alpha (draft)
 
 Changes since v1.0.21-alpha, including the v1.0.22-alpha NextUI hotfix.

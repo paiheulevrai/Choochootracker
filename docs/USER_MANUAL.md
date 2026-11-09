@@ -2,6 +2,13 @@
 
 ChooChooTracker is an 8-track music tracker for handheld consoles.
 
+Release **v1.0.24-alpha** adds MIDI recording and stopped browser audition,
+on-the-fly Simplified editing, track audio cross-modulation and vocoder,
+Fatty/DigiSophie engines, Echoverb and experimental universal macOS packages.
+Back up projects before upgrading: existing Bogie Clap presets load with the
+redesigned sound, and removed experimental engine-specific audio FM/PM modes
+are rejected explicitly. See [the changelog](../CHANGELOG.md) for release details.
+
 ## Three-view text prototype
 
 Project -> View mode - Editing style -> Mode cycles through Classic, Groovebox and Simplified with

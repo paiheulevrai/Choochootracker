@@ -1,0 +1,5 @@
+MIDI recording and browser audition with pitch, velocity and Note Off.
+Simplified on-the-fly bar editing; track audio cross-modulation and vocoder.
+Fatty bass and DigiSophie drums, redesigned Bogie Clap, Echoverb and EUC/REP/RTO FX.
+Improved exports, gamepad remapping, modulation cleanup and working-folder images.
+Back up projects before upgrading; existing Clap presets sound different.
