@@ -1232,6 +1232,38 @@ int main(int argc,char** argv){
     printf("All delay time visual hints passed\n");
     chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
   }
+  if(argc==3 && !strcmp(argv[2],"--bogie-clap-only")) {
+    auto& instrument=prepareHomepageInstrument(InstrumentType::DrumSynth,"Noise Clap");
+    screenSetup(&screenInstrument,0);appDraw();
+    for(int model=0;model<3;++model)
+      require(screenInstrumentDrumSynth.onEdit(0,3,CellEditAction::increase),"Bogie model editable");
+    auto& d=instrument.chip.drumSynth;
+    require(d.engine==DrumSynthEngine::clap,"Clap selected");
+    require(drumSynthClapSlaps(d.fm)==4,"Clap starts with four hands");
+    require(screenInstrumentDrumSynth.onEdit(0,8,CellEditAction::clear),"Slaps clear handled");
+    for(int hands=1;hands<=8;++hands) {
+      require(drumSynthClapSlaps(d.fm)==hands,"Slaps edits one hand at a time");
+      require(screenInstrumentDrumSynth.onEdit(0,8,CellEditAction::increase),"Slaps increment handled");
+    }
+    require(drumSynthClapSlaps(d.fm)==8,"Slaps stops at eight hands");
+    d.noise=255;currentScreen->fullRedraw();capture("bogie-clap-eight-wide");
+    for(int hands=8;hands>1;--hands)
+      require(screenInstrumentDrumSynth.onEdit(0,8,CellEditAction::decrease),"Slaps decrement handled");
+    require(drumSynthClapSlaps(d.fm)==1,"Slaps decrements to one");
+    require(screenInstrumentDrumSynth.onEdit(0,3,CellEditAction::decrease),"leave Clap");
+    screenInstrumentDrumSynth.cursorRow=3;
+    require(screenInstrumentDrumSynth.onInput(1,keyEdit|keyRight,0),"cycle to Clap");
+    screenInstrumentDrumSynth.onInput(0,0,0);
+    require(d.engine==DrumSynthEngine::clap&&drumSynthClapSlaps(d.fm)==4,"cycling to Clap starts at four hands");
+    capture("bogie-clap-four-wide");
+    prepareHomepageInstrument(InstrumentType::DigiSophie,"Sophie");
+    screenSetup(&screenInstrument,0);
+    const auto feedback=instrument.chip.drumSynth.fm;
+    require(screenInstrumentDrumSynth.onEdit(0,8,CellEditAction::increase),"Sophie Feedback editable");
+    require(instrument.chip.drumSynth.fm==feedback+1,"Sophie retains raw Feedback editing");
+    printf("Bogie Clap counts, defaults, cycling and DigiSophie editing passed\n");
+    chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--drum-selector-only")) {
     prepareHomepageInstrument(InstrumentType::DrumSynth,"Bogie");
     screenSetup(&screenInstrument,0);appDraw();

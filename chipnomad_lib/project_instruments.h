@@ -340,6 +340,9 @@ struct InstrumentAChChid {
 
 enum class DrumSynthEngine : uint8_t { kick, snare, hat, clap, tom, rim, fm, noise, cowbell, cymbal, shaker, clave, totalCount };
 
+int drumSynthClapSlaps(uint8_t control);
+uint8_t drumSynthClapSlapsControl(int slaps);
+
 struct InstrumentDrumSynth : InstrumentVoicePostSettings {
   DrumSynthEngine engine;
   uint8_t decay;

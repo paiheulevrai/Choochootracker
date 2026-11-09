@@ -338,6 +338,13 @@ static const char* modNameDrumSynth(int modIndex) {
 int drumSynthMacroUsed(DrumSynthEngine engine, int macro) {
   return (int)engine >= 0 && (int)engine < (int)DrumSynthEngine::totalCount && macro >= 0 && macro < 6;
 }
+int drumSynthClapSlaps(uint8_t control) {
+  return control <= 128 ? 1 + (control * 3 + 64) / 128 : 4 + ((control - 128) * 4 + 63) / 127;
+}
+uint8_t drumSynthClapSlapsControl(int slaps) {
+  slaps = std::clamp(slaps, 1, 8);
+  return slaps <= 4 ? ((slaps - 1) * 128 + 1) / 3 : 128 + ((slaps - 4) * 127 + 2) / 4;
+}
 static int initDrumSynthInstrument(Instrument* instrument) {
   initCommon(instrument); instrument->type = InstrumentType::DrumSynth;
   InstrumentDrumSynth* d = &instrument->chip.drumSynth;
@@ -982,7 +989,11 @@ const char* instrumentModDestinationName(InstrumentType type, int destination) {
 
 const char* instrumentModDestinationNameForInstrument(const Instrument* instrument, int destination) {
   if (instrument && destination >= 3 && destination <= 8) {
-    if (instrument->type == InstrumentType::MME) {
+    if (instrument->type == InstrumentType::DrumSynth &&
+        instrument->chip.drumSynth.engine == DrumSynthEngine::clap) {
+      static const char* names[] = {"Decay", "Tone", "Spacing", "Width", "Slaps", "Drive"};
+      return names[destination - 3];
+    } else if (instrument->type == InstrumentType::MME) {
       static const char* sync[] = {"Waves", "Interval", "SyncAmt", "Reset", "Feedback", "Shaper"};
       static const char* logic[] = {"Waves", "Interval", "Amount", "Logic", "Feedback", "Shaper"};
       static const char* vocode[] = {"Waves", "Interval", "Analyze", "Formant", "Feedback", "Shaper"};

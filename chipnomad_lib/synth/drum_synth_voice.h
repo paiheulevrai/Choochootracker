@@ -23,6 +23,7 @@ class DrumSynthVoice {
   float random();
   float oscillator(float frequency, int shape, int slot);
   float sophieSample();
+  void renderClap(float* output, size_t frames);
   const InstrumentDrumSynth* instrument_;
   InstrumentDrumSynth parameters_;
   VoicePostProcessor<> post_;
@@ -35,6 +36,9 @@ class DrumSynthVoice {
   size_t sophieRead_;
   float sophiePosition_, sophieLeft_, sophieRight_, sophieDecay_;
   bool digiSophie_, sophieTrigger_;
+  int clapSpacing_, clapCountdown_, clapRemaining_;
+  float clapSlap_, clapTail_, clapSlapDecay_, clapTailDecay_;
+  float clapLow_, clapHigh_, clapLowAlpha_, clapHighAlpha_, clapMakeup_;
 };
 
 #endif

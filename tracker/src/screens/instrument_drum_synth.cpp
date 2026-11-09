@@ -9,8 +9,14 @@ static int engineButtonDown;
 static bool digiSophie() { return chipnomadState->project.instruments[cInstrument].type == InstrumentType::DigiSophie; }
 static int lastModel() { return digiSophie() ? 3 : 11; }
 
+static void setEngine(int value) {
+  auto& d = chipnomadState->project.instruments[cInstrument].chip.drumSynth;
+  if (!digiSophie() && value == (int)DrumSynthEngine::clap && d.engine != DrumSynthEngine::clap)
+    d.fm = drumSynthClapSlapsControl(4);
+  d.engine = (DrumSynthEngine)value;
+}
 static void selectEngine(int value) {
-  chipnomadState->project.instruments[cInstrument].chip.drumSynth.engine = (DrumSynthEngine)value;
+  setEngine(value);
   projectModified = 1;
   screenSetup(&screenInstrument, cInstrument);
 }
@@ -38,7 +44,7 @@ static const char* macroName(DrumSynthEngine e, int macro) {
   static const char* kick[] = {"Decay", "Tone", "Sweep", "Click", "Harm", "Drive"};
   static const char* snare[] = {"Decay", "Tone", "Snap", "Wire", "Body", "Drive"};
   static const char* hat[] = {"Decay", "Tone", "PtchEnv", "Noise", "Metal", "Drive"};
-  static const char* clap[] = {"Decay", "Tone", "Spacing", "Noise", "ToneMix", "Drive"};
+  static const char* clap[] = {"Decay", "Tone", "Spacing", "Width", "Slaps", "Drive"};
   static const char* tom[] = {"Decay", "Tone", "Sweep", "Noise", "Harm", "Drive"};
   static const char* rim[] = {"Decay", "Tone", "Sweep", "Noise", "Ratio", "Drive"};
   static const char* fm[] = {"Decay", "Ratio", "PtchEnv", "Noise", "Index", "Drive"};
@@ -92,8 +98,11 @@ static void drawField(int col, int row, CellState state) {
     gfxSetFgColor(fieldNameColor(state));
     gfxPrint(x + 3, 6, engineName(d->engine));
   } else if (used) {
-    if (uint8_t* value = macro(d, row - 4))
-      fieldDrawNumber(x, row + 4, *value, state, -1.0f, false, instrumentLivePosition(liveSource1 + row - 4));
+    if (uint8_t* value = macro(d, row - 4)) {
+      const bool slaps = !digiSophie() && d->engine == DrumSynthEngine::clap && row == 8;
+      fieldDrawNumber(x, row + 4, slaps ? drumSynthClapSlaps(*value) : *value, state,
+        slaps ? *value / 255.0f : -1.0f, false, instrumentLivePosition(liveSource1 + row - 4));
+    }
   } else gfxPrint(x, row + 4, "--");
 }
 bool instrumentDrumSynthLiveCell(int control, int* col, int* row) {
@@ -108,7 +117,16 @@ static int onEdit(int col, int row, CellEditAction action) {
   if (row < 3) return instrumentCommonOnEdit(col, row, action);
   InstrumentDrumSynth* d = &chipnomadState->project.instruments[cInstrument].chip.drumSynth;
   if (col && row >= 4 && row <= 8) { int ok = instrumentCommonOnEditVoicePost(col, row, action, d); if (ok) projectModified = 1; return ok; }
-  int ok = row == 3 ? edit8noLast(action, (uint8_t*)&d->engine, 1, 0, lastModel()) :
+  int ok;
+  if (!digiSophie() && d->engine == DrumSynthEngine::clap && !col && row == 8) {
+    uint8_t slaps = drumSynthClapSlaps(d->fm);
+    ok = edit8noLast(action, &slaps, 1, 1, 8);
+    if (ok && slaps != drumSynthClapSlaps(d->fm)) d->fm = drumSynthClapSlapsControl(slaps);
+  } else if (row == 3) {
+    uint8_t engine = (uint8_t)d->engine;
+    ok = edit8noLast(action, &engine, 1, 0, lastModel());
+    if (ok) setEngine(engine);
+  } else ok =
     (drumSynthMacroUsed(d->engine, row - 4) && macro(d, row - 4) ? edit8noLast(action, macro(d, row - 4), 16, 0, 255) : 0);
   if (ok) { projectModified = 1; screenFullRedraw(&screenInstrumentDrumSynth); }
   return ok;
@@ -117,8 +135,9 @@ static int onInput(int isKeyDown, int keys, int) {
   if (screenInstrumentDrumSynth.cursorRow != 3) { engineButtonDown = 0; return 0; }
   PopupEditInput input = popupEditInput(isKeyDown, keys, &engineButtonDown);
   if (input == PopupEditInput::cycle) {
-    cycle8((uint8_t*)&chipnomadState->project.instruments[cInstrument].chip.drumSynth.engine,
-      keys == (keyEdit | keyRight) ? 1 : -1, 0, lastModel(), 0);
+    uint8_t engine = (uint8_t)chipnomadState->project.instruments[cInstrument].chip.drumSynth.engine;
+    cycle8(&engine, keys == (keyEdit | keyRight) ? 1 : -1, 0, lastModel(), 0);
+    setEngine(engine);
     projectModified = 1; screenFullRedraw(&screenInstrumentDrumSynth); return 1;
   }
   if (input == PopupEditInput::hold) return 1;

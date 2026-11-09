@@ -16,12 +16,20 @@ void DrumSynthVoice::init(float sampleRate) {
   sophieRead_ = DS_BLOCK_SIZE;
   digiSophie_ = sophieTrigger_ = false;
   sophiePosition_ = sophieLeft_ = sophieRight_ = 0.0f;
+  clapSpacing_ = clapCountdown_ = clapRemaining_ = 0;
+  clapSlap_ = clapTail_ = clapLow_ = clapHigh_ = 0.0f;
+  clapSlapDecay_ = expf(-1.0f / (sampleRate_ * 0.0028f));
+  clapTailDecay_ = clapLowAlpha_ = clapHighAlpha_ = clapMakeup_ = 0.0f;
 }
 
 void DrumSynthVoice::configure(const InstrumentDrumSynth* instrument, float pitchCents,
                                float gain, uint16_t cutoffHz, uint8_t resonance, bool digiSophie) {
   const bool decayChanged = !instrument_ || digiSophie_ != digiSophie ||
     (instrument && parameters_.decay != instrument->decay);
+  const bool enteringClap = !instrument_ || digiSophie_ ||
+    parameters_.engine != DrumSynthEngine::clap;
+  const bool clapBandChanged = enteringClap || (instrument &&
+    (parameters_.tone != instrument->tone || parameters_.noise != instrument->noise));
   if (digiSophie_ != digiSophie) kill();
   digiSophie_ = digiSophie;
   if (instrument) parameters_ = *instrument;
@@ -49,7 +57,40 @@ void DrumSynthVoice::configure(const InstrumentDrumSynth* instrument, float pitc
     const auto time = [](uint8_t value) { const float n = value / 255.0f; return n * n * 5.0f; };
     post_.setEnvelope(true, time(amp.attack), time(amp.decay), amp.sustain / 255.0f,
       time(amp.release), amp.envelopeShape);
-  } else post_.setEnvelope(false, 0, 0, 1, 0, 0);
+  } else {
+    post_.setEnvelope(false, 0, 0, 1, 0, 0);
+    if (instrument_->engine == DrumSynthEngine::clap) {
+      if (enteringClap) {
+        clapCountdown_ = 0;
+        clapRemaining_ = drumSynthClapSlaps(instrument_->fm);
+        clapSlap_ = clapTail_ = clapLow_ = clapHigh_ = 0.0f;
+      }
+      const float spacing = instrument_->sweep / 255.0f;
+      const float spacingMs = spacing <= 0.5f ? 4.0f + spacing * 12.0f :
+        10.0f + (spacing - 0.5f) * 40.0f;
+      clapSpacing_ = std::max(1, (int)(sampleRate_ * spacingMs * 0.001f + 0.5f));
+      if (decayChanged || enteringClap) {
+        const float decay = instrument_->decay / 255.0f;
+        clapTailDecay_ = expf(-6.9f / (sampleRate_ * (0.018f + decay * decay * 2.0f)));
+      }
+      if (clapBandChanged || clapMakeup_ == 0.0f) {
+        const float width = instrument_->noise / 255.0f;
+        const float halfWidth = width <= 0.5f ? 0.2f + width * 0.9f :
+          0.65f + (width - 0.5f) * 4.3f;
+        const float spread = powf(2.0f, halfWidth);
+        const float center = 650.0f * powf(2.0f, instrument_->tone / 255.0f * 2.0f);
+        const float low = center / spread;
+        const float high = std::min(center * spread, sampleRate_ * 0.4f);
+        clapLowAlpha_ = -expm1f(-2.0f * pi * low / sampleRate_);
+        clapHighAlpha_ = -expm1f(-2.0f * pi * high / sampleRate_);
+        // Exact white-noise power of the difference of these two one-pole lowpasses.
+        const float a = clapLowAlpha_, b = clapHighAlpha_;
+        const float power = a / (2.0f - a) + b / (2.0f - b) -
+          2.0f * a * b / (a + b - a * b);
+        clapMakeup_ = 0.6f / sqrtf(power);
+      }
+    }
+  }
 }
 
 void DrumSynthVoice::noteOn() {
@@ -59,6 +100,11 @@ void DrumSynthVoice::noteOn() {
   float d = instrument_->decay / 255.0f;
   duration_ = 0.018f + d * d * (instrument_->engine == DrumSynthEngine::hat ? 1.55f : 2.0f);
   post_.noteOn(true);
+  if (!digiSophie_ && instrument_->engine == DrumSynthEngine::clap) {
+    clapCountdown_ = 0;
+    clapRemaining_ = drumSynthClapSlaps(instrument_->fm);
+    clapSlap_ = clapTail_ = clapLow_ = clapHigh_ = 0.0f;
+  }
   if (digiSophie_) {
     sophieRead_ = DS_BLOCK_SIZE;
     sophieTrigger_ = true;
@@ -93,6 +139,32 @@ float DrumSynthVoice::sophieSample() {
   return sophieBuffer_[sophieRead_++] * (1.0f / 2147483648.0f);
 }
 
+void DrumSynthVoice::renderClap(float* output, size_t frames) {
+  const float drive = 1.0f + instrument_->drive / 255.0f * 5.5f;
+  const float inverseDriveSaturation = 1.0f / audioTanh(drive);
+  for (size_t i = 0; i < frames; ++i) {
+    if (clapRemaining_ && clapCountdown_ == 0) {
+      clapSlap_ = 1.0f;
+      if (--clapRemaining_ == 0) clapTail_ = 1.0f;
+      clapCountdown_ = clapSpacing_;
+    }
+    if (!clapRemaining_ && clapSlap_ < 0.001f && clapTail_ < 0.001f) {
+      kill(); memset(output + i, 0, (frames - i) * sizeof(float)); break;
+    }
+    const float n = random();
+    clapLow_ += clapLowAlpha_ * (n - clapLow_);
+    clapHigh_ += clapHighAlpha_ * (n - clapHigh_);
+    envelope_ = (clapSlap_ + 0.55f * clapTail_) / 1.55f;
+    const float sample = (clapHigh_ - clapLow_) * clapMakeup_;
+    output[i] = post_.process(audioTanh(sample * drive) * inverseDriveSaturation *
+      envelope_ * 1.352630f);
+    clapSlap_ *= clapSlapDecay_;
+    clapTail_ *= clapTailDecay_;
+    age_ += 1.0f / sampleRate_;
+    if (clapCountdown_ > 0) --clapCountdown_;
+  }
+}
+
 void DrumSynthVoice::render(float* output, size_t frames) {
   if (!output) return;
   if (!active_ || !instrument_) { memset(output, 0, frames * sizeof(float)); return; }
@@ -111,6 +183,10 @@ void DrumSynthVoice::render(float* output, size_t frames) {
         sophieRight_ = sophieSample();
       }
     }
+    return;
+  }
+  if (instrument_->engine == DrumSynthEngine::clap) {
+    renderClap(output, frames);
     return;
   }
   const float tone = instrument_->tone / 255.0f, sweep = instrument_->sweep / 255.0f;
@@ -151,14 +227,6 @@ void DrumSynthVoice::render(float* output, size_t frames) {
           metal += oscillator(base * (ratios[o] + fm * (o + 1) * .20f), 2, o) * modeDecay * (.06f + fm * .06f);
         }
         sample = metal + brightNoise * noise * 1.25f;
-        break;
-      }
-      case DrumSynthEngine::clap: {
-        float spacing = .010f + sweep * .018f;
-        float burst = age_ < .010f || (age_ > spacing && age_ < spacing + .010f) ||
-          (age_ > spacing * 2.0f && age_ < spacing * 2.0f + .010f) ? 1.0f : .55f;
-        sample = brightNoise * (0.25f + noise * .75f) * burst;
-        sample += oscillator(frequency_ * (2.0f + tone * 8.0f), 2, 0) * fm * .55f * fast;
         break;
       }
       case DrumSynthEngine::tom:
