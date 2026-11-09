@@ -1,12 +1,13 @@
 Categories:
   - Multimedia
 # Project sources are MIT; the linked Ableton Link submodule is GPL-2.0-or-later.
+# Bundled preset collections also carry their own licenses and source notices.
 License: GPL-2.0-or-later
 AuthorName: ChooChooTracker contributors
 WebSite: https://github.com/paiheulevrai/Choochootracker
 SourceCode: https://github.com/paiheulevrai/Choochootracker
 IssueTracker: https://github.com/paiheulevrai/Choochootracker/issues
-Changelog: https://github.com/paiheulevrai/Choochootracker/blob/main/CHANGELOG.md
+Changelog: https://github.com/paiheulevrai/Choochootracker/blob/HEAD/CHANGELOG.md
 Summary: Music tracker and groovebox with synthesis, samples, MIDI and WAV export
 Description: |-
     ChooChooTracker is a music tracker and groovebox for Android. Compose songs
@@ -24,18 +25,31 @@ RepoType: git
 Repo: https://github.com/paiheulevrai/Choochootracker.git
 
 Builds:
-  - versionName: 1.0.21-alpha
-    versionCode: 21
-    commit: v1.0.21-alpha
+  - versionName: 1.0.23-alpha
+    versionCode: 23
+    commit: v1.0.23-alpha
     subdir: tracker/platforms/android
     submodules: true
     srclibs:
       - SDL@release-2.32.10
+    # Data-only preset collections: catalogs, CNI parameters and source notices.
+    # Their per-source licenses and provenance are included inside each archive.
+    scanignore:
+      - tracker/packaging/common/instruments/FACTORY/*.zip
+      # Mutable Instruments wavetable data, not executable code.
+      - chipnomad_lib/external/mutable/plaits_alt/resources/waves.bin
     scandelete:
+      # Only the F-Droid build checkout is cleaned, never the upstream repository.
+      - web/dist
+      - tracker/tests/fixtures
       - tracker/packaging/rg35xx/j2k.so
       - tracker/platforms/android/app/src/main/jniLibs/arm64-v8a/libSDL2.so
       - tracker/platforms/android/app/src/main/jniLibs/armeabi-v7a/libSDL2.so
-      - tracker/platforms/android/gradle/wrapper/gradle-wrapper.jar
+    # F-Droid uses Link's upstream GPL license, not the authorization notice
+    # for official upstream binaries. Keep Link itself as an upstream submodule.
+    prebuild:
+      - cp ../../../chipnomad_lib/external/ableton_link/LICENSE.md ../../packaging/common/licenses/ABLETON_LINK.txt
+      - cp ../../../chipnomad_lib/external/ableton_link/GNU-GPL-v2.0.md ../../packaging/common/licenses/ABLETON_LINK_GPL-2.0.txt
     build:
       - cd ../.. && export ANDROID_NDK_ROOT="$ANDROID_NDK" && bash platforms/android/build-sdl2-android.sh $$SDL$$ && mkdir -p ../.tmp/SDL2-2.32.10/SDL2 && cp build/sdl2-android/include/*.h ../.tmp/SDL2-2.32.10/SDL2/
     gradle:
@@ -44,5 +58,5 @@ Builds:
 
 AutoUpdateMode: None
 UpdateCheckMode: None
-CurrentVersion: 1.0.21-alpha
-CurrentVersionCode: 21
+CurrentVersion: 1.0.23-alpha
+CurrentVersionCode: 23

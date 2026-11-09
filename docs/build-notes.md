@@ -463,6 +463,40 @@ Android has two Gradle flavors, selected by the task name:
   launch it asks for a working folder and restarts after one is chosen. Until
   then it uses private app storage.
 
+### F-Droid source builds
+
+The proposed recipe is `fdroid/metadata/com.paiheulevrai.choochootracker.yml`.
+It builds the `direct` flavor from the pinned release tag and fetches SDL
+`release-2.32.10` and Git submodules from their upstream repositories.
+`scandelete` removes precompiled Web/other-platform binaries, Android SDL
+libraries and test archives only from F-Droid's disposable source checkout.
+F-Droid removes the Gradle wrapper automatically and uses its own Gradle.
+SDL is rebuilt for both ARM ABIs after the source scan.
+Do not delete those files from GitHub to satisfy the Android scanner.
+
+The narrowly scoped `scanignore` entries retain the factory ZIP collections
+(CNI preset parameters, catalogs and bundled source/license notices) and Mutable
+Instruments' raw wavetable data. They are data, not precompiled application code.
+Keep the per-source notices and provenance inside the packs; a new archive
+format or executable entry requires review rather than a broader exclusion.
+
+Ableton Link remains an upstream Git submodule under its own license. The
+F-Droid build uses its GPL-2.0-or-later terms, not the separate authorization
+notice for official upstream binaries: `prebuild` copies Link's upstream
+license notice and GPL text into that build's packaged licenses. This does not
+change the upstream notice, MIT sources, or other platform packages.
+F-Droid must make the corresponding sources, including Link, available as
+required by its license; using a submodule does not waive that obligation.
+
+The RFP bot scans the repository before applying this external recipe, so its
+raw binary warnings can remain visible. Validate with the recipe-aware F-Droid
+scanner/build before requesting inclusion. Gradle build-tool dependencies are
+not the APK's runtime dependencies. OpenCensus comes from AGP's internal Unified
+Test Platform `core` and `launcher` configurations, not
+`directReleaseRuntimeClasspath`; it is not included in the release APK.
+
+### Picked-folder I/O
+
 The picked folder has no filesystem path, so the native engine reaches it
 through `platforms/android/saf_storage.cpp`: `Makefile.android` links with
 `-Wl,--wrap` for `fopen`, `open`, `stat`, `opendir`, `rename`... and the wrappers
