@@ -5,7 +5,7 @@
 Changes since v1.0.23-alpha.
 
 - Add MIDI note recording using REC: stopped Phrase step entry, live Quantized
-  and Free recording, velocity, NOTE OFF and note erasure. Auto Channel follows
+  and Free recording, velocity and NOTE OFF. Auto Channel follows
   editor context and unique instrument/track associations without moving the UI.
 - Audition highlighted samples, wavetables, native/FM presets and SoundFont/SFZ/EXS
   presets through Auto MIDI while stopped, without committing selections or
@@ -24,6 +24,8 @@ Changes since v1.0.23-alpha.
 - Fix stopped MIDI audition transport counters, pending editor navigation,
   volume-slide scaling, slow-tempo WAV export, insert transitions, Song
   selections and playback sequencing.
+- Keep motion DEL limited to matching stick-destination FX; preserve notes,
+  instruments, velocity, MIDI note delay and unrelated FX.
 - Improve handheld remapping and console-only stick calibration; fix ROCKNIX
   Select input, Android working-folder BMP loading and F-Droid source builds.
 - Add experimental universal Intel/Apple Silicon macOS packages, validated on

@@ -754,11 +754,11 @@ int main(int argc,char** argv){
     require(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1), "start erase song");
     chipnomadRender(chipnomadState, audio, 2048);
     appOnEvent({MainLoopEvent::tick});
-    const auto& erased = p.phrases[0].rows[0];
-    require(erased.note == EMPTY_VALUE_8 && erased.instrument == EMPTY_VALUE_8 &&
-      erased.volume == EMPTY_VALUE_16, "erase clears selected-track note fields without stick mappings");
-    require(erased.fx[0].command == fxPAN && erased.fx[2].command == FX_ID_EMPTY,
-      "erase removes DEL but preserves unrelated FX");
+    const auto& preserved = p.phrases[0].rows[0];
+    require(preserved.note == 48 && preserved.instrument == p.phrases[0].rows[5].instrument &&
+      preserved.volume == 100, "motion erase preserves note fields without stick mappings");
+    require(preserved.fx[0].command == fxPAN && preserved.fx[2].command == fxDEL &&
+      preserved.fx[2].value == 2, "motion erase preserves unrelated FX and MIDI timing");
     require(p.phrases[1].rows[0].note == 48, "erase leaves neighboring track untouched");
     rec.type = MainLoopEvent::keyUp; appOnEvent(rec);
     chipnomadQueuePlaybackStop(chipnomadState);

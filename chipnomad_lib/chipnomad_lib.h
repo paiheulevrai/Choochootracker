@@ -272,7 +272,6 @@ int chipnomadQueueMidiInput(ChipNomadState* state, int track, uint8_t note, uint
                             uint8_t velocity, uint64_t timestamp, int record, MidiRecordMode mode);
 int chipnomadConsumeMidiRecordEvent(ChipNomadState* state, MidiRecordEvent* event);
 int chipnomadGetMidiRecordOverflow(ChipNomadState* state);
-void chipnomadSetMidiEraseTrack(ChipNomadState* state, int track);
 // Copies the bounded native patch into the existing audio command queue.
 int chipnomadQueueSimpleChipPreview(ChipNomadState* state,int track,InstrumentType type,const InstrumentSimpleChip* patch);
 int chipnomadQueueFourOpPreview(ChipNomadState* state,int track,InstrumentType type,const InstrumentFourOp* patch);

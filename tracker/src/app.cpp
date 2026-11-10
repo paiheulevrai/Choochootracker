@@ -549,7 +549,6 @@ static int isMotionEraseTrigger(InputCode input) {
 
 static void updateMotionRecordMode(void) {
   chipnomadSetMotionRecordMode(motionRecordHeld, motionEraseHeld);
-  chipnomadSetMidiEraseTrack(chipnomadState, motionEraseHeld && pSongTrack ? *pSongTrack : -1);
   chipnomadSetLiveStickEnabled(motionLiveActive() || motionRecordHeld || motionEraseHeld);
 }
 
@@ -1394,7 +1393,6 @@ void appOnEvent(MainLoopEventData eventData) {
       audioProjectDirty = 1;
       if (currentScreen == &screenPhrase) currentScreen->fullRedraw();
     }
-    chipnomadSetMidiEraseTrack(chipnomadState, motionEraseHeld ? *pSongTrack : -1);
     if (audioProjectDirty && chipnomadQueueProjectRefresh(chipnomadState)) audioProjectDirty = 0;
 
 #if defined(ANDROID_BUILD) || defined(WEB_BUILD)

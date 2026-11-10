@@ -1521,7 +1521,7 @@ LFO trigger types:
 - **STICK LIVE** (`L1` by default) applies stick modulation without changing the phrase. In **Settings > Stick live mode**, `HOLD` (the default) enables it while held; `TOGGLE` enables it on one press and disables it on the next; `FREE` leaves it permanently enabled. Releasing the button in `TOGGLE` leaves it enabled.
 - During playback, hold **MOTION RECORD** (`L2`) to apply stick modulation and record changed destinations as absolute FX values.
 - Hold **MOTION ERASE** (`R2`) to remove matching destination FX from the current row.
-- During playback, **MOTION ERASE** also clears note, instrument, velocity and `DEL` on each visited step of the selected track. Other FX retain their usual destination-based erase behavior. This works for manually entered notes too; phrases do not store the origin of a note.
+- **MOTION ERASE** (the **DEL** control) only removes FX matching the active stick modulation destinations. It never clears notes, instruments, velocity or the `DEL` note-delay FX, whether notes were entered manually or recorded over MIDI. Without stick mappings, it does not change the phrase. Phrases do not store FX provenance: a manually entered FX matching a stick destination is also removed.
 
 The bottom-right `~` indicates active Stick live. Record (`*`, or `!` for overflow) and Erase (`x`) take indicator priority and remain momentary in both modes. Both enable live stick processing while held; releasing them leaves a separately enabled live toggle intact.
 

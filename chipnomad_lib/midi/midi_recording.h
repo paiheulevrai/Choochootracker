@@ -13,7 +13,6 @@ struct MidiRecordEvent {
   uint8_t instrument;
   uint8_t velocity;
   uint8_t delay;
-  uint8_t erase = 0;
 };
 
 // Audio owns the bounded tick history; completed edits cross to the UI via SPSC.
@@ -25,7 +24,6 @@ class MidiRecording {
   int consume(MidiRecordEvent* event);
   bool overflow() const { return overflow_.load(std::memory_order_relaxed); }
   void clear();
-  void setEraseTrack(int track) { eraseTrack_.store(track, std::memory_order_relaxed); }
  private:
   static constexpr unsigned capacity = 64;
   struct Position { uint16_t phrase; uint8_t row; uint16_t tick; };
@@ -35,10 +33,6 @@ class MidiRecording {
   MidiRecordEvent events_[capacity]{};
   std::atomic<unsigned> write_{0}, read_{0};
   std::atomic<bool> overflow_{false};
-  std::atomic<int> eraseTrack_{-1};
-  uint16_t erasedPhrase_ = EMPTY_VALUE_16;
-  uint8_t erasedRow_ = 0;
-  int erasedTrack_ = -1;
 };
 
 // Returns false without modifying the row if DEL cannot fit.

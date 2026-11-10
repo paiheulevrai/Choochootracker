@@ -6,9 +6,6 @@ void MidiRecording::clear() {
   write_.store(0, std::memory_order_relaxed);
   read_.store(0, std::memory_order_relaxed);
   overflow_.store(false, std::memory_order_relaxed);
-  eraseTrack_.store(-1, std::memory_order_relaxed);
-  erasedPhrase_ = EMPTY_VALUE_16;
-  erasedTrack_ = -1;
 }
 
 void MidiRecording::observe(const PlaybackState& playback, uint64_t timestamp) {
@@ -26,26 +23,6 @@ void MidiRecording::observe(const PlaybackState& playback, uint64_t timestamp) {
     if (phrase >= PROJECT_MAX_PHRASES) continue;
     position = {(uint16_t)phrase, (uint8_t)track.phraseRow,
                 (uint16_t)(track.frameCounter > 65535 ? 65535 : track.frameCounter)};
-  }
-  int eraseTrack = eraseTrack_.load(std::memory_order_relaxed);
-  if (eraseTrack >= 0 && eraseTrack < PROJECT_MAX_TRACKS) {
-    const auto& position = tick.tracks[eraseTrack];
-    if (position.phrase != EMPTY_VALUE_16 &&
-        (erasedTrack_ != eraseTrack || erasedPhrase_ != position.phrase || erasedRow_ != position.row)) {
-      unsigned write = write_.load(std::memory_order_relaxed);
-      unsigned next = (write + 1) % capacity;
-      if (next == read_.load(std::memory_order_acquire)) overflow_.store(true, std::memory_order_relaxed);
-      else {
-        events_[write] = {position.phrase, position.row, EMPTY_VALUE_8, EMPTY_VALUE_8, 0, 0, 1};
-        write_.store(next, std::memory_order_release);
-        erasedTrack_ = eraseTrack;
-        erasedPhrase_ = position.phrase;
-        erasedRow_ = position.row;
-      }
-    }
-  } else {
-    erasedTrack_ = -1;
-    erasedPhrase_ = EMPTY_VALUE_16;
   }
   head_ = (head_ + 1) % capacity;
   if (count_ < capacity) ++count_;
@@ -113,12 +90,6 @@ void midiRecordStep(Phrase& phrase, int& cursor, uint8_t note, uint8_t instrumen
 }
 
 bool midiRecordApply(PhraseRow& row, const MidiRecordEvent& event) {
-  if (event.erase) {
-    row.note = row.instrument = EMPTY_VALUE_8;
-    row.volume = EMPTY_VALUE_16;
-    for (auto& fx : row.fx) if (fx.command == fxDEL) fx = {FX_ID_EMPTY, 0};
-    return true;
-  }
   if (event.note == NOTE_OFF) {
     if (row.note != EMPTY_VALUE_8 && row.note != NOTE_OFF) return true;
     if (!midiRecordWriteRow(row, NOTE_OFF, EMPTY_VALUE_8, 0, event.delay)) return false;

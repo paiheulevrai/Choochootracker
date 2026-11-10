@@ -433,6 +433,67 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI Auto Channel and recording mode persis
   CHECK(appSettings.midiRecordMode == MidiRecordMode::free);
 }
 
+TEST_CASE_FIXTURE(StickLiveFixture, "Motion DEL preserves notes and timing while erasing only mapped FX") {
+  bool mapped = false;
+  SUBCASE("without stick mappings") {}
+  SUBCASE("with a stick destination") { mapped = true; }
+  auto& project = chipnomadState->project;
+  projectInitAY(&project);
+  project.tickRate = 48;
+  project.tracksCount = 2;
+  if (mapped) {
+    auto& mod = project.instruments[0].modulation[0];
+    mod = {};
+    mod.type = ModulationType::StickLinear;
+    mod.destination = getInstrumentFunctions(project.instruments[0].type).modDestinationsCount + 1 + genericModTrackPan;
+    mod.amount = 127;
+  }
+  for (int track = 0; track < 2; ++track) {
+    project.song[0][track] = track;
+    project.chains[track].rows[0].phrase = track;
+    for (auto& row : project.phrases[track].rows) {
+      row.note = 48 + track;
+      row.instrument = 0;
+      row.volume = 100;
+      row.fx[0] = {fxPAN, 80};
+      row.fx[1] = {fxTPN, 64};
+      row.fx[2] = {fxDEL, 2};
+    }
+  }
+  chipnomadInitChips(chipnomadState, 48000, nullptr);
+  playbackInit(&chipnomadState->playbackState, &chipnomadState->audioProject);
+  *pSongTrack = 0;
+  projectModified = 0;
+  motion(keyMotionErase, true);
+  REQUIRE(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1));
+  float audio[2000]{};
+  for (int i = 0; i < 48; ++i) {
+    if (i == 24) *pSongTrack = 1;
+    chipnomadRender(chipnomadState, audio, 1000);
+    appOnEvent({MainLoopEvent::tick});
+  }
+  int erased = 0;
+  for (int track = 0; track < 2; ++track) {
+    for (const auto& row : project.phrases[track].rows) {
+      CHECK(row.note == 48 + track);
+      CHECK(row.instrument == 0);
+      CHECK(row.volume == 100);
+      CHECK(row.fx[0].command == fxPAN);
+      CHECK(row.fx[0].value == 80);
+      CHECK(row.fx[2].command == fxDEL);
+      CHECK(row.fx[2].value == 2);
+      if (row.fx[1].command == FX_ID_EMPTY) ++erased;
+      else {
+        CHECK(row.fx[1].command == fxTPN);
+        CHECK(row.fx[1].value == 64);
+      }
+    }
+  }
+  CHECK((erased > 0) == mapped);
+  CHECK(projectModified == mapped);
+  motion(keyMotionErase, false);
+}
+
 TEST_CASE_FIXTURE(StickLiveFixture, "MIDI menu exposes saved Auto Channel and Quantized Free controls") {
   screenMidi.fullRedraw();
   REQUIRE(mockScreenData);

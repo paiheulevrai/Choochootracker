@@ -161,21 +161,15 @@ TEST_CASE_FIXTURE(RecordingFixture, "Free recording uses actual ticks under groo
   CHECK(event.delay == 2);
 }
 
-TEST_CASE_FIXTURE(RecordingFixture, "Simplified recording and erase resolve pattern bars rather than classic chains") {
+TEST_CASE_FIXTURE(RecordingFixture, "Simplified recording resolves pattern bars rather than classic chains") {
   auto& project = state->project;
   project.viewMode = ViewMode::simplified;
   project.patterns[0].length = 2;
   project.patterns[0].bars[1].phrase = 7;
-  recording.setEraseTrack(0);
   tick(100000, 3, 2, 1);
   recording.record(0, 48, 0, 100, 100000, MidiRecordMode::free);
   MidiRecordEvent event{};
   REQUIRE(recording.consume(&event));
-  CHECK(event.erase);
-  CHECK(event.phrase == 7);
-  CHECK(event.row == 3);
-  REQUIRE(recording.consume(&event));
-  CHECK_FALSE(event.erase);
   CHECK(event.phrase == 7);
   CHECK(event.row == 3);
   CHECK(event.delay == 2);
@@ -266,39 +260,15 @@ TEST_CASE("MIDI Note Off fills empty steps, with musical notes taking priority i
   CHECK(phrase.rows[1].fx[2].command == FX_ID_EMPTY);
 }
 
-TEST_CASE_FIXTURE(RecordingFixture, "Erase captures each visited step on only the selected playing track") {
-  recording.setEraseTrack(0);
+TEST_CASE_FIXTURE(RecordingFixture, "Observing playback never queues MIDI edits without recorded notes") {
   tick(100000, 3, 0);
   tick(120000, 3, 1);
   tick(140000, 4, 0);
   MidiRecordEvent event{};
-  REQUIRE(recording.consume(&event));
-  CHECK(event.erase);
-  CHECK(event.row == 3);
-  Phrase phrase;
-  phraseClear(&phrase);
-  auto& row = phrase.rows[3];
-  REQUIRE(midiRecordWriteRow(row, 60, 2, 100, 3));
-  row.fx[0] = {fxPAN, 80};
-  REQUIRE(midiRecordApply(row, event));
-  CHECK(row.note == EMPTY_VALUE_8);
-  CHECK(row.instrument == EMPTY_VALUE_8);
-  CHECK(row.volume == EMPTY_VALUE_16);
-  CHECK(row.fx[2].command == FX_ID_EMPTY);
-  CHECK(row.fx[0].command == fxPAN);
-  REQUIRE(recording.consume(&event));
-  CHECK(event.row == 4);
   CHECK_FALSE(recording.consume(&event));
   tick(150000, 0, 0, 1);
-  REQUIRE(recording.consume(&event));
-  CHECK(event.phrase == 1);
-  CHECK(event.row == 0);
-  recording.setEraseTrack(1);
-  tick(160000, 5, 0);
   CHECK_FALSE(recording.consume(&event));
-  recording.setEraseTrack(-1);
-  tick(180000, 6, 0);
-  CHECK_FALSE(recording.consume(&event));
+  CHECK_FALSE(recording.overflow());
 }
 
 TEST_CASE_FIXTURE(AudioFixture, "Audio records a MIDI release as NOTE OFF at its arrival step and tick") {

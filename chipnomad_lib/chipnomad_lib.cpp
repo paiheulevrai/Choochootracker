@@ -1895,9 +1895,6 @@ int chipnomadConsumeMidiRecordEvent(ChipNomadState* state, MidiRecordEvent* even
 int chipnomadGetMidiRecordOverflow(ChipNomadState* state) {
   return state && state->audioCommands ? state->audioCommands->midiRecording.overflow() : 0;
 }
-void chipnomadSetMidiEraseTrack(ChipNomadState* state, int track) {
-  if (state && state->audioCommands) state->audioCommands->midiRecording.setEraseTrack(track);
-}
 int chipnomadQueuePlaybackStopPreview(ChipNomadState* state, int trackIdx) {
   return state && state->audioCommands ? state->audioCommands->pushCommand(6, trackIdx) : 0;
 }
