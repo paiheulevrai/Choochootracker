@@ -12,6 +12,8 @@
 #include "chipnomad_lib.h"
 #include "app.h"
 #include "screen_project.h"
+#include "screen_export.h"
+#include "midi/smf_file.h"
 #include "screen_groovebox.h"
 #include "corelib_font.h"
 #include "corelib_gfx.h"
@@ -329,6 +331,43 @@ int main(int argc,char** argv){
   if(argc!=2&&argc!=3) return 1;
   setvbuf(stdout, nullptr, _IONBF, 0);
   output=argv[1];initDefaultAppSettings();appSettings.screenWidth=640;appSettings.screenHeight=480;fontSetCurrent(fontGetDefault());require(!gfxSetup(&appSettings.screenWidth,&appSettings.screenHeight),"SDL dummy setup");
+  if(argc==3 && !strcmp(argv[2],"--midi-export-only")) {
+    namespace fs = std::filesystem;
+    chipnomadState = chipnomadCreate();
+    require(chipnomadState != nullptr, "MIDI export state");
+    screensInitAll();
+    projectFree(&chipnomadState->project); projectInitAY(&chipnomadState->project);
+    auto& p = chipnomadState->project;
+    p.tracksCount = 1;
+    p.song[0][0] = 0; p.chains[0].rows[0].phrase = 0;
+    p.phrases[0].rows[0].note = 48;
+    p.phrases[0].rows[0].instrument = 0;
+    p.phrases[0].rows[0].volume = 100;
+    p.phrases[0].rows[2].note = NOTE_OFF;
+    const auto root = fs::absolute(fs::path(output) / "midi-export-regression");
+    const auto destination = root / "nested";
+    require(!fs::exists(root), "MIDI export fixture must not already exist");
+    snprintf(appSettings.exportPath, sizeof(appSettings.exportPath), "%s", destination.string().c_str());
+    snprintf(appSettings.projectFilename, sizeof(appSettings.projectFilename), "midi-test");
+    for (const char* name : {"midi-test.mid", "midi-test_001.mid"}) {
+      require(exportCommonOnEdit(0, 5, CellEditAction::tap) == 1, "MIDI export action handled");
+      const auto path = destination / name;
+      SmfReadResult result{};
+      require(smfReadFile(path.string().c_str(), &result) == 0, "UI export writes a valid MIDI file");
+      require(result.channels[0].count == 2, "exported MIDI contains note on and off");
+      require(result.channels[0].events[0].note == 60 &&
+              result.channels[0].events[0].velocity == 100, "exported MIDI preserves pitch and velocity");
+      smfFreeReadResult(&result);
+    }
+    require(fs::remove(destination / "midi-test.mid"), "remove first MIDI export");
+    require(fs::remove(destination / "midi-test_001.mid"), "remove collision MIDI export");
+    require(fs::remove(destination), "remove MIDI export destination");
+    require(fs::remove(root), "remove MIDI export fixture");
+    chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
+    gfxCleanup(); SDL_Quit();
+    puts("PASS: first MIDI export creates missing nested folders; repeat export preserves existing files.");
+    return 0;
+  }
 #ifdef BMP_STREAM_TEST
   if(argc==3 && !strcmp(argv[2],"--bmp-stream-only")) {
     const std::string bmp = (std::filesystem::path(output) / "bmp-stream-valid.bmp").string();

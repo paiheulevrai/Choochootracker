@@ -335,6 +335,10 @@ templates** above the tracker to add `.m8s` or `.lsdsng` files to
 choose the template from the corresponding export row. Templates are remembered
 until you quit; **EDIT + OPT** clears the selected template.
 
+Web controls follow the active theme, including the A/B touch buttons. Labels
+use a contrasting theme color (at least 4.5:1); black or white is used only when
+the palette has no accessible pairing.
+
 ### Directory configuration
 
 | Folder | What it contains |
@@ -1965,6 +1969,9 @@ Exports, stems and bounces are written to a per-project folder inside the app's 
 - **Default**: `<app folder>/samples/Exports/<project name>/`. While the project is unnamed, the folder is `current-project`.
 - On the web build the default is `/user/samples/Exports/<project name>/`.
 - On Android the samples folder is inside the active workspace (private, picked, or shared).
+
+MIDI export creates the destination folder automatically, including on the first
+Web export; the browser then downloads the `.mid` file.
 
 The **Folder** row on the EXPORT screen shows the active destination:
 

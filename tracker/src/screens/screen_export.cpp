@@ -608,6 +608,10 @@ int exportCommonOnEdit(int col, int row, CellEditAction action) {
     }
   } else if (row == 5) {
     if (currentExporter) return 1;
+    if (exportEnsureProjectDir() != 0) {
+      screenMessage(MESSAGE_TIME_ERROR, "Cannot create export folder");
+      return 1;
+    }
     char exportPath[1024];
     generateExportPath(exportPath, sizeof(exportPath), "mid");
     if (projectExportMidi(&chipnomadState->project, exportPath) == 0) {
