@@ -656,10 +656,10 @@ TEST_CASE("new instruments use audible synth defaults") {
   Instrument instrument;
   getInstrumentFunctions(InstrumentType::Braids).init(&instrument);
   CHECK(instrument.volume == 255);
-  CHECK(instrument.chip.braids.attack == 0);
+  CHECK(instrument.chip.braids.attack == 8);
   CHECK(instrument.chip.braids.decay == 0);
   CHECK(instrument.chip.braids.sustain == 255);
-  CHECK(instrument.chip.braids.release == 0);
+  CHECK(instrument.chip.braids.release == 20);
   CHECK(instrument.chip.braids.filterCharacter == 2);
   CHECK(instrument.chip.braids.filterColor == 128);
   CHECK(instrument.chip.braids.filterCutoffHz == 20000);
@@ -695,6 +695,28 @@ TEST_CASE("new instruments use audible synth defaults") {
     CHECK(post->filterCharacter == 2);
     CHECK(post->filterColor == 128);
     CHECK(post->filterCutoffHz == 20000);
+  }
+}
+
+TEST_CASE("new instrument ADSR defaults use short attack and release times") {
+  const InstrumentType quadratic[] = {
+    InstrumentType::Braids, InstrumentType::Sample, InstrumentType::SCWF,
+    InstrumentType::BYOWTBL, InstrumentType::Plaits, InstrumentType::PlaitsAlt,
+    InstrumentType::MME, InstrumentType::AudioIn, InstrumentType::DigiSophie,
+    InstrumentType::SegaPSG, InstrumentType::GBPulse, InstrumentType::GBNoise
+  };
+  for (InstrumentType type : quadratic) {
+    CAPTURE((int)type);
+    Instrument instrument{};
+    getInstrumentFunctions(type).init(&instrument);
+    auto* post = instrumentVoicePostSettings(&instrument);
+    REQUIRE(post);
+    const float attackMs = post->attack * post->attack * 1000.0f / 13005.0f;
+    const float releaseMs = post->release * post->release * 1000.0f / 13005.0f;
+    CHECK(attackMs >= 2.0f);
+    CHECK(attackMs <= 10.0f);
+    CHECK(releaseMs >= 10.0f);
+    CHECK(releaseMs <= 50.0f);
   }
 }
 

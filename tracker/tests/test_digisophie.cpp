@@ -52,6 +52,7 @@ TEST_CASE("DigiSophie four models render distinctly at native and device rates")
 
 TEST_CASE("DigiSophie preserves core waveform and centered sweep before tracker envelope") {
   auto i = sophieInstrument();
+  i.chip.drumSynth.attack = 0;
   DrumSynthVoice v; v.init(48000);
   v.configure(&i.chip.drumSynth, 6900, 1, 20000, 0, true); v.noteOn();
   ds_voice reference{}; ds_voice_init(&reference);

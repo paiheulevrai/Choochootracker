@@ -1339,17 +1339,23 @@ Recordings are written at the selected audio sample rate as stereo 16-bit WAV fi
 
 2xSCWF is a dual single-cycle waveform oscillator. Load 1 mono WAV containing exactly 1 period into each oscillator. Both oscillators read forwards and wrap at the end of their cycle.
 
+New instruments with the standard filter and ADSR use a short attack and release by default to reduce clicks. Existing instruments retain their saved settings, and either control can still be set to `00`.
+
 Mix crossfades A and B.
 
 Detune is fine and exponential from unison through `+200 ct`, then moves in semitone steps from `+3 st` to `+24 st`.
 
 2xSCWF treats each file as a 1-cycle table and reads it exactly once per oscillator cycle. This lets you blend and detune 2 single-cycle waves.
 
+On consecutive notes, 2xSCWF preserves the phase and filter history of an active voice while retriggering its envelope, reducing clicks. After the voice ends, the next note starts with fresh oscillator and filter state.
+
 The factory `waveforms/AKWF/` folder contains waveforms from the Adventure Kid library. Plenty more are available online if you want to expand the collection.
 
 #### BYOWTBL
 
 BYOWTBL is a dual wavetable oscillator compatible with Serum tables. Each oscillator loads a mono WAV containing consecutive single-cycle frames. `Pos A` and `Pos B` scan their tables independently from `00` to `FF`. The engine interpolates linearly within each frame and between adjacent frames. `Mix` crossfades the oscillators, and `Detune` offsets oscillator B.
+
+Like 2xSCWF, BYOWTBL preserves an active voice's phase and filter history across consecutive notes while retriggering its envelope.
 
 ## 6. Modulation and motion recording
 

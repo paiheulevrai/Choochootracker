@@ -184,10 +184,10 @@ static void initVoicePostSettings(InstrumentVoicePostSettings* post) {
   post->filterCutoffHz = FILTER_CUTOFF_MAX_HZ;
   post->filterResonance = 0;
   post->filterColor = 128;
-  post->attack = 0;
+  post->attack = 8;
   post->decay = 0;
   post->sustain = 255;
-  post->release = 0;
+  post->release = 20;
   post->envelopeShape = 0x80;
 }
 
@@ -350,7 +350,7 @@ static int initDrumSynthInstrument(Instrument* instrument) {
   InstrumentDrumSynth* d = &instrument->chip.drumSynth;
   d->engine = DrumSynthEngine::kick; d->decay = 72; d->tone = 128;
   d->sweep = 150; d->noise = 24; d->fm = 32; d->drive = 28;
-  initVoicePostSettings(d); return 0;
+  initVoicePostSettings(d); d->attack = d->release = 0; return 0;
 }
 static int freeDrumSynthInstrument(Instrument* instrument) { freeCommon(instrument); return 0; }
 
@@ -368,6 +368,7 @@ static int initDigiSophieInstrument(Instrument* instrument) {
   auto& d = instrument->chip.drumSynth;
   d.decay = 160; d.tone = 128; d.sweep = 128;
   d.noise = 128; d.fm = 64; d.drive = 0;
+  d.attack = 8; d.release = 20;
   return 0;
 }
 
@@ -425,9 +426,12 @@ static int initOPL3Instrument(Instrument* instrument) {
   initOPL2Instrument(instrument);instrument->type=InstrumentType::OPL3;return 0;
 }
 static int initSIDInstrument(Instrument* i){initCommon(i);i->type=InstrumentType::SID;initSIDPatch(&i->chip.sid);strcpy(i->name,"Moving Pulse");return 0;}
-static int initSegaInstrument(Instrument* i){initCommon(i);i->type=InstrumentType::SegaPSG;simpleChipApplyPreset(i,0);return 0;}
-static int initGBPulseInstrument(Instrument* i){initCommon(i);i->type=InstrumentType::GBPulse;simpleChipApplyPreset(i,0);return 0;}
-static int initGBNoiseInstrument(Instrument* i){initCommon(i);i->type=InstrumentType::GBNoise;simpleChipApplyPreset(i,0);return 0;}
+static void initSimpleChipEnvelope(Instrument* i) {
+  i->chip.simpleChip.attack = 8; i->chip.simpleChip.release = 20;
+}
+static int initSegaInstrument(Instrument* i){initCommon(i);i->type=InstrumentType::SegaPSG;simpleChipApplyPreset(i,0);initSimpleChipEnvelope(i);return 0;}
+static int initGBPulseInstrument(Instrument* i){initCommon(i);i->type=InstrumentType::GBPulse;simpleChipApplyPreset(i,0);initSimpleChipEnvelope(i);return 0;}
+static int initGBNoiseInstrument(Instrument* i){initCommon(i);i->type=InstrumentType::GBNoise;simpleChipApplyPreset(i,0);initSimpleChipEnvelope(i);return 0;}
 static const char* modNameSintered(int modIndex) {
   static const char* names[] = {"Off", "Volume", "Pitch", "Decay", "Mod", "A", "B", "Motion", "C", "Cutoff", "Reso"};
   return modIndex >= 0 && modIndex < 11 ? names[modIndex] : "Off";
@@ -436,7 +440,7 @@ static int initSinteredInstrument(Instrument* instrument) {
   initCommon(instrument); instrument->type = InstrumentType::Sintered;
   InstrumentSintered* s = &instrument->chip.sintered;
   s->model = SinteredModel::knot; s->decay = 82; s->mod = 112; s->a = 128;
-  s->b = 96; s->motion = 128; s->c = 64; s->gate = 0; initVoicePostSettings(s); return 0;
+  s->b = 96; s->motion = 128; s->c = 64; s->gate = 0; initVoicePostSettings(s); s->attack = s->release = 0; return 0;
 }
 static int freeSinteredInstrument(Instrument* instrument) { freeCommon(instrument); return 0; }
 
@@ -456,8 +460,7 @@ static int initBass808Instrument(Instrument* instrument) {
   b->envelopeMode = 2;            // VCA ADSR by default (TRIG = 0)
   initVoicePostSettings(b);
   // Sensible defaults for a sustained sub-bass: short attack, long
-  // sustain, medium release; the inherited InstrumentVoicePostSettings
-  // init zeroes these so override only what we need.
+  // sustain, medium release, using Fatty's linear timing scale.
   b->attack = 0;
   b->decay = 32;
   b->sustain = 255;

@@ -14,6 +14,7 @@ TEST_CASE("Audio in gates stereo with ADSR and filters both channels") {
   getInstrumentFunctions(InstrumentType::AudioIn).init(&instrument);
   auto& p = instrument.chip.audioIn;
   p.filterEnabled = 0;
+  p.attack = 0;
   p.release = 8;
   AudioInputVoice voice;
   voice.init(48000);
@@ -167,6 +168,7 @@ TEST_CASE("Audio in engine follows notes, chunk offsets, inserts and offline sil
     calculateLinearPitchTable12TET(&p);
     getInstrumentFunctions(InstrumentType::AudioIn).init(&p.instruments[0]);
     p.instruments[0].chip.audioIn.filterEnabled = 0;
+    p.instruments[0].chip.audioIn.attack = 0;
     p.instruments[0].volume = 255; p.trackVolume[0] = 100;
     p.trackReverbSend[0] = p.trackDelaySend[0] = 0;
     p.reverbReturn = p.delayReturn = 0;

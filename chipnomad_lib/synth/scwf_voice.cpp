@@ -82,9 +82,10 @@ void SCWFVoice::setWavetablePosition(int oscillator, float position) {
 
 void SCWFVoice::noteOn() {
   if (!instrument_ || (!instrument_->oscillator[0].data && !instrument_->oscillator[1].data)) return;
-  phase_[0] = phase_[1] = 0.0;
+  const bool retriggering = active_ && post_.envelopeActive();
+  if (!retriggering) phase_[0] = phase_[1] = 0.0;
   active_ = true;
-  post_.noteOn(true);
+  post_.noteOn(!retriggering);
 }
 
 void SCWFVoice::noteOff() { if (active_) post_.noteOff(); }
