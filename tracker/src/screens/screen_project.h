@@ -3,15 +3,14 @@
 
 #include "screens.h"
 
-// Common rows on the project screen:
-// 0 Load/Save/New/Export/Manage, 1 File, 2 Title, 3 Author, 4 Linear pitch,
-// 5 Tempo, 6 Sync, 7 Sync out, 8 Link connection, 9 Link transport.
-#ifdef DESKTOP_BUILD
-// 10 Link Audio send (desktop prototype).
-#define SCR_PROJECT_ROWS (11)
-#else
+// 0 Actions, 1 File, 2 Title, 3 Author, 4 Tempo, 5 Sync,
+// 6 Link connection, 7 Link options, 8 Sync out, 9 Tuning.
 #define SCR_PROJECT_ROWS (10)
-#endif
+
+inline int projectRowY(int row) {
+  constexpr int positions[] = {3, 5, 6, 7, 9, 10, 11, 12, 13, 15, 16, 17};
+  return positions[row];
+}
 
 int projectLoadFromPath(const char* path);
 void projectOpenFromScreen(const AppScreen* returnScreen);

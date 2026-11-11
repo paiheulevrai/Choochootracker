@@ -4,7 +4,7 @@
 #include "chipnomad_lib.h"
 #include "common.h"
 
-static const char viewLabel[] = "View mode - Editing style";
+static const char viewLabel[] = "View";
 
 static int getColumnCount(int row) {
   if (row < SCR_PROJECT_ROWS) return projectCommonColumnCount(row);
@@ -14,19 +14,16 @@ static int getColumnCount(int row) {
 static void drawStatic(void) {
   projectCommonDrawStatic();
   gfxSetFgColor(appSettings.colorScheme.textLabel);
-  gfxPrint(0, 16, "Pitch table");
-  gfxPrint(0, 17, "Scale");
-  gfxPrint(0, 18, viewLabel);
+  gfxPrint(0, 16, "Scale");
+  gfxPrint(0, 17, viewLabel);
 }
 
 static void drawCursor(int col, int row) {
   if (row < SCR_PROJECT_ROWS) return projectCommonDrawCursor(col, row);
   if (row == SCR_PROJECT_ROWS) {
-    gfxCursor(13, 16, strlen(chipnomadState->project.pitchTable.name));
+    gfxCursor(0, 16, 5);
   } else if (row == SCR_PROJECT_ROWS + 1) {
-    gfxCursor(0, 17, 5);
-  } else if (row == SCR_PROJECT_ROWS + 2) {
-    gfxCursor(0, 18, sizeof(viewLabel) - 1);
+    gfxCursor(0, 17, sizeof(viewLabel) - 1);
   }
 }
 
@@ -36,23 +33,21 @@ static void drawField(int col, int row, CellState state) {
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
 
   if (row == SCR_PROJECT_ROWS) {
-    gfxClearRect(13, 16, PROJECT_PITCH_TABLE_TITLE_LENGTH, 1);
-    gfxPrint(13, 16, chipnomadState->project.pitchTable.name);
+    gfxClearRect(0, 16, 5, 1);
+    gfxPrint(0, 16, "Scale");
   } else if (row == SCR_PROJECT_ROWS + 1) {
-    gfxPrint(0, 17, "Scale");
-  } else if (row == SCR_PROJECT_ROWS + 2) {
-    gfxPrint(0, 18, viewLabel);
+    gfxClearRect(0, 17, sizeof(viewLabel) - 1, 1);
+    gfxPrint(0, 17, viewLabel);
   }
 }
 
 static int onEdit(int col, int row, enum CellEditAction action) {
   if (row < SCR_PROJECT_ROWS) return projectCommonOnEdit(col, row, action);
+  if (action != CellEditAction::tap && action != CellEditAction::doubleTap) return 0;
 
   if (row == SCR_PROJECT_ROWS) {
-    screenSetup(&screenPitchTable, 0);
-  } else if (row == SCR_PROJECT_ROWS + 1) {
     screenSetup(&screenScale, 0);
-  } else if (row == SCR_PROJECT_ROWS + 2) {
+  } else if (row == SCR_PROJECT_ROWS + 1) {
     // View window: this project's view mode (read-only), default pattern
     // length and the playhead mode for the simplified view.
     screenSetup(&screenViewSettings, 0);
@@ -60,8 +55,10 @@ static int onEdit(int col, int row, enum CellEditAction action) {
   return 0;
 }
 
+static int isButtonCell(int, int row) { return row >= 7; }
+
 ScreenData screenProjectExtra = {
-  .rows = SCR_PROJECT_ROWS + 3,
+  .rows = SCR_PROJECT_ROWS + 2,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,
@@ -83,4 +80,5 @@ ScreenData screenProjectExtra = {
   .onRawInput = NULL,
   .isCellValid = NULL,
   .getLoopRange = NULL,
+  .isButtonCell = isButtonCell,
 };

@@ -709,6 +709,8 @@ static bool inputBranchNavigation(int keys) {
   if (keys != (keyShift | keyLeft) && keys != (keyShift | keyRight)) return false;
   int column = -1;
   if (currentScreen == &screenProject || currentScreen == &screenSettings ||
+      currentScreen == &screenProjectTuning || currentScreen == &screenLinkOptions ||
+      currentScreen == &screenLinkAudio || currentScreen == &screenSyncOut ||
       currentScreen == &screenControlsSettings || currentScreen == &screenAudioSettings || currentScreen == &screenSynthSettings || currentScreen == &screenMixerSettings ||
       currentScreen == &screenGraphicsSettings || currentScreen == &screenBackgroundSettings || currentScreen == &screenTrackVisuals ||
       currentScreen == &screenMidi || currentScreen == &screenMidiChannelMap ||

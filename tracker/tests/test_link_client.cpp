@@ -6,6 +6,7 @@
 #include <vector>
 #include <cstdint>
 #include <limits>
+#include <string>
 
 // LinkClient tests through a hand-built fake LinkBackend, mirroring
 // test_midi_router.cpp's approach: the real backend only exists under
@@ -33,6 +34,8 @@ struct FakeLinkState {
   int onAudioFrameCalls = 0;
   int resetFilterCalls = 0;
   int audioEnabled = 0;
+  int receiveEnabled = 0;
+  int audioPolls = 0;
   int audioEnableResult = 1;
   int audioSendCalls = 0;
   int audioFrames = 0;
@@ -127,6 +130,18 @@ void fakeSendAudio(void*, void*, const int16_t* samples, int frames, int sampleR
   g_fake.audioSampleRate = sampleRate;
   g_fake.audioSamples = samples;
 }
+int fakeSetReceive(void*, void*, int enabled) {
+  if (!g_fake.audioEnableResult) return 0;
+  g_fake.receiveEnabled = enabled;
+  return 1;
+}
+void fakePollAudio(void*, void*) { ++g_fake.audioPolls; }
+const char* fakeReceiveStatus(void*, void*) { return g_fake.receiveEnabled ? "Receiving" : "Off"; }
+int fakeMixReceived(void*, void*, float* samples, int frames, int) {
+  if (!g_fake.receiveEnabled) return 0;
+  for (int i = 0; i < frames * 2; ++i) samples[i] += 0.1f;
+  return frames;
+}
 
 const LinkBackend kFakeBackend = {
   nullptr,  // userdata
@@ -145,6 +160,10 @@ const LinkBackend kFakeBackend = {
   fakeSetPlaying,
   fakeSetAudioEnabled,
   fakeSendAudio,
+  fakeSetReceive,
+  fakePollAudio,
+  fakeReceiveStatus,
+  fakeMixReceived,
 };
 
 // Mirrors app.cpp's UI-tick Link block: poll the client's session tempo and
@@ -161,6 +180,35 @@ void simulateUiTick(ChipNomadState* state, uint32_t* appliedSerial) {
 }  // namespace
 
 TEST_SUITE("Link client") {
+
+TEST_CASE("Link Audio receive is independent from send and reports backend failures") {
+  resetFake();
+  linkClientSetBackend(&kFakeBackend);
+  LinkClientState* client = linkClientCreate();
+  CHECK_FALSE(linkClientIsAudioReceiveEnabled(client));
+  float mix[4] = {};
+  CHECK(linkClientMixReceivedAudio(client, mix, 2, 48000) == 0);
+  REQUIRE(linkClientSetAudioReceiveEnabled(client, 1));
+  CHECK(linkClientIsAudioReceiveEnabled(client));
+  CHECK_FALSE(linkClientIsAudioEnabled(client));
+  CHECK(std::string(linkClientAudioReceiveStatus(client)) == "Receiving");
+  linkClientPoll(client);
+  CHECK(g_fake.audioPolls == 1);
+  CHECK(linkClientMixReceivedAudio(client, mix, 2, 48000) == 2);
+  CHECK(mix[0] == doctest::Approx(0.1));
+  CHECK(linkClientMixReceivedAudio(client, nullptr, 2, 48000) == 0);
+  CHECK(linkClientMixReceivedAudio(client, mix, 0, 48000) == 0);
+  CHECK(linkClientMixReceivedAudio(client, mix, 2, 0) == 0);
+  g_fake.audioEnableResult = 0;
+  CHECK_FALSE(linkClientSetAudioReceiveEnabled(client, 0));
+  CHECK(linkClientIsAudioReceiveEnabled(client));
+  g_fake.audioEnableResult = 1;
+  REQUIRE(linkClientSetAudioReceiveEnabled(client, 0));
+  CHECK_FALSE(linkClientIsAudioReceiveEnabled(client));
+  CHECK(linkClientMixReceivedAudio(client, mix, 2, 48000) == 0);
+  linkClientDestroy(client);
+  linkClientSetBackend(nullptr);
+}
 
 TEST_CASE("Link Audio is opt-in and forwards valid stereo buffers") {
   resetFake();

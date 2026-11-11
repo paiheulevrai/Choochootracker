@@ -56,6 +56,10 @@ struct LinkBackend {
   void (*setPlaying)(void* userdata, void* state, int playing, uint64_t atMicros);
   int (*setAudioEnabled)(void* userdata, void* state, int enabled);
   void (*sendAudio)(void* userdata, void* state, const int16_t* samples, int frames, int sampleRate);
+  int (*setAudioReceiveEnabled)(void* userdata, void* state, int enabled);
+  void (*pollAudio)(void* userdata, void* state);
+  const char* (*audioReceiveStatus)(void* userdata, void* state);
+  int (*mixReceivedAudio)(void* userdata, void* state, float* samples, int frames, int sampleRate);
 };
 
 // Registers the active backend. Global rather than per-client-state:

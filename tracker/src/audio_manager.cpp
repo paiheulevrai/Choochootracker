@@ -40,6 +40,18 @@ static float previewPitch = 3600.0f, previewGain = 1.0f;
 static float* floatBuffer;
 static float* samplePreviewBuffer;
 static OutputSafetyLimiter outputLimiter;
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+static OutputSafetyLimiter receivedAudioLimiter;
+#endif
+static std::atomic<bool> localOutputEnabled{true};
+
+static int getLocalOutputEnabled(void) {
+  return localOutputEnabled.load(std::memory_order_relaxed);
+}
+
+static void setLocalOutputEnabled(int enabled) {
+  localOutputEnabled.store(enabled != 0, std::memory_order_relaxed);
+}
 
 enum { PREVIEW_NONE, PREVIEW_PCM, PREVIEW_AY, PREVIEW_SCWF, PREVIEW_BYOWTBL };
 static constexpr double previewTwoPi = 6.28318530717958647692;
@@ -163,10 +175,21 @@ static void audioCallback(int16_t* buffer, int stereoSamples) {
   // Audio input monitoring (Phase 2.4): route armed capture into the output
   // when enabled. No-op (single atomic load) when monitor is off.
   audioInputManager.mixMonitor(floatBuffer, stereoSamples);
-  outputLimiter.process(floatBuffer, buffer, stereoSamples);
-#ifdef DESKTOP_BUILD
-  linkClientSendAudio(chipnomadState->linkClient, buffer, stereoSamples, aSampleRate);
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+  const bool receiving = linkClientIsAudioReceiveEnabled(chipnomadState->linkClient);
+  if (receiving)
+    memcpy(samplePreviewBuffer, floatBuffer, stereoSamples * 2 * sizeof(*samplePreviewBuffer));
 #endif
+  outputLimiter.process(floatBuffer, buffer, stereoSamples);
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+  // Send only our own master, never feed received audio back to peers.
+  linkClientSendAudio(chipnomadState->linkClient, buffer, stereoSamples, aSampleRate);
+  if (receiving &&
+      linkClientMixReceivedAudio(chipnomadState->linkClient, samplePreviewBuffer, stereoSamples, aSampleRate))
+    receivedAudioLimiter.process(samplePreviewBuffer, buffer, stereoSamples);
+#endif
+  if (!localOutputEnabled.load(std::memory_order_relaxed))
+    memset(buffer, 0, stereoSamples * 2 * sizeof(*buffer));
 
   const auto elapsedNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
     std::chrono::steady_clock::now() - startedAt).count();
@@ -184,6 +207,9 @@ static int start(int sampleRate, int bufferSize) {
   aSampleRate = sampleRate;
   aBufferSize = bufferSize;
   outputLimiter.reset(sampleRate);
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+  receivedAudioLimiter.reset(sampleRate);
+#endif
   cpuLoadPercent.store(0, std::memory_order_relaxed);
   memset(&samplePreview, 0, sizeof(samplePreview));
   samplePreviewVoice.init((float)sampleRate);
@@ -636,4 +662,6 @@ struct AudioManager audioManager = {
   .preparePreviewFile = preparePreviewFile,
   .preparePreviewInstrument = preparePreviewInstrument,
   .previewMidiNote = previewMidiNote,
+  .getLocalOutputEnabled = getLocalOutputEnabled,
+  .setLocalOutputEnabled = setLocalOutputEnabled,
 };

@@ -1966,7 +1966,10 @@ but it can still create long, loud tails.
 
 ## 11. Project screen
 
-The Project screen provides **Load**, **Save**, **New**, **Export**, **Manage**, **Pitch table** and **Scale** commands, along with filename, title and author metadata.
+The Project screen provides **Load**, **Save**, **New**, **Export** and **Manage**,
+along with filename, title and author metadata. Tempo, Sync and the Link
+connection stay directly accessible. **Tuning**, **Link options**, **Sync out**
+and **View** open their respective submenus; **Scale** remains a direct command.
 
 ### Export location
 
@@ -2019,9 +2022,9 @@ With the cursor resting on **Mode**, the status bar shows a fixed description of
 
 Both modes share the same root, scale, **Custom** note editing and track checkboxes. Each of the eight track checkboxes decides which tracks the mode applies to. The scale engine is bypassed for non-12-note pitch tables and for Sampler instruments whose **Slice** mode is EQUAL, AUTO or LAZY (their notes select slices chromatically from C-0); MIDI input is not part of this version.
 
-- **Linear pitch** selects the pitch-table mode. **Off** is the default and the hardware-validated setting for correct AY, Braids and Plaits octave tracking.
+- **Tuning** groups **Linear pitch** and **Pitch table**. Linear pitch selects the pitch-table mode. **Off** is the default and the hardware-validated setting for correct AY, Braids and Plaits octave tracking. OPT returns from the pitch-table editor to Tuning, then to Project.
 - **Sync** selects **Off** (local tempo), **MIDI** (incoming MIDI clock and transport) or **Link** (shared network tempo). With MIDI selected, Tempo is read-only and shows the measured incoming tempo. With Link selected, Tempo remains editable: edits are shared with the other participants, and their edits update this field too. This setting applies to all projects.
-- **Sync out** selects **Off** or **MIDI**. MIDI sends clock at the current tempo, including a shared Link tempo. Select the MIDI output device and optionally enable **Send transport** in Settings > MIDI. Output is suppressed while Sync is MIDI; the saved output preference is retained.
+- **Sync out** groups **MIDI clock** and **MIDI transport**. Clock follows the current tempo, including a shared Link tempo; transport sends start/stop. These are the same preferences as Settings > MIDI. Select the MIDI output device there. Output is suppressed while Sync is MIDI; the saved output preferences are retained.
 - **Tempo** sets the project tempo in whole BPM (`3-500`). Internally the tracker still stores its tick rate in Hz (`tick rate = BPM x 0.4`), so existing projects load and save unchanged; a project with a fractional tempo displays it rounded and snaps to a whole BPM on the first tempo edit. Coarse adjustment steps by 5 BPM, fine adjustment by 1 BPM; clearing resets to the default 125 BPM.
 - ChooChooTracker saves projects as `.cct`. This format is not compatible with ChipNomad.
 
@@ -2029,7 +2032,7 @@ Use **Save** before changing instrument types or loading another project.
 
 ### View window
 
-The View mode - Editing style row opens the view window, which controls how the Song screen is
+The **View** row opens the view window, which controls how the Song screen is
 interpreted:
 
 - **Mode** is the active project view: **Classic** (LSDJ-style
@@ -2066,12 +2069,12 @@ Ableton Link shares tempo and beat phase between apps on the same local network 
 1. In Project, select **Sync: Link**.
 2. Press EDIT on **[Connect]**. The right-hand status shows `Searching`, then the number of peers. `0 peers` means Link is enabled and waiting for another participant. The first device uses its current project tempo.
 3. Edit **Tempo** on either device to update the shared session. Tempo stays visible at all times, within the tracker's 3-500 BPM range.
-4. Press PLAY in Song, Chain or Phrase to launch that playback mode on the session's next four-beat boundary. Shift+PLAY launches the song on that boundary too; note and row previews remain immediate. When the first participant starts alone, its launch establishes the shared downbeat for later joiners. **Transport: On** also shares play/stop with participants that enable Link start/stop sync; **Off** keeps playback controls independent while retaining tempo and beat sync.
+4. Press PLAY in Song, Chain or Phrase to launch that playback mode on the session's next four-beat boundary. Shift+PLAY launches the song on that boundary too; note and row previews remain immediate. When the first participant starts alone, its launch establishes the shared downbeat for later joiners. **Link options > Link start/stop: On** also shares play/stop in both directions with participants that enable Link start/stop sync; **Off** keeps playback controls independent while retaining tempo and beat sync. This is separate from MIDI transport output.
 5. Press EDIT on **[Disconnect]**, or choose another Sync mode, to leave.
 
 Older CCT versions that receive Link tempo can follow tempo changes from this version. Their transport behavior remains the behavior implemented by that version.
 
-For **Link to MIDI**, select **Sync: Link**, connect, and set **Sync out: MIDI**. Choose a MIDI Out device in Settings > MIDI and enable external MIDI sync on the receiving device. Enable **Send transport** there if the MIDI device should also start and stop with CCT. Clock is sent during sequencer playback.
+For **Link to MIDI**, select **Sync: Link**, connect, and enable **Sync out > MIDI clock**. Choose a MIDI Out device in Settings > MIDI and enable external MIDI sync on the receiving device. Enable **Sync out > MIDI transport** if the MIDI device should also start and stop with CCT. Clock is sent during sequencer playback.
 
 During Link playback, CCT gently corrects its local tick rate once per four-beat bar to keep beat phase aligned without skipping tracker ticks. Grooves, `SPD` and `DELAY` remain relative to tempo. Song positions, patterns and mixer settings are not shared.
 
@@ -2083,19 +2086,44 @@ During Link playback, CCT gently corrects its local tick rate once per four-beat
 
 #### Link Audio prototype
 
-On desktop, **Project > Link Audio** enables an experimental stereo master send.
+On desktop and PortMaster, **Project > Link options > Link Audio > Send** enables an experimental stereo master send.
 It defaults to Off each time CCT starts. Set **Sync: Link**, connect, and set
-**Link Audio: On**. In a compatible receiver, select the `Master` channel
+**Send: On**. In a compatible receiver, select the `Master` channel
 from the `ChooChooTracker` peer. This also sends preview and monitored input
 audio to compatible peers on the local network; enable it only on a trusted
 network and avoid routing the received signal back into CCT. Local output
-remains enabled, so monitor only one path to avoid doubled audio.
+is controlled independently by **Local audio** in the same submenu. Set it to
+**Off** when monitoring through the receiver to avoid doubled audio; it silences
+only CCT's local output, not the Link stream, previews, meters or monitored input
+sent over Link. Local audio defaults to **On** at each launch and remains
+accessible even with Sync Off or Link disconnected. None of these options are
+saved across app restarts.
+
+For a two-device CCT test, connect both devices to Link on the same trusted
+local network. Enable **Send** on the first and **Receive** on the second.
+The receiver automatically subscribes to one remote `ChooChooTracker` / `Master`
+channel, even when both devices have the same peer name. **Input** shows
+`Waiting for CCT`, `Subscribed`, or `Receiving`; format and buffer errors are
+shown there too. Receive adds the remote stereo audio to local playback with
+a fixed **100 ms** playout delay and linear sample-rate conversion. This is
+a listening prototype, not sample-accurate drum/melody alignment. Lost or late
+packets leave gaps; use a reliable Wi-Fi connection. Use only one sender when
+testing: selecting among several CCT sources is not implemented.
+Audio timestamps follow sample positions, with gradual clock-drift correction,
+rather than the irregular arrival times of SDL/ALSA callbacks.
+
+Received audio is never included in the outgoing Master, so enabling Send
+and Receive on both devices does not create an audio feedback loop.
+Local audio Off silences the entire local output, including received audio;
+leave it On on the listening device. Reception uses a bounded, lazily allocated
+buffer (about 132 KiB plus SDK resources). CPU cost and Wi-Fi stability still
+need validation on the target consoles.
 
 The receiver must support Link Audio, not just tempo synchronization. For
 example, VCV Rack can use the third-party VoidLinkAudio Receive module. Network
 latency and alignment depend on the receiver, audio buffers and connection.
-This prototype does not receive audio or send separate tracks; it is not
-available on handheld or Android builds.
+This prototype does not send separate tracks or receive arbitrary DAW channels;
+it is not available on Miyoo, original RG35XX, Web or Android builds.
 
 ## 12. Settings
 

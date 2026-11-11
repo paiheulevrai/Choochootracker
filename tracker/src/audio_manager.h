@@ -38,6 +38,8 @@ struct AudioManager {
   int (*preparePreviewInstrument)(const Project* project, int instrument, const Instrument* patch);
   void (*previewMidiNote)(uint8_t note, uint8_t velocity);
   uint8_t trackStates[PROJECT_MAX_TRACKS];
+  int (*getLocalOutputEnabled)(void);
+  void (*setLocalOutputEnabled)(int enabled);
 };
 
 // Singleton AudioManager struct

@@ -4,6 +4,7 @@
 #include "screens.h"
 #include "field_style.h"
 #include "screen_settings.h"
+#include "screen_project.h"
 #include "screen_audio_input.h"
 #include "../audio_input_manager.h"
 #include "screen_export.h"
@@ -50,6 +51,9 @@ void drawScreenMap() {
     chipnomadState->project.viewMode == ViewMode::classic;
   const int mixerX = compact ? 35 : 34;
   const int songX = compact ? 36 : 35;
+  const bool projectScreen = currentScreen == &screenProject ||
+    currentScreen == &screenProjectTuning || currentScreen == &screenLinkOptions ||
+    currentScreen == &screenLinkAudio || currentScreen == &screenSyncOut;
 
   const ColorScheme cs = appSettings.colorScheme;
   gfxSetBgColor(cs.background);
@@ -65,7 +69,7 @@ void drawScreenMap() {
   if (currentScreen == &screenMixer || (currentScreen == &screenInsertFX && screenInsertFXIsMaster())) {
     gfxPrint(mixerX, smY, "R");
     gfxPrint(mixerX, smY + 2, "D");
-  } else if (currentScreen == &screenSong || currentScreen == &screenProject || currentScreen == &screenSettings) {
+  } else if (currentScreen == &screenSong || projectScreen || currentScreen == &screenSettings) {
     gfxPrint(songX, smY, "P");
   } else if (currentScreen == &screenPhrase || currentScreen == &screenGroove) {
     gfxPrint(37, smY, "G");
@@ -80,7 +84,7 @@ void drawScreenMap() {
   }
 
   // Show Settings below Song
-  if (currentScreen == &screenSong || currentScreen == &screenProject || currentScreen == &screenSettings) {
+  if (currentScreen == &screenSong || projectScreen || currentScreen == &screenSettings) {
     gfxPrint(songX, smY + 2, "S");
   }
 
@@ -107,7 +111,7 @@ void drawScreenMap() {
     gfxPrint(39, smY + 1, "T");
   } else if (currentScreen == &screenAYWavetable) {
     gfxPrint(39, smY + 2, "W");
-  } else if (currentScreen == &screenProject) {
+  } else if (projectScreen) {
     gfxPrint(songX, smY, "P");
   } else if (currentScreen == &screenGroove) {
     gfxPrint(37, smY, "G");
@@ -453,14 +457,9 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
     return 1;
   }
   if (currentScreen == &screenProject) {
-    // Field y-coordinates: row 0 buttons at y=3, File/Title/Author at
-    // y=5/6/7, Linear pitch y=9, Tempo y=10, Sync y=11, Sync out y=12,
-    // Link y=13, Transport y=14, then the extra rows: Pitch table y=16,
-    // Scale y=17, View y=18.
-    const int fieldY[] = {3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17, 18};
     int field = -1, column = 0;
-    for (unsigned i = 0; i < sizeof(fieldY) / sizeof(fieldY[0]); ++i)
-      if (row == fieldY[i]) field = i;
+    for (int i = 0; i < touchScreenData->rows; ++i)
+      if (row == projectRowY(i)) field = i;
     if (field < 0) return 0;
     if (field == 0) {
       const int x[] = {7, 12, 17, 21, 28}, width[] = {4, 4, 3, 6, 6};
@@ -470,16 +469,20 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
     } else if (field <= 3) {
       column = col - 7;
       if (column < 0 || column >= touchScreenData->getColumnCount(field)) return 0;
-    } else if (field == 8) {
-      if (col < 0 || col >= 5) return 0;
-    } else if (field == 12) {
-      // View row: whole label is the touch target.
-      if (col < 0 || col >= 4) return 0;
-      column = 0;
+    } else if (field >= 6) {
+      if (col < 0 || col >= 34) return 0;
     } else {
       if (col < 13 || col >= 34) return 0;
     }
     if (targetCol) *targetCol = column;
+    if (targetRow) *targetRow = field;
+    return 1;
+  }
+  if (currentScreen == &screenProjectTuning || currentScreen == &screenLinkOptions ||
+      currentScreen == &screenLinkAudio || currentScreen == &screenSyncOut) {
+    const int field = row - 2;
+    if (field < 0 || field >= touchScreenData->rows || col < 0 || col >= 34) return 0;
+    if (targetCol) *targetCol = 0;
     if (targetRow) *targetRow = field;
     return 1;
   }

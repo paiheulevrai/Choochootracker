@@ -11,7 +11,7 @@
 
 #if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD) || defined(ANDROID_BUILD)
 
-#ifdef DESKTOP_BUILD
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
 #ifdef LINK_PLATFORM_WINDOWS
 // Windows headers define "interface", which collides with Link Audio identifiers.
 #include <ableton/platforms/Config.hpp>
@@ -26,10 +26,12 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#ifdef DESKTOP_BUILD
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
 #include <cstring>
 #include <memory>
 #include <optional>
+#include "link_audio_receive_buffer.h"
+#include "link_audio_clock.h"
 #endif
 
 #ifdef ANDROID_BUILD
@@ -47,12 +49,22 @@ namespace {
 
 
 struct RealLinkState {
-#ifdef DESKTOP_BUILD
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+  // Keep the callback's flag alive until Link has stopped its thread.
+  std::atomic<bool> channelsChanged{true};
   ableton::LinkAudio link{125.0, "ChooChooTracker"};
   std::unique_ptr<ableton::LinkAudioSink> audioSink;
+  std::unique_ptr<LinkAudioReceiveBuffer> receiveBuffer;
+  std::unique_ptr<ableton::LinkAudioSource> audioSource;
+  std::atomic<bool> receiveEnabled{false};
+  std::atomic<bool> discardReceived{false};
+  std::atomic<int> receiveStatus{0};
+  std::atomic<uint64_t> lastReceivedAt{0};
+  std::atomic<bool> receiveDrops{false};
   std::atomic<bool> audioEnabled{false};
   std::optional<ableton::LinkAudio::SessionState> audioSession;
   std::chrono::microseconds audioTime{0};
+  LinkAudioClock audioClock;
 #else
   ableton::Link link{125.0};
 #endif
@@ -69,11 +81,19 @@ struct RealLinkState {
 
 void* linkBackendCreate(void*) {
   RealLinkState* state = new RealLinkState();
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+  state->link.setChannelsChangedCallback([state]() { state->channelsChanged.store(true); });
+#endif
   return state;
 }
 
 void linkBackendDestroy(void*, void* state) {
-  delete (RealLinkState*)state;
+  auto* s = (RealLinkState*)state;
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+  // Source destruction waits for an in-flight network callback to finish.
+  s->audioSource.reset();
+#endif
+  delete s;
 }
 
 int linkBackendEnable(void*, void* state) {
@@ -89,15 +109,20 @@ int linkBackendEnable(void*, void* state) {
   // app can never observe session transport changes.
   s->link.enableStartStopSync(s->transportSync);
   s->link.enable(true);
-#ifdef DESKTOP_BUILD
-  if (s->audioEnabled.load(std::memory_order_acquire)) s->link.enableLinkAudio(true);
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+  if (s->audioEnabled.load(std::memory_order_acquire) || s->receiveEnabled.load(std::memory_order_acquire))
+    s->link.enableLinkAudio(true);
+  s->channelsChanged.store(true);
 #endif
   return 1;
 }
 
 void linkBackendDisable(void*, void* state) {
   RealLinkState* s = (RealLinkState*)state;
-#ifdef DESKTOP_BUILD
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+  s->audioSource.reset();
+  s->discardReceived.store(true);
+  s->receiveStatus.store(0);
   s->link.enableLinkAudio(false);
 #endif
   s->link.enable(false);
@@ -220,9 +245,10 @@ void linkBackendOnAudioFrame(void*, void* state, uint64_t sampleCounter, uint64_
   RealLinkState* s = (RealLinkState*)state;
   s->lastSampleCounter.store(sampleCounter, std::memory_order_relaxed);
   s->hostTimeFilter.add(sampleCounter, hostTimeMicros);
-#ifdef DESKTOP_BUILD
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
   s->audioSession.reset();
-  if (s->audioEnabled.load(std::memory_order_acquire) && s->link.isEnabled()) {
+  if ((s->audioEnabled.load(std::memory_order_acquire) ||
+       s->receiveEnabled.load(std::memory_order_acquire)) && s->link.isEnabled()) {
     s->audioSession.emplace(s->link.captureAudioSessionState());
     s->audioTime = s->link.clock().micros() + std::chrono::microseconds(outputLatencyMicros());
   }
@@ -232,15 +258,18 @@ void linkBackendOnAudioFrame(void*, void* state, uint64_t sampleCounter, uint64_
 void linkBackendResetHostTimeFilter(void*, void* state) {
   RealLinkState* s = (RealLinkState*)state;
   s->hostTimeFilter.reset();
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+  s->audioClock.reset();
+#endif
 }
 
-#ifdef DESKTOP_BUILD
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
 int linkBackendSetAudioEnabled(void*, void* state, int enabled) {
   auto* s = (RealLinkState*)state;
   if (enabled && !s->audioSink)
     s->audioSink.reset(new ableton::LinkAudioSink(s->link, "Master", 4096));
   if (!enabled) s->audioEnabled.store(false, std::memory_order_release);
-  s->link.enableLinkAudio(enabled && s->link.isEnabled());
+  s->link.enableLinkAudio((enabled || s->receiveEnabled.load(std::memory_order_acquire)) && s->link.isEnabled());
   if (enabled) s->audioEnabled.store(true, std::memory_order_release);
   return 1;
 }
@@ -254,8 +283,90 @@ void linkBackendSendAudio(void*, void* state, const int16_t* samples, int frames
   if (count > buffer.maxNumSamples) return;
   std::memcpy(buffer.samples, samples, count * sizeof(*samples));
   constexpr double quantum = 4.0;
-  const double beat = s->audioSession->beatAtTime(s->audioTime, quantum);
+  const auto time = std::chrono::microseconds(static_cast<int64_t>(s->audioClock.time(
+    s->lastSampleCounter.load(std::memory_order_relaxed), sampleRate,
+    static_cast<double>(s->audioTime.count()))));
+  const double beat = s->audioSession->beatAtTime(time, quantum);
   buffer.commit(*s->audioSession, beat, quantum, frames, 2, sampleRate);
+}
+
+int linkBackendSetAudioReceiveEnabled(void*, void* state, int enabled) {
+  auto* s = (RealLinkState*)state;
+  if (enabled && !s->receiveBuffer) s->receiveBuffer.reset(new LinkAudioReceiveBuffer);
+  s->receiveEnabled.store(enabled != 0, std::memory_order_release);
+  if (!enabled) s->audioSource.reset();
+  s->discardReceived.store(true);
+  s->receiveStatus.store(0);
+  s->lastReceivedAt.store(0);
+  s->receiveDrops.store(false);
+  s->channelsChanged.store(true);
+  s->link.enableLinkAudio((enabled || s->audioEnabled.load(std::memory_order_acquire)) && s->link.isEnabled());
+  return 1;
+}
+
+void linkBackendPollAudio(void*, void* state) {
+  auto* s = (RealLinkState*)state;
+  if (!s->receiveEnabled.load(std::memory_order_acquire) || !s->link.isEnabled() ||
+      !s->channelsChanged.exchange(false)) return;
+  const auto channels = s->link.channels();
+  for (const auto& channel : channels)
+    if (s->audioSource && channel.id == s->audioSource->id()) return;
+  s->audioSource.reset();
+  s->discardReceived.store(true);
+  s->receiveStatus.store(0);
+  for (const auto& channel : channels) {
+    if (channel.peerName != "ChooChooTracker" || channel.name != "Master") continue;
+    s->receiveStatus.store(1);
+    s->audioSource.reset(new ableton::LinkAudioSource(s->link, channel.id,
+      [s](ableton::LinkAudioSource::BufferHandle buffer) {
+        if (!s->receiveEnabled.load(std::memory_order_acquire)) return;
+        const auto session = s->link.captureAppSessionState();
+        const auto beat = buffer.info.beginBeats(session, 4.0);
+        if (!beat) return; // A packet from a previous Link session.
+        if (buffer.info.numChannels != 2 || buffer.info.sampleRate < 8000 ||
+            buffer.info.sampleRate > 192000 || buffer.info.numFrames > 32768) {
+          s->receiveStatus.store(4);
+          return;
+        }
+        const double time = static_cast<double>(session.timeAtBeat(*beat, 4.0).count());
+        const bool ok = s->receiveBuffer->push(buffer.samples,
+          static_cast<unsigned>(buffer.info.numFrames), buffer.info.sampleRate, time);
+        if (!ok) s->receiveDrops.store(true);
+        s->lastReceivedAt.store(static_cast<uint64_t>(s->link.clock().micros().count()));
+        s->receiveStatus.store(ok ? 2 : 3);
+      }));
+    break;
+  }
+}
+
+const char* linkBackendAudioReceiveStatus(void*, void* state) {
+  auto* s = (RealLinkState*)state;
+  if (!s->receiveEnabled.load(std::memory_order_acquire)) return "Off";
+  if (!s->link.isEnabled()) return "Disconnected";
+  const int status = s->receiveStatus.load();
+  const uint64_t last = s->lastReceivedAt.load();
+  if ((status == 2 || status == 3) && last &&
+      static_cast<uint64_t>(s->link.clock().micros().count()) - last > 1000000)
+    return "No recent audio";
+  switch (status) {
+    case 1: return "Subscribed";
+    case 2: return s->receiveDrops.load() ? "Receiving (drops)" : "Receiving";
+    case 3: return "Buffer full";
+    case 4: return "Invalid format";
+    default: return "Waiting for CCT";
+  }
+}
+
+int linkBackendMixReceivedAudio(void*, void* state, float* samples, int frames, int sampleRate) {
+  auto* s = (RealLinkState*)state;
+  if (!s->receiveEnabled.load(std::memory_order_acquire)) return 0;
+  if (s->discardReceived.exchange(false)) s->receiveBuffer->discard();
+  if (!s->link.isEnabled()) { s->receiveBuffer->discard(); return 0; }
+  // Prototype: fixed 100 ms playout delay absorbs Wi-Fi jitter; no retransmission.
+  const double time = s->audioClock.time(
+    s->lastSampleCounter.load(std::memory_order_relaxed), sampleRate,
+    static_cast<double>(s->audioTime.count())) - 100000.0;
+  return s->receiveBuffer->mix(samples, frames, sampleRate, time);
 }
 #endif
 
@@ -280,10 +391,18 @@ static const LinkBackend kLinkBackend = {
   linkBackendSetTempo,
   linkBackendSetTransportSync,
   linkBackendSetPlaying,
-#ifdef DESKTOP_BUILD
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
   linkBackendSetAudioEnabled,
   linkBackendSendAudio,
+  linkBackendSetAudioReceiveEnabled,
+  linkBackendPollAudio,
+  linkBackendAudioReceiveStatus,
+  linkBackendMixReceivedAudio,
 #else
+  nullptr,
+  nullptr,
+  nullptr,
+  nullptr,
   nullptr,
   nullptr,
 #endif

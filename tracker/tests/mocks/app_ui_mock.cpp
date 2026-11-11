@@ -71,6 +71,10 @@ const AppScreen screenMixer = {nullptr, nullptr, noOp, noOp, ignoreInput};
 int screenMixerGetPage(void) { return 0; }
 const AppScreen screenGroove = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenProject = {nullptr, nullptr, noOp, noOp, ignoreInput};
+const AppScreen screenProjectTuning = {nullptr, nullptr, noOp, noOp, ignoreInput};
+const AppScreen screenLinkOptions = {nullptr, nullptr, noOp, noOp, ignoreInput};
+const AppScreen screenLinkAudio = {nullptr, nullptr, noOp, noOp, ignoreInput};
+const AppScreen screenSyncOut = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenAYWavetable = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen* currentScreen = &screenSong;
 ScreenData* mockScreenData;

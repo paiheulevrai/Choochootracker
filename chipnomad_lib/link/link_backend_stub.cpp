@@ -62,6 +62,10 @@ static const LinkBackend kLinkStubBackend = {
   nullptr,
   nullptr,
   nullptr,
+  nullptr,
+  nullptr,
+  nullptr,
+  nullptr,
 };
 
 const LinkBackend* linkBackendRealGet(void) {

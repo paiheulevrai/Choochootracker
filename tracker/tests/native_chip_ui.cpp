@@ -49,6 +49,7 @@
 #include "corelib_audio.h"
 #include "file_browser.h"
 #include "midi/midi_router.h"
+#include "link/link_backend.h"
 #include "chipnomad_lib_live_stick.h"
 #include <fstream>
 #include <thread>
@@ -72,9 +73,12 @@ extern "C" void __wrap_audioPause(int paused) {
 }
 static const char* virtualBMPPath = "/ChooChooTracker/__bmp_stream_test__.bmp";
 static std::string virtualBMPBacking;
+static std::string settingsOverride;
 static int virtualBMPOpens;
 extern "C" FILE* __real_fopen(const char*, const char*);
 extern "C" FILE* __wrap_fopen(const char* path, const char* mode) {
+  if (!settingsOverride.empty() && std::filesystem::path(path).filename() == "settings.txt")
+    return __real_fopen(settingsOverride.c_str(), mode);
   if (!virtualBMPBacking.empty() && !strcmp(path, virtualBMPPath)) {
     ++virtualBMPOpens;
     return __real_fopen(virtualBMPBacking.c_str(), mode);
@@ -435,6 +439,158 @@ int main(int argc,char** argv){
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
 #ifdef BMP_STREAM_TEST
+  if(argc==3 && !strcmp(argv[2],"--project-options-only")) {
+    settingsOverride = std::filesystem::absolute(std::filesystem::path(output) / "project-options-settings.txt").string();
+    require(!std::filesystem::exists(settingsOverride), "isolated settings fixture");
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+    projectFree(&chipnomadState->project); projectInitAY(&chipnomadState->project);
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    struct Probe {
+      int sends = 0, frames = 0, rate = 0, transport = -1;
+      bool enabled = false, audio = false, receive = false;
+      int16_t samples[1024] = {};
+    } probe;
+    LinkBackend backend{};
+    backend.userdata = &probe;
+    backend.create = [](void* data) -> void* { return data; };
+    backend.destroy = [](void*, void*) {};
+    backend.enable = [](void* data, void*) { static_cast<Probe*>(data)->enabled = true; return 1; };
+    backend.disable = [](void* data, void*) { static_cast<Probe*>(data)->enabled = false; };
+    backend.isEnabled = [](void* data, void*) { return int(static_cast<Probe*>(data)->enabled); };
+    backend.numPeers = [](void*, void*) { return 0; };
+    backend.captureAudioSessionState = [](void*, void*, double*, double*, uint64_t*, uint64_t*, int*) { return 0; };
+    backend.onAudioFrame = [](void*, void*, uint64_t, uint64_t) {};
+    backend.resetHostTimeFilter = [](void*, void*) {};
+    backend.setTempo = [](void*, void*, double) { return 1; };
+    backend.setTransportSync = [](void* data, void*, int enabled) { static_cast<Probe*>(data)->transport = enabled; };
+    backend.setAudioEnabled = [](void* data, void*, int enabled) { static_cast<Probe*>(data)->audio = enabled; return 1; };
+    backend.sendAudio = [](void* data, void*, const int16_t* samples, int frames, int rate) {
+      auto& p = *static_cast<Probe*>(data);
+      if (!p.audio || !p.enabled) return;
+      require(frames == 512, "stereo callback frame count");
+      ++p.sends; p.frames = frames; p.rate = rate;
+      memcpy(p.samples, samples, sizeof(p.samples));
+    };
+    backend.setAudioReceiveEnabled = [](void* data, void*, int enabled) {
+      static_cast<Probe*>(data)->receive = enabled; return 1;
+    };
+    backend.mixReceivedAudio = [](void* data, void*, float* samples, int frames, int) {
+      if (!static_cast<Probe*>(data)->receive) return 0;
+      for (int i = 0; i < frames; ++i) {
+        samples[i * 2] += (i % 48 < 24 ? 0.1f : -0.1f);
+        samples[i * 2 + 1] -= (i % 48 < 24 ? 0.1f : -0.1f);
+      }
+      return frames;
+    };
+    linkClientDestroy(chipnomadState->linkClient);
+    linkClientSetBackend(&backend);
+    chipnomadState->linkClient = linkClientCreate();
+    captureAudioCallback = true;
+    require(!audioManager.start(48000, 512) && previewAudioCallback, "project audio callback captured");
+    require(audioManager.getLocalOutputEnabled() && !linkClientIsAudioEnabled(chipnomadState->linkClient),
+            "session starts with local audio On and send Off");
+    auto touch = [&](int x, int y) { require(screenTouchTap(x,y), "project option touch target"); appDraw(); };
+    auto back = [&]() { key(1,keyOpt); key(0,0); };
+    screenSetup(&screenProject, 0); appDraw();
+    require(screenProjectExtra.rows == 12, "same compact Project layout on all platforms");
+    capture("project-menu");
+    gfxSetCursorBrackets(0);
+    screenProjectExtra.cursorRow = 6;
+    screenFullRedraw(&screenProjectExtra); appDraw();
+    const auto cleanMenu = framePixels();
+    for (int i = 0; i < 5; ++i) { key(1,keyDown); key(0,0); }
+    for (int i = 0; i < 5; ++i) { key(1,keyUp); key(0,0); }
+    const auto revisitedMenu = framePixels();
+    for (int y = 12 * 24; y < 18 * 24; ++y)
+      for (int x = 0; x < 12 * 16; ++x)
+        require(cleanMenu[y * 640 + x] == revisitedMenu[y * 640 + x],
+                "Project submenu labels leave no stale cursor underline");
+    require(!screenTouchTap(13,14), "Project gap is not editable");
+    touch(2,15);
+    require(currentScreen == &screenProjectTuning, "Tuning opens from its label");
+    capture("project-tuning");
+    uint8_t linear = chipnomadState->project.linearPitch;
+    touch(20,2); tapEdit();
+    require(chipnomadState->project.linearPitch == !linear && projectModified, "Linear pitch remains editable");
+    touch(2,3);
+    require(currentScreen == &screenPitchTable, "Pitch table opens from Tuning");
+    back(); require(currentScreen == &screenProjectTuning, "Pitch table returns to Tuning");
+    back(); require(currentScreen == &screenProject, "Tuning returns to Project");
+    touch(2,13); require(currentScreen == &screenSyncOut, "Sync out opens from its label");
+    capture("project-sync-out");
+    uint8_t clock = appSettings.midiSendClock, transport = appSettings.midiSendTransport;
+    touch(20,2); tapEdit(); touch(20,3); tapEdit();
+    require(appSettings.midiSendClock == !clock && appSettings.midiSendTransport == !transport,
+            "MIDI clock and transport are independent output preferences");
+    back();
+    touch(2,12); require(currentScreen == &screenLinkOptions, "Link options accessible while Sync Off");
+    capture("project-link-options");
+    uint8_t shared = appSettings.linkTransport;
+    touch(20,2); tapEdit();
+    require(appSettings.linkTransport == !shared && probe.transport == !shared &&
+            appSettings.midiSendTransport == !transport, "Link start/stop is separate from MIDI transport");
+    touch(2,3); require(currentScreen == &screenLinkAudio, "Link Audio has its own submenu");
+    capture("project-link-audio");
+    back(); require(currentScreen == &screenLinkOptions, "Link Audio returns to Link options");
+    back(); require(currentScreen == &screenProject, "Link options returns to Project");
+    require(projectCommonOnEdit(0,5,CellEditAction::increase), "select MIDI sync");
+    require(projectCommonOnEdit(0,5,CellEditAction::increase), "select Link sync");
+    require(projectCommonOnEdit(0,6,CellEditAction::tap) && probe.enabled, "Link connection stays on Project");
+    appDraw(); capture("project-menu-link");
+    touch(2,12); touch(2,3);
+    touch(20,2); tapEdit(); require(probe.audio, "Send toggle enables backend");
+    std::vector<int16_t> pcm(48000);
+    for (size_t n = 0; n < pcm.size(); ++n) pcm[n] = int16_t(3000 * sin(n * 6.283185307179586 / 256));
+    InstrumentSample sample{}; sample.data = pcm.data(); sample.frameCount = pcm.size();
+    sample.sampleRate = 48000; sample.channels = 1;
+    const auto samplePath = std::filesystem::absolute(std::filesystem::path(output) / "project-options-preview.wav");
+    require(!std::filesystem::exists(samplePath), "isolated audio fixture");
+    char error[128];
+    require(!sampleSaveWav16(&sample, samplePath.string().c_str(), error, sizeof(error)), "save stereo-send test tone");
+    require(!audioManager.previewSample(samplePath.string().c_str()), "start stereo-send preview");
+    int16_t local[1024];
+    auto audible = [](const int16_t* samples) {
+      return std::any_of(samples, samples + 1024, [](int16_t sample) { return sample != 0; });
+    };
+    previewAudioCallback(local,512);
+    require(audible(local) && !memcmp(local,probe.samples,sizeof(local)), "local output matches sent stereo master");
+    touch(20,4); tapEdit(); require(!audioManager.getLocalOutputEnabled(), "Local audio switches Off");
+    for (int n = 0; n < 8; ++n) {
+      const int before = probe.sends;
+      std::fill(std::begin(local), std::end(local), int16_t(123));
+      previewAudioCallback(local,512);
+      require(!audible(local) && audible(probe.samples) && probe.sends == before + 1 &&
+              probe.frames == 512 && probe.rate == 48000, "muted local output still sends full stereo audio");
+    }
+    tapEdit(); previewAudioCallback(local,512);
+    require(audioManager.getLocalOutputEnabled() && audible(local) &&
+            !memcmp(local,probe.samples,sizeof(local)), "local output restores without changing the Link stream");
+    touch(20,2); tapEdit();
+    const int sends = probe.sends; previewAudioCallback(local,512);
+    require(!probe.audio && probe.sends == sends && audible(local), "disabling send preserves local playback");
+    audioManager.stopSamplePreview();
+    // Let the local limiter's DC-removal tail settle before injecting remote audio.
+    for (int n = 0; n < 128; ++n) previewAudioCallback(local,512);
+    touch(20,2); tapEdit(); require(probe.audio, "restore send for receive isolation test");
+    touch(20,3); tapEdit(); require(probe.receive, "Receive toggle enables backend");
+    previewAudioCallback(local,512);
+    require(audible(local) && !audible(probe.samples), "received audio is audible but never sent back");
+    touch(20,4); tapEdit(); previewAudioCallback(local,512);
+    require(!audible(local) && !audible(probe.samples), "local mute also silences received audio");
+    tapEdit(); touch(20,3); tapEdit(); previewAudioCallback(local,512);
+    require(!probe.receive && !audible(local), "Receive Off stops remote audio");
+    back(); back();
+    touch(2,16); require(currentScreen == &screenScale, "Scale stays directly accessible"); back();
+    touch(2,17); require(currentScreen == &screenViewSettings, "View stays directly accessible");
+    audioManager.stop(); chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
+    linkClientSetBackend(nullptr);
+    require(std::filesystem::remove(samplePath), "remove audio fixture");
+    require(std::filesystem::remove(settingsOverride), "remove isolated settings");
+    settingsOverride.clear();
+    gfxCleanup(); SDL_Quit();
+    puts("PASS: Project submenus, clean cursor navigation, tuning, MIDI/Link separation, stereo send/receive, no feedback, local mute.");
+    return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--midi-browser-only")) {
     namespace fs = std::filesystem;
     screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
@@ -1507,6 +1663,8 @@ int main(int argc,char** argv){
     struct Route { const AppScreen *from,*left,*right; };
     const Route routes[]={
       {&screenProject,&screenMixer,&screenChain},{&screenSettings,&screenMixer,&screenChain},
+      {&screenProjectTuning,&screenMixer,&screenChain},{&screenLinkOptions,&screenMixer,&screenChain},
+      {&screenLinkAudio,&screenMixer,&screenChain},{&screenSyncOut,&screenMixer,&screenChain},
       {&screenSynthSettings,&screenMixer,&screenChain},{&screenMixerSettings,&screenMixer,&screenChain},
       {&screenGraphicsSettings,&screenMixer,&screenChain},{&screenBackgroundSettings,&screenMixer,&screenChain},{&screenTrackVisuals,&screenMixer,&screenChain},
       {&screenMidi,&screenMixer,&screenChain},{&screenMidiChannelMap,&screenMixer,&screenChain},

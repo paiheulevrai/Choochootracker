@@ -59,6 +59,7 @@ struct LinkClientState {
   // can skip redundant backend calls.
   int enabled;
   int audioEnabled;
+  std::atomic<int> audioReceiveEnabled{0};
 
   // --- Status state machine (written on UI thread, read anywhere) ---
   std::atomic<LinkStatus> status;
@@ -266,6 +267,8 @@ uint64_t linkClientRequestBeatAtLaunch(LinkClientState* state, int64_t quantum) 
 // --- UI-thread poll resolution (called once per UI frame from app.cpp) ---
 
 void linkClientPoll(LinkClientState* state) {
+  const auto* backend = activeBackend();
+  if (backend->pollAudio) backend->pollAudio(backend->userdata, state->backendState);
   if (state->connectPending) {
     const int peers = activeBackend()->numPeers(activeBackend()->userdata, state->backendState);
     if (peers > 0) {
@@ -338,6 +341,30 @@ void linkClientSendAudio(LinkClientState* state, const int16_t* samples, int fra
   const auto* backend = activeBackend();
   if (state && backend->sendAudio && samples && frames > 0 && sampleRate > 0)
     backend->sendAudio(backend->userdata, state->backendState, samples, frames, sampleRate);
+}
+
+int linkClientSetAudioReceiveEnabled(LinkClientState* state, int enabled) {
+  const auto* backend = activeBackend();
+  if (!state || !backend->setAudioReceiveEnabled ||
+      !backend->setAudioReceiveEnabled(backend->userdata, state->backendState, enabled != 0)) return 0;
+  state->audioReceiveEnabled = enabled != 0;
+  return 1;
+}
+
+int linkClientIsAudioReceiveEnabled(const LinkClientState* state) {
+  return state && state->audioReceiveEnabled.load(std::memory_order_acquire);
+}
+
+const char* linkClientAudioReceiveStatus(LinkClientState* state) {
+  const auto* backend = activeBackend();
+  return state && backend->audioReceiveStatus ?
+    backend->audioReceiveStatus(backend->userdata, state->backendState) : "Unavailable";
+}
+
+int linkClientMixReceivedAudio(LinkClientState* state, float* samples, int frames, int sampleRate) {
+  const auto* backend = activeBackend();
+  return state && backend->mixReceivedAudio && samples && frames > 0 && sampleRate > 0 ?
+    backend->mixReceivedAudio(backend->userdata, state->backendState, samples, frames, sampleRate) : 0;
 }
 
 void linkClientResetHostTimeFilter(LinkClientState* state) {

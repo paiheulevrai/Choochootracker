@@ -329,7 +329,7 @@ static LinkStatus currentLinkStatus(void) {
 static void draw(void) {
   if (!clockSourceMirror) return;
   ScreenData* screen = projectScreen();
-  for (int row : {5, 7, 8, 9}) {
+  for (int row : {4, 6}) {
     const bool focused = screen->cursorRow == row;
     projectCommonDrawField(0, row, focused ? CellState::focus : CellState::normal);
     if (focused) screen->drawCursor(screen->cursorCol, row);
@@ -349,12 +349,6 @@ int projectCommonColumnCount(int row) {
     return 5; // Load, save, new, export, manage
   } else if (row >= 1 && row <= 3) {
     return 24; // File, title, author
-  } else if (row == 4) {
-    return 1; // Linear pitch
-  } else if (row == 5) {
-    return 1; // Tempo
-  } else if (row == 6) {
-    return 1; // Sync in
   }
   return 1; // Default value
 }
@@ -374,15 +368,12 @@ void projectCommonDrawStatic(void) {
   gfxPrint(0, 6, "Title");
   gfxPrint(0, 7, "Author");
 
-  gfxPrint(0, 9, "Linear pitch");
-  gfxPrint(0, 10, "Tempo");
-  gfxPrint(0, 11, "Sync");
-  gfxPrint(0, 12, "Sync out");
-  gfxPrint(0, 13, "Link");
-  gfxPrint(0, 14, "Transport");
-#ifdef DESKTOP_BUILD
-  gfxPrint(0, 15, "Link Audio");
-#endif
+  gfxPrint(0, 9, "Tempo");
+  gfxPrint(0, 10, "Sync");
+  gfxPrint(0, 11, "Link");
+  gfxPrint(0, 12, "Link options");
+  gfxPrint(0, 13, "Sync out");
+  gfxPrint(0, 15, "Tuning");
 }
 
 void projectCommonDrawCursor(int col, int row) {
@@ -401,13 +392,9 @@ void projectCommonDrawCursor(int col, int row) {
   } else if (row >= 1 && row <= 3) {
     // Text fields: file name, title, author
     gfxCursor(7 + col, 4 + row, 1);
-  } else if (row == 4) {
-    // Linear pitch
-    gfxCursor(13, 9, 3);
-  } else if (row >= 5 && row < SCR_PROJECT_ROWS) {
-    static const int y[] = {10, 11, 12, 13, 14, 15};
-    const int width = row == 5 ? 3 : row == 8 ? (linkClientIsEnabled(chipnomadState->linkClient) ? 12 : 9) : 4;
-    gfxCursor(13, y[row - 5], width);
+  } else if (row >= 4 && row < SCR_PROJECT_ROWS) {
+    const int width = row == 4 ? 3 : row == 6 ? (linkClientIsEnabled(chipnomadState->linkClient) ? 12 : 9) : row == 5 ? 4 : row == 7 ? 12 : row == 8 ? 8 : 6;
+    gfxCursor(row >= 7 ? 0 : 13, projectRowY(row), width);
   }
 }
 
@@ -436,14 +423,14 @@ void projectCommonDrawField(int col, int row, CellState state) {
   } else if (row == 3) {
     // Author
     fieldDrawText(7, 7, chipnomadState->project.author, PROJECT_TITLE_LENGTH, state);
-  } else if (row == 4) {
-    // Linear pitch
-    gfxPrint(13, 9, chipnomadState->project.linearPitch ? "ON " : "OFF");
-  } else if (row >= 5 && row < SCR_PROJECT_ROWS) {
-    static const int y[] = {10, 11, 12, 13, 14, 15};
-    const int line = y[row - 5];
-    gfxClearRect(13, line, 27, 1);
-    if (row == 5) {
+  } else if (row >= 4 && row < SCR_PROJECT_ROWS) {
+    const int line = projectRowY(row);
+    if (row >= 7) {
+      gfxClearRect(0, line, 12, 1);
+      gfxPrint(0, line, row == 7 ? "Link options" : row == 8 ? "Sync out" : "Tuning");
+    }
+    gfxClearRect(13, line, 21, 1);
+    if (row == 4) {
       uint32_t serial = 0;
       const float shared = clockSourceMirror == 2 ? linkClientGetSessionTempo(chipnomadState->linkClient, &serial) : 0;
       const int bpm = shared > 0 ? (int)(shared + 0.5f) : liveClockBpm();
@@ -452,32 +439,20 @@ void projectCommonDrawField(int col, int row, CellState state) {
       gfxSetFgColor(appSettings.colorScheme.textInfo);
       if (clockSourceMirror == 1) gfxPrint(25, line, "received");
       else if (clockSourceMirror == 2 && linkClientIsEnabled(chipnomadState->linkClient)) gfxPrint(25, line, "shared");
-    } else if (row == 6) {
+    } else if (row == 5) {
       gfxPrint(13, line, clockSourceMirror == 2 ? "Link" : clockSourceMirror == 1 ? "MIDI" : "Off");
-    } else if (row == 7) {
-      if (clockSourceMirror == 1) gfxSetFgColor(appSettings.colorScheme.textInfo);
-      gfxPrint(13, line, clockSourceMirror != 1 && appSettings.midiSendClock ? "MIDI" : "Off");
-      if (clockSourceMirror == 1) gfxPrint(25, line, "MIDI input");
-    } else if (clockSourceMirror != 2) {
+    } else if (row == 6 && clockSourceMirror != 2) {
       gfxSetFgColor(appSettings.colorScheme.textInfo);
       gfxPrint(13, line, "--");
-    } else if (row == 8) {
+    } else if (row == 6) {
       gfxPrint(13, line, linkClientIsEnabled(chipnomadState->linkClient) ? "[Disconnect]" : "[Connect]");
       gfxSetFgColor(appSettings.colorScheme.textInfo);
       const LinkStatus status = currentLinkStatus();
       if (status == LinkStatus::connected || status == LinkStatus::noPeers)
         gfxPrintf(26, line, "%d peers", linkClientGetPeerCount(chipnomadState->linkClient));
-      else if (status == LinkStatus::connecting) gfxPrint(26, line, "Searching");
-      else if (status == LinkStatus::error) gfxPrint(26, line, "Unavailable");
-      else if (status == LinkStatus::noNetwork) gfxPrint(26, line, "No network");
-    } else if (row == 9) {
-      gfxPrint(13, line, appSettings.linkTransport ? "On" : "Off");
-      gfxSetFgColor(appSettings.colorScheme.textInfo);
-      gfxPrint(25, line, "Link play/stop");
-    } else {
-      gfxPrint(13, line, linkClientIsAudioEnabled(chipnomadState->linkClient) ? "On" : "Off");
-      gfxSetFgColor(appSettings.colorScheme.textInfo);
-      gfxPrint(25, line, "Master send");
+      else if (status == LinkStatus::connecting) gfxPrint(26, line, "Search");
+      else if (status == LinkStatus::error) gfxPrint(26, line, "Error");
+      else if (status == LinkStatus::noNetwork) gfxPrint(26, line, "Offline");
     }
   }
 }
@@ -554,15 +529,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
     } else if (res > 1) {
       handled = 1;
     }
-  } else if (row == 4) {
-    // Linear pitch (ON/OFF)
-    handled = edit8noLast(action, &chipnomadState->project.linearPitch, 1, 0, 1);
-    if (handled) {
-      projectModified = 1;
-      chipnomadQueuePlaybackStop(chipnomadState);
-      reinitializePitchTable(&chipnomadState->project);
-    }
-  } else if (row == 6) {
+  } else if (row == 5) {
     // Keep the saved source values compatible with previous versions.
     action = convertMultiAction(action);
     switch (action) {
@@ -607,7 +574,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
       bpmValue = (uint16_t)bpm;
       fullRedraw();
     }
-  } else if (row == 5) {
+  } else if (row == 4) {
     if (clockSourceMirror == 1) {
       // Slaved to MIDI clock: the tempo is driven by the incoming clock,
       // so edits are swallowed (the field shows the live followed tempo).
@@ -657,13 +624,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
         projectModified = 1;
       }
     }
-  } else if (row == 7) {
-    if (clockSourceMirror == 1) return 0;
-    action = convertMultiAction(action);
-    if (action == CellEditAction::tap || action == CellEditAction::doubleTap) { appSettings.midiSendClock ^= 1; handled = 1; }
-    else handled = edit8noLast(action, &appSettings.midiSendClock, 1, 0, 1);
-    if (handled) midiRouterSetSyncOutput(chipnomadState->midiRouter, appSettings.midiSendClock, appSettings.midiSendTransport);
-  } else if (row == 8 && clockSourceMirror == 2) {
+  } else if (row == 6 && clockSourceMirror == 2) {
     action = convertMultiAction(action);
     if (action == CellEditAction::tap || action == CellEditAction::doubleTap) {
       if (linkClientIsEnabled(chipnomadState->linkClient)) linkClientDisconnect(chipnomadState->linkClient);
@@ -677,31 +638,13 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
       linkClientDisconnect(chipnomadState->linkClient);
       handled = 1;
     }
-  } else if (row == 9 && clockSourceMirror == 2) {
-    action = convertMultiAction(action);
-    if (action == CellEditAction::tap || action == CellEditAction::doubleTap) { appSettings.linkTransport ^= 1; handled = 1; }
-    else handled = edit8noLast(action, &appSettings.linkTransport, 1, 0, 1);
-    if (handled) linkClientSetTransportSync(chipnomadState->linkClient, appSettings.linkTransport);
-#ifdef DESKTOP_BUILD
-  } else if (row == 10 && clockSourceMirror == 2) {
-    action = convertMultiAction(action);
-    int enabled = linkClientIsAudioEnabled(chipnomadState->linkClient);
-    if (action == CellEditAction::tap || action == CellEditAction::doubleTap) {
-      enabled = !enabled;
-      handled = 1;
-    } else if (action == CellEditAction::clear || action == CellEditAction::decrease ||
-               action == CellEditAction::decreaseBig) {
-      enabled = 0;
-      handled = 1;
-    } else if (action == CellEditAction::increase || action == CellEditAction::increaseBig) {
-      enabled = 1;
-      handled = 1;
-    }
-    if (handled && !linkClientSetAudioEnabled(chipnomadState->linkClient, enabled))
-      screenMessage(MESSAGE_TIME_ERROR, "Link Audio unavailable");
-#endif
+  } else if (action == CellEditAction::tap || action == CellEditAction::doubleTap) {
+    if (row == 7) screenSetup(&screenLinkOptions, 0);
+    else if (row == 8) screenSetup(&screenSyncOut, 0);
+    else if (row == 9) screenSetup(&screenProjectTuning, 0);
   }
-  if (handled && row >= 6) settingsSave();
+  if (handled && row >= 5 && settingsSave())
+    screenMessage(MESSAGE_TIME_ERROR, "Could not save sync settings");
 
   return handled;
 }

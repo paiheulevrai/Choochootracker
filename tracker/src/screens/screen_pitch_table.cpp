@@ -161,7 +161,7 @@ static void draw(void) {
 
 static int inputScreenNavigation(int keys, int tapCount) {
   if (keys == keyOpt) {
-    screenSetup(&screenProject, 0);
+    screenSetup(&screenProjectTuning, 0);
     return 1;
   }
   return 0;
