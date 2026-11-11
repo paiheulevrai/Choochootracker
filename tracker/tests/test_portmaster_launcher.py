@@ -1,6 +1,7 @@
 import os
 import io
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import tarfile
@@ -8,6 +9,7 @@ import unittest
 
 
 LAUNCHER = Path(__file__).resolve().parents[1] / "packaging" / "portmaster" / "ChooChooTracker.sh"
+DEBUG_LAUNCHER = LAUNCHER.with_name("ChooChooTracker-debug.sh")
 
 
 class PortMasterLauncherTest(unittest.TestCase):
@@ -127,6 +129,26 @@ class PortMasterLauncherTest(unittest.TestCase):
         self.run_launcher("ROCKNIX", blocked=True, retry=True, launches=2,
                           assets={"projects/New song.cct": b"complete song",
                                   "samples/New sample.wav": b"sample"})
+
+    def test_debug_launcher_traces_original_and_writes_diagnostic_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "ChooChooTracker.sh").write_text(
+                '#!/bin/bash\nprintf "stub launcher ran\\n"\n'
+            )
+            shutil.copyfile(DEBUG_LAUNCHER, root / DEBUG_LAUNCHER.name)
+            (root / "choochootracker").mkdir()
+            result = subprocess.run(
+                ["bash", DEBUG_LAUNCHER.name],
+                env=dict(os.environ, HOME=tmp, XDG_DATA_HOME=tmp),
+                capture_output=True, text=True, timeout=10,
+                cwd=root,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            log = (root / "cct-startup.txt").read_text()
+            self.assertIn("=== Original launcher trace ===", log)
+            self.assertIn("stub launcher ran", log)
+            self.assertIn("=== Launcher exited with status 0 ===", log)
 
 
 if __name__ == "__main__":
