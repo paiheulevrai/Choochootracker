@@ -2171,6 +2171,7 @@ the current screen.
 | Saturation | Drive, Tone, Level, Mix |
 | Bitcrusher | Bit depth, Rate reduction, Tone, Mix |
 | Destruction | Crush, Rate, Fold, Distort, Saturate, Tone, Mix, Input |
+| Beads | Time, Size, Density, Pitch, Scatter, Feedback, Shape / Freeze, Mix |
 | FORMANT | Mode, Vowel, First formant, Second formant, Resonance, Mix |
 
 Continuous controls use 00–FF, except FORMANT VOW (00–7F). Bipolar
@@ -2181,6 +2182,10 @@ controls have an exact neutral at 80. Distortion modes are 00 Density, 01 Drive,
 low-pass, above is high-pass. A track source is taken after its volume, pan and
 Tilt EQ but before its inserts; a muted or absent source supplies silence. Either
 slot can contain any module; repeated modules are independent.
+Beads Pitch spans -24 to +24 semitones. The closest byte value to each whole
+semitone is tuned exactly (for example `40` = -12, `80` = 0 and `C0` = +12);
+the values between them retain fine detuning. Existing projects and automation
+using those anchor bytes may sound slightly different.
 Stereo Width shapes the sides without moving the centre. Width `00` folds the
 signal to mono, `80` leaves its existing width unchanged and `FF` reaches 200%.
 Space adds width to mono sounds; its generated bass stays centred. New Stereo

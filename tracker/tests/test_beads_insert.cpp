@@ -3,6 +3,7 @@
 #include "insert_fx.h"
 #include "chipnomad_lib.h"
 #include "playback_internal.h"
+#include "external/mutable/stmlib/dsp/units.h"
 #include "external/mutable/stmlib/utils/random.h"
 #include <algorithm>
 #include <cmath>
@@ -44,6 +45,37 @@ double power(const std::vector<float>& x, size_t start = 0) {
 }
 
 TEST_SUITE("Beads insert") {
+TEST_CASE("pitch has exact semitone anchors and retains fine tuning between them") {
+  CHECK(insertMap(insertBeads, 3, 0xC0) == 12.0f);
+  CHECK(insertMap(insertBeads, 3, 0x40) == -12.0f);
+  char description[64];
+  insertDescribe(description, sizeof(description), insertBeads, 3, 0xC0);
+  CHECK(std::strcmp(description, "12.00 st") == 0);
+  for (int semitones = -24; semitones <= 24; ++semitones) {
+    CAPTURE(semitones);
+    const int span = semitones < 0 ? 128 : 127;
+    const int anchor = (std::abs(semitones) * span + 12) / 24;
+    const int value = 128 + (semitones < 0 ? -anchor : anchor);
+    const float pitch = insertMap(insertBeads, 3, value);
+    CHECK(pitch == float(semitones));
+    CHECK(stmlib::SemitonesToRatio(pitch) ==
+          doctest::Approx(std::pow(2.0, semitones / 12.0)).epsilon(0.00001));
+  }
+  float previous = -25.0f;
+  for (int value = 0; value <= 255; ++value) {
+    CAPTURE(value);
+    const int offset = value - 128;
+    const int span = offset < 0 ? 128 : 127;
+    const int distance = std::abs(offset);
+    const int semitones = (distance * 24 + span / 2) / span;
+    const int anchor = (semitones * span + 12) / 24;
+    const float pitch = insertMap(insertBeads, 3, value);
+    CHECK(pitch > previous);
+    if (distance != anchor)
+      CHECK(pitch == doctest::Approx(24.0f * offset / span));
+    previous = pitch;
+  }
+}
 TEST_CASE("pool is lazy bounded and keeps leases alive until producer collection") {
   BeadsPool pool;
   CHECK(pool.allocated() == 0);

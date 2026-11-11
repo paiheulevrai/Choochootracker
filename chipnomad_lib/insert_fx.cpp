@@ -185,6 +185,14 @@ float insertMap(int m, int p, int v) {
     return v <= 128 ? v / 128.0f : 1.0f + (v - 128) / 127.0f;
   if (m == insertStereoWidth && p == 2)
     return v == 0 ? 0.0f : 40.0f * powf(10.0f, (v - 1) / 254.0f);
+  if (m == insertBeads && p == 3) {
+    const int offset = v - 128;
+    const int span = offset < 0 ? 128 : 127;
+    const int distance = std::abs(offset);
+    const int semitones = (distance * 24 + span / 2) / span;
+    const int anchor = (semitones * span + 12) / 24;
+    if (distance == anchor) return offset < 0 ? -semitones : semitones;
+  }
   float x = v / float(std::max(1, insertParameterMaximum(m, p)));
   if (a.mapping == M::discrete) return v;
   if (a.mapping == M::exponential) return a.minimum * powf(a.maximum / a.minimum, x);
