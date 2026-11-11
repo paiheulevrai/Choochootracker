@@ -2073,6 +2073,22 @@ During Link playback, CCT gently corrects its local tick rate once per four-beat
 
 **PortMaster note:** on PortMaster devices the audio buffer is larger (512 frames at 48 kHz), so beat alignment is best-effort within roughly 10-15 ms rather than sample-accurate. Tempo sync itself is unaffected.
 
+#### Link Audio prototype
+
+On desktop, **Project > Link Audio** enables an experimental stereo master send.
+It defaults to Off each time CCT starts. Set **Sync: Link**, connect, and set
+**Link Audio: On**. In a compatible receiver, select the `Master` channel
+from the `ChooChooTracker` peer. This also sends preview and monitored input
+audio to compatible peers on the local network; enable it only on a trusted
+network and avoid routing the received signal back into CCT. Local output
+remains enabled, so monitor only one path to avoid doubled audio.
+
+The receiver must support Link Audio, not just tempo synchronization. For
+example, VCV Rack can use the third-party VoidLinkAudio Receive module. Network
+latency and alignment depend on the receiver, audio buffers and connection.
+This prototype does not receive audio or send separate tracks; it is not
+available on handheld or Android builds.
+
 ## 12. Settings
 
 - **Audio** offers a **Sample rate** of `32 kHz`, `44.1 kHz` or `48 kHz` (default), an adjustable **Buffer size** (32 to 2048 frames), **Audio Output**, and a master **Audio Input** switch. On **Audio Output**, hold EDIT and press Left or Right to switch to the next usable output; EDIT alone leaves it unchanged. `Default` follows the system's audio routing; named outputs let you choose a connected interface, such as a USB sound card or HDMI. Unavailable outputs are skipped, and the working selection is saved. If no other output works, the previous output is restored and `No other output` appears briefly. If that output has also become unavailable, the app tries `Default`. At startup, an unavailable saved interface also falls back to `Default`. Changing the sample rate stops playback and sample preview while the sound engines and any enabled audio input reopen at the new rate. If a device rejects the new rate, the previous setting remains active. Choose `44.1 kHz` when the sound card runs at 44.1 kHz, so that the system does not resample the output. A larger buffer gives the audio engine more time but increases latency (2048 frames is about 43 ms at 48 kHz); 32 kHz reduces processing work and limits the highest reproduced frequency to 16 kHz. The CPU load readout shows audio rendering cost.

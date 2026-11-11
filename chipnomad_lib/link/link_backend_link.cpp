@@ -11,12 +11,26 @@
 
 #if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD) || defined(ANDROID_BUILD)
 
+#ifdef DESKTOP_BUILD
+#ifdef LINK_PLATFORM_WINDOWS
+// Windows headers define "interface", which collides with Link Audio identifiers.
+#include <ableton/platforms/Config.hpp>
+#undef interface
+#endif
+#include <ableton/LinkAudio.hpp>
+#else
 #include <ableton/Link.hpp>
+#endif
 
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#ifdef DESKTOP_BUILD
+#include <cstring>
+#include <memory>
+#include <optional>
+#endif
 
 #ifdef ANDROID_BUILD
 // T28: Android needs a WifiManager MulticastLock before Link's mDNS
@@ -33,7 +47,15 @@ namespace {
 
 
 struct RealLinkState {
-  ableton::Link link{125.0};  // seed tempo; overridden by the session once connected
+#ifdef DESKTOP_BUILD
+  ableton::LinkAudio link{125.0, "ChooChooTracker"};
+  std::unique_ptr<ableton::LinkAudioSink> audioSink;
+  std::atomic<bool> audioEnabled{false};
+  std::optional<ableton::LinkAudio::SessionState> audioSession;
+  std::chrono::microseconds audioTime{0};
+#else
+  ableton::Link link{125.0};
+#endif
   HostTimeFilter hostTimeFilter;
   // Latest sample counter reported by the audio thread; the launch-time
   // estimator maps it through the regression to a host time.
@@ -67,11 +89,17 @@ int linkBackendEnable(void*, void* state) {
   // app can never observe session transport changes.
   s->link.enableStartStopSync(s->transportSync);
   s->link.enable(true);
+#ifdef DESKTOP_BUILD
+  if (s->audioEnabled.load(std::memory_order_acquire)) s->link.enableLinkAudio(true);
+#endif
   return 1;
 }
 
 void linkBackendDisable(void*, void* state) {
   RealLinkState* s = (RealLinkState*)state;
+#ifdef DESKTOP_BUILD
+  s->link.enableLinkAudio(false);
+#endif
   s->link.enable(false);
   s->link.enableStartStopSync(false);
   s->hostTimeFilter.reset();
@@ -192,12 +220,44 @@ void linkBackendOnAudioFrame(void*, void* state, uint64_t sampleCounter, uint64_
   RealLinkState* s = (RealLinkState*)state;
   s->lastSampleCounter.store(sampleCounter, std::memory_order_relaxed);
   s->hostTimeFilter.add(sampleCounter, hostTimeMicros);
+#ifdef DESKTOP_BUILD
+  s->audioSession.reset();
+  if (s->audioEnabled.load(std::memory_order_acquire) && s->link.isEnabled()) {
+    s->audioSession.emplace(s->link.captureAudioSessionState());
+    s->audioTime = s->link.clock().micros() + std::chrono::microseconds(outputLatencyMicros());
+  }
+#endif
 }
 
 void linkBackendResetHostTimeFilter(void*, void* state) {
   RealLinkState* s = (RealLinkState*)state;
   s->hostTimeFilter.reset();
 }
+
+#ifdef DESKTOP_BUILD
+int linkBackendSetAudioEnabled(void*, void* state, int enabled) {
+  auto* s = (RealLinkState*)state;
+  if (enabled && !s->audioSink)
+    s->audioSink.reset(new ableton::LinkAudioSink(s->link, "Master", 4096));
+  if (!enabled) s->audioEnabled.store(false, std::memory_order_release);
+  s->link.enableLinkAudio(enabled && s->link.isEnabled());
+  if (enabled) s->audioEnabled.store(true, std::memory_order_release);
+  return 1;
+}
+
+void linkBackendSendAudio(void*, void* state, const int16_t* samples, int frames, int sampleRate) {
+  auto* s = (RealLinkState*)state;
+  if (!s->audioEnabled.load(std::memory_order_acquire) || !s->audioSession) return;
+  ableton::LinkAudioSink::BufferHandle buffer(*s->audioSink);
+  if (!buffer) return;
+  const size_t count = static_cast<size_t>(frames) * 2;
+  if (count > buffer.maxNumSamples) return;
+  std::memcpy(buffer.samples, samples, count * sizeof(*samples));
+  constexpr double quantum = 4.0;
+  const double beat = s->audioSession->beatAtTime(s->audioTime, quantum);
+  buffer.commit(*s->audioSession, beat, quantum, frames, 2, sampleRate);
+}
+#endif
 
 // outputLatencyMicros() is declared in link_backend_internal.h. The
 // weak default definition lives in link_client.cpp; corelib_audio
@@ -220,6 +280,13 @@ static const LinkBackend kLinkBackend = {
   linkBackendSetTempo,
   linkBackendSetTransportSync,
   linkBackendSetPlaying,
+#ifdef DESKTOP_BUILD
+  linkBackendSetAudioEnabled,
+  linkBackendSendAudio,
+#else
+  nullptr,
+  nullptr,
+#endif
 };
 
 const LinkBackend* linkBackendRealGet(void) {

@@ -32,6 +32,12 @@ struct FakeLinkState {
   int requestBeatCalls = 0;
   int onAudioFrameCalls = 0;
   int resetFilterCalls = 0;
+  int audioEnabled = 0;
+  int audioEnableResult = 1;
+  int audioSendCalls = 0;
+  int audioFrames = 0;
+  int audioSampleRate = 0;
+  const int16_t* audioSamples = nullptr;
   uint64_t lastRequestedBeat = 999;  // sentinel: requestBeatAtTime arg
   double lastQuantum = -1.0;
   uint64_t lastSampleCounter = 0;
@@ -110,6 +116,17 @@ void fakeSetPlaying(void*, void*, int playing, uint64_t atMicros) {
   g_fake.sessionIsPlaying = playing;
   g_fake.transportTime = atMicros;
 }
+int fakeSetAudioEnabled(void*, void*, int enabled) {
+  if (!g_fake.audioEnableResult) return 0;
+  g_fake.audioEnabled = enabled;
+  return 1;
+}
+void fakeSendAudio(void*, void*, const int16_t* samples, int frames, int sampleRate) {
+  ++g_fake.audioSendCalls;
+  g_fake.audioFrames = frames;
+  g_fake.audioSampleRate = sampleRate;
+  g_fake.audioSamples = samples;
+}
 
 const LinkBackend kFakeBackend = {
   nullptr,  // userdata
@@ -126,6 +143,8 @@ const LinkBackend kFakeBackend = {
   fakeSetTempo,
   fakeSetTransportSync,
   fakeSetPlaying,
+  fakeSetAudioEnabled,
+  fakeSendAudio,
 };
 
 // Mirrors app.cpp's UI-tick Link block: poll the client's session tempo and
@@ -142,6 +161,35 @@ void simulateUiTick(ChipNomadState* state, uint32_t* appliedSerial) {
 }  // namespace
 
 TEST_SUITE("Link client") {
+
+TEST_CASE("Link Audio is opt-in and forwards valid stereo buffers") {
+  resetFake();
+  linkClientSetBackend(&kFakeBackend);
+  LinkClientState* client = linkClientCreate();
+  CHECK(linkClientIsAudioEnabled(client) == 0);
+  CHECK(linkClientSetAudioEnabled(client, 1) == 1);
+  CHECK(linkClientIsAudioEnabled(client) == 1);
+  CHECK(g_fake.audioEnabled == 1);
+  const int16_t samples[] = {1, -1, 2, -2};
+  linkClientSendAudio(client, samples, 2, 48000);
+  CHECK(g_fake.audioSendCalls == 1);
+  CHECK(g_fake.audioSamples == samples);
+  CHECK(g_fake.audioFrames == 2);
+  CHECK(g_fake.audioSampleRate == 48000);
+  linkClientSendAudio(client, nullptr, 2, 48000);
+  linkClientSendAudio(client, samples, 0, 48000);
+  linkClientSendAudio(client, samples, 2, 0);
+  CHECK(g_fake.audioSendCalls == 1);
+  g_fake.audioEnableResult = 0;
+  CHECK(linkClientSetAudioEnabled(client, 0) == 0);
+  CHECK(linkClientIsAudioEnabled(client) == 1);
+  g_fake.audioEnableResult = 1;
+  CHECK(linkClientSetAudioEnabled(client, 0) == 1);
+  CHECK(linkClientIsAudioEnabled(client) == 0);
+  CHECK(g_fake.audioEnabled == 0);
+  linkClientDestroy(client);
+  linkClientSetBackend(nullptr);
+}
 
 TEST_CASE("Link client lifecycle, selection and connection") {
 SUBCASE("Create/destroy lifecycle talks to the backend exactly once") {

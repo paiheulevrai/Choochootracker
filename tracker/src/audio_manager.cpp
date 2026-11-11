@@ -164,6 +164,9 @@ static void audioCallback(int16_t* buffer, int stereoSamples) {
   // when enabled. No-op (single atomic load) when monitor is off.
   audioInputManager.mixMonitor(floatBuffer, stereoSamples);
   outputLimiter.process(floatBuffer, buffer, stereoSamples);
+#ifdef DESKTOP_BUILD
+  linkClientSendAudio(chipnomadState->linkClient, buffer, stereoSamples, aSampleRate);
+#endif
 
   const auto elapsedNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
     std::chrono::steady_clock::now() - startedAt).count();

@@ -58,6 +58,7 @@ struct LinkClientState {
   // enabled mirrors the backend's enable state so Disconnect/Deselect
   // can skip redundant backend calls.
   int enabled;
+  int audioEnabled;
 
   // --- Status state machine (written on UI thread, read anywhere) ---
   std::atomic<LinkStatus> status;
@@ -84,6 +85,7 @@ struct LinkClientState {
 
   LinkClientState()
     : enabled(0),
+      audioEnabled(0),
       status(LinkStatus::disabled),
       statusSerial(0),
       sessionTempo(0.0f),
@@ -318,6 +320,24 @@ void linkClientPoll(LinkClientState* state) {
 void linkClientNotifyAudioFrame(LinkClientState* state, uint64_t sampleCounter, uint64_t hostTimeMicros) {
   activeBackend()->onAudioFrame(activeBackend()->userdata, state->backendState, sampleCounter,
                                 hostTimeMicros);
+}
+
+int linkClientSetAudioEnabled(LinkClientState* state, int enabled) {
+  const auto* backend = activeBackend();
+  if (!state || !backend->setAudioEnabled) return 0;
+  if (!backend->setAudioEnabled(backend->userdata, state->backendState, enabled != 0)) return 0;
+  state->audioEnabled = enabled != 0;
+  return 1;
+}
+
+int linkClientIsAudioEnabled(const LinkClientState* state) {
+  return state && state->audioEnabled;
+}
+
+void linkClientSendAudio(LinkClientState* state, const int16_t* samples, int frames, int sampleRate) {
+  const auto* backend = activeBackend();
+  if (state && backend->sendAudio && samples && frames > 0 && sampleRate > 0)
+    backend->sendAudio(backend->userdata, state->backendState, samples, frames, sampleRate);
 }
 
 void linkClientResetHostTimeFilter(LinkClientState* state) {

@@ -54,6 +54,8 @@ struct LinkBackend {
   int (*setTempo)(void* userdata, void* state, double bpm);
   void (*setTransportSync)(void* userdata, void* state, int enabled);
   void (*setPlaying)(void* userdata, void* state, int playing, uint64_t atMicros);
+  int (*setAudioEnabled)(void* userdata, void* state, int enabled);
+  void (*sendAudio)(void* userdata, void* state, const int16_t* samples, int frames, int sampleRate);
 };
 
 // Registers the active backend. Global rather than per-client-state:

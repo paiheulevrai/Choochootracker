@@ -380,6 +380,9 @@ void projectCommonDrawStatic(void) {
   gfxPrint(0, 12, "Sync out");
   gfxPrint(0, 13, "Link");
   gfxPrint(0, 14, "Transport");
+#ifdef DESKTOP_BUILD
+  gfxPrint(0, 15, "Link Audio");
+#endif
 }
 
 void projectCommonDrawCursor(int col, int row) {
@@ -401,8 +404,8 @@ void projectCommonDrawCursor(int col, int row) {
   } else if (row == 4) {
     // Linear pitch
     gfxCursor(13, 9, 3);
-  } else if (row >= 5 && row <= 9) {
-    static const int y[] = {10, 11, 12, 13, 14};
+  } else if (row >= 5 && row < SCR_PROJECT_ROWS) {
+    static const int y[] = {10, 11, 12, 13, 14, 15};
     const int width = row == 5 ? 3 : row == 8 ? (linkClientIsEnabled(chipnomadState->linkClient) ? 12 : 9) : 4;
     gfxCursor(13, y[row - 5], width);
   }
@@ -436,8 +439,8 @@ void projectCommonDrawField(int col, int row, CellState state) {
   } else if (row == 4) {
     // Linear pitch
     gfxPrint(13, 9, chipnomadState->project.linearPitch ? "ON " : "OFF");
-  } else if (row >= 5 && row <= 9) {
-    static const int y[] = {10, 11, 12, 13, 14};
+  } else if (row >= 5 && row < SCR_PROJECT_ROWS) {
+    static const int y[] = {10, 11, 12, 13, 14, 15};
     const int line = y[row - 5];
     gfxClearRect(13, line, 27, 1);
     if (row == 5) {
@@ -467,10 +470,14 @@ void projectCommonDrawField(int col, int row, CellState state) {
       else if (status == LinkStatus::connecting) gfxPrint(26, line, "Searching");
       else if (status == LinkStatus::error) gfxPrint(26, line, "Unavailable");
       else if (status == LinkStatus::noNetwork) gfxPrint(26, line, "No network");
-    } else {
+    } else if (row == 9) {
       gfxPrint(13, line, appSettings.linkTransport ? "On" : "Off");
       gfxSetFgColor(appSettings.colorScheme.textInfo);
       gfxPrint(25, line, "Link play/stop");
+    } else {
+      gfxPrint(13, line, linkClientIsAudioEnabled(chipnomadState->linkClient) ? "On" : "Off");
+      gfxSetFgColor(appSettings.colorScheme.textInfo);
+      gfxPrint(25, line, "Master send");
     }
   }
 }
@@ -675,6 +682,24 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
     if (action == CellEditAction::tap || action == CellEditAction::doubleTap) { appSettings.linkTransport ^= 1; handled = 1; }
     else handled = edit8noLast(action, &appSettings.linkTransport, 1, 0, 1);
     if (handled) linkClientSetTransportSync(chipnomadState->linkClient, appSettings.linkTransport);
+#ifdef DESKTOP_BUILD
+  } else if (row == 10 && clockSourceMirror == 2) {
+    action = convertMultiAction(action);
+    int enabled = linkClientIsAudioEnabled(chipnomadState->linkClient);
+    if (action == CellEditAction::tap || action == CellEditAction::doubleTap) {
+      enabled = !enabled;
+      handled = 1;
+    } else if (action == CellEditAction::clear || action == CellEditAction::decrease ||
+               action == CellEditAction::decreaseBig) {
+      enabled = 0;
+      handled = 1;
+    } else if (action == CellEditAction::increase || action == CellEditAction::increaseBig) {
+      enabled = 1;
+      handled = 1;
+    }
+    if (handled && !linkClientSetAudioEnabled(chipnomadState->linkClient, enabled))
+      screenMessage(MESSAGE_TIME_ERROR, "Link Audio unavailable");
+#endif
   }
   if (handled && row >= 6) settingsSave();
 

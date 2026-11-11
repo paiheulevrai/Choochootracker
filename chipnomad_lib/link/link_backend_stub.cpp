@@ -60,6 +60,8 @@ static const LinkBackend kLinkStubBackend = {
   nullptr, // Tempo publishing is unavailable on this platform.
   nullptr,
   nullptr,
+  nullptr,
+  nullptr,
 };
 
 const LinkBackend* linkBackendRealGet(void) {

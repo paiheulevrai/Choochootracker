@@ -103,6 +103,10 @@ void linkClientPoll(LinkClientState*);
 // enable(); the host time comes from the same steady_clock scale as
 // linkClientNowMicros().
 void linkClientNotifyAudioFrame(LinkClientState*, uint64_t sampleCounter, uint64_t hostTimeMicros);
+// Link Audio sending is opt-in and available only in desktop builds.
+int linkClientSetAudioEnabled(LinkClientState*, int enabled);
+int linkClientIsAudioEnabled(const LinkClientState*);
+void linkClientSendAudio(LinkClientState*, const int16_t* samples, int frames, int sampleRate);
 
 // Reset the HostTimeFilter window: on enable(), sample-rate change or
 // buffer-size change.

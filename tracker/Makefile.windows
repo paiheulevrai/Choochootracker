@@ -64,6 +64,13 @@ windows: $(TARGET)
 	cp "$$(dirname "$$(command -v sdl2-config)")/libwinpthread-1.dll" $(BUILD)/
 	cp -r packaging/common/* $(BUILD)/
 
+.PHONY: link-audio-integration
+link-audio-integration: $(BUILD)/link-audio-integration$(OUTPUT_EXT)
+	$<
+
+$(BUILD)/link-audio-integration$(OUTPUT_EXT): tests/link_audio_integration.cpp $(call object_for,../chipnomad_lib/link/link_backend_link.cpp) $(call object_for,../chipnomad_lib/link/link_client.cpp)
+	$(CXX) $(CFLAGS) $^ $(XTRA_LIBS) -o $@
+
 $(TARGET): $(OBJECTS) $(WINDOWS_ICON)
 	mkdir -p $(BUILD)
 	@$(file >$(BUILD)/objects.rsp,$(subst $(space),$(newline),$(OBJECTS) $(WINDOWS_ICON)))
