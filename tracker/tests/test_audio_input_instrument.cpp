@@ -65,6 +65,77 @@ TEST_CASE("Audio in capture is stereo and independent from dry monitoring") {
   CHECK(recent[1] == doctest::Approx(-3008 / 32768.0f));
 }
 
+TEST_CASE("Audio in retrigger preserves a running stereo filter") {
+  for (int character = 1; character <= 6; ++character) {
+    CAPTURE(character);
+    Instrument instrument{};
+    getInstrumentFunctions(InstrumentType::AudioIn).init(&instrument);
+    auto& p = instrument.chip.audioIn;
+    p.filterEnabled = 1;
+    p.filterCharacter = character;
+    p.filterCutoffHz = 400;
+    p.filterResonance = 80;
+    AudioInputVoice reference, retriggered;
+    float input[512], expected[512], actual[512];
+    for (int i = 0; i < 256; ++i) { input[2 * i] = .25f; input[2 * i + 1] = -.125f; }
+    for (auto* voice : {&reference, &retriggered}) {
+      voice->init(48000);
+      voice->configure(p, 1);
+      voice->setInput(input, 256);
+      voice->noteOn();
+    }
+    for (int block = 0; block < 8; ++block) {
+      reference.render(expected, 256);
+      retriggered.render(actual, 256);
+    }
+    retriggered.noteOn();
+    reference.render(expected, 256);
+    retriggered.render(actual, 256);
+    float maxDifference = 0;
+    for (int i = 0; i < 512; ++i)
+      maxDifference = std::fmax(maxDifference, std::fabs(actual[i] - expected[i]));
+    CHECK(maxDifference < 1e-6f);
+  }
+}
+
+TEST_CASE("Audio in envelope settings shape notes and retriggers") {
+  Instrument instrument{};
+  getInstrumentFunctions(InstrumentType::AudioIn).init(&instrument);
+  auto& p = instrument.chip.audioIn;
+  p.filterEnabled = 0;
+  p.attack = 16;
+  p.decay = 16;
+  p.sustain = 64;
+  p.release = 16;
+  p.envelopeShape = 128;
+  AudioInputVoice voice;
+  float input[4096], output[4096];
+  for (float& sample : input) sample = .5f;
+  voice.init(48000);
+  voice.configure(p, 1);
+  voice.setInput(input, 2048);
+  voice.noteOn();
+  voice.render(output, 256);
+  CHECK(output[0] == 0);
+  CHECK(output[510] > 0);
+  CHECK(output[510] < .25f);
+  voice.render(output, 2048);
+  CHECK(output[4094] == doctest::Approx(.5f * 64 / 255));
+
+  p.sustain = 128;
+  voice.configure(p, 1);
+  const float before = voice.envelopeLevel();
+  voice.noteOn();
+  voice.render(output, 2048);
+  CHECK(output[0] == doctest::Approx(.5f * before));
+  CHECK(output[4094] == doctest::Approx(.5f * 128 / 255));
+  voice.noteOff();
+  voice.render(output, 2048);
+  CHECK(output[0] > 0);
+  CHECK(output[4094] == 0);
+  CHECK_FALSE(voice.active());
+}
+
 TEST_CASE("Audio in preset preserves post settings and utility category") {
   auto saved = std::make_unique<Project>(), loaded = std::make_unique<Project>();
   fillFXNames(); projectInit(saved.get()); projectInit(loaded.get());

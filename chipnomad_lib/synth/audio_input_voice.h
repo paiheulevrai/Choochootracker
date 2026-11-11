@@ -16,7 +16,7 @@ class AudioInputVoice {
       p.release * p.release / 13005.0f, p.envelopeShape);
   }
   void setInput(const float* stereo, size_t frames = (size_t)-1) { input_ = stereo; inputFrames_ = frames; }
-  void noteOn() { active_ = true; post_.noteOn(true); }
+  void noteOn() { post_.noteOn(!active_); active_ = true; }
   void noteOff() { post_.noteOff(); }
   void kill() { active_ = false; post_.kill(); input_ = nullptr; inputFrames_ = 0; }
   bool active() const { return active_; }

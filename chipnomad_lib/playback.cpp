@@ -548,10 +548,7 @@ void handleNoteOff(PlaybackState* state, int trackIdx) {
   }
 }
 
-static void initModulations(PlaybackState* state, int trackIdx, uint8_t oldInstrument, uint8_t newInstrument) {
-  PlaybackTrackState* track = &state->tracks[trackIdx];
-  Project* p = state->p;
-
+static void initModulations(PlaybackTrackState* track, Project* p, uint8_t oldInstrument, uint8_t newInstrument) {
   if (newInstrument == EMPTY_VALUE_8) return;
 
   const Modulation* mods = p->instruments[newInstrument].modulation;
@@ -797,7 +794,7 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
     }
 
     // Initialize modulations
-    initModulations(state, trackIdx, oldInstrument, instrument);
+    initModulations(track, p, oldInstrument, instrument);
 
     // Setup instrument
     setupInstrument(state, trackIdx);
@@ -1527,12 +1524,8 @@ static void syncLayerTracks(PlaybackState* state, int trackIdx) {
     child.note.fineOffset += cents;
     child.note.volume1 = (uint8_t)((volume * layerVolume + 127) / 255);
     child.note.layerGainActive = 1;
-    if (oldInstrument != slot || child.note.noteTriggered) {
-      for (int m = 0; m < 4; ++m) {
-        playbackModInit(&child.note.modulation[m], &state->p->instruments[slot].modulation[m]);
-        playbackModSetAYWavetables(&child.note.modulation[m], state->p->ayWavetables);
-      }
-    }
+    if (oldInstrument != slot || child.note.noteTriggered)
+      initModulations(&child, state->p, oldInstrument, slot);
     if (child.note.noteReleased || child.note.noteKilled)
       for (auto& modulation : child.note.modulation) playbackModNoteOff(&modulation);
 

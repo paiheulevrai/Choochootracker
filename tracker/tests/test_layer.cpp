@@ -283,6 +283,112 @@ TEST_CASE("Layer child MIDI notes are released once before the owner is retired"
   CHECK(e.state->voiceOwnerCount == 1);
 }
 
+TEST_CASE("Layer MME children respect free and retrigger LFO modes") {
+  LayerPlayback e(2);
+  auto& p = e.state->project;
+  const ModulationType types[] = {ModulationType::LFO, ModulationType::SlowLFO,
+                                 ModulationType::SLFO, ModulationType::FLFO};
+  for (int slot = 1; slot <= 2; ++slot) {
+    getInstrumentFunctions(InstrumentType::MME).init(&p.instruments[slot]);
+    for (int m = 0; m < 4; ++m) {
+      auto& mod = p.instruments[slot].modulation[m];
+      mod.type = types[m];
+      mod.destination = 2;
+      mod.amount = 32;
+      mod.p2 = static_cast<uint8_t>(slot == 1 ? LFOTrigger::free : LFOTrigger::retrig);
+      mod.p3 = 80;
+      mod.p4 = 4;
+    }
+  }
+  p.instruments[0].chip.layer.entries[1] = {2, 0x80, 255};
+  for (auto& speed : p.grooves[0].speed) speed = 3;
+  for (int track = 0; track < 2; ++track) {
+    p.song[0][track] = track;
+    p.chains[track].rows[0].phrase = track;
+    for (auto& row : p.phrases[track].rows) {
+      row.note = 48;
+      row.instrument = track;
+      row.volume = PHRASE_VOLUME_MAX;
+    }
+  }
+  e.init();
+  REQUIRE(chipnomadQueuePlaybackStartSong(e.state.get(), 0, 0, 1));
+  e.render();
+  auto& free = e.state->playbackState.layerTracks[0][0];
+  auto& retrig = e.state->playbackState.layerTracks[0][1];
+  PlaybackModState initial[4];
+  std::memcpy(initial, retrig.note.modulation, sizeof(initial));
+  e.render();
+  e.render();
+  e.render();
+  REQUIRE(e.state->playbackState.tracks[0].phraseRow == 1);
+  REQUIRE(e.state->playbackState.tracks[0].frameCounter == 0);
+  for (int m = 0; m < 4; ++m) {
+    CAPTURE(m);
+    const auto& standalone = e.state->playbackState.tracks[1].note.modulation[m];
+    CHECK(free.note.modulation[m].counter == standalone.counter);
+    CHECK(free.note.modulation[m].phase == standalone.phase);
+    CHECK(free.note.modulation[m].outValue == standalone.outValue);
+    CHECK(retrig.note.modulation[m].counter == initial[m].counter);
+    CHECK(retrig.note.modulation[m].phase == initial[m].phase);
+    if (types[m] == ModulationType::FLFO)
+      CHECK(free.note.modulation[m].phase != initial[m].phase);
+    else
+      CHECK(free.note.modulation[m].counter > initial[m].counter);
+  }
+
+  p.instruments[0].chip.layer.entries[0].instrument = 2;
+  REQUIRE(chipnomadQueueProjectRefresh(e.state.get()));
+  e.render();
+  e.render();
+  e.render();
+  for (int m = 0; m < 4; ++m) {
+    CHECK(free.note.modulation[m].counter == initial[m].counter);
+    CHECK(free.note.modulation[m].phase == initial[m].phase);
+  }
+}
+
+TEST_CASE("Layer routed into sustained Audio in stays continuous across destination notes") {
+  LayerPlayback held(2), repeated(2);
+  for (auto* engine : {&held, &repeated}) {
+    auto& p = engine->state->project;
+    for (int slot = 1; slot <= 2; ++slot)
+      getInstrumentFunctions(InstrumentType::MME).init(&p.instruments[slot]);
+    p.instruments[0].chip.layer.entries[1] = {2, 0x80, 255};
+    getInstrumentFunctions(InstrumentType::AudioIn).init(&p.instruments[3]);
+    p.instruments[3].audioInputSource = InstrumentAudioInputSource::track1;
+    p.instruments[3].chip.audioIn.filterCutoffHz = 400;
+    p.instruments[3].chip.audioIn.filterResonance = 80;
+    p.reverbReturn = p.delayReturn = 0;
+    for (auto& speed : p.grooves[0].speed) speed = 3;
+    for (int track = 0; track < 2; ++track) {
+      p.song[0][track] = track;
+      p.chains[track].rows[0].phrase = track;
+      for (int row = 0; row < 16; ++row) {
+        if (track == 1 && row > 0 && engine == &held) continue;
+        auto& note = p.phrases[track].rows[row];
+        note.note = 48;
+        note.instrument = track == 0 ? 0 : 3;
+        note.volume = PHRASE_VOLUME_MAX;
+      }
+    }
+    engine->init();
+    REQUIRE(chipnomadQueuePlaybackStartSong(engine->state.get(), 0, 0, 1));
+  }
+  float energy = 0, maxDifference = 0;
+  for (int tick = 0; tick < 12; ++tick) {
+    held.render();
+    repeated.render();
+    CHECK(repeated.state->audioInputRoutedTrackMask == 1);
+    for (int i = 0; i < 1920; ++i) {
+      energy += std::fabs(held.output[i]);
+      maxDifference = std::fmax(maxDifference, std::fabs(held.output[i] - repeated.output[i]));
+    }
+  }
+  CHECK(energy > .01f);
+  CHECK(maxDifference < 1e-6f);
+}
+
 TEST_CASE("Layer defaults and quadratic transpose are stable") {
   Instrument layer{};
   getInstrumentFunctions(InstrumentType::Layer).init(&layer);
