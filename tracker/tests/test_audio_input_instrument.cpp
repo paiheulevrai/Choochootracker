@@ -275,10 +275,50 @@ TEST_CASE("Audio Input reroutes internal tracks without inserts away from the mi
   double firstEnergy = 0;
   for (float sample : first) firstEnergy += std::fabs(sample);
   CHECK(firstEnergy == doctest::Approx(0.0));
-  REQUIRE(chipnomadRender(state.get(), second, 128, input) == 128);
+  for (int i = 0; i < 4; ++i)
+    REQUIRE(chipnomadRender(state.get(), second, 128, input) == 128);
   double secondEnergy = 0;
   for (float sample : second) secondEnergy += std::fabs(sample);
   CHECK(secondEnergy > 0);
+}
+
+TEST_CASE("Audio in internal routing keeps audio continuous across varying render chunks") {
+  auto state = std::unique_ptr<ChipNomadState, decltype(&chipnomadDestroy)>(chipnomadCreate(), chipnomadDestroy);
+  auto& p = state->project;
+  p.chipsCount = 0; p.tracksCount = 2; p.tickRate = 50; p.linearPitch = 1;
+  calculateLinearPitchTable12TET(&p);
+  for (int i = 0; i < 2; ++i) {
+    getInstrumentFunctions(InstrumentType::AudioIn).init(&p.instruments[i]);
+    p.instruments[i].chip.audioIn.filterEnabled = 0;
+    p.instruments[i].chip.audioIn.attack = 0;
+    p.instruments[i].volume = 255;
+    p.trackVolume[i] = 100;
+    p.trackReverbSend[i] = p.trackDelaySend[i] = 0;
+  }
+  p.instruments[1].audioInputSource = InstrumentAudioInputSource::track1;
+  p.reverbReturn = p.delayReturn = 0;
+  chipnomadInitChips(state.get(), 48000, nullptr);
+  REQUIRE(chipnomadReserveRenderBuffers(state.get(), 512) == 0);
+  REQUIRE(chipnomadQueuePlaybackPreviewNote(state.get(), 0, 45, 0));
+  REQUIRE(chipnomadQueuePlaybackPreviewNote(state.get(), 1, 45, 1));
+  float input[1024], output[1024];
+  const int sizes[] = {512, 127, 339, 64, 512, 91};
+  int position = 0;
+  for (int block = 0; block < 32; ++block) {
+    const int frames = sizes[block % 6];
+    for (int i = 0; i < frames; ++i) {
+      input[2 * i] = .25f + .1f * std::sin((position + i) * .013f);
+      input[2 * i + 1] = -.5f * input[2 * i];
+    }
+    REQUIRE(chipnomadRender(state.get(), output, frames, input) == frames);
+    for (int i = 0; i < frames; ++i) {
+      if (position + i < AUDIO_INPUT_ROUTE_DELAY_FRAMES) continue;
+      const float expected = .25f + .1f * std::sin((position + i - AUDIO_INPUT_ROUTE_DELAY_FRAMES) * .013f);
+      CHECK(output[2 * i] == doctest::Approx(expected).epsilon(.0001));
+      CHECK(output[2 * i + 1] == doctest::Approx(-.5f * expected).epsilon(.0001));
+    }
+    position += frames;
+  }
 }
 
 TEST_CASE("sampler track input captures Audio Input after its inserts") {

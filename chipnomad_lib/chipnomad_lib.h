@@ -39,6 +39,7 @@ struct LinkClientState;
 class AudioMonitor;
 
 constexpr int VOICE_OWNER_COUNT = PROJECT_MAX_VOICE_OWNERS;
+constexpr int AUDIO_INPUT_ROUTE_DELAY_FRAMES = 512;
 
 constexpr int VOICE_MONITOR_SAMPLES = 256;
 
@@ -144,6 +145,8 @@ struct ChipNomadState {
   float* audioInputTrackCurrent;
   float* audioInputTrackPrevious;
   int audioInputTrackPreviousFrames;
+  float audioInputRouteDelay[PROJECT_MAX_TRACKS][AUDIO_INPUT_ROUTE_DELAY_FRAMES * 2];
+  int audioInputRoutePosition;
   float* sidechainBuffer;
   uint8_t sidechainSourceMask, masterSidechainExcludeMask;
   float* mixBuffer;

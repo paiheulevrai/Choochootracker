@@ -1051,7 +1051,7 @@ The modulation **Dest** fields and destination popup use the current model's par
 
 ### Audio in
 
-Choose **Utility > Audio in** to process a live stereo input on a track. On **SOURCE**, choose **External** or one of the eight internal tracks. An internal source taps that track after its inserts and reroutes it to Audio in, so the source is no longer sent directly to the mixer. The resulting sound follows Audio in's notes, filter and envelope, then the destination track's inserts and mixer settings. Select **Device > [Open]** to enable hardware input, open its settings and arm an external source; **Back** returns to the instrument. You can also reach these settings through **Settings > Audio > Input devices**. Then enter notes in a phrase using this instrument. Any note opens the ADSR; note-off starts its release. The note pitch does not transpose the incoming audio. Without a note, the input stays silent on this track.
+Choose **Utility > Audio in** to process a live stereo input on a track. On **SOURCE**, choose **External** or one of the eight internal tracks. An internal source taps that track after its inserts and reroutes it to Audio in with a delay of 512 samples, so the source is no longer sent directly to the mixer. The resulting sound follows Audio in's notes, filter and envelope, then the destination track's inserts and mixer settings. Select **Device > [Open]** to enable hardware input, open its settings and arm an external source; **Back** returns to the instrument. You can also reach these settings through **Settings > Audio > Input devices**. Then enter notes in a phrase using this instrument. Any note opens the ADSR; note-off starts its release. The note pitch does not transpose the incoming audio. Without a note, the input stays silent on this track.
 
 The **Input level** meter shows the selected source before Audio in's envelope and filter, including while no note is playing. For an internal source, this includes the source track's inserts. The track waveform shows Audio in's signal during playback.
 
@@ -1073,7 +1073,7 @@ The Layer modulation page offers `L1 Cents`/`L1 Vol` through `L3 Cents`/`L3 Vol`
 
 Lane FX `L1C`/`L1V` through `L3C`/`L3V` automate the same per-child controls from a phrase or table. A cents value of `00` is -2400 cents, `80` is neutral and `FF` is +2400 cents; volume uses the normal `00`-`FF` range. Modulation is applied after these Lane FX, so both can shape the same line.
 
-Layer presets store instrument slot numbers, not copies of the selected instruments. After loading a Layer `.cni` into another project, put the intended instruments in those same slots or reselect them. Audio in children may use internal tracks; routing loops retain the normal one-audio-block delay and can feed back, so lower the involved levels before trying them.
+Layer presets store instrument slot numbers, not copies of the selected instruments. After loading a Layer `.cni` into another project, put the intended instruments in those same slots or reselect them. Audio in children may use internal tracks; routing loops include the normal 512-sample delay and can feed back, so lower the involved levels before trying them.
 
 ### MIDI Out
 

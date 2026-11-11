@@ -1077,6 +1077,10 @@ static void updateAudioInputRoutedTracks(ChipNomadState* state) {
       }
   }
   const uint8_t added = (mask | modulationMask) & ~(state->audioInputRoutedTrackMask | state->audioModTrackMask);
+  const uint8_t routeAdded = mask & ~state->audioInputRoutedTrackMask;
+  for (int track = 0; track < PROJECT_MAX_TRACKS; ++track)
+    if (routeAdded & (1u << track))
+      memset(state->audioInputRouteDelay[track], 0, sizeof(state->audioInputRouteDelay[track]));
   for (int track = 0; track < PROJECT_MAX_TRACKS; ++track)
     if (added & (1u << track)) {
       memset(state->audioInputTrackCurrent + (size_t)track * state->mixBufferSize, 0,
@@ -2460,6 +2464,8 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
     }
     int frames = (int)state->frameSampleCounter < samplesLeft ? (int)state->frameSampleCounter : samplesLeft;
     updateAudioInputRoutedTracks(state);
+    if (state->audioInputRoutedTrackMask)
+      frames = std::min(frames, AUDIO_INPUT_ROUTE_DELAY_FRAMES - state->audioInputRoutePosition);
     for (int owner = 0; owner < voiceOwnerLimit(state); ++owner)
       if (state->audioCrossOwners[owner])
         memset(state->audioCrossBuffer[owner], 0, sizeof(state->audioCrossBuffer[owner]));
@@ -2491,10 +2497,10 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
       int source = instrument && instrument->type == InstrumentType::AudioIn
         ? (int)instrument->audioInputSource : 0;
       const float* input = source > 0 && source <= PROJECT_MAX_TRACKS
-        ? state->audioInputTrackPrevious + (size_t)(source - 1) * state->mixBufferSize
+        ? state->audioInputRouteDelay[source - 1] + state->audioInputRoutePosition * 2
         : (liveInput ? liveInput + (samples - samplesLeft) * 2 : nullptr);
       for (auto* voice : state->audioInputVoices[t])
-        if (voice) voice->setInput(input, source > 0 ? (size_t)state->audioInputTrackPreviousFrames : (size_t)frames);
+        if (voice) voice->setInput(input, (size_t)frames);
     }
     renderStereoVoiceTracks(state, state->audioInputVoices, output, frames, true);
     renderStereoVoiceTracks(state, state->scwfVoices, output, frames);
@@ -2565,6 +2571,18 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
     state->stopTransition.process(output, frames);
     state->audioMonitor->finishChunk(output, frames, state->sampleRate);
     audioRecorderEndTrackChunk(frames);
+    if (state->audioInputRoutedTrackMask) {
+      for (int source = 0; source < PROJECT_MAX_TRACKS; ++source)
+        if (state->audioInputRoutedTrackMask & (1u << source)) {
+          float* destination = state->audioInputRouteDelay[source] + state->audioInputRoutePosition * 2;
+          if (source < state->audioProject.tracksCount)
+            memcpy(destination, state->audioInputTrackCurrent + (size_t)source * state->mixBufferSize,
+                   (size_t)frames * 2 * sizeof(float));
+          else
+            memset(destination, 0, (size_t)frames * 2 * sizeof(float));
+        }
+      state->audioInputRoutePosition = (state->audioInputRoutePosition + frames) % AUDIO_INPUT_ROUTE_DELAY_FRAMES;
+    }
     if (state->audioInputRoutedTrackMask | state->audioModTrackMask) {
       for (int source = 0; source < state->audioProject.tracksCount; ++source) {
         if (!(state->audioWaveTrackMask & (1u << source))) continue;

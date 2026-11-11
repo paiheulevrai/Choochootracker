@@ -389,6 +389,45 @@ TEST_CASE("Layer routed into sustained Audio in stays continuous across destinat
   CHECK(maxDifference < 1e-6f);
 }
 
+TEST_CASE("Layer MME audio stays intact when routed to Audio in across irregular blocks") {
+  LayerPlayback dry(2), routed(2);
+  for (auto* engine : {&dry, &routed}) {
+    auto& p = engine->state->project;
+    for (int slot = 1; slot <= 2; ++slot)
+      getInstrumentFunctions(InstrumentType::MME).init(&p.instruments[slot]);
+    p.instruments[0].chip.layer.entries[1] = {2, 0x80, 255};
+    p.trackReverbSend[0] = p.trackReverbSend[1] = 0;
+    p.trackDelaySend[0] = p.trackDelaySend[1] = 0;
+    p.reverbReturn = p.delayReturn = 0;
+    if (engine == &routed) {
+      getInstrumentFunctions(InstrumentType::AudioIn).init(&p.instruments[3]);
+      p.instruments[3].audioInputSource = InstrumentAudioInputSource::track1;
+      p.instruments[3].chip.audioIn.filterEnabled = 0;
+      p.instruments[3].chip.audioIn.attack = 0;
+      p.instruments[3].volume = 255;
+    }
+    engine->init();
+    engine->note(0, 0);
+    if (engine == &routed) engine->note(1, 3);
+  }
+  std::vector<float> direct, received;
+  for (int block = 0; block < 24; ++block) {
+    const int frames = block % 2 ? 311 : 512;
+    dry.render(frames);
+    routed.render(frames);
+    direct.insert(direct.end(), dry.output, dry.output + frames * 2);
+    received.insert(received.end(), routed.output, routed.output + frames * 2);
+  }
+  double energy = 0, difference = 0;
+  for (size_t i = AUDIO_INPUT_ROUTE_DELAY_FRAMES * 2; i < direct.size(); ++i) {
+    const float expected = direct[i - AUDIO_INPUT_ROUTE_DELAY_FRAMES * 2];
+    energy += std::fabs(expected);
+    difference += std::fabs(received[i] - expected);
+  }
+  REQUIRE(energy > 1);
+  CHECK(difference / energy < .001);
+}
+
 TEST_CASE("Layer defaults and quadratic transpose are stable") {
   Instrument layer{};
   getInstrumentFunctions(InstrumentType::Layer).init(&layer);
