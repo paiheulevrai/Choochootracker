@@ -23,12 +23,6 @@ your edits. The archive is deleted only after successful extraction. If
 extraction fails, the app does not start and the archive remains for a retry.
 Legacy installations with already-extracted data continue to work.
 
-For support, the separate [startup diagnostic script](https://github.com/paiheulevrai/Choochootracker/blob/main/tracker/packaging/portmaster/ChooChooTracker-debug.sh)
-can be downloaded from the repository. It is not included in the port package.
-Place it next to `ChooChooTracker.sh` in the Ports folder, make it executable
-if needed (`chmod +x ChooChooTracker-debug.sh`), and run it to produce
-`cct-startup.txt` there. Review the log for personal information before sharing.
-
 Validated on RG353V / ArkOS: all 781 bundled files matched after extraction,
 relaunch skipped extraction, updates preserved a modified project, and a corrupt
 archive stopped launch without being deleted. The isolated rebuilt tracker also

@@ -9,7 +9,7 @@ import unittest
 
 
 LAUNCHER = Path(__file__).resolve().parents[1] / "packaging" / "portmaster" / "ChooChooTracker.sh"
-DEBUG_LAUNCHER = LAUNCHER.with_name("ChooChooTracker-debug.sh")
+DEBUG_LAUNCHER = Path(__file__).resolve().parents[2] / "support" / "ChooChooTracker-debug.sh"
 
 
 class PortMasterLauncherTest(unittest.TestCase):
