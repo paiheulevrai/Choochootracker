@@ -873,6 +873,11 @@ void appSetup(void) {
 #else
   midiRouterSetBackend(midiBackendDesktopGet());
 #endif
+#ifdef PORTMASTER_BUILD
+  const char* launchpadTest = getenv("CCT_LAUNCHPAD_TEST");
+  if (launchpadTest && strcmp(launchpadTest, "1") == 0)
+    midiIoLaunchpadTestStart();
+#endif
 
   // LOGD("--- ChipNomad started ---");
   // Initialize default key mappings if not loaded from settings
@@ -1024,11 +1029,6 @@ void appActivateProject(void) {
   if (savedInputPort >= 0 && midiRouterOpenInput(savedInputPort) == 0) appSettings.midiInputDevice = savedInputPort;
   int savedOutputPort = findMidiPortByName(0, appSettings.midiOutputDeviceName);
   if (savedOutputPort >= 0 && midiRouterOpenOutput(savedOutputPort) == 0) appSettings.midiOutputDevice = savedOutputPort;
-#ifdef PORTMASTER_BUILD
-  const char* launchpadTest = getenv("CCT_LAUNCHPAD_TEST");
-  if (launchpadTest && strcmp(launchpadTest, "1") == 0)
-    midiIoLaunchpadTestStart();
-#endif
   midiRouterSetChannelInstrumentMap(chipnomadState->midiRouter, appSettings.midiChannelInstrument);
   linkClientSetTransportSync(chipnomadState->linkClient, appSettings.linkTransport);
   midiRouterSetSyncOutput(chipnomadState->midiRouter, appSettings.midiSendClock, appSettings.midiSendTransport);
