@@ -139,7 +139,7 @@ static void launchpadControlTick(void) {
     }
     if (songLayoutActive) {
       const launchpadGrid::SongNavigation navigation =
-        launchpadGrid::songNavigationForEvent(status, note, velocity);
+        launchpadGrid::songNavigationForEvent(status, note);
       if (navigation != launchpadGrid::SongNavigation::none) {
         const int target = launchpadGrid::targetForNavigation(navigation);
         if (velocity == 0) launchpadPresses.release(target);

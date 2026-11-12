@@ -74,8 +74,8 @@ enum class SongNavigation : uint8_t { none, up, down, left, right };
 // Mini MK3 Programmer Mode top-row CCs 92-95 are the four navigation keys
 // (the first top key, CC 91, is Session). Keep this decoder in the Song
 // layout so future screen layouts can choose their own controls.
-inline SongNavigation songNavigationForEvent(uint8_t status, uint8_t control, uint8_t value) {
-  if ((status & 0xf0) != 0xb0 || value == 0) return SongNavigation::none;
+inline SongNavigation songNavigationForEvent(uint8_t status, uint8_t control) {
+  if ((status & 0xf0) != 0xb0) return SongNavigation::none;
   switch (control) {
     case 92: return SongNavigation::up;
     case 93: return SongNavigation::down;
