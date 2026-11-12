@@ -14,13 +14,13 @@ executable; it does not modify the Pak Store package.
 
 ## Preserve the installed Pak and deploy the test
 
-Connect the Brick over ADB. The earlier test replaced only the installed
-executable and retained the original as the backup named below. Restore that
-executable first so the Pak Store installation is back to v1.0.24-alpha.
-`launch.sh` and `pak.json` were not changed.
+Connect the Brick over ADB. Keep the Pak Store v1.0.24-alpha executable,
+`launch.sh`, and `pak.json` unchanged. The development test previously replaced
+the executable; it has been restored and its original hashes verified. Install
+the test only in its separate Pak directory.
 
 ```sh
-adb shell 'cd /mnt/SDCARD/Tools/tg5040/ChooChooTracker.pak && cp choochootracker.aarch64.v1.0.24-alpha.backup choochootracker.aarch64 && sha256sum choochootracker.aarch64 launch.sh pak.json'
+adb shell 'cd /mnt/SDCARD/Tools/tg5040/ChooChooTracker.pak && sha256sum choochootracker.aarch64 launch.sh pak.json'
 ```
 
 Unpack the downloaded artifact locally, then install it beside the original Pak
@@ -49,8 +49,9 @@ Brick. In **Settings → MIDI → Launchpad Mini MK3 Support**, set the option t
   urgent. These use the existing chain/phrase boundary semantics.
 - Right-side scene buttons queue all tracks in the row; double press requests
   urgent per-track launches/stops.
-- Top-row Up/Down/Left/Right controls use Song screen navigation, moving the
-  same TrimUI cursor and scrolling the shared viewport.
+- Top-row CC 91–94 (Up/Down/Left/Right) use Song screen navigation, moving the
+  same TrimUI cursor and scrolling the shared viewport. CC 95 (Session) is
+  ignored.
 - Leaving Song/Scenes clears the Launchpad grid and ignores launcher controls
   while keeping the controller connection open. Returning redraws from current
   song and playback state.
@@ -69,11 +70,12 @@ behaviours.
 
 ## Rollback
 
-Exit the test app, then remove only its separate Pak directory. The original Pak
-remains installed, with its original executable, `launch.sh`, and `pak.json`:
+Exit the test app, preserve any `autosave.cct` and `settings.txt` in its Pak
+directory if they contain work you want to keep, then remove the test launcher,
+manifest, and executable. The original Pak remains installed and unchanged:
 
 ```sh
-adb shell 'rm -rf /mnt/SDCARD/Tools/tg5040/ChooChooTrackerLaunchpadTest.pak'
+adb shell 'cd /mnt/SDCARD/Tools/tg5040/ChooChooTrackerLaunchpadTest.pak && rm launch.sh pak.json choochootracker-launchpad-test.aarch64'
 adb shell 'cd /mnt/SDCARD/Tools/tg5040/ChooChooTracker.pak && sha256sum choochootracker.aarch64 launch.sh pak.json'
 ```
 
