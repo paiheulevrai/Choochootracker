@@ -86,7 +86,8 @@ static uint64_t playbackCounterStartMicros;
 static uint64_t playbackCounterPreviousTicks;
 static bool playbackCounterWasPlaying;
 #ifdef PORTMASTER_BUILD
-static int8_t launchpadLedCache[launchpadGrid::kWidth * launchpadGrid::kHeight];
+static int8_t launchpadLedCache[launchpadGrid::kWidth * launchpadGrid::kHeight + launchpadGrid::kHeight];
+static launchpadGrid::PressTracker launchpadPresses;
 static bool launchpadSongLayoutActive;
 static void appInput(int isKeyDown, int keys, int tapCount);
 
@@ -99,6 +100,7 @@ static void launchpadControlTick(void) {
     if (midiIoLaunchpadConnected()) midiIoLaunchpadStop();
     launchpadInvalidateLeds();
     launchpadSongLayoutActive = false;
+    launchpadPresses.reset();
     return;
   }
   if (!midiIoLaunchpadConnected()) {
@@ -109,42 +111,77 @@ static void launchpadControlTick(void) {
   uint8_t status, note, velocity;
   int pollResult;
   const bool songVisible = currentScreen == &screenSong && chipnomadState;
-  if (songVisible != launchpadSongLayoutActive) {
-    launchpadSongLayoutActive = songVisible;
+  const bool songLayoutActive = launchpadGrid::isScreenActive(appSettings.launchpadMiniMk3Enabled, songVisible);
+  if (songLayoutActive != launchpadSongLayoutActive) {
+    launchpadSongLayoutActive = songLayoutActive;
     launchpadInvalidateLeds();
+    if (!songLayoutActive) launchpadPresses.reset();
   }
+  launchpadPresses.tick();
   while ((pollResult = midiIoLaunchpadPoll(&status, &note, &velocity)) > 0) {
-    if (songVisible) {
+    if ((status & 0xf0) == 0xb0) {
+      int sceneRow = -1;
+      const bool sceneControl = launchpadGrid::songRowForSceneControl(note,
+        screenSongGetTopRow(), &sceneRow);
+      if (sceneControl) {
+        const int visibleRow = (89 - note) / 10;
+        const int target = launchpadGrid::PressTracker::kSceneTargetStart + visibleRow;
+        if (velocity == 0) {
+          launchpadPresses.release(target);
+        } else if (songLayoutActive && sceneRow >= 0 && sceneRow < PROJECT_MAX_LENGTH) {
+          const int taps = launchpadPresses.press(target, appSettings.doubleTapFrames);
+          if (taps > 0 &&
+              !chipnomadQueuePlaybackQueueLiveScene(chipnomadState, sceneRow, taps >= 2))
+            screenMessage(MESSAGE_TIME_ERROR, "Launchpad scene launch failed");
+        }
+        continue;
+      }
+    }
+    if (songLayoutActive) {
       const launchpadGrid::SongNavigation navigation =
         launchpadGrid::songNavigationForEvent(status, note, velocity);
-      int key = 0;
-      switch (navigation) {
-        case launchpadGrid::SongNavigation::up: key = keyUp; break;
-        case launchpadGrid::SongNavigation::down: key = keyDown; break;
-        case launchpadGrid::SongNavigation::left: key = keyLeft; break;
-        case launchpadGrid::SongNavigation::right: key = keyRight; break;
-        default: break;
-      }
-      if (key) {
-        // Route through the existing Song screen navigation and cursor logic.
-        appInput(1, key, 1);
-        appInput(0, 0, 0);
+      if (navigation != launchpadGrid::SongNavigation::none) {
+        const int target = launchpadGrid::targetForNavigation(navigation);
+        if (velocity == 0) launchpadPresses.release(target);
+        else if (launchpadPresses.press(target, appSettings.doubleTapFrames) > 0) {
+          int key = 0;
+          switch (navigation) {
+            case launchpadGrid::SongNavigation::up: key = keyUp; break;
+            case launchpadGrid::SongNavigation::down: key = keyDown; break;
+            case launchpadGrid::SongNavigation::left: key = keyLeft; break;
+            case launchpadGrid::SongNavigation::right: key = keyRight; break;
+            default: break;
+          }
+          if (key) {
+            // Route through the existing Song screen navigation and cursor logic.
+            appInput(1, key, 1);
+            appInput(0, 0, 0);
+          }
+        }
         continue;
       }
     }
     int track, visibleRow;
-    if ((status & 0xf0) != 0x90 || velocity == 0 ||
-        !songVisible ||
-        !launchpadGrid::coordinatesForNote(note, &track, &visibleRow) ||
+    if (!launchpadGrid::coordinatesForNote(note, &track, &visibleRow)) continue;
+    const int target = visibleRow * launchpadGrid::kWidth + track;
+    if ((status & 0xf0) == 0x80 || ((status & 0xf0) == 0x90 && velocity == 0)) {
+      launchpadPresses.release(target);
+      continue;
+    }
+    if ((status & 0xf0) != 0x90 || !songLayoutActive ||
         track >= chipnomadState->project.tracksCount) continue;
+    const int taps = launchpadPresses.press(target, appSettings.doubleTapFrames);
+    if (taps == 0) continue;
     const int songRow = launchpadGrid::songRowForVisibleRow(screenSongGetTopRow(), visibleRow);
     if (songRow < 0 || songRow >= PROJECT_MAX_LENGTH) continue;
     const int chain = chipnomadState->project.song[songRow][track];
-    if (chain != EMPTY_VALUE_16)
-      chipnomadQueuePlaybackQueueLiveChain(chipnomadState, track, songRow, 0);
+    const int destination = chain == EMPTY_VALUE_16 ? -1 : songRow;
+    if (!chipnomadQueuePlaybackQueueLiveChain(chipnomadState, track, destination, taps >= 2))
+      screenMessage(MESSAGE_TIME_ERROR, "Launchpad chain launch failed");
   }
   if (pollResult < 0) {
     launchpadInvalidateLeds();
+    launchpadPresses.reset();
     return;
   }
 
@@ -152,6 +189,7 @@ static void launchpadControlTick(void) {
   const PlaybackStatus* playback = songVisible ? chipnomadGetPlaybackStatus(chipnomadState) : NULL;
   for (int visibleRow = 0; visibleRow < launchpadGrid::kHeight; ++visibleRow) {
     const int songRow = topRow < 0 ? -1 : launchpadGrid::songRowForVisibleRow(topRow, visibleRow);
+    bool scenePopulated = false, sceneQueued = false, sceneUrgent = false, scenePlaying = false;
     for (int track = 0; track < launchpadGrid::kWidth; ++track) {
       const int cacheIndex = visibleRow * launchpadGrid::kWidth + track;
       const int noteNumber = launchpadGrid::noteFor(track, visibleRow);
@@ -161,15 +199,36 @@ static void launchpadControlTick(void) {
       const PlaybackTrackState* trackState = valid ? &playback->tracks[track] : NULL;
       const bool playing = trackState && trackState->songRow == songRow &&
         trackState->mode != PlaybackMode::stopped && trackState->mode != PlaybackMode::none;
-      const bool queued = trackState &&
-        (trackState->queue.liveAction == LiveQueueAction::normal ||
-         trackState->queue.liveAction == LiveQueueAction::urgent) &&
+      const LiveQueueAction action = trackState ? trackState->queue.liveAction : LiveQueueAction::none;
+      const bool queuedChain = trackState &&
+        (action == LiveQueueAction::normal || action == LiveQueueAction::urgent) &&
         trackState->queue.songRow == songRow;
-      const uint8_t colour = launchpadGrid::colour(populated, queued, playing);
-      if (launchpadLedCache[cacheIndex] != (int8_t)colour) {
-        midiIoLaunchpadSetPad((uint8_t)noteNumber, colour);
-        launchpadLedCache[cacheIndex] = (int8_t)colour;
+      const bool queuedStop = trackState && playing && trackState->songRow == songRow &&
+        (action == LiveQueueAction::stopNormal || action == LiveQueueAction::stopUrgent);
+      const bool urgent = action == LiveQueueAction::urgent || action == LiveQueueAction::stopUrgent;
+      const bool queued = queuedChain || queuedStop;
+      const launchpadGrid::LedState led = launchpadGrid::ledState(populated, queued, queued && urgent, playing);
+      const int8_t stateCode = (int8_t)led;
+      if (launchpadLedCache[cacheIndex] != stateCode) {
+        midiIoLaunchpadSetPad((uint8_t)noteNumber, launchpadGrid::colourForState(led), led == launchpadGrid::LedState::urgent);
+        launchpadLedCache[cacheIndex] = stateCode;
       }
+      scenePopulated |= populated;
+      // The scene button acknowledges the queued destination where a chain
+      // is pending. Empty destinations are represented by the old playing
+      // cells above because stop queue state intentionally has no row target.
+      sceneQueued |= queuedChain || queuedStop;
+      sceneUrgent |= (queuedChain || queuedStop) && urgent;
+      scenePlaying |= playing;
+    }
+    const int sceneCacheIndex = launchpadGrid::kWidth * launchpadGrid::kHeight + visibleRow;
+    const launchpadGrid::LedState sceneLed = launchpadGrid::ledState(
+      scenePopulated, sceneQueued, sceneUrgent, scenePlaying);
+    const int8_t sceneStateCode = (int8_t)sceneLed;
+    if (launchpadLedCache[sceneCacheIndex] != sceneStateCode) {
+      const int sceneControl = launchpadGrid::sceneControlForVisibleRow(visibleRow);
+      midiIoLaunchpadSetButton((uint8_t)sceneControl, launchpadGrid::colourForState(sceneLed));
+      launchpadLedCache[sceneCacheIndex] = sceneStateCode;
     }
   }
 }

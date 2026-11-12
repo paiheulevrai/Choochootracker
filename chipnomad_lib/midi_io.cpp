@@ -154,10 +154,17 @@ int midiIoLaunchpadPoll(uint8_t* status, uint8_t* note, uint8_t* velocity) {
   }
 }
 
-void midiIoLaunchpadSetPad(uint8_t note, uint8_t colour) {
+void midiIoLaunchpadSetPad(uint8_t note, uint8_t colour, int flashing) {
   if (!g_launchpadOut) return;
   try {
-    std::vector<unsigned char> message{0x90, note, colour};
+    std::vector<unsigned char> message{(unsigned char)(flashing ? 0x91 : 0x90), note, colour};
+    g_launchpadOut->sendMessage(&message);
+  } catch (...) { midiIoLaunchpadStop(); }
+}
+void midiIoLaunchpadSetButton(uint8_t control, uint8_t colour) {
+  if (!g_launchpadOut) return;
+  try {
+    std::vector<unsigned char> message{0xb0, control, colour};
     g_launchpadOut->sendMessage(&message);
   } catch (...) { midiIoLaunchpadStop(); }
 }
@@ -165,7 +172,8 @@ void midiIoLaunchpadSetPad(uint8_t note, uint8_t colour) {
 int midiIoLaunchpadStart(void) { return 0; }
 int midiIoLaunchpadConnected(void) { return 0; }
 int midiIoLaunchpadPoll(uint8_t*, uint8_t*, uint8_t*) { return 0; }
-void midiIoLaunchpadSetPad(uint8_t, uint8_t) {}
+void midiIoLaunchpadSetPad(uint8_t, uint8_t, int) {}
+void midiIoLaunchpadSetButton(uint8_t, uint8_t) {}
 void midiIoLaunchpadStop(void) {}
 #endif // PORTMASTER_BUILD
 
@@ -438,7 +446,8 @@ unsigned int midiIoGetDroppedCount(void) { return 0; }
 int midiIoLaunchpadStart(void) { return 0; }
 int midiIoLaunchpadConnected(void) { return 0; }
 int midiIoLaunchpadPoll(uint8_t*, uint8_t*, uint8_t*) { return 0; }
-void midiIoLaunchpadSetPad(uint8_t, uint8_t) {}
+void midiIoLaunchpadSetPad(uint8_t, uint8_t, int) {}
+void midiIoLaunchpadSetButton(uint8_t, uint8_t) {}
 void midiIoLaunchpadStop(void) {}
 
 #endif

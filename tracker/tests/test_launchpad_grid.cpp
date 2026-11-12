@@ -17,6 +17,14 @@ TEST_CASE("Launchpad Programmer Mode coordinates map to tracks and visible song 
   CHECK(launchpadGrid::songRowForVisibleRow(24, 0) == 24);
   CHECK(launchpadGrid::songRowForVisibleRow(24, 7) == 31);
   CHECK(launchpadGrid::songRowForVisibleRow(32, 0) == 32); // viewport follows topRow
+  int sceneRow = -1;
+  CHECK(launchpadGrid::songRowForSceneControl(89, 24, &sceneRow));
+  CHECK(sceneRow == 24);
+  CHECK(launchpadGrid::songRowForSceneControl(19, 24, &sceneRow));
+  CHECK(sceneRow == 31);
+  CHECK(launchpadGrid::sceneControlForVisibleRow(0) == 89);
+  CHECK(launchpadGrid::sceneControlForVisibleRow(7) == 19);
+  CHECK_FALSE(launchpadGrid::songRowForSceneControl(20, 24, &sceneRow));
 }
 
 TEST_CASE("Launchpad LED states prioritize playing over queued over populated") {
@@ -36,4 +44,36 @@ TEST_CASE("Launchpad Song layout maps the four Programmer Mode navigation keys")
   CHECK(launchpadGrid::songNavigationForEvent(0xb0, 91, 127) == SongNavigation::none);
   CHECK(launchpadGrid::songNavigationForEvent(0xb0, 92, 0) == SongNavigation::none);
   CHECK(launchpadGrid::songNavigationForEvent(0x90, 92, 127) == SongNavigation::none);
+}
+
+TEST_CASE("Launchpad double presses track the same released control and reject held duplicates") {
+  launchpadGrid::PressTracker presses;
+  CHECK(presses.press(3, 20) == 1);
+  CHECK(presses.press(3, 20) == 0); // duplicate Note On while held
+  presses.release(3);
+  CHECK(presses.press(3, 20) == 2);
+  presses.release(3);
+  CHECK(presses.press(4, 20) == 1); // different pad is a new sequence
+  presses.release(4);
+  presses.tick();
+  CHECK(presses.press(4, 20) == 2);
+  presses.release(4);
+  for (int i = 0; i < 20; ++i) presses.tick();
+  CHECK(presses.press(4, 20) == 1); // expired interval
+  presses.reset();
+  CHECK(presses.press(64, 20) == 1); // scene controls have separate identities
+}
+
+TEST_CASE("Launchpad LED state reflects playing, urgent queue, queued stop and screen scope") {
+  using launchpadGrid::LedState;
+  CHECK(launchpadGrid::ledState(false, false, false, false) == LedState::off);
+  CHECK(launchpadGrid::ledState(true, false, false, false) == LedState::populated);
+  CHECK(launchpadGrid::ledState(true, true, false, false) == LedState::queued);
+  CHECK(launchpadGrid::ledState(true, true, true, false) == LedState::urgent);
+  CHECK(launchpadGrid::ledState(false, true, true, false) == LedState::urgent); // queued stop
+  CHECK(launchpadGrid::ledState(true, true, true, true) == LedState::playing);
+  CHECK(launchpadGrid::colourForState(LedState::urgent) == launchpadGrid::kUrgentAmber);
+  CHECK(launchpadGrid::isScreenActive(true, true));
+  CHECK_FALSE(launchpadGrid::isScreenActive(false, true));
+  CHECK_FALSE(launchpadGrid::isScreenActive(true, false));
 }
