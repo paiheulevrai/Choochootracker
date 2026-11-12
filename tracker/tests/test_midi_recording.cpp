@@ -306,6 +306,82 @@ TEST_CASE_FIXTURE(AudioFixture, "External notes win over internal triggers witho
   CHECK(track.note.instrument == 0);
 }
 
+TEST_CASE_FIXTURE(AudioFixture, "MIDI notes and releases apply in the next block without waiting for a tracker tick") {
+  REQUIRE(chipnomadQueuePlaybackStartSong(state, 0, 0, 1));
+  REQUIRE(chipnomadRender(state, audio, 17) == 17);
+  auto& track = state->playbackState.tracks[0];
+  const int row = track.phraseRow, tick = track.frameCounter;
+  const float remaining = state->frameSampleCounter;
+  REQUIRE(remaining > 64);
+  REQUIRE(chipnomadQueueMidiInput(state, 0, 60, 1, 100, now + 500, 1, MidiRecordMode::free));
+  REQUIRE(chipnomadRender(state, audio, 32) == 32);
+  CHECK(track.note.instrument == 1);
+  CHECK(track.note.pitchFinal == 60);
+  CHECK(track.midiHeld);
+  CHECK(track.phraseRow == row);
+  CHECK(track.frameCounter == tick);
+  CHECK(state->frameSampleCounter == doctest::Approx(remaining - 32));
+  MidiRecordEvent event{};
+  REQUIRE(chipnomadConsumeMidiRecordEvent(state, &event));
+  CHECK(event.note == 60);
+  CHECK(event.row == row);
+  CHECK(event.delay == tick);
+  REQUIRE(chipnomadQueueMidiInput(state, 0, 0, 0, 0, now + 1000, 1, MidiRecordMode::free));
+  REQUIRE(chipnomadRender(state, audio, 32) == 32);
+  CHECK_FALSE(track.midiHeld);
+  CHECK(track.frameCounter == tick);
+  REQUIRE(chipnomadConsumeMidiRecordEvent(state, &event));
+  CHECK(event.note == NOTE_OFF);
+  CHECK(event.row == row);
+  CHECK(event.delay == tick);
+}
+
+TEST_CASE_FIXTURE(AudioFixture, "MIDI overflow releases held tracks and does not lose a final Note Off") {
+  REQUIRE(chipnomadQueuePlaybackStartSong(state, 0, 0, 1));
+  REQUIRE(chipnomadRender(state, audio, 17) == 17);
+  for (int i = 0; i < 63; ++i)
+    REQUIRE(chipnomadQueueMidiInput(state, 0, 60, 1, 100, now, 0, MidiRecordMode::free));
+  CHECK_FALSE(chipnomadQueueMidiInput(state, 0, 0, 0, 0, now, 0, MidiRecordMode::free));
+  CHECK(chipnomadGetCommandOverflow(state));
+  REQUIRE(chipnomadRender(state, audio, 32) == 32);
+  CHECK_FALSE(state->playbackState.tracks[0].midiHeld);
+  REQUIRE(chipnomadQueueMidiInput(state, 0, 61, 1, 100, now, 0, MidiRecordMode::free));
+  REQUIRE(chipnomadRender(state, audio, 32) == 32);
+  CHECK(state->playbackState.tracks[0].midiHeld);
+  CHECK(state->playbackState.tracks[0].note.pitchFinal == 61);
+}
+
+TEST_CASE_FIXTURE(AudioFixture, "Off-tick MIDI retriggers do not advance free-running LFOs or tables") {
+  state->project.instruments[1].modulation[0] =
+    {ModulationType::LFO, 2, 64, 0, static_cast<uint8_t>(LFOTrigger::free), 24, 0, 0};
+  chipnomadInitChips(state, 48000, nullptr);
+  REQUIRE(chipnomadQueueMidiInput(state, 0, 60, 1, 100, now, 0, MidiRecordMode::free));
+  REQUIRE(chipnomadRender(state, audio, 17) == 17);
+  auto& track = state->playbackState.tracks[0];
+  const auto counter = track.note.modulation[0].counter;
+  const auto value = track.note.modulation[0].outValue;
+  const auto tableCounter = track.note.instrumentTable.counters[0];
+  REQUIRE(chipnomadQueueMidiInput(state, 0, 62, 1, 100, now, 0, MidiRecordMode::free));
+  REQUIRE(chipnomadRender(state, audio, 32) == 32);
+  CHECK(track.note.pitchBase == 62);
+  CHECK(track.note.modulation[0].counter == counter);
+  CHECK(track.note.modulation[0].outValue == value);
+  CHECK(track.note.instrumentTable.counters[0] == tableCounter);
+}
+
+TEST_CASE_FIXTURE(AudioFixture, "Off-tick MIDI audition replaces a standalone chip preview immediately") {
+  Instrument candidate{};
+  getInstrumentFunctions(InstrumentType::OPLL).init(&candidate);
+  REQUIRE(chipnomadQueueOPLLPreview(state, 0, &candidate.chip.opll));
+  REQUIRE(chipnomadRender(state, audio, 17) == 17);
+  REQUIRE(state->opllPreviewTrack == 0);
+  REQUIRE(state->frameSampleCounter > 32);
+  REQUIRE(chipnomadQueueMidiInput(state, 0, 60, 1, 100, now, 0, MidiRecordMode::free));
+  REQUIRE(chipnomadRender(state, audio, 32) == 32);
+  CHECK(state->playbackState.tracks[0].midiHeld);
+  CHECK(state->opllPreviewTrack == -1);
+}
+
 TEST_CASE_FIXTURE(AudioFixture, "Audio thread records delayed input against past ticks, without editing the UI project") {
   REQUIRE(chipnomadQueuePlaybackStartSong(state, 0, 0, 1));
   for (int i = 0; i < 10; ++i) render();

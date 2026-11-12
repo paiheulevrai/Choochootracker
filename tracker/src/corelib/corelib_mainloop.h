@@ -18,6 +18,8 @@ enum class MainLoopEvent {
   // SDL_AUDIODEVICEREMOVED reached the platform loop. data.value is the
   // event's iscapture flag (1 = a capture device was removed/failed).
   audioDeviceRemoved,
+  // UI-thread MIDI polling between redraws; no animation or musical tick.
+  midiInput,
 };
 
 struct MainLoopEventData {

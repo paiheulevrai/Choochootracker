@@ -109,7 +109,13 @@ int linkClientIsAudioEnabled(const LinkClientState*);
 void linkClientSendAudio(LinkClientState*, const int16_t* samples, int frames, int sampleRate);
 int linkClientSetAudioReceiveEnabled(LinkClientState*, int enabled);
 int linkClientIsAudioReceiveEnabled(const LinkClientState*);
+// Session-only jitter margin, shared by received and local speaker audio.
+constexpr int linkAudioMaxCompensationMillis = 100;
+int linkClientGetAudioCompensationMillis(const LinkClientState*);
+int linkClientSetAudioCompensationMillis(LinkClientState*, int millis);
 const char* linkClientAudioReceiveStatus(LinkClientState*);
+// Returns the number of remote frames mixed; local audio may be delayed even
+// when this is zero. Outgoing audio must be sent beforehand.
 int linkClientMixReceivedAudio(LinkClientState*, float* samples, int frames, int sampleRate);
 
 // Reset the HostTimeFilter window: on enable(), sample-rate change or

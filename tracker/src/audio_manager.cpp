@@ -184,9 +184,11 @@ static void audioCallback(int16_t* buffer, int stereoSamples) {
 #if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
   // Send only our own master, never feed received audio back to peers.
   linkClientSendAudio(chipnomadState->linkClient, buffer, stereoSamples, aSampleRate);
-  if (receiving &&
-      linkClientMixReceivedAudio(chipnomadState->linkClient, samplePreviewBuffer, stereoSamples, aSampleRate))
+  if (receiving) {
+    linkClientMixReceivedAudio(chipnomadState->linkClient, samplePreviewBuffer, stereoSamples, aSampleRate);
+    // Missing remote packets must not bypass the local compensation.
     receivedAudioLimiter.process(samplePreviewBuffer, buffer, stereoSamples);
+  }
 #endif
   if (!localOutputEnabled.load(std::memory_order_relaxed))
     memset(buffer, 0, stereoSamples * 2 * sizeof(*buffer));

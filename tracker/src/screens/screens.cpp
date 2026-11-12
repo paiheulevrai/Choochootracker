@@ -53,7 +53,7 @@ void drawScreenMap() {
   const int songX = compact ? 36 : 35;
   const bool projectScreen = currentScreen == &screenProject ||
     currentScreen == &screenProjectTuning || currentScreen == &screenLinkOptions ||
-    currentScreen == &screenLinkAudio || currentScreen == &screenSyncOut;
+    currentScreen == &screenSyncOut;
 
   const ColorScheme cs = appSettings.colorScheme;
   gfxSetBgColor(cs.background);
@@ -479,9 +479,11 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
     return 1;
   }
   if (currentScreen == &screenProjectTuning || currentScreen == &screenLinkOptions ||
-      currentScreen == &screenLinkAudio || currentScreen == &screenSyncOut) {
-    const int field = row - 2;
+      currentScreen == &screenSyncOut) {
+    if (currentScreen == &screenLinkOptions && row == 3) return 0;
+    const int field = row - 2 - (currentScreen == &screenLinkOptions && row > 2);
     if (field < 0 || field >= touchScreenData->rows || col < 0 || col >= 34) return 0;
+    if (touchScreenData->isCellValid && !touchScreenData->isCellValid(0, field)) return 0;
     if (targetCol) *targetCol = 0;
     if (targetRow) *targetRow = field;
     return 1;

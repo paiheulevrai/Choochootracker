@@ -55,6 +55,7 @@ struct RealLinkState {
   ableton::LinkAudio link{125.0, "ChooChooTracker"};
   std::unique_ptr<ableton::LinkAudioSink> audioSink;
   std::unique_ptr<LinkAudioReceiveBuffer> receiveBuffer;
+  std::unique_ptr<LinkAudioLocalDelay> localDelay;
   std::unique_ptr<ableton::LinkAudioSource> audioSource;
   std::atomic<bool> receiveEnabled{false};
   std::atomic<bool> discardReceived{false};
@@ -260,6 +261,7 @@ void linkBackendResetHostTimeFilter(void*, void* state) {
   s->hostTimeFilter.reset();
 #if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
   s->audioClock.reset();
+  s->discardReceived.store(true);
 #endif
 }
 
@@ -293,6 +295,7 @@ void linkBackendSendAudio(void*, void* state, const int16_t* samples, int frames
 int linkBackendSetAudioReceiveEnabled(void*, void* state, int enabled) {
   auto* s = (RealLinkState*)state;
   if (enabled && !s->receiveBuffer) s->receiveBuffer.reset(new LinkAudioReceiveBuffer);
+  if (enabled && !s->localDelay) s->localDelay.reset(new LinkAudioLocalDelay);
   s->receiveEnabled.store(enabled != 0, std::memory_order_release);
   if (!enabled) s->audioSource.reset();
   s->discardReceived.store(true);
@@ -357,15 +360,20 @@ const char* linkBackendAudioReceiveStatus(void*, void* state) {
   }
 }
 
-int linkBackendMixReceivedAudio(void*, void* state, float* samples, int frames, int sampleRate) {
+int linkBackendMixReceivedAudio(void*, void* state, float* samples, int frames, int sampleRate,
+                                int compensationMillis) {
   auto* s = (RealLinkState*)state;
   if (!s->receiveEnabled.load(std::memory_order_acquire)) return 0;
-  if (s->discardReceived.exchange(false)) s->receiveBuffer->discard();
+  if (s->discardReceived.exchange(false)) {
+    s->receiveBuffer->discard();
+    s->localDelay->reset();
+  }
   if (!s->link.isEnabled()) { s->receiveBuffer->discard(); return 0; }
-  // Prototype: fixed 100 ms playout delay absorbs Wi-Fi jitter; no retransmission.
+  s->localDelay->process(samples, frames, sampleRate, compensationMillis);
+  const int delayFrames = LinkAudioLocalDelay::framesFor(sampleRate, compensationMillis);
   const double time = s->audioClock.time(
     s->lastSampleCounter.load(std::memory_order_relaxed), sampleRate,
-    static_cast<double>(s->audioTime.count())) - 100000.0;
+    static_cast<double>(s->audioTime.count())) - delayFrames * 1000000.0 / sampleRate;
   return s->receiveBuffer->mix(samples, frames, sampleRate, time);
 }
 #endif

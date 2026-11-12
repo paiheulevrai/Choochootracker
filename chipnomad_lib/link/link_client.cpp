@@ -60,6 +60,7 @@ struct LinkClientState {
   int enabled;
   int audioEnabled;
   std::atomic<int> audioReceiveEnabled{0};
+  std::atomic<int> audioCompensationMillis{0};
 
   // --- Status state machine (written on UI thread, read anywhere) ---
   std::atomic<LinkStatus> status;
@@ -355,6 +356,16 @@ int linkClientIsAudioReceiveEnabled(const LinkClientState* state) {
   return state && state->audioReceiveEnabled.load(std::memory_order_acquire);
 }
 
+int linkClientGetAudioCompensationMillis(const LinkClientState* state) {
+  return state ? state->audioCompensationMillis.load(std::memory_order_relaxed) : 0;
+}
+
+int linkClientSetAudioCompensationMillis(LinkClientState* state, int millis) {
+  if (!state || millis < 0 || millis > linkAudioMaxCompensationMillis) return 0;
+  state->audioCompensationMillis.store(millis, std::memory_order_relaxed);
+  return 1;
+}
+
 const char* linkClientAudioReceiveStatus(LinkClientState* state) {
   const auto* backend = activeBackend();
   return state && backend->audioReceiveStatus ?
@@ -364,7 +375,8 @@ const char* linkClientAudioReceiveStatus(LinkClientState* state) {
 int linkClientMixReceivedAudio(LinkClientState* state, float* samples, int frames, int sampleRate) {
   const auto* backend = activeBackend();
   return state && backend->mixReceivedAudio && samples && frames > 0 && sampleRate > 0 ?
-    backend->mixReceivedAudio(backend->userdata, state->backendState, samples, frames, sampleRate) : 0;
+    backend->mixReceivedAudio(backend->userdata, state->backendState, samples, frames, sampleRate,
+                             linkClientGetAudioCompensationMillis(state)) : 0;
 }
 
 void linkClientResetHostTimeFilter(LinkClientState* state) {

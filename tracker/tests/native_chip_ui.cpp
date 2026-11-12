@@ -50,6 +50,7 @@
 #include "file_browser.h"
 #include "midi/midi_router.h"
 #include "link/link_backend.h"
+#include "link/link_audio_receive_buffer.h"
 #include "chipnomad_lib_live_stick.h"
 #include <fstream>
 #include <thread>
@@ -448,6 +449,8 @@ int main(int argc,char** argv){
     struct Probe {
       int sends = 0, frames = 0, rate = 0, transport = -1;
       bool enabled = false, audio = false, receive = false;
+      bool missingPackets = false;
+      LinkAudioLocalDelay localDelay;
       int16_t samples[1024] = {};
     } probe;
     LinkBackend backend{};
@@ -472,10 +475,15 @@ int main(int argc,char** argv){
       memcpy(p.samples, samples, sizeof(p.samples));
     };
     backend.setAudioReceiveEnabled = [](void* data, void*, int enabled) {
-      static_cast<Probe*>(data)->receive = enabled; return 1;
+      auto& p = *static_cast<Probe*>(data);
+      p.localDelay.reset();
+      p.receive = enabled; return 1;
     };
-    backend.mixReceivedAudio = [](void* data, void*, float* samples, int frames, int) {
-      if (!static_cast<Probe*>(data)->receive) return 0;
+    backend.mixReceivedAudio = [](void* data, void*, float* samples, int frames, int rate, int millis) {
+      auto& p = *static_cast<Probe*>(data);
+      if (!p.receive || !p.enabled) return 0;
+      p.localDelay.process(samples, frames, rate, millis);
+      if (p.missingPackets) return 0;
       for (int i = 0; i < frames; ++i) {
         samples[i * 2] += (i % 48 < 24 ? 0.1f : -0.1f);
         samples[i * 2 + 1] -= (i % 48 < 24 ? 0.1f : -0.1f);
@@ -529,16 +537,24 @@ int main(int argc,char** argv){
     touch(20,2); tapEdit();
     require(appSettings.linkTransport == !shared && probe.transport == !shared &&
             appSettings.midiSendTransport == !transport, "Link start/stop is separate from MIDI transport");
-    touch(2,3); require(currentScreen == &screenLinkAudio, "Link Audio has its own submenu");
-    capture("project-link-audio");
-    back(); require(currentScreen == &screenLinkOptions, "Link Audio returns to Link options");
+    require(!screenTouchTap(2,3) && !screenTouchTap(2,4), "Link Audio heading and gap are not editable");
+    touch(20,8);
+    require(linkClientGetAudioCompensationMillis(chipnomadState->linkClient) == 0,
+            "compensation defaults to zero");
+    key(1,keyEdit | keyRight); key(0,0);
+    require(linkClientGetAudioCompensationMillis(chipnomadState->linkClient) == 1,
+            "shared compensation editable directly in Link options");
+    key(1,keyEdit | keyLeft); key(0,0);
+    require(linkClientGetAudioCompensationMillis(chipnomadState->linkClient) == 0,
+            "compensation restores to zero");
+    capture("project-link-options-audio");
     back(); require(currentScreen == &screenProject, "Link options returns to Project");
     require(projectCommonOnEdit(0,5,CellEditAction::increase), "select MIDI sync");
     require(projectCommonOnEdit(0,5,CellEditAction::increase), "select Link sync");
     require(projectCommonOnEdit(0,6,CellEditAction::tap) && probe.enabled, "Link connection stays on Project");
     appDraw(); capture("project-menu-link");
-    touch(2,12); touch(2,3);
-    touch(20,2); tapEdit(); require(probe.audio, "Send toggle enables backend");
+    touch(2,12);
+    touch(20,5); tapEdit(); require(probe.audio, "Send toggle enables backend");
     std::vector<int16_t> pcm(48000);
     for (size_t n = 0; n < pcm.size(); ++n) pcm[n] = int16_t(3000 * sin(n * 6.283185307179586 / 256));
     InstrumentSample sample{}; sample.data = pcm.data(); sample.frameCount = pcm.size();
@@ -554,7 +570,7 @@ int main(int argc,char** argv){
     };
     previewAudioCallback(local,512);
     require(audible(local) && !memcmp(local,probe.samples,sizeof(local)), "local output matches sent stereo master");
-    touch(20,4); tapEdit(); require(!audioManager.getLocalOutputEnabled(), "Local audio switches Off");
+    touch(20,7); tapEdit(); require(!audioManager.getLocalOutputEnabled(), "Local audio switches Off");
     for (int n = 0; n < 8; ++n) {
       const int before = probe.sends;
       std::fill(std::begin(local), std::end(local), int16_t(123));
@@ -565,21 +581,36 @@ int main(int argc,char** argv){
     tapEdit(); previewAudioCallback(local,512);
     require(audioManager.getLocalOutputEnabled() && audible(local) &&
             !memcmp(local,probe.samples,sizeof(local)), "local output restores without changing the Link stream");
-    touch(20,2); tapEdit();
+    touch(20,5); tapEdit();
     const int sends = probe.sends; previewAudioCallback(local,512);
     require(!probe.audio && probe.sends == sends && audible(local), "disabling send preserves local playback");
     audioManager.stopSamplePreview();
     // Let the local limiter's DC-removal tail settle before injecting remote audio.
     for (int n = 0; n < 128; ++n) previewAudioCallback(local,512);
-    touch(20,2); tapEdit(); require(probe.audio, "restore send for receive isolation test");
-    touch(20,3); tapEdit(); require(probe.receive, "Receive toggle enables backend");
+    touch(20,5); tapEdit(); require(probe.audio, "restore send for receive isolation test");
+    touch(20,6); tapEdit(); require(probe.receive, "Receive toggle enables backend");
     previewAudioCallback(local,512);
     require(audible(local) && !audible(probe.samples), "received audio is audible but never sent back");
-    touch(20,4); tapEdit(); previewAudioCallback(local,512);
+    require(linkClientSetAudioCompensationMillis(chipnomadState->linkClient, 100),
+            "set compensation for missing-packet delay test");
+    probe.missingPackets = true;
+    for (int n = 0; n < 128; ++n) previewAudioCallback(local,512);
+    require(!audioManager.previewSample(samplePath.string().c_str()), "restart preview with missing network packets");
+    for (int n = 0; n < 9; ++n) {
+      previewAudioCallback(local,512);
+      require(!audible(local) && audible(probe.samples),
+              "missing packets preserve 100 ms local compensation without delaying send");
+    }
+    previewAudioCallback(local,512);
+    require(audible(local), "local compensation releases audio after its exact delay");
+    audioManager.stopSamplePreview();
+    for (int n = 0; n < 128; ++n) previewAudioCallback(local,512);
+    probe.missingPackets = false;
+    touch(20,7); tapEdit(); previewAudioCallback(local,512);
     require(!audible(local) && !audible(probe.samples), "local mute also silences received audio");
-    tapEdit(); touch(20,3); tapEdit(); previewAudioCallback(local,512);
+    tapEdit(); touch(20,6); tapEdit(); previewAudioCallback(local,512);
     require(!probe.receive && !audible(local), "Receive Off stops remote audio");
-    back(); back();
+    back();
     touch(2,16); require(currentScreen == &screenScale, "Scale stays directly accessible"); back();
     touch(2,17); require(currentScreen == &screenViewSettings, "View stays directly accessible");
     audioManager.stop(); chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
@@ -626,7 +657,7 @@ int main(int argc,char** argv){
     midiRouterSetBackend(&backend); appSettings.midiAutoChannel = 1;
     auto send = [&](uint8_t type, uint8_t note, uint8_t velocity, uint8_t channel = 0) {
       midi.event = {midiRouterNowMicros(), type, channel, note, velocity}; midi.pending = true;
-      appOnEvent({MainLoopEvent::tick});
+      appOnEvent({MainLoopEvent::midiInput});
     };
     MainLoopEventData rec{}; rec.type = MainLoopEvent::keyDown;
     rec.data.input = {InputDeviceType::logical, keyMotionRecord}; appOnEvent(rec);
@@ -1664,7 +1695,7 @@ int main(int argc,char** argv){
     const Route routes[]={
       {&screenProject,&screenMixer,&screenChain},{&screenSettings,&screenMixer,&screenChain},
       {&screenProjectTuning,&screenMixer,&screenChain},{&screenLinkOptions,&screenMixer,&screenChain},
-      {&screenLinkAudio,&screenMixer,&screenChain},{&screenSyncOut,&screenMixer,&screenChain},
+      {&screenSyncOut,&screenMixer,&screenChain},
       {&screenSynthSettings,&screenMixer,&screenChain},{&screenMixerSettings,&screenMixer,&screenChain},
       {&screenGraphicsSettings,&screenMixer,&screenChain},{&screenBackgroundSettings,&screenMixer,&screenChain},{&screenTrackVisuals,&screenMixer,&screenChain},
       {&screenMidi,&screenMixer,&screenChain},{&screenMidiChannelMap,&screenMixer,&screenChain},

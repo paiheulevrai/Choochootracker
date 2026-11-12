@@ -7,7 +7,7 @@
 
 namespace {
 
-extern ScreenData tuningData, linkData, linkAudioData, syncOutData;
+extern ScreenData tuningData, linkData, syncOutData;
 
 int columnCount(int) { return 1; }
 void noHeader(int, CellState) {}
@@ -32,21 +32,26 @@ void title(const char* text) {
   gfxPrint(0, 0, text);
 }
 
-void field(int row, const char* label, const char* value, CellState state) {
-  gfxClearRect(0, row + 2, 18, 1);
+void fieldAt(int y, const char* label, const char* value, CellState state) {
+  gfxClearRect(0, y, 18, 1);
   gfxSetFgColor(appSettings.colorScheme.textLabel);
-  gfxPrint(0, row + 2, label);
-  gfxClearRect(18, row + 2, 16, 1);
+  gfxPrint(0, y, label);
+  gfxClearRect(18, y, 16, 1);
   gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue :
                 appSettings.colorScheme.textDefault);
-  gfxPrintf(18, row + 2, "%.16s", value);
+  gfxPrintf(18, y, "%.16s", value);
+}
+void field(int row, const char* label, const char* value, CellState state) {
+  fieldAt(row + 2, label, value, state);
 }
 
 void cursor(int, int row) {
-  if (currentScreen == &screenLinkOptions && row == 1) gfxCursor(0, row + 2, 10);
-  else gfxCursor(18, row + 2, 3);
+  gfxCursor(18, row + 2, 3);
 }
 int submenuButton(int, int row) { return row == 1; }
+int linkRowY(int row) { return row + 2 + (row > 0); }
+void linkCursor(int, int row) { gfxCursor(18, linkRowY(row), row == 5 ? 6 : 3); }
+int linkCellValid(int, int row) { return row != 1; }
 
 void tuningStatic(void) { title("TUNING"); }
 void tuningField(int, int row, CellState state) {
@@ -69,56 +74,60 @@ int tuningEdit(int, int row, CellEditAction action) {
 
 void linkStatic(void) {
   title("LINK OPTIONS");
-  gfxSetFgColor(appSettings.colorScheme.textInfo);
-  gfxPrint(0, 6, "Start/stop is shared both ways.");
-}
-void linkField(int, int row, CellState state) {
-  field(row, row == 0 ? "Link start/stop" : "Link Audio",
-        row == 0 ? (appSettings.linkTransport ? "On" : "Off") : "", state);
-}
-int linkEdit(int, int row, CellEditAction action) {
-  if (row == 1) {
 #if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
-    if (action == CellEditAction::tap || action == CellEditAction::doubleTap)
-      screenSetup(&screenLinkAudio, 0);
-#endif
-    return 0;
-  }
-  if (!editToggle(action, &appSettings.linkTransport)) return 0;
-  linkClientSetTransportSync(chipnomadState->linkClient, appSettings.linkTransport);
-  saveSyncSettings();
-  return 1;
-}
-
-void linkAudioStatic(void) {
-  title("LINK AUDIO");
+  gfxSetFgColor(appSettings.colorScheme.textLabel);
+  gfxPrint(0, 4, "Link Audio");
   gfxSetFgColor(appSettings.colorScheme.textInfo);
-  gfxPrint(0, 6, "Stereo Link Audio (prototype)");
-  gfxPrint(0, 7, "Peer: ChooChooTracker");
-  gfxPrint(0, 8, "Channel: Master");
-  gfxPrint(0, 10, "Receive: one remote CCT Master.");
-  gfxPrint(0, 11, "Receive delay: 100 ms.");
-  gfxPrint(0, 12, "Received audio is never sent.");
-  gfxPrint(0, 13, "Local audio only mutes speakers.");
+  gfxPrint(0, 12, "Compensation: local + received.");
+  gfxPrint(0, 13, "Active only with Link Receive.");
   gfxPrint(0, 14, "Options reset on restart.");
   if (!linkClientIsEnabled(chipnomadState->linkClient))
     gfxPrint(0, 16, "Connect Link on Project first.");
+#else
+  gfxSetFgColor(appSettings.colorScheme.textInfo);
+  gfxPrint(0, 6, "Start/stop is shared both ways.");
+#endif
 }
-void linkAudioField(int, int row, CellState state) {
-  const bool enabled = row == 0 ? linkClientIsAudioEnabled(chipnomadState->linkClient) :
-    row == 1 ? linkClientIsAudioReceiveEnabled(chipnomadState->linkClient) :
+void linkField(int, int row, CellState state) {
+  if (row == 1) return;
+  if (row == 5) {
+    char value[16];
+    snprintf(value, sizeof(value), "%03d ms",
+             linkClientGetAudioCompensationMillis(chipnomadState->linkClient));
+    fieldAt(linkRowY(row), " - Compensation", value, state);
+    return;
+  }
+  const bool enabled = row == 0 ? appSettings.linkTransport :
+    row == 2 ? linkClientIsAudioEnabled(chipnomadState->linkClient) :
+    row == 3 ? linkClientIsAudioReceiveEnabled(chipnomadState->linkClient) :
     audioManager.getLocalOutputEnabled();
-  field(row, row == 0 ? "Send" : row == 1 ? "Receive" : "Local audio", enabled ? "On" : "Off", state);
+  const char* label = row == 0 ? "Link start/stop" : row == 2 ? " - Send" :
+    row == 3 ? " - Receive" : " - Local audio";
+  fieldAt(linkRowY(row), label, enabled ? "On" : "Off", state);
 }
-int linkAudioEdit(int, int row, CellEditAction action) {
-  uint8_t enabled = row == 0 ? linkClientIsAudioEnabled(chipnomadState->linkClient) :
-    row == 1 ? linkClientIsAudioReceiveEnabled(chipnomadState->linkClient) :
+int linkEdit(int, int row, CellEditAction action) {
+  if (row == 1) return 0;
+  if (row == 0) {
+    if (!editToggle(action, &appSettings.linkTransport)) return 0;
+    linkClientSetTransportSync(chipnomadState->linkClient, appSettings.linkTransport);
+    saveSyncSettings();
+    return 1;
+  }
+  if (row == 5) {
+    uint8_t value = linkClientGetAudioCompensationMillis(chipnomadState->linkClient);
+    if (!edit8noLast(action, &value, 1, 0, linkAudioMaxCompensationMillis)) return 0;
+    if (!linkClientSetAudioCompensationMillis(chipnomadState->linkClient, value))
+      screenMessage(MESSAGE_TIME_ERROR, "Invalid compensation");
+    return 1;
+  }
+  uint8_t enabled = row == 2 ? linkClientIsAudioEnabled(chipnomadState->linkClient) :
+    row == 3 ? linkClientIsAudioReceiveEnabled(chipnomadState->linkClient) :
     audioManager.getLocalOutputEnabled();
   if (!editToggle(action, &enabled)) return 0;
-  if (row == 0) {
+  if (row == 2) {
     if (!linkClientSetAudioEnabled(chipnomadState->linkClient, enabled))
       screenMessage(MESSAGE_TIME_ERROR, "Link Audio unavailable");
-  } else if (row == 1) {
+  } else if (row == 3) {
     if (!linkClientSetAudioReceiveEnabled(chipnomadState->linkClient, enabled))
       screenMessage(MESSAGE_TIME_ERROR, "Link Audio unavailable");
   } else {
@@ -149,13 +158,14 @@ int syncOutEdit(int, int row, CellEditAction action) {
 
 void tuningRedraw(void) { screenFullRedraw(&tuningData); }
 void linkRedraw(void) { screenFullRedraw(&linkData); }
-void linkAudioRedraw(void) { screenFullRedraw(&linkAudioData); }
 void syncOutRedraw(void) { screenFullRedraw(&syncOutData); }
 void draw(void) {}
-void linkAudioDraw(void) {
-  gfxClearRect(0, 9, 34, 1);
+void linkDraw(void) {
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+  gfxClearRect(0, 10, 34, 1);
   gfxSetFgColor(appSettings.colorScheme.textInfo);
-  gfxPrintf(0, 9, "Input: %s", linkClientAudioReceiveStatus(chipnomadState->linkClient));
+  gfxPrintf(0, 10, "Input: %s", linkClientAudioReceiveStatus(chipnomadState->linkClient));
+#endif
 }
 
 int menuInput(ScreenData* data, const AppScreen* parent, int down, int keys, int taps) {
@@ -167,22 +177,19 @@ int menuInput(ScreenData* data, const AppScreen* parent, int down, int keys, int
 }
 int tuningInput(int down, int keys, int taps) { return menuInput(&tuningData, &screenProject, down, keys, taps); }
 int linkInput(int down, int keys, int taps) { return menuInput(&linkData, &screenProject, down, keys, taps); }
-int linkAudioInput(int down, int keys, int taps) { return menuInput(&linkAudioData, &screenLinkOptions, down, keys, taps); }
 int syncOutInput(int down, int keys, int taps) { return menuInput(&syncOutData, &screenProject, down, keys, taps); }
 
 ScreenData tuningData = {2, 0, 0, 0, -1, 0, 0, 0, 0, ScreenPlaybackLevel::song, columnCount, tuningStatic, cursor, nullptr, noHeader, noHeader, tuningField, tuningEdit, nullptr, nullptr, nullptr, nullptr, submenuButton};
 #if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
-constexpr int linkRows = 2;
+constexpr int linkRows = 6;
 #else
 constexpr int linkRows = 1;
 #endif
-ScreenData linkData = {linkRows, 0, 0, 0, -1, 0, 0, 0, 0, ScreenPlaybackLevel::song, columnCount, linkStatic, cursor, nullptr, noHeader, noHeader, linkField, linkEdit, nullptr, nullptr, nullptr, nullptr, submenuButton};
-ScreenData linkAudioData = {3, 0, 0, 0, -1, 0, 0, 0, 0, ScreenPlaybackLevel::song, columnCount, linkAudioStatic, cursor, nullptr, noHeader, noHeader, linkAudioField, linkAudioEdit, nullptr, nullptr, nullptr, nullptr};
+ScreenData linkData = {linkRows, 0, 0, 0, -1, 0, 0, 0, 0, ScreenPlaybackLevel::song, columnCount, linkStatic, linkCursor, nullptr, noHeader, noHeader, linkField, linkEdit, nullptr, nullptr, linkCellValid, nullptr};
 ScreenData syncOutData = {2, 0, 0, 0, -1, 0, 0, 0, 0, ScreenPlaybackLevel::song, columnCount, syncOutStatic, cursor, nullptr, noHeader, noHeader, syncOutField, syncOutEdit, nullptr, nullptr, nullptr, nullptr};
 
 } // namespace
 
 const AppScreen screenProjectTuning = {nullptr, setup, tuningRedraw, draw, tuningInput, playbackLevel};
-const AppScreen screenLinkOptions = {nullptr, setup, linkRedraw, draw, linkInput, playbackLevel};
-const AppScreen screenLinkAudio = {nullptr, setup, linkAudioRedraw, linkAudioDraw, linkAudioInput, playbackLevel};
+const AppScreen screenLinkOptions = {nullptr, setup, linkRedraw, linkDraw, linkInput, playbackLevel};
 const AppScreen screenSyncOut = {nullptr, setup, syncOutRedraw, draw, syncOutInput, playbackLevel};

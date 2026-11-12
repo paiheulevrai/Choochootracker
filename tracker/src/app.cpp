@@ -420,7 +420,9 @@ static int isMotionRecordTrigger(InputCode input) {
 }
 
 static void receiveMidiNote(void* userdata, const MidiPreviewIntent& intent) {
-  const auto& playback = **static_cast<const PlaybackStatus**>(userdata);
+  auto& status = *static_cast<const PlaybackStatus**>(userdata);
+  if (!status) status = chipnomadGetPlaybackStatus(chipnomadState);
+  const auto& playback = *status;
   if (intent.browserPreview) {
     if (intent.stop) {
       selectionPopupMidiInput(intent);
@@ -710,7 +712,7 @@ static bool inputBranchNavigation(int keys) {
   int column = -1;
   if (currentScreen == &screenProject || currentScreen == &screenSettings ||
       currentScreen == &screenProjectTuning || currentScreen == &screenLinkOptions ||
-      currentScreen == &screenLinkAudio || currentScreen == &screenSyncOut ||
+      currentScreen == &screenSyncOut ||
       currentScreen == &screenControlsSettings || currentScreen == &screenAudioSettings || currentScreen == &screenSynthSettings || currentScreen == &screenMixerSettings ||
       currentScreen == &screenGraphicsSettings || currentScreen == &screenBackgroundSettings || currentScreen == &screenTrackVisuals ||
       currentScreen == &screenMidi || currentScreen == &screenMidiChannelMap ||
@@ -1371,6 +1373,17 @@ void appOnEvent(MainLoopEventData eventData) {
     chipnomadSetLiveStickAxes(eventData.data.axes[0], eventData.data.axes[1],
                               eventData.data.axes[2], eventData.data.axes[3]);
     break;
+  case MainLoopEvent::midiInput:
+    if (chipnomadState && chipnomadState->sampleRate > 0) {
+      updateMidiAuditionInstrument();
+      if (audioProjectDirty && chipnomadQueueProjectRefresh(chipnomadState)) audioProjectDirty = 0;
+      const PlaybackStatus* playback = nullptr;
+      midiRouterProcessInput(chipnomadState->midiRouter, midiAuditionInstrument, *pSongTrack,
+        appSettings.midiAutoChannel ? appSettings.midiAutoChannel - 1 : -1,
+        receiveMidiNote, &playback, midiAuditionTrack,
+        selectionPopupHasMidiPreview() || fileBrowserHasMidiPreview());
+    }
+    break;
   case MainLoopEvent::tick: {
 #ifdef CCT_CONSOLE_CONTROLS
     screenKeyMappingTick();
@@ -1402,12 +1415,7 @@ void appOnEvent(MainLoopEventData eventData) {
 #endif
 
     {
-      const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
-      updateMidiAuditionInstrument();
-      midiRouterProcessInput(chipnomadState->midiRouter, midiAuditionInstrument, *pSongTrack,
-        appSettings.midiAutoChannel ? appSettings.midiAutoChannel - 1 : -1,
-        receiveMidiNote, &playback, midiAuditionTrack,
-        selectionPopupHasMidiPreview() || fileBrowserHasMidiPreview());
+      appOnEvent({MainLoopEvent::midiInput, {0}});
 
       // MIDI clock slave mode: transport (Start/Continue/Stop) always
       // drives song playback - there is deliberately no separate UI toggle

@@ -89,7 +89,6 @@ struct ScreenData {
 extern const AppScreen screenProject;
 extern const AppScreen screenProjectTuning;
 extern const AppScreen screenLinkOptions;
-extern const AppScreen screenLinkAudio;
 extern const AppScreen screenSyncOut;
 extern const AppScreen screenProjectLoad;
 extern const AppScreen screenProjectSave;

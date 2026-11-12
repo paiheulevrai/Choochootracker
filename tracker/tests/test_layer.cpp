@@ -7,6 +7,7 @@
 #include "soundbank.h"
 #include "soundbank_runtime.h"
 #include "midi/midi_router.h"
+#include "midi/midi_recording.h"
 #include <cstdio>
 #include <cmath>
 #include <cstring>
@@ -15,6 +16,7 @@
 #include <sstream>
 #include <vector>
 #include <cstdlib>
+#include <chrono>
 
 namespace {
 
@@ -103,6 +105,68 @@ TEST_CASE("Layer owner bounds follow previews, transitions and stops on the last
   REQUIRE(status);
   CHECK(status->layerTracks[7][0].instrument == EMPTY_VALUE_8);
   CHECK(status->layerTracks[7][0].liveInstrument == EMPTY_VALUE_8);
+}
+
+TEST_CASE("MIDI Layer polyphony starts and releases between ticks without preparing new voices") {
+  LayerPlayback e(8);
+  auto& p = e.state->project;
+  getInstrumentFunctions(InstrumentType::Sample).init(&p.instruments[2]);
+  auto& sample = p.instruments[2].chip.sample;
+  sample.frameCount = 4096;
+  sample.channels = 1;
+  sample.sampleRate = 48000;
+  sample.data = static_cast<int16_t*>(std::malloc(sample.frameCount * sizeof(int16_t)));
+  REQUIRE(sample.data);
+  for (unsigned i = 0; i < sample.frameCount; ++i) sample.data[i] = i & 8 ? 8192 : -8192;
+  sample.attack = sample.decay = sample.release = 0;
+  sample.sustain = sample.end = 255;
+  sample.loopMode = 1;
+  for (auto& child : p.instruments[0].chip.layer.entries) child = {2, 0x80, 255};
+  e.init();
+  e.note(0, 1);
+  e.render(17);
+  const int clockTick = e.state->playbackState.tracks[0].frameCounter;
+  SampleVoice* voices[7][INSTRUMENT_LAYER_COUNT];
+  for (int t = 1; t < 8; ++t) {
+    for (int lane = 0; lane < INSTRUMENT_LAYER_COUNT; ++lane)
+      voices[t - 1][lane] = e.state->sampleVoices[PROJECT_MAX_TRACKS + t * INSTRUMENT_LAYER_COUNT + lane][0];
+    REQUIRE(chipnomadQueueMidiInput(e.state.get(), t, 48, 0, 100, 0, 0, MidiRecordMode::free));
+  }
+  e.render(32);
+  CHECK(e.state->playbackState.tracks[0].frameCounter == clockTick);
+  CHECK(e.state->playbackState.layerTrackMask == 0xfe);
+  for (int t = 1; t < 8; ++t) {
+    CHECK(e.state->playbackState.tracks[t].mode == PlaybackMode::phraseRow);
+    for (int lane = 0; lane < INSTRUMENT_LAYER_COUNT; ++lane) {
+      auto* voice = e.state->sampleVoices[PROJECT_MAX_TRACKS + t * INSTRUMENT_LAYER_COUNT + lane][0];
+      REQUIRE(voice == voices[t - 1][lane]);
+      REQUIRE(voice);
+      CHECK(voice->active());
+      CHECK(e.state->playbackState.layerTracks[t][lane].note.pitchFinal == 48);
+    }
+    REQUIRE(chipnomadQueueMidiInput(e.state.get(), t, 0, 0, 0, 0, 0, MidiRecordMode::free));
+  }
+  e.render(256);
+  CHECK(e.state->playbackState.tracks[0].frameCounter == clockTick);
+  for (const auto& track : voices)
+    for (auto* voice : track) CHECK_FALSE(voice->active());
+
+  for (int t = 1; t < 8; ++t)
+    REQUIRE(chipnomadQueueMidiInput(e.state.get(), t, 48, 0, 100, 0, 0, MidiRecordMode::free));
+  e.render(512);
+  auto measure = [&](bool retrigger) {
+    const auto start = std::chrono::steady_clock::now();
+    for (int callback = 0; callback < 128; ++callback) {
+      if (retrigger && callback % 4 == 0)
+        for (int t = 1; t < 8; ++t)
+          REQUIRE(chipnomadQueueMidiInput(e.state.get(), t, 48, 0, 100, 0, 0, MidiRecordMode::free));
+      e.render(512);
+    }
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+  };
+  const double baseline = measure(false), midi = measure(true);
+  std::printf("MIDI 7 tracks x 3 Layer children: %.2f ms held, %.2f ms retriggered / 65536 frames; 21 reused voices\n",
+              baseline, midi);
 }
 
 TEST_CASE("Live project snapshots activate and retire Layer children without reinitializing") {

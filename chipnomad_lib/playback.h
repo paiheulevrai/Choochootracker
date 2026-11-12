@@ -383,6 +383,8 @@ void playbackStop(PlaybackState* state);
 void playbackPreviewNote(PlaybackState* state, int trackIdx, uint8_t note, uint8_t instrument);
 // External notes override the sound, never the sequencer's position or transport.
 void playbackMidiInput(PlaybackState* state, int trackIdx, uint8_t note, uint8_t instrument, uint8_t velocity);
+// Initializes only changed MIDI tracks; does not advance the sequencer.
+uint8_t playbackApplyPendingMidiInput(PlaybackState* state);
 
 /**
  * Stops preview playback on a specific track

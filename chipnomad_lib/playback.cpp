@@ -1266,7 +1266,7 @@ static int16_t sequenceSourceOutput(const PlaybackState* state, PlaybackTrackSta
   return (int16_t)clampInt(raw * amount / 127, -32385, 32385);
 }
 
-static void processModulationsForTrack(PlaybackState* state, PlaybackTrackState* track) {
+static void processModulationsForTrack(PlaybackState* state, PlaybackTrackState* track, bool advanceClock = true) {
   if (track->note.instrument == EMPTY_VALUE_8) return;
 
   InstrumentType type = state->p->instruments[track->note.instrument].type;
@@ -1303,7 +1303,7 @@ static void processModulationsForTrack(PlaybackState* state, PlaybackTrackState*
         mod->modulation->type == ModulationType::FLFO ||
         mod->modulation->type == ModulationType::Audio ||
         mod->modulation->type == ModulationType::Sequence) continue;
-    playbackModNext(mod);
+    if (advanceClock || !modulationIsTickLFO(mod->modulation->type)) playbackModNext(mod);
     if (modulationIsLiveStick(mod->modulation->type)) {
       mod->outValue = playbackLiveStickOutput(state, track->note.instrument, i, mod->modulation);
     }
@@ -1319,12 +1319,13 @@ static void processModulationsForTrack(PlaybackState* state, PlaybackTrackState*
       mod->outValue = 0;
       continue;
     }
-    mod->outValue = sequenceSourceOutput(state, track, mod);
+    if (advanceClock || mod->modulation->p1 != static_cast<uint8_t>(SequenceSource::tranceGate))
+      mod->outValue = sequenceSourceOutput(state, track, mod);
   }
 }
 
-static void processModulations(PlaybackState* state, int trackIdx) {
-  processModulationsForTrack(state, &state->tracks[trackIdx]);
+static void processModulations(PlaybackState* state, int trackIdx, bool advanceClock = true) {
+  processModulationsForTrack(state, &state->tracks[trackIdx], advanceClock);
 }
 
 static void handleInstrument(PlaybackState* state, int trackIdx) {
@@ -1364,7 +1365,7 @@ static void handleInstrument(PlaybackState* state, int trackIdx) {
   }
 }
 
-static void nextFrame(PlaybackState* state, int trackIdx, int chipIdx) {
+static void nextFrame(PlaybackState* state, int trackIdx, int chipIdx, bool advanceClock = true) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
   Project* p = state->p;
 
@@ -1375,15 +1376,15 @@ static void nextFrame(PlaybackState* state, int trackIdx, int chipIdx) {
   }
 
   resetOffsets(state, trackIdx);
-  handleFX(state, trackIdx, chipIdx);
-  if (track->achchidGateTicks) {
+  if (advanceClock) handleFX(state, trackIdx, chipIdx);
+  if (advanceClock && track->achchidGateTicks) {
     if (track->achchidGateCounter >= track->achchidGateTicks) {
       handleNoteOff(state, trackIdx);
     } else {
       track->achchidGateCounter++;
     }
   }
-  processModulations(state, trackIdx);
+  processModulations(state, trackIdx, advanceClock);
   handleInstrument(state, trackIdx);
 
   // Final pitch calculation
@@ -1426,7 +1427,7 @@ static void nextFrame(PlaybackState* state, int trackIdx, int chipIdx) {
   }
 }
 
-static void syncLayerTracks(PlaybackState* state, int trackIdx) {
+static void syncLayerTracks(PlaybackState* state, int trackIdx, bool advanceClock = true) {
   PlaybackTrackState& parent = state->tracks[trackIdx];
   const Instrument* layer = parent.note.instrument < PROJECT_MAX_INSTRUMENTS
     ? &state->p->instruments[parent.note.instrument] : nullptr;
@@ -1544,13 +1545,13 @@ static void syncLayerTracks(PlaybackState* state, int trackIdx) {
         const FXCell cell = {(FXId)fx, child.note.fx[fx].fxValue};
         initFX(state, trackIdx, &cell, nullptr, -1);
       }
-      if (fxHandlers[fx].handle) {
+      if (advanceClock && fxHandlers[fx].handle) {
         fxHandlers[fx].handle(state, &state->tracks[trackIdx], trackIdx, trackIdx,
                               &state->tracks[trackIdx].note.fx[fx]);
         state->tracks[trackIdx].note.fx[fx].counter++;
       }
     }
-    processModulationsForTrack(state, &state->tracks[trackIdx]);
+    processModulationsForTrack(state, &state->tracks[trackIdx], advanceClock);
     handleInstrument(state, trackIdx);
     child = state->tracks[trackIdx];
     state->tracks[trackIdx] = parentTrack;
@@ -2136,6 +2137,41 @@ static void applyMidiInput(PlaybackState* state, int trackIdx) {
   track.midiHeld = 1;
 }
 
+static void applyQueuedTrack(PlaybackState* state, int trackIdx) {
+  auto& track = state->tracks[trackIdx];
+  track.mode = track.queue.mode;
+  track.songRow = track.queue.songRow;
+  track.chainRow = track.queue.chainRow;
+  track.phraseRow = track.queue.phraseRow;
+  track.loop = track.queue.loop;
+  track.queue.mode = PlaybackMode::none;
+  track.queue.liveAction = LiveQueueAction::none;
+  restartStructuralLFOs(state, trackIdx, track.mode != PlaybackMode::phraseRow,
+                        track.mode == PlaybackMode::song || track.mode == PlaybackMode::chain);
+  skipZeroGrooveRows(state, trackIdx);
+  readPhraseRow(state, trackIdx, 0);
+}
+
+uint8_t playbackApplyPendingMidiInput(PlaybackState* state) {
+  uint8_t changed = 0;
+  int chipIdx = 0, nextChipTrack = projectGetChipTracks(state->p, 0);
+  for (int t = 0; t < state->p->tracksCount; ++t) {
+    if (t >= nextChipTrack) {
+      ++chipIdx;
+      nextChipTrack += projectGetChipTracks(state->p, chipIdx);
+    }
+    auto& track = state->tracks[t];
+    if (!track.midiPending) continue;
+    if (track.mode == PlaybackMode::stopped && track.queue.mode == PlaybackMode::phraseRow)
+      applyQueuedTrack(state, t);
+    applyMidiInput(state, t);
+    nextFrame(state, t, chipIdx, false);
+    syncLayerTracks(state, t, false);
+    changed |= 1u << t;
+  }
+  return changed;
+}
+
 void playbackStop(PlaybackState* state) {
   for (auto& track : state->tracks) {
     memset(&track.inserts, 0, sizeof(track.inserts));
@@ -2190,20 +2226,7 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
     if ((track->mode == PlaybackMode::stopped && track->queue.mode != PlaybackMode::none &&
          !(waitingTracks & (1u << trackIdx))) ||
     (track->mode == PlaybackMode::phraseRow && track->queue.mode == PlaybackMode::phraseRow)) {
-      track->mode = track->queue.mode;
-      track->songRow = track->queue.songRow;
-      track->chainRow = track->queue.chainRow;
-      track->phraseRow = track->queue.phraseRow;
-      track->loop = track->queue.loop;
-
-      // Consume queued event
-      track->queue.mode = PlaybackMode::none;
-      track->queue.liveAction = LiveQueueAction::none;
-
-      restartStructuralLFOs(state, trackIdx, track->mode != PlaybackMode::phraseRow,
-                            track->mode == PlaybackMode::song || track->mode == PlaybackMode::chain);
-      skipZeroGrooveRows(state, trackIdx);
-      readPhraseRow(state, trackIdx, 0);
+      applyQueuedTrack(state, trackIdx);
     }
     // Advance further in the track
     else if (!(waitingTracks & (1u << trackIdx))) {

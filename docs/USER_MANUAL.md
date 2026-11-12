@@ -2086,7 +2086,8 @@ During Link playback, CCT gently corrects its local tick rate once per four-beat
 
 #### Link Audio prototype
 
-On desktop and PortMaster, **Project > Link options > Link Audio > Send** enables an experimental stereo master send.
+On desktop and PortMaster, **Project > Link options > Send**, under the
+indented **Link Audio** category, enables an experimental stereo master send.
 It defaults to Off each time CCT starts. Set **Sync: Link**, connect, and set
 **Send: On**. In a compatible receiver, select the `Master` channel
 from the `ChooChooTracker` peer. This also sends preview and monitored input
@@ -2104,9 +2105,17 @@ local network. Enable **Send** on the first and **Receive** on the second.
 The receiver automatically subscribes to one remote `ChooChooTracker` / `Master`
 channel, even when both devices have the same peer name. **Input** shows
 `Waiting for CCT`, `Subscribed`, or `Receiving`; format and buffer errors are
-shown there too. Receive adds the remote stereo audio to local playback with
-a fixed **100 ms** playout delay and linear sample-rate conversion. This is
-a listening prototype, not sample-accurate drum/melody alignment. Lost or late
+shown there too. **Compensation** sets a shared **0-100 ms** jitter margin
+(default **0 ms**, reset at restart). While Link is connected and Receive
+is On, it delays both the local master (including previews and monitored
+input) and received audio by the same amount before mixing them. The outgoing
+Master stays undelayed, so delays do not accumulate between consoles.
+Receive Off or disconnected Link leaves local audio immediate. Lower values
+improve live response but tolerate less network jitter; **0 ms** disables the
+added margin. Changing the margin clears the local delay history and can cause
+a brief discontinuity. Reception uses linear sample-rate conversion.
+This does not measure or correct residual hardware output-latency errors.
+Lost or late
 packets leave gaps; use a reliable Wi-Fi connection. Use only one sender when
 testing: selecting among several CCT sources is not implemented.
 Audio timestamps follow sample positions, with gradual clock-drift correction,
@@ -2116,7 +2125,8 @@ Received audio is never included in the outgoing Master, so enabling Send
 and Receive on both devices does not create an audio feedback loop.
 Local audio Off silences the entire local output, including received audio;
 leave it On on the listening device. Reception uses a bounded, lazily allocated
-buffer (about 132 KiB plus SDK resources). CPU cost and Wi-Fi stability still
+buffer (about 132 KiB for reception plus 38 KiB for local compensation and SDK resources).
+CPU cost and Wi-Fi stability still
 need validation on the target consoles.
 
 The receiver must support Link Audio, not just tempo synchronization. For
@@ -2177,6 +2187,7 @@ Desktop and PortMaster. Settings > **MIDI** opens this submenu: **MIDI In** / **
 - **Playing from a MIDI keyboard**: with a MIDI In device selected, incoming notes play on any screen and during playback. External notes take priority over internal phrase notes while held, without stopping or moving the sequencer; phrase notes resume on subsequent steps after release. Note Off follows the original track even if you select another track while holding the key, and triggers the instrument's ADSR release with REC off too. Without REC, playing does not modify phrases, start song transport, or advance the playback counter.
 - **Auto channel**: `01`-`16`, or `OFF`; defaults to `16`. This channel remembers the instrument associated with your navigation: the selected instrument in Instrument, Modulation and instrument effect/edit screens; the last known phrase instrument at the cursor when stopped or on the playing track during playback; the instrument associated with a Table or track Insert FX; and the highlighted Instrument Pool entry. Screens without an instrument context, such as Mixer, keep that memory. An empty/unresolved context does not replace the last valid instrument. New notes follow the current context even when stopped. Phrase and track Insert FX contexts keep the selected track. Instrument-related contexts use the instrument's unique track in the song arrangement (including Layer references); if unassigned or used on multiple tracks, they use the selected track. The selected UI track is not changed. Auto works with REC off too and overrides that channel's instrument mapping. Other channels keep their instrument mappings and always use the selected track. Overlapping notes on a track use last-note priority; releasing the current note resumes the previous held note.
 - **Browser audition with Auto**: while the sequencer is stopped, Auto Channel notes audition the highlighted WAV sample, SCWF/wavetable, native/FM preset, or SoundFont/SFZ/EXS preset in its picker without selecting or replacing the project's instrument. MIDI pitch, velocity and Note Off apply to the temporary sound. Banks prepare asynchronously; releasing the key before preparation finishes cancels the pending note. Moving to another item, leaving the picker or starting playback stops the preview. Folders do not sound. REC never writes browser audition into phrases; other MIDI channels keep their normal routing. During playback, stop the sequencer before auditioning a browser candidate.
+- **Live response**: desktop and PortMaster poll an open MIDI input approximately every **2 ms** between redraws, without increasing graphics FPS. Incoming notes and releases are applied at the next audio block, without waiting for the next tracker tick. Sequencer steps, MIDI clock and recorded `DEL` keep their existing tick timing. Driver scheduling, audio output buffers and a nonzero Link Receive Compensation still add latency; this is not a guaranteed 2 ms end-to-end response.
 - **Channel mapping**: opens a list of the 16 MIDI channels; assign each one an instrument (`OFF` by default) so notes received on that channel preview that instrument regardless of which one is selected on the Instrument screen - e.g. channel `01` -> instrument `05`. A channel left `OFF` falls back to the currently selected instrument, the original behavior. This mapping is saved to settings.txt.
 - **MIDI recording** uses the existing **MOTION RECORD** control alongside stick automation. At rest, in the Phrase screen, Auto Channel Note On writes the note, instrument and velocity at the cursor and advances one row, staying on row `F` at the end. Dedicated channels remain play-only at rest. If REC receives another channel, a message shows its actual number and the configured Auto Channel: match these to enable step entry. During sequencer playback, REC records incoming Note On events from any channel into the selected destination track's playing phrase, even on another screen.
 - **MIDI record** selects `QUANTIZED` (default) or `FREE`. Quantized writes to the step current at the note's arrival, never the next step. Free uses that same step and adds `DEL` for the preceding audio tick, not the nearest or following tick. Tick `0` needs no `DEL`. Timestamped input is matched against actual playback ticks, including groove and track-speed changes. Both settings are saved.

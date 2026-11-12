@@ -40,6 +40,7 @@ struct FakeLinkState {
   int audioSendCalls = 0;
   int audioFrames = 0;
   int audioSampleRate = 0;
+  int compensationMillis = -1;
   const int16_t* audioSamples = nullptr;
   uint64_t lastRequestedBeat = 999;  // sentinel: requestBeatAtTime arg
   double lastQuantum = -1.0;
@@ -137,8 +138,9 @@ int fakeSetReceive(void*, void*, int enabled) {
 }
 void fakePollAudio(void*, void*) { ++g_fake.audioPolls; }
 const char* fakeReceiveStatus(void*, void*) { return g_fake.receiveEnabled ? "Receiving" : "Off"; }
-int fakeMixReceived(void*, void*, float* samples, int frames, int) {
+int fakeMixReceived(void*, void*, float* samples, int frames, int, int compensationMillis) {
   if (!g_fake.receiveEnabled) return 0;
+  g_fake.compensationMillis = compensationMillis;
   for (int i = 0; i < frames * 2; ++i) samples[i] += 0.1f;
   return frames;
 }
@@ -188,6 +190,11 @@ TEST_CASE("Link Audio receive is independent from send and reports backend failu
   CHECK_FALSE(linkClientIsAudioReceiveEnabled(client));
   float mix[4] = {};
   CHECK(linkClientMixReceivedAudio(client, mix, 2, 48000) == 0);
+  CHECK(linkClientGetAudioCompensationMillis(client) == 0);
+  REQUIRE(linkClientSetAudioCompensationMillis(client, 37));
+  CHECK_FALSE(linkClientSetAudioCompensationMillis(client, -1));
+  CHECK_FALSE(linkClientSetAudioCompensationMillis(client, 101));
+  CHECK(linkClientGetAudioCompensationMillis(client) == 37);
   REQUIRE(linkClientSetAudioReceiveEnabled(client, 1));
   CHECK(linkClientIsAudioReceiveEnabled(client));
   CHECK_FALSE(linkClientIsAudioEnabled(client));
@@ -195,6 +202,7 @@ TEST_CASE("Link Audio receive is independent from send and reports backend failu
   linkClientPoll(client);
   CHECK(g_fake.audioPolls == 1);
   CHECK(linkClientMixReceivedAudio(client, mix, 2, 48000) == 2);
+  CHECK(g_fake.compensationMillis == 37);
   CHECK(mix[0] == doctest::Approx(0.1));
   CHECK(linkClientMixReceivedAudio(client, nullptr, 2, 48000) == 0);
   CHECK(linkClientMixReceivedAudio(client, mix, 0, 48000) == 0);

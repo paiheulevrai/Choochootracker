@@ -811,6 +811,17 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 #endif
     uint32_t delay = 1000 / (uint32_t)targetFps;
     if (delay > busytime) {
+#if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
+      if (appSettings.midiInputDevice >= 0) {
+        while (SDL_GetTicks() - start < delay) {
+          onEvent({MainLoopEvent::midiInput, {0}});
+          const uint32_t elapsed = SDL_GetTicks() - start;
+          if (elapsed >= delay) break;
+          const uint32_t remaining = delay - elapsed;
+          SDL_Delay(remaining < 2 ? remaining : 2);
+        }
+      } else
+#endif
       SDL_Delay(delay - busytime);
     }
   }

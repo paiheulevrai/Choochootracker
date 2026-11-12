@@ -6,6 +6,60 @@
 #include <thread>
 #include <vector>
 
+TEST_CASE("Link Audio compensation aligns local and remote impulses across callbacks") {
+  for (const int rate : {32000, 44100, 48000}) {
+    for (const int millis : {0, 1, 37, 100}) {
+      CAPTURE(rate);
+      CAPTURE(millis);
+      auto queue = std::make_unique<LinkAudioReceiveBuffer>();
+      auto delay = std::make_unique<LinkAudioLocalDelay>();
+      const int delayFrames = LinkAudioLocalDelay::framesFor(rate, millis);
+      constexpr int frames = 32;
+      for (int start = 0; start < delayFrames + frames * 2; start += frames) {
+        float local[frames * 2] = {};
+        int16_t remote[frames * 2] = {};
+        if (!start) {
+          local[0] = 0.25f; local[1] = -0.25f;
+          remote[0] = 8192; remote[1] = -8192;
+        }
+        REQUIRE(queue->push(remote, frames, rate, start * 1000000.0 / rate));
+        delay->process(local, frames, rate, millis);
+        queue->mix(local, frames, rate, (start - delayFrames) * 1000000.0 / rate);
+        for (int frame = 0; frame < frames; ++frame) {
+          const float expected = start + frame == delayFrames ? 0.5f : 0.0f;
+          CHECK(local[frame * 2] == doctest::Approx(expected).epsilon(0.0001).scale(1));
+          CHECK(local[frame * 2 + 1] == doctest::Approx(-expected).epsilon(0.0001).scale(1));
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("Link Audio local compensation survives missing packets and clears stale history") {
+  auto delay = std::make_unique<LinkAudioLocalDelay>();
+  float output[96] = {};
+  output[0] = 0.25f; output[1] = -0.25f;
+  delay->process(output, 48, 48000, 1);
+  CHECK(output[0] == 0);
+  std::fill(std::begin(output), std::end(output), 0.0f);
+  delay->process(output, 48, 48000, 1);
+  CHECK(output[0] == 0.25f);
+  CHECK(output[1] == -0.25f);
+  output[0] = 0.75f;
+  delay->process(output, 48, 48000, 1);
+  delay->reset();
+  std::fill(std::begin(output), std::end(output), 0.0f);
+  delay->process(output, 48, 48000, 1);
+  CHECK(output[0] == 0);
+  output[0] = 0.5f;
+  delay->process(output, 48, 48000, 0);
+  CHECK(output[0] == 0.5f);
+  delay->process(output, 48, 44100, 1);
+  CHECK(output[0] == 0);
+  delay->process(output, 48, 44100, 2);
+  CHECK(output[0] == 0);
+}
+
 TEST_CASE("Link Audio sample clock removes batched callback timestamp overlaps") {
   LinkAudioClock clock;
   constexpr double duration = 512.0 * 1000000.0 / 48000;
