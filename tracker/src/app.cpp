@@ -34,6 +34,7 @@
 #include "chipnomad_lib_live_stick.h"
 #include "link/link_client.h"
 #include "midi/midi_backend_desktop.h"
+#include "midi_io.h"
 #include <math.h>
 #ifdef ANDROID_BUILD
 #include "midi/midi_backend_android.h"
@@ -1023,6 +1024,11 @@ void appActivateProject(void) {
   if (savedInputPort >= 0 && midiRouterOpenInput(savedInputPort) == 0) appSettings.midiInputDevice = savedInputPort;
   int savedOutputPort = findMidiPortByName(0, appSettings.midiOutputDeviceName);
   if (savedOutputPort >= 0 && midiRouterOpenOutput(savedOutputPort) == 0) appSettings.midiOutputDevice = savedOutputPort;
+#ifdef PORTMASTER_BUILD
+  const char* launchpadTest = getenv("CCT_LAUNCHPAD_TEST");
+  if (launchpadTest && strcmp(launchpadTest, "1") == 0)
+    midiIoLaunchpadTestStart();
+#endif
   midiRouterSetChannelInstrumentMap(chipnomadState->midiRouter, appSettings.midiChannelInstrument);
   linkClientSetTransportSync(chipnomadState->linkClient, appSettings.linkTransport);
   midiRouterSetSyncOutput(chipnomadState->midiRouter, appSettings.midiSendClock, appSettings.midiSendTransport);
@@ -1069,6 +1075,7 @@ void appCleanup(void) {
   // cleanly, and any still-sounding note must get a Note Off while the port
   // is still open.
   chipnomadMidiPanic(chipnomadState);
+  midiIoLaunchpadTestStop();
   midiRouterCloseInput();
   midiRouterCloseOutput();
   midiRouterResetHeldNotes(chipnomadState->midiRouter);
@@ -1385,6 +1392,9 @@ void appOnEvent(MainLoopEventData eventData) {
     }
     break;
   case MainLoopEvent::tick: {
+#ifdef PORTMASTER_BUILD
+    midiIoLaunchpadTestPoll();
+#endif
 #ifdef CCT_CONSOLE_CONTROLS
     screenKeyMappingTick();
 #endif

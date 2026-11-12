@@ -81,4 +81,10 @@ void midiIoFlushOutputQueue(void);
 // build/session that never filled the queue.
 unsigned int midiIoGetDroppedCount(void);
 
+// Optional NextUI-only Launchpad Mini MK3 hardware test. These use an
+// independent RtMidi input/output pair and never touch musical MIDI ports.
+void midiIoLaunchpadTestStart(void);
+void midiIoLaunchpadTestPoll(void);
+void midiIoLaunchpadTestStop(void);
+
 #endif // __CHIPNOMAD_LIB__MIDI_IO_H__

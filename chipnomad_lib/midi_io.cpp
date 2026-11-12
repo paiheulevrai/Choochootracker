@@ -17,6 +17,103 @@ uint64_t midiIoNowMicros(void) {
 
 static RtMidiIn* g_midiIn = NULL;
 static RtMidiOut* g_midiOut = NULL;
+static RtMidiIn* g_launchpadTestIn = NULL;
+static RtMidiOut* g_launchpadTestOut = NULL;
+static bool g_launchpadTestSawPress = false;
+
+static void launchpadTestSend(const std::vector<unsigned char>& bytes) {
+  if (!g_launchpadTestOut) return;
+  std::vector<unsigned char> message = bytes;
+  try {
+    g_launchpadTestOut->sendMessage(&message);
+  } catch (...) {
+    fprintf(stderr, "Launchpad test: output failed; closing controller ports\n");
+    midiIoLaunchpadTestStop();
+  }
+}
+
+void midiIoLaunchpadTestStop(void) {
+  if (g_launchpadTestIn) {
+    try { g_launchpadTestIn->closePort(); } catch (...) {}
+    delete g_launchpadTestIn;
+    g_launchpadTestIn = NULL;
+  }
+  if (g_launchpadTestOut) {
+    try { g_launchpadTestOut->closePort(); } catch (...) {}
+    delete g_launchpadTestOut;
+    g_launchpadTestOut = NULL;
+  }
+}
+
+static int findLaunchpadMidi2Port(bool input) {
+  try {
+    if (input) {
+      RtMidiIn probe;
+      for (unsigned int i = 0; i < probe.getPortCount(); ++i) {
+        const std::string name = probe.getPortName(i);
+        // RtMidi's ALSA names contain the sequencer client and port number,
+        // not ALSA's descriptive port name. The Brick exposes MIDI 1 as
+        // port 0 and MIDI 2 as port 1 (confirmed in /proc/asound/seq/clients).
+        if (name == "Launchpad Mini MK3:1") return (int)i;
+      }
+    } else {
+      RtMidiOut probe;
+      for (unsigned int i = 0; i < probe.getPortCount(); ++i) {
+        const std::string name = probe.getPortName(i);
+        if (name == "Launchpad Mini MK3:1") return (int)i;
+      }
+    }
+  } catch (...) {}
+  return -1;
+}
+
+void midiIoLaunchpadTestStart(void) {
+  midiIoLaunchpadTestStop();
+  const int inputPort = findLaunchpadMidi2Port(true);
+  const int outputPort = findLaunchpadMidi2Port(false);
+  if (inputPort < 0 || outputPort < 0) {
+    fprintf(stderr, "Launchpad test: MIDI 2 ALSA ports not found (in=%d out=%d)\n", inputPort, outputPort);
+    return;
+  }
+  try {
+    g_launchpadTestIn = new RtMidiIn();
+    g_launchpadTestIn->ignoreTypes(false, false, false);
+    g_launchpadTestIn->openPort((unsigned int)inputPort, "ChooChooTracker Launchpad Test In");
+    g_launchpadTestOut = new RtMidiOut();
+    g_launchpadTestOut->openPort((unsigned int)outputPort, "ChooChooTracker Launchpad Test Out");
+    g_launchpadTestSawPress = false;
+    // Novation Programmer Mode switch: F0 00 20 29 02 0D 0E 01 F7.
+    launchpadTestSend({0xf0, 0x00, 0x20, 0x29, 0x02, 0x0d, 0x0e, 0x01, 0xf7});
+    // Programmer layout lower-left pad is note 11; palette 19 is green.
+    launchpadTestSend({0x90, 0x0b, 0x13});
+    fprintf(stderr, "Launchpad test: opened MIDI 2 (ALSA port 1); lower-left pad lit green\n");
+  } catch (...) {
+    fprintf(stderr, "Launchpad test: failed to open MIDI 2; closing controller ports\n");
+    midiIoLaunchpadTestStop();
+  }
+}
+
+void midiIoLaunchpadTestPoll(void) {
+  if (!g_launchpadTestIn || !g_launchpadTestOut) return;
+  try {
+    std::vector<unsigned char> message;
+    while (g_launchpadTestIn->getMessage(&message) > 0.0 || !message.empty()) {
+      if (message.size() >= 3 && (message[0] & 0xf0) == 0x90 &&
+          message[1] == 0x0b && message[2] > 0) {
+        if (!g_launchpadTestSawPress) {
+          g_launchpadTestSawPress = true;
+          // Change the same pad from green to red after its first press.
+          launchpadTestSend({0x90, 0x0b, 0x05});
+          fprintf(stderr, "Launchpad test: lower-left pad press received; LED changed to red\n");
+        }
+      }
+      message.clear();
+    }
+  } catch (...) {
+    fprintf(stderr, "Launchpad test: input failed; closing controller ports\n");
+    midiIoLaunchpadTestStop();
+  }
+}
 
 // Program Change and Channel Pressure are 2-byte channel voice messages;
 // every other one we send (Note On/Off, CC) is 3 bytes. Sending a spurious
@@ -284,5 +381,8 @@ void midiIoSendMessage(uint8_t, uint8_t, uint8_t) {}
 void midiIoScheduleMessage(uint8_t, uint8_t, uint8_t, uint64_t) {}
 void midiIoFlushOutputQueue(void) {}
 unsigned int midiIoGetDroppedCount(void) { return 0; }
+void midiIoLaunchpadTestStart(void) {}
+void midiIoLaunchpadTestPoll(void) {}
+void midiIoLaunchpadTestStop(void) {}
 
 #endif
