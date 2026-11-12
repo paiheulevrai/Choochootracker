@@ -87,6 +87,8 @@ static uint64_t playbackCounterPreviousTicks;
 static bool playbackCounterWasPlaying;
 #ifdef PORTMASTER_BUILD
 static int8_t launchpadLedCache[launchpadGrid::kWidth * launchpadGrid::kHeight];
+static bool launchpadSongLayoutActive;
+static void appInput(int isKeyDown, int keys, int tapCount);
 
 static void launchpadInvalidateLeds(void) {
   memset(launchpadLedCache, -1, sizeof(launchpadLedCache));
@@ -96,6 +98,7 @@ static void launchpadControlTick(void) {
   if (!appSettings.launchpadMiniMk3Enabled) {
     if (midiIoLaunchpadConnected()) midiIoLaunchpadStop();
     launchpadInvalidateLeds();
+    launchpadSongLayoutActive = false;
     return;
   }
   if (!midiIoLaunchpadConnected()) {
@@ -105,10 +108,33 @@ static void launchpadControlTick(void) {
 
   uint8_t status, note, velocity;
   int pollResult;
+  const bool songVisible = currentScreen == &screenSong && chipnomadState;
+  if (songVisible != launchpadSongLayoutActive) {
+    launchpadSongLayoutActive = songVisible;
+    launchpadInvalidateLeds();
+  }
   while ((pollResult = midiIoLaunchpadPoll(&status, &note, &velocity)) > 0) {
+    if (songVisible) {
+      const launchpadGrid::SongNavigation navigation =
+        launchpadGrid::songNavigationForEvent(status, note, velocity);
+      int key = 0;
+      switch (navigation) {
+        case launchpadGrid::SongNavigation::up: key = keyUp; break;
+        case launchpadGrid::SongNavigation::down: key = keyDown; break;
+        case launchpadGrid::SongNavigation::left: key = keyLeft; break;
+        case launchpadGrid::SongNavigation::right: key = keyRight; break;
+        default: break;
+      }
+      if (key) {
+        // Route through the existing Song screen navigation and cursor logic.
+        appInput(1, key, 1);
+        appInput(0, 0, 0);
+        continue;
+      }
+    }
     int track, visibleRow;
     if ((status & 0xf0) != 0x90 || velocity == 0 ||
-        currentScreen != &screenSong || !chipnomadState ||
+        !songVisible ||
         !launchpadGrid::coordinatesForNote(note, &track, &visibleRow) ||
         track >= chipnomadState->project.tracksCount) continue;
     const int songRow = launchpadGrid::songRowForVisibleRow(screenSongGetTopRow(), visibleRow);
@@ -122,7 +148,6 @@ static void launchpadControlTick(void) {
     return;
   }
 
-  const bool songVisible = currentScreen == &screenSong && chipnomadState;
   const int topRow = songVisible ? screenSongGetTopRow() : -1;
   const PlaybackStatus* playback = songVisible ? chipnomadGetPlaybackStatus(chipnomadState) : NULL;
   for (int visibleRow = 0; visibleRow < launchpadGrid::kHeight; ++visibleRow) {
