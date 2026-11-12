@@ -512,8 +512,8 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI menu exposes saved Auto Channel and Qu
   CHECK(appSettings.midiRecordMode == MidiRecordMode::free);
   CHECK(appSettings.launchpadMiniMk3Enabled == 0);
   screen->drawField(0, 9, CellState::focus);
-  CHECK(std::string(mockGfxCells[14], 35) == "Launchpad Mini MK3 Control Surface:");
-  CHECK(std::string(mockGfxCells[14] + 36, 3) == "OFF");
+  CHECK(std::string(mockGfxCells[14], 27) == "Launchpad Mini MK3 Support:");
+  CHECK(std::string(mockGfxCells[14] + 28, 3) == "OFF");
   CHECK(screen->onEdit(0, 9, CellEditAction::tap));
   CHECK(appSettings.launchpadMiniMk3Enabled == 1);
   REQUIRE(settingsLoad() == 0);

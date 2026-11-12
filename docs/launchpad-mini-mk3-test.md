@@ -43,8 +43,8 @@ cd /mnt/SDCARD/Tools/tg5040/ChooChooTracker.pak
 ./launchpad-test.sh
 ```
 
-In the test executable, open **Settings → MIDI → Launchpad Mini MK3 Control
-Surface** and set it to **ON**. It should connect to the `Launchpad Mini MK3
+In the test executable, open **Settings → MIDI → Launchpad Mini MK3 Support**
+and set it to **ON**. It should connect to the `Launchpad Mini MK3
 MIDI 2` identity, enter Programmer Mode, and use the 8×8 grid while the Song
 screen is active. Set the option to **OFF** or exit the test app to release the
 controller and request Live Mode.

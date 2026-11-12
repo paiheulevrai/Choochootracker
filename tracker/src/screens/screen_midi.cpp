@@ -73,7 +73,7 @@ static void drawCursor(int col, int row) {
   } else if ((row == 7 || row == 8) && col == 0) {
     gfxCursor(16, row + 5, row == 7 ? 3 : 9);
   } else if (row == 9 && col == 0) {
-    gfxCursor(36, 14, 3);
+    gfxCursor(28, 14, 3);
   }
 }
 
@@ -130,10 +130,10 @@ static void drawField(int col, int row, CellState state) {
     else gfxPrint(16, 12, "OFF");
   } else if (row == 9 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
-    gfxPrint(0, 14, "Launchpad Mini MK3 Control Surface:");
+    gfxPrint(0, 14, "Launchpad Mini MK3 Support:");
     gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
-    gfxClearRect(36, 14, 4, 1);
-    gfxPrint(36, 14, appSettings.launchpadMiniMk3Enabled ? "ON" : "OFF");
+    gfxClearRect(28, 14, 4, 1);
+    gfxPrint(28, 14, appSettings.launchpadMiniMk3Enabled ? "ON" : "OFF");
   }
 }
 
