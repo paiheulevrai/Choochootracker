@@ -18,6 +18,8 @@ jobs:
           submodules: true
       - name: Build the NextUI test executable
         run: |
+          mkdir -p tracker/build/portmaster/launchpad-test
+          chmod 777 tracker/build/portmaster/launchpad-test
           image=ghcr.io/monkeyx-net/portmaster-build-templates/portmaster-builder:aarch64-latest
           docker pull "$image"
           docker run --rm \
@@ -39,7 +41,6 @@ jobs:
           readelf -h "$binary" | grep -q AArch64
           glibc=$(readelf -V "$binary" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)
           test "$(printf '%s\n' "$glibc" GLIBC_2.29 | sort -V | tail -1)" = GLIBC_2.29
-          mkdir -p tracker/build/portmaster/launchpad-test
           cp "$binary" tracker/build/portmaster/launchpad-test/choochootracker-launchpad-test.aarch64
           cp tracker/packaging/nextui/launchpad-test.sh tracker/build/portmaster/launchpad-test/
       - uses: actions/upload-artifact@v4
