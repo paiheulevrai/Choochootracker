@@ -6,6 +6,7 @@
 #include "corelib_input.h"
 #include "screens.h"
 #include "midi/midi_router.h"
+#include "midi_io.h"
 #include <string.h>
 
 static int columnCount(int row) {
@@ -71,6 +72,8 @@ static void drawCursor(int col, int row) {
     gfxCursor(16, 10, 6);
   } else if ((row == 7 || row == 8) && col == 0) {
     gfxCursor(16, row + 5, row == 7 ? 3 : 9);
+  } else if (row == 9 && col == 0) {
+    gfxCursor(36, 14, 3);
   }
 }
 
@@ -125,10 +128,26 @@ static void drawField(int col, int row, CellState state) {
     if (row == 8) gfxPrint(16, 13, appSettings.midiRecordMode == MidiRecordMode::free ? "FREE" : "QUANTIZED");
     else if (appSettings.midiAutoChannel) gfxPrintf(16, 12, "%02u", appSettings.midiAutoChannel);
     else gfxPrint(16, 12, "OFF");
+  } else if (row == 9 && col == 0) {
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxPrint(0, 14, "Launchpad Mini MK3 Control Surface:");
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxClearRect(36, 14, 4, 1);
+    gfxPrint(36, 14, appSettings.launchpadMiniMk3Enabled ? "ON" : "OFF");
   }
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
+  if (row == 9 && col == 0) {
+    action = convertMultiAction(action);
+    if (action == CellEditAction::tap || action == CellEditAction::doubleTap)
+      appSettings.launchpadMiniMk3Enabled = !appSettings.launchpadMiniMk3Enabled;
+    else if (!edit8noLast(action, &appSettings.launchpadMiniMk3Enabled, 1, 0, 1)) return 0;
+    if (appSettings.launchpadMiniMk3Enabled) midiIoLaunchpadStart();
+    else midiIoLaunchpadStop();
+    if (settingsSave()) screenMessage(MESSAGE_TIME_ERROR, "Could not save MIDI settings");
+    return 1;
+  }
   if ((row == 7 || row == 8) && col == 0) {
     uint8_t value = row == 7 ? appSettings.midiAutoChannel : (uint8_t)appSettings.midiRecordMode;
     action = convertMultiAction(action);
@@ -205,7 +224,7 @@ static int onEdit(int col, int row, CellEditAction action) {
 }
 
 static ScreenData screenMidiData = {
-  .rows = 9,
+  .rows = 10,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,

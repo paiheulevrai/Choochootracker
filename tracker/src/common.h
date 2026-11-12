@@ -150,6 +150,7 @@ struct AppSettings {
   uint8_t midiOutputDelayMs;
   uint8_t midiAutoChannel; // 0 = off, 1-16 = selected instrument, before channel mapping.
   MidiRecordMode midiRecordMode;
+  uint8_t launchpadMiniMk3Enabled; // Dedicated Launchpad Mini MK3 pattern grid; off by default.
   // Saved to settings.txt: which instrument a MIDI-in note on a given
   // channel (0-15) plays during preview, e.g. channel 0 -> instrument 5.
   // -1 = channel not assigned (falls back to the currently selected

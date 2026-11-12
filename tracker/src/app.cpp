@@ -35,6 +35,7 @@
 #include "link/link_client.h"
 #include "midi/midi_backend_desktop.h"
 #include "midi_io.h"
+#include "launchpad_grid.h"
 #include <math.h>
 #ifdef ANDROID_BUILD
 #include "midi/midi_backend_android.h"
@@ -84,6 +85,70 @@ static uint64_t playbackCounterMicros;
 static uint64_t playbackCounterStartMicros;
 static uint64_t playbackCounterPreviousTicks;
 static bool playbackCounterWasPlaying;
+#ifdef PORTMASTER_BUILD
+static int8_t launchpadLedCache[launchpadGrid::kWidth * launchpadGrid::kHeight];
+
+static void launchpadInvalidateLeds(void) {
+  memset(launchpadLedCache, -1, sizeof(launchpadLedCache));
+}
+
+static void launchpadControlTick(void) {
+  if (!appSettings.launchpadMiniMk3Enabled) {
+    if (midiIoLaunchpadConnected()) midiIoLaunchpadStop();
+    launchpadInvalidateLeds();
+    return;
+  }
+  if (!midiIoLaunchpadConnected()) {
+    if (!midiIoLaunchpadStart()) return;
+    launchpadInvalidateLeds();
+  }
+
+  uint8_t status, note, velocity;
+  int pollResult;
+  while ((pollResult = midiIoLaunchpadPoll(&status, &note, &velocity)) > 0) {
+    int track, visibleRow;
+    if ((status & 0xf0) != 0x90 || velocity == 0 ||
+        currentScreen != &screenSong || !chipnomadState ||
+        !launchpadGrid::coordinatesForNote(note, &track, &visibleRow) ||
+        track >= chipnomadState->project.tracksCount) continue;
+    const int songRow = launchpadGrid::songRowForVisibleRow(screenSongGetTopRow(), visibleRow);
+    if (songRow < 0 || songRow >= PROJECT_MAX_LENGTH) continue;
+    const int chain = chipnomadState->project.song[songRow][track];
+    if (chain != EMPTY_VALUE_16)
+      chipnomadQueuePlaybackQueueLiveChain(chipnomadState, track, songRow, 0);
+  }
+  if (pollResult < 0) {
+    launchpadInvalidateLeds();
+    return;
+  }
+
+  const bool songVisible = currentScreen == &screenSong && chipnomadState;
+  const int topRow = songVisible ? screenSongGetTopRow() : -1;
+  const PlaybackStatus* playback = songVisible ? chipnomadGetPlaybackStatus(chipnomadState) : NULL;
+  for (int visibleRow = 0; visibleRow < launchpadGrid::kHeight; ++visibleRow) {
+    const int songRow = topRow < 0 ? -1 : launchpadGrid::songRowForVisibleRow(topRow, visibleRow);
+    for (int track = 0; track < launchpadGrid::kWidth; ++track) {
+      const int cacheIndex = visibleRow * launchpadGrid::kWidth + track;
+      const int noteNumber = launchpadGrid::noteFor(track, visibleRow);
+      const bool valid = songRow >= 0 && songRow < PROJECT_MAX_LENGTH &&
+        track < chipnomadState->project.tracksCount;
+      const bool populated = valid && chipnomadState->project.song[songRow][track] != EMPTY_VALUE_16;
+      const PlaybackTrackState* trackState = valid ? &playback->tracks[track] : NULL;
+      const bool playing = trackState && trackState->songRow == songRow &&
+        trackState->mode != PlaybackMode::stopped && trackState->mode != PlaybackMode::none;
+      const bool queued = trackState &&
+        (trackState->queue.liveAction == LiveQueueAction::normal ||
+         trackState->queue.liveAction == LiveQueueAction::urgent) &&
+        trackState->queue.songRow == songRow;
+      const uint8_t colour = launchpadGrid::colour(populated, queued, playing);
+      if (launchpadLedCache[cacheIndex] != (int8_t)colour) {
+        midiIoLaunchpadSetPad((uint8_t)noteNumber, colour);
+        launchpadLedCache[cacheIndex] = (int8_t)colour;
+      }
+    }
+  }
+}
+#endif
 
 struct BatterySample { uint64_t time; int percent; };
 static BatterySample batterySamples[11];
@@ -874,9 +939,7 @@ void appSetup(void) {
   midiRouterSetBackend(midiBackendDesktopGet());
 #endif
 #ifdef PORTMASTER_BUILD
-  const char* launchpadTest = getenv("CCT_LAUNCHPAD_TEST");
-  if (launchpadTest && strcmp(launchpadTest, "1") == 0)
-    midiIoLaunchpadTestStart();
+  launchpadInvalidateLeds();
 #endif
 
   // LOGD("--- ChipNomad started ---");
@@ -1075,7 +1138,7 @@ void appCleanup(void) {
   // cleanly, and any still-sounding note must get a Note Off while the port
   // is still open.
   chipnomadMidiPanic(chipnomadState);
-  midiIoLaunchpadTestStop();
+  midiIoLaunchpadStop();
   midiRouterCloseInput();
   midiRouterCloseOutput();
   midiRouterResetHeldNotes(chipnomadState->midiRouter);
@@ -1393,7 +1456,7 @@ void appOnEvent(MainLoopEventData eventData) {
     break;
   case MainLoopEvent::tick: {
 #ifdef PORTMASTER_BUILD
-    midiIoLaunchpadTestPoll();
+    launchpadControlTick();
 #endif
 #ifdef CCT_CONSOLE_CONTROLS
     screenKeyMappingTick();
