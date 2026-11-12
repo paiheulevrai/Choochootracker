@@ -498,7 +498,7 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI menu exposes saved Auto Channel and Qu
   screenMidi.fullRedraw();
   REQUIRE(mockScreenData);
   auto* screen = mockScreenData;
-  CHECK(screen->rows == 9);
+  CHECK(screen->rows == 10);
   screen->drawField(0, 7, CellState::focus);
   CHECK(std::string(mockGfxCells[12], 12) == "Auto channel");
   screen->drawField(0, 8, CellState::focus);
@@ -510,6 +510,16 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI menu exposes saved Auto Channel and Qu
   REQUIRE(settingsLoad() == 0);
   CHECK(appSettings.midiAutoChannel == 15);
   CHECK(appSettings.midiRecordMode == MidiRecordMode::free);
+  CHECK(appSettings.launchpadMiniMk3Enabled == 0);
+  screen->drawField(0, 9, CellState::focus);
+  CHECK(std::string(mockGfxCells[14], 27) == "Launchpad Mini MK3 Support:");
+  CHECK(std::string(mockGfxCells[14] + 28, 3) == "OFF");
+  CHECK(screen->onEdit(0, 9, CellEditAction::tap));
+  CHECK(appSettings.launchpadMiniMk3Enabled == 1);
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.launchpadMiniMk3Enabled == 1);
+  CHECK(screen->onEdit(0, 9, CellEditAction::tap));
+  CHECK(appSettings.launchpadMiniMk3Enabled == 0);
 }
 
 TEST_CASE_FIXTURE(StickLiveFixture, "FM motion records one native command without a selector") {
@@ -1267,7 +1277,7 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI mute and solo toggle on presses while 
 TEST_CASE_FIXTURE(StickLiveFixture, "screenMidi shows device rows and links to channel mapping") {
   screenMidi.fullRedraw();
   REQUIRE(mockScreenData != nullptr);
-  CHECK(mockScreenData->rows == 9);
+  CHECK(mockScreenData->rows == 10);
   auto* screen = mockScreenData;
 
   screen->drawField(0, 0, CellState::focus);

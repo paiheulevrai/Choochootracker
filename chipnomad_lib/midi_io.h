@@ -81,4 +81,13 @@ void midiIoFlushOutputQueue(void);
 // build/session that never filled the queue.
 unsigned int midiIoGetDroppedCount(void);
 
+// Optional Launchpad Mini MK3 controller ports, kept separate from musical
+// MIDI. Poll returns 1 for a pad message, 0 for none, and -1 if disconnected.
+int midiIoLaunchpadStart(void);
+int midiIoLaunchpadConnected(void);
+int midiIoLaunchpadPoll(uint8_t* outStatus, uint8_t* outNote, uint8_t* outVelocity);
+void midiIoLaunchpadSetPad(uint8_t note, uint8_t colour, int flashing);
+void midiIoLaunchpadSetButton(uint8_t control, uint8_t colour);
+void midiIoLaunchpadStop(void);
+
 #endif // __CHIPNOMAD_LIB__MIDI_IO_H__

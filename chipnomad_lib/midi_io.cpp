@@ -9,6 +9,9 @@ uint64_t midiIoNowMicros(void) {
 #if defined(DESKTOP_BUILD) || defined(PORTMASTER_BUILD)
 
 #include "external/rtmidi/RtMidi.h"
+#ifdef PORTMASTER_BUILD
+#include <alsa/asoundlib.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <vector>
@@ -17,6 +20,162 @@ uint64_t midiIoNowMicros(void) {
 
 static RtMidiIn* g_midiIn = NULL;
 static RtMidiOut* g_midiOut = NULL;
+#ifdef PORTMASTER_BUILD
+static RtMidiIn* g_launchpadIn = NULL;
+static RtMidiOut* g_launchpadOut = NULL;
+static uint64_t g_launchpadRetryAt = 0;
+static uint64_t g_launchpadLastPresenceCheck = 0;
+static std::string g_launchpadInputIdentity;
+static std::string g_launchpadOutputIdentity;
+
+static bool launchpadPortIdentity(const std::string& expectedName, std::string* identity) {
+  snd_seq_t* seq = NULL;
+  if (snd_seq_open(&seq, "default", SND_SEQ_OPEN_DUPLEX, 0) < 0) return false;
+  snd_seq_client_info_t* clientInfo;
+  snd_seq_port_info_t* portInfo;
+  snd_seq_client_info_alloca(&clientInfo);
+  snd_seq_port_info_alloca(&portInfo);
+  bool found = false;
+  snd_seq_client_info_set_client(clientInfo, -1);
+  while (snd_seq_query_next_client(seq, clientInfo) >= 0 && !found) {
+    const int client = snd_seq_client_info_get_client(clientInfo);
+    const char* clientName = snd_seq_client_info_get_name(clientInfo);
+    snd_seq_port_info_set_client(portInfo, client);
+    snd_seq_port_info_set_port(portInfo, -1);
+    while (snd_seq_query_next_port(seq, portInfo) >= 0) {
+      if (strcmp(snd_seq_port_info_get_name(portInfo), expectedName.c_str()) == 0) {
+        char key[128];
+        snprintf(key, sizeof(key), "%s:%d", clientName, snd_seq_port_info_get_port(portInfo));
+        *identity = key;
+        found = true;
+        break;
+      }
+    }
+  }
+  snd_seq_close(seq);
+  return found;
+}
+
+static int findRtMidiPort(bool input, const std::string& identity) {
+  try {
+    if (input) {
+      RtMidiIn probe;
+      for (unsigned int i = 0; i < probe.getPortCount(); ++i)
+        if (probe.getPortName(i) == identity) return (int)i;
+    } else {
+      RtMidiOut probe;
+      for (unsigned int i = 0; i < probe.getPortCount(); ++i)
+        if (probe.getPortName(i) == identity) return (int)i;
+    }
+  } catch (...) {}
+  return -1;
+}
+
+static int findLaunchpadPort(bool input, std::string* identity) {
+  if (!launchpadPortIdentity("Launchpad Mini MK3 MIDI 2", identity)) return -1;
+  return findRtMidiPort(input, *identity);
+}
+
+void midiIoLaunchpadStop(void) {
+  if (g_launchpadOut) {
+    try {
+      std::vector<unsigned char> liveMode{0xf0, 0x00, 0x20, 0x29, 0x02, 0x0d, 0x0e, 0x00, 0xf7};
+      g_launchpadOut->sendMessage(&liveMode);
+    } catch (...) {}
+  }
+  if (g_launchpadIn) {
+    try { g_launchpadIn->closePort(); } catch (...) {}
+    delete g_launchpadIn;
+    g_launchpadIn = NULL;
+  }
+  if (g_launchpadOut) {
+    try { g_launchpadOut->closePort(); } catch (...) {}
+    delete g_launchpadOut;
+    g_launchpadOut = NULL;
+  }
+  g_launchpadInputIdentity.clear();
+  g_launchpadOutputIdentity.clear();
+}
+
+int midiIoLaunchpadConnected(void) {
+  return g_launchpadIn && g_launchpadOut;
+}
+
+int midiIoLaunchpadStart(void) {
+  if (midiIoLaunchpadConnected()) return 1;
+  const uint64_t now = midiIoNowMicros();
+  if (now < g_launchpadRetryAt) return 0;
+  g_launchpadRetryAt = now + 1000000;
+  std::string inputIdentity, outputIdentity;
+  const int inputPort = findLaunchpadPort(true, &inputIdentity);
+  const int outputPort = findLaunchpadPort(false, &outputIdentity);
+  if (inputPort < 0 || outputPort < 0) return 0;
+  try {
+    g_launchpadIn = new RtMidiIn();
+    g_launchpadIn->ignoreTypes(false, false, false);
+    g_launchpadIn->openPort((unsigned int)inputPort, "ChooChooTracker Launchpad In");
+    g_launchpadOut = new RtMidiOut();
+    g_launchpadOut->openPort((unsigned int)outputPort, "ChooChooTracker Launchpad Out");
+    g_launchpadInputIdentity = inputIdentity;
+    g_launchpadOutputIdentity = outputIdentity;
+    std::vector<unsigned char> programmer{0xf0, 0x00, 0x20, 0x29, 0x02, 0x0d, 0x0e, 0x01, 0xf7};
+    g_launchpadOut->sendMessage(&programmer);
+    g_launchpadLastPresenceCheck = now;
+    return 1;
+  } catch (...) {
+    midiIoLaunchpadStop();
+    return 0;
+  }
+}
+
+int midiIoLaunchpadPoll(uint8_t* status, uint8_t* note, uint8_t* velocity) {
+  if (!midiIoLaunchpadConnected()) return 0;
+  try {
+    const uint64_t now = midiIoNowMicros();
+    if (now - g_launchpadLastPresenceCheck > 1000000) {
+      std::string inIdentity, outIdentity;
+      if (findLaunchpadPort(true, &inIdentity) < 0 || findLaunchpadPort(false, &outIdentity) < 0 ||
+          inIdentity != g_launchpadInputIdentity || outIdentity != g_launchpadOutputIdentity) {
+        midiIoLaunchpadStop();
+        return -1;
+      }
+      g_launchpadLastPresenceCheck = now;
+    }
+    std::vector<unsigned char> message;
+    if (g_launchpadIn->getMessage(&message) <= 0.0 || message.empty()) return 0;
+    if (message.size() >= 3) {
+      *status = message[0]; *note = message[1]; *velocity = message[2];
+      return 1;
+    }
+    return 0;
+  } catch (...) {
+    midiIoLaunchpadStop();
+    return -1;
+  }
+}
+
+void midiIoLaunchpadSetPad(uint8_t note, uint8_t colour, int flashing) {
+  if (!g_launchpadOut) return;
+  try {
+    std::vector<unsigned char> message{(unsigned char)(flashing ? 0x91 : 0x90), note, colour};
+    g_launchpadOut->sendMessage(&message);
+  } catch (...) { midiIoLaunchpadStop(); }
+}
+void midiIoLaunchpadSetButton(uint8_t control, uint8_t colour) {
+  if (!g_launchpadOut) return;
+  try {
+    std::vector<unsigned char> message{0xb0, control, colour};
+    g_launchpadOut->sendMessage(&message);
+  } catch (...) { midiIoLaunchpadStop(); }
+}
+#else
+int midiIoLaunchpadStart(void) { return 0; }
+int midiIoLaunchpadConnected(void) { return 0; }
+int midiIoLaunchpadPoll(uint8_t*, uint8_t*, uint8_t*) { return 0; }
+void midiIoLaunchpadSetPad(uint8_t, uint8_t, int) {}
+void midiIoLaunchpadSetButton(uint8_t, uint8_t) {}
+void midiIoLaunchpadStop(void) {}
+#endif // PORTMASTER_BUILD
 
 // Program Change and Channel Pressure are 2-byte channel voice messages;
 // every other one we send (Note On/Off, CC) is 3 bytes. Sending a spurious
@@ -284,5 +443,11 @@ void midiIoSendMessage(uint8_t, uint8_t, uint8_t) {}
 void midiIoScheduleMessage(uint8_t, uint8_t, uint8_t, uint64_t) {}
 void midiIoFlushOutputQueue(void) {}
 unsigned int midiIoGetDroppedCount(void) { return 0; }
+int midiIoLaunchpadStart(void) { return 0; }
+int midiIoLaunchpadConnected(void) { return 0; }
+int midiIoLaunchpadPoll(uint8_t*, uint8_t*, uint8_t*) { return 0; }
+void midiIoLaunchpadSetPad(uint8_t, uint8_t, int) {}
+void midiIoLaunchpadSetButton(uint8_t, uint8_t) {}
+void midiIoLaunchpadStop(void) {}
 
 #endif

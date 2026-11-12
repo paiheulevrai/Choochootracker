@@ -531,6 +531,19 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Live urgent switches at a phrase boundary an
   CHECK(state->playbackState.tracks[0].chainRow == 0);
 
   playbackQueueLiveChain(&state->playbackState, 0, -1, 0);
+  CHECK(state->playbackState.tracks[0].queue.liveAction == LiveQueueAction::stopNormal);
+  state->playbackState.tracks[0].phraseRow = 15;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::stopped);
+
+  playbackStartLiveChain(&state->playbackState, 0, 0);
+  playbackNextFrame(state);
+  playbackQueueLiveChain(&state->playbackState, 0, -1, 0);
+  playbackQueueLiveChain(&state->playbackState, 0, -1, 1);
+  CHECK(state->playbackState.tracks[0].queue.liveAction == LiveQueueAction::stopUrgent);
+  state->playbackState.tracks[0].phraseRow = 0;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].mode != PlaybackMode::stopped);
   state->playbackState.tracks[0].phraseRow = 15;
   playbackNextFrame(state);
   CHECK(state->playbackState.tracks[0].mode == PlaybackMode::stopped);

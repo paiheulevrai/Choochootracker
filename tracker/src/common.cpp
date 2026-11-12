@@ -93,6 +93,7 @@ void initDefaultAppSettings(void) {
   appSettings.midiOutputDelayMs = 0;
   appSettings.midiAutoChannel = 16;
   appSettings.midiRecordMode = MidiRecordMode::quantized;
+  appSettings.launchpadMiniMk3Enabled = 0;
   for (int i = 0; i < MIDI_CHANNEL_COUNT; i++) appSettings.midiChannelInstrument[i] = -1;
   appSettings.persistentWaveform = 0;
 #ifdef ANDROID_BUILD
@@ -298,6 +299,7 @@ int settingsSave(void) {
   fprintf(file, "midiOutputDelayMs: %d\n", appSettings.midiOutputDelayMs);
   fprintf(file, "midiAutoChannel: %u\n", appSettings.midiAutoChannel);
   fprintf(file, "midiRecordMode: %s\n", appSettings.midiRecordMode == MidiRecordMode::free ? "FREE" : "QUANTIZED");
+  fprintf(file, "launchpadMiniMk3Enabled: %u\n", appSettings.launchpadMiniMk3Enabled ? 1 : 0);
   fprintf(file, "clockSource: %d\n", (int)appSettings.clockSource);
   fprintf(file, "midiClockMode: %d\n",
     appSettings.clockSource == ClockSource::midiClock ? 1 : 0);
@@ -564,6 +566,10 @@ int settingsLoad(void) {
     } else if (strncmp(line, "midiRecordMode: ", 16) == 0) {
       if (strcmp(line + 16, "FREE") == 0) appSettings.midiRecordMode = MidiRecordMode::free;
       else if (strcmp(line + 16, "QUANTIZED") == 0) appSettings.midiRecordMode = MidiRecordMode::quantized;
+    } else if (strncmp(line, "launchpadMiniMk3Enabled: ", 25) == 0) {
+      int value = 0;
+      if (sscanf(line + 25, "%d", &value) == 1 && (value == 0 || value == 1))
+        appSettings.launchpadMiniMk3Enabled = (uint8_t)value;
     } else if (strncmp(line, "midiOutputDelayMs: ", 19) == 0) {
       int value = 0;
       if (sscanf(line + 19, "%d", &value) == 1 && value >= 0 && value <= 200)
