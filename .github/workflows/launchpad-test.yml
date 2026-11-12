@@ -42,7 +42,8 @@ jobs:
           glibc=$(readelf -V "$binary" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)
           test "$(printf '%s\n' "$glibc" GLIBC_2.29 | sort -V | tail -1)" = GLIBC_2.29
           cp "$binary" tracker/build/portmaster/launchpad-test/choochootracker-launchpad-test.aarch64
-          cp tracker/packaging/nextui/launchpad-test.sh tracker/build/portmaster/launchpad-test/
+          cp tracker/packaging/nextui/launchpad-test.sh tracker/build/portmaster/launchpad-test/launch.sh
+          cp tracker/packaging/nextui/launchpad-test-pak.json tracker/build/portmaster/launchpad-test/pak.json
       - uses: actions/upload-artifact@v4
         with:
           name: launchpad-test-arm64

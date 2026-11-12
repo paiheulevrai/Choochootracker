@@ -1,0 +1,16 @@
+{
+  "name": "ChooChooTracker Launchpad Test",
+  "version": "test-1",
+  "type": "TOOL",
+  "description": "Temporary Launchpad Mini MK3 song grid hardware test.",
+  "author": "ChooChooTracker contributors",
+  "repo_url": "https://github.com/reverbrick/Choochootracker",
+  "release_filename": "ChooChooTracker-Launchpad-Test.pak.zip",
+  "changelog": {
+    "test-1": "Temporary Launchpad Mini MK3 Programmer Mode pattern-launch test."
+  },
+  "screenshots": [],
+  "platforms": [
+    "tg5040"
+  ]
+}
