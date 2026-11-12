@@ -71,16 +71,16 @@ class PressTracker {
 
 enum class SongNavigation : uint8_t { none, up, down, left, right };
 
-// Mini MK3 Programmer Mode top-row CCs 92-95 are the four navigation keys
-// (the first top key, CC 91, is Session). Keep this decoder in the Song
-// layout so future screen layouts can choose their own controls.
+// Mini MK3 Programmer Mode top-row CCs 91-94 are Up, Down, Left, Right.
+// Session is CC 95 and is deliberately ignored. Keep this decoder in the
+// Song layout so future screen layouts can choose their own controls.
 inline SongNavigation songNavigationForEvent(uint8_t status, uint8_t control) {
   if ((status & 0xf0) != 0xb0) return SongNavigation::none;
   switch (control) {
-    case 92: return SongNavigation::up;
-    case 93: return SongNavigation::down;
-    case 94: return SongNavigation::left;
-    case 95: return SongNavigation::right;
+    case 91: return SongNavigation::up;
+    case 92: return SongNavigation::down;
+    case 93: return SongNavigation::left;
+    case 94: return SongNavigation::right;
     default: return SongNavigation::none;
   }
 }

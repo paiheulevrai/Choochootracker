@@ -37,11 +37,11 @@ TEST_CASE("Launchpad LED states prioritize playing over queued over populated") 
 
 TEST_CASE("Launchpad Song layout maps the four Programmer Mode navigation keys") {
   using launchpadGrid::SongNavigation;
-  CHECK(launchpadGrid::songNavigationForEvent(0xb0, 92) == SongNavigation::up);
-  CHECK(launchpadGrid::songNavigationForEvent(0xb0, 93) == SongNavigation::down);
-  CHECK(launchpadGrid::songNavigationForEvent(0xb0, 94) == SongNavigation::left);
-  CHECK(launchpadGrid::songNavigationForEvent(0xb0, 95) == SongNavigation::right);
-  CHECK(launchpadGrid::songNavigationForEvent(0xb0, 91) == SongNavigation::none);
+  CHECK(launchpadGrid::songNavigationForEvent(0xb0, 91) == SongNavigation::up);
+  CHECK(launchpadGrid::songNavigationForEvent(0xb0, 92) == SongNavigation::down);
+  CHECK(launchpadGrid::songNavigationForEvent(0xb0, 93) == SongNavigation::left);
+  CHECK(launchpadGrid::songNavigationForEvent(0xb0, 94) == SongNavigation::right);
+  CHECK(launchpadGrid::songNavigationForEvent(0xb0, 95) == SongNavigation::none);
   CHECK(launchpadGrid::songNavigationForEvent(0x90, 92) == SongNavigation::none);
 }
 
