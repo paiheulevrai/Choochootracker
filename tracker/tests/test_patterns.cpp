@@ -58,6 +58,20 @@ TEST_CASE_FIXTURE(PatternFixture, "patternClear sets length=1 with empty bar") {
   }
 }
 
+TEST_CASE_FIXTURE(PatternFixture, "new patterns use track ID banks like classic chains") {
+  CHECK(findEmptyPatternForTrack(project.get(), 0) == 0x10);
+  CHECK(findEmptyPatternForTrack(project.get(), 1) == 0x20);
+
+  for (int pattern = 0x10; pattern < 0x20; ++pattern)
+    project->patterns[pattern].bars[0].phrase = 0;
+  CHECK(findEmptyPatternForTrack(project.get(), 0) == 0x90);
+
+  project->patternToChainMap[0x90] = 4;
+  CHECK(findEmptyPatternForTrack(project.get(), 0) == 0x91);
+  CHECK(findEmptyPatternForTrack(project.get(), -1) == EMPTY_VALUE_16);
+  CHECK(findEmptyPatternForTrack(project.get(), PROJECT_MAX_TRACKS) == EMPTY_VALUE_16);
+}
+
 TEST_CASE_FIXTURE(PatternFixture, "patternMaterializeIfPristine: pristine pattern adopts defaultPatternLength") {
   // User flow: type pattern 002 onto an empty song row in simplified view —
   // it must start at the View window's Default length, not the 1-bar

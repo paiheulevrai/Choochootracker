@@ -1,6 +1,7 @@
 #include "pattern_utils.h"
 #include "project_utils.h"
 #include "common.h"
+#include <algorithm>
 #include <string.h>
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -130,6 +131,24 @@ int findClosestEmptyPattern(Project* p, int startIdx) {
     }
   }
   return EMPTY_VALUE_16;
+}
+
+int findEmptyPatternForTrack(Project* p, int track) {
+  if (!p || track < 0 || track >= PROJECT_MAX_TRACKS) return EMPTY_VALUE_16;
+  const int start = (track + 1) * 16;
+  auto findInRange = [&](int first, int end) {
+    for (int pattern = first; pattern < end; ++pattern)
+      if (patternIsEmpty(p, pattern) &&
+          p->patternToChainMap[pattern] == EMPTY_VALUE_16) return pattern;
+    return -1;
+  };
+  int pattern = findInRange(start, std::min(start + 16, PROJECT_MAX_PATTERNS));
+  if (pattern < 0) {
+    const int fallback = (start + 128) % 256;
+    pattern = findInRange(fallback, std::min(fallback + 16, PROJECT_MAX_PATTERNS));
+  }
+  if (pattern < 0) pattern = findInRange(0, PROJECT_MAX_PATTERNS);
+  return pattern < 0 ? EMPTY_VALUE_16 : pattern;
 }
 
 int findClosestEmptyChain(Project* p, int startIdx) {

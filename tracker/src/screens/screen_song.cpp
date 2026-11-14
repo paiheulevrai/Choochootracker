@@ -356,7 +356,9 @@ static int editCell(int col, int row, CellEditAction action) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
       int nextEmpty = groovebox ? grooveboxFindFreeChain(&chipnomadState->project, col) :
-        viewModeFindEmpty(&chipnomadState->project, current + 1);
+        chipnomadState->project.viewMode == ViewMode::simplified
+          ? findEmptyPatternForTrack(&chipnomadState->project, col)
+          : viewModeFindEmpty(&chipnomadState->project, current + 1);
       if (nextEmpty != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = nextEmpty;
         lastChainValue = nextEmpty;

@@ -2059,8 +2059,12 @@ interpreted:
   created patterns. It applies when you type a pattern number onto an
   empty Song row (the pattern starts that long) and when clearing the
   Length field on the Phrase screen header.
+- New pattern IDs use the selected track's `10`, `20`, `30`… bank, like new
+  chains in Classic mode. If that bank is full, the other banks are searched
+  before using any remaining pattern ID.
 - **Playhead** (visible in Simplified mode) chooses between looping the bar
-  the cursor views and playing the whole pattern.
+  the cursor views and playing the whole pattern. In **PAT**, playback starts
+  at the viewed bar, then continues through and loops the full pattern.
 
 ### Ableton Link
 
