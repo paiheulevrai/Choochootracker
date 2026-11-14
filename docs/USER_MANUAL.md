@@ -611,6 +611,8 @@ Double-tap **OPT** to enter or leave Live Mode; `LIVE` replaces the Song title. 
 
 Select one Song row across several columns to queue or stop those tracks together. Multi-row selections are deliberately rejected. Live queues are cleared while a Song range loop is active. Live is a performance mode and is not saved in the project.
 
+In Simplified view, chain boundaries follow the playing pattern's length and bars. If playback is looping a single phrase or an active bar, that phrase or bar's end is the boundary for a normal Live change and for stopped tracks waiting on it.
+
 #### Controls
 
 - **OPT + [UP/DOWN]**: jump 16 positions up or down

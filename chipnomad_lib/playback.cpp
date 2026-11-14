@@ -1607,13 +1607,17 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
     track->phraseRow = 0;
     enteredPhrase = 1;
     state->phraseBoundaryMask |= 1u << trackIdx;
-    int currentChain = track->songRow == EMPTY_VALUE_16 ? EMPTY_VALUE_16 : p->song[track->songRow][trackIdx];
-    if (track->mode == PlaybackMode::phrase || currentChain == EMPTY_VALUE_16 ||
-        track->chainRow == 15 ||
-        p->chains[currentChain].rows[track->chainRow + 1].phrase == EMPTY_VALUE_16 ||
+    int nextChainRow = track->chainRow + 1;
+    bool chainBoundary = track->mode == PlaybackMode::phrase ||
+        (track->mode == PlaybackMode::chain && p->viewMode == ViewMode::simplified &&
+         p->playheadMode == PlayheadMode::loopActiveBar) ||
+        track->songRow == EMPTY_VALUE_16 ||
+        nextChainRow >= playbackResolveLengthAt(p, track->songRow, trackIdx) ||
+        playbackResolvePhraseAt(p, track->songRow, trackIdx, nextChainRow) == EMPTY_VALUE_16 ||
         (state->loopRange.enabled && state->loopRange.level == 1 && track->loop &&
          track->songRow == state->loopRange.endSongRow &&
-         track->chainRow == state->loopRange.endChainRow))
+         track->chainRow == state->loopRange.endChainRow);
+    if (chainBoundary)
       state->chainBoundaryMask |= 1u << trackIdx;
 
     if (track->queue.liveAction == LiveQueueAction::urgent ||
@@ -1646,10 +1650,7 @@ static int moveToNextPhraseRow(PlaybackState* state, int trackIdx) {
 
     if (track->queue.liveAction == LiveQueueAction::normal ||
         track->queue.liveAction == LiveQueueAction::stopNormal) {
-      int chain = track->songRow == EMPTY_VALUE_16 ? EMPTY_VALUE_16 : p->song[track->songRow][trackIdx];
-      int next = track->chainRow + 1;
-      if (chain == EMPTY_VALUE_16 || next >= playbackResolveLengthAt(p, track->songRow, trackIdx) ||
-          playbackResolvePhraseAt(p, track->songRow, trackIdx, next) == EMPTY_VALUE_16) {
+      if (chainBoundary) {
         stopped = applyLiveQueue(state, trackIdx);
         resetTrackFXAuxState(state, trackIdx);
         if (!stopped) restartStructuralLFOs(state, trackIdx, 1, 1);
