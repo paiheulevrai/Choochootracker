@@ -34,6 +34,7 @@
 #include "chipnomad_lib_live_stick.h"
 #include "link/link_client.h"
 #include "midi/midi_backend_desktop.h"
+#include "synth/multimode_filter.h"
 #include <math.h>
 #ifdef ANDROID_BUILD
 #include "midi/midi_backend_android.h"
@@ -78,6 +79,7 @@ static int quickHelpSelectAlone;
 static int audioProjectDirty;
 static MidiCCMapping midiCCApplied[PROJECT_MAX_MIDI_CC_MAPPINGS];
 static uint8_t midiCCAppliedValid[PROJECT_MAX_MIDI_CC_MAPPINGS];
+static int16_t midiCCRecordLast[PROJECT_MAX_MIDI_CC_MAPPINGS][PROJECT_MAX_TRACKS];
 static uint64_t playbackCounterTicks;
 static uint64_t playbackCounterMicros;
 static uint64_t playbackCounterStartMicros;
@@ -413,6 +415,62 @@ static int applyMotionRecordEvent(const MotionRecordEvent& event) {
   return 1;
 }
 
+static void recordMidiCC(const MidiCCMapping& mapping, int mappingIndex, uint8_t cc) {
+  if (!motionRecordHeld || motionEraseHeld) return;
+  Project& project = chipnomadState->project;
+  const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
+  const bool trackDestination = mapping.destination >= midiCCDestinationTrackMute &&
+    mapping.destination <= midiCCDestinationTrackDelaySend;
+  FXId fx = FX_ID_EMPTY;
+  int value = 0;
+  if (mapping.destination == midiCCDestinationTrackReverbSend ||
+      mapping.destination == midiCCDestinationTrackDelaySend) {
+    fx = mapping.destination == midiCCDestinationTrackReverbSend ? fxRSN : fxDSN;
+    int percent = (cc * 100 + 63) / 127;
+    value = (percent * 255 + 99) / 100;
+  } else if (!trackDestination && mapping.destination != midiCCDestinationSongPlayStop) {
+    Instrument* instrument = &project.instruments[mapping.instrument];
+    if (mapping.destination >= midiCCDestinationAttack && mapping.destination <= midiCCDestinationRelease) {
+      static const FXId envelopeFX[] = {fxEAT, fxEDC, fxESU, fxERL};
+      fx = envelopeFX[mapping.destination - midiCCDestinationAttack];
+      value = (cc * 255 + 63) / 127;
+    } else {
+      int base, range;
+      InstrumentMotionValue kind;
+      if (instrumentMotionDestination(instrument, mapping.destination, &fx, &base, &range, &kind)) {
+        if (kind == InstrumentMotionValue::cutoff) value = filterControlFromCutoff((float)base);
+        else if (kind == InstrumentMotionValue::speed) value = (base * 255 + 250) / 500;
+        else value = base;
+        if (instrument->type == InstrumentType::AChChid && fx == fxADC) {
+          int decay = instrument->chip.achchid.decay;
+          value = decay <= 200 ? 0 : ((decay - 200) * 255 + 900) / 1800;
+        } else if (instrument->type == InstrumentType::AChChid &&
+                   (fx == fxARS || fx == fxAEM || fx == fxAAC)) {
+          int percent = fx == fxARS ? instrument->chip.achchid.resonance :
+            fx == fxAEM ? instrument->chip.achchid.envMod : instrument->chip.achchid.accent;
+          value = (percent * 255 + 99) / 100;
+        }
+      }
+    }
+  }
+  bool foundTrack = false;
+  for (int track = 0; track < project.tracksCount; ++track) {
+    const PlaybackTrackState& state = playback->tracks[track];
+    if (state.mode == PlaybackMode::none || state.mode == PlaybackMode::stopped ||
+        state.mode == PlaybackMode::phraseRow || state.phraseRow < 0 || state.phraseRow >= 16) continue;
+    if (trackDestination ? track != mapping.instrument : state.note.instrument != mapping.instrument) continue;
+    uint16_t phrase = playbackResolvePhraseAt(&project, state.songRow, track, state.chainRow);
+    if (phrase == EMPTY_VALUE_16 || phrase >= PROJECT_MAX_PHRASES) continue;
+    foundTrack = true;
+    if (fx != FX_ID_EMPTY && midiCCRecordLast[mappingIndex][track] != value) {
+      applyMotionRecordEvent({phrase, (uint8_t)state.phraseRow, fx, (uint8_t)value, 0});
+      midiCCRecordLast[mappingIndex][track] = value;
+    }
+  }
+  if (foundTrack && fx == FX_ID_EMPTY)
+    screenMessage(MESSAGE_TIME_ERROR, "MIDI CC: no corresponding recordable FX");
+}
+
 static int isMotionRecordTrigger(InputCode input) {
   for (int i = 0; i < 3; i++)
     if (appSettings.keyMapping.keyMotionRecord[i].deviceType == input.deviceType && appSettings.keyMapping.keyMotionRecord[i].code == input.code) return 1;
@@ -550,6 +608,9 @@ static int isMotionEraseTrigger(InputCode input) {
 }
 
 static void updateMotionRecordMode(void) {
+  if (chipnomadMotionMode() != (motionEraseHeld ? 2 : motionRecordHeld ? 1 : 0))
+    for (auto& mapping : midiCCRecordLast)
+      for (auto& value : mapping) value = -1;
   chipnomadSetMotionRecordMode(motionRecordHeld, motionEraseHeld);
   chipnomadSetLiveStickEnabled(motionLiveActive() || motionRecordHeld || motionEraseHeld);
 }
@@ -1532,6 +1593,7 @@ void appOnEvent(MainLoopEventData eventData) {
           // after it is assigned, so MIDI Learn cannot overwrite a patch
           // with the controller's stale (often zero) position.
           midiCCAppliedSerial[i] = serial;
+          for (auto& recorded : midiCCRecordLast[i]) recorded = -1;
         } else if (valid && received && serial != midiCCAppliedSerial[i]) {
           const uint32_t presses = serial - midiCCAppliedSerial[i];
           midiCCAppliedSerial[i] = serial;
@@ -1555,6 +1617,7 @@ void appOnEvent(MainLoopEventData eventData) {
           } else {
             instrumentSetCCDestination(&chipnomadState->project.instruments[mapping.instrument], mapping.destination, value);
           }
+          if (!toggle) recordMidiCC(mapping, i, value);
           projectModified = 1;
           audioProjectDirty = 1;
           if (currentScreen) currentScreen->fullRedraw();
