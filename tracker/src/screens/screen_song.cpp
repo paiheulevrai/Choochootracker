@@ -1100,3 +1100,7 @@ const AppScreen screenSong = {
 LoopRange songScreenGetLoopRange(void) {
   return getLoopRange();
 }
+
+int screenSongGetTopRow(void) {
+  return screen.topRow;
+}
