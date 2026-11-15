@@ -1369,6 +1369,11 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC recording preserves full rows and r
   CHECK(row.fx[0].command == fxARP);
   CHECK(row.fx[1].command == fxDEL);
   CHECK(row.fx[2].command == fxBCL);
+  row.fx[2] = {FX_ID_EMPTY, 0};
+  button.values = {64};
+  appOnEvent({MainLoopEvent::tick});
+  CHECK(row.fx[2].command == fxBTM);
+  CHECK(row.fx[2].value == 128);
   mapping.destination = 1; // Instrument volume has no absolute phrase FX.
   appOnEvent({MainLoopEvent::tick});
   button.values = {127};

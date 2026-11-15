@@ -395,26 +395,30 @@ static void refreshDynamicMidiConnections(void) {
 }
 #endif
 
-static int applyMotionRecordEvent(const MotionRecordEvent& event) {
-  if (event.phrase >= PROJECT_MAX_PHRASES || event.row >= 16 || event.fx >= fxTotalCount) return 0;
+enum class MotionRecordResult { failed, unchanged, changed };
+
+static MotionRecordResult applyMotionRecordEvent(const MotionRecordEvent& event) {
+  if (event.phrase >= PROJECT_MAX_PHRASES || event.row >= 16 || event.fx >= fxTotalCount)
+    return MotionRecordResult::failed;
   PhraseRow* row = &chipnomadState->project.phrases[event.phrase].rows[event.row];
   int column = -1;
   for (int i = 2; i >= 0; --i) if (row->fx[i].command == event.fx) { column = i; break; }
   if (event.erase) {
-    if (column < 0) return 0;
+    if (column < 0) return MotionRecordResult::unchanged;
     row->fx[column] = {FX_ID_EMPTY, 0};
-    return 1;
+    return MotionRecordResult::changed;
   }
 
   if (column < 0)
     for (int i = 2; i >= 0; --i) if (row->fx[i].command == FX_ID_EMPTY) { column = i; break; }
   if (column < 0) {
     chipnomadSetMotionRecordOverflow();
-    return 0;
+    return MotionRecordResult::failed;
   }
-  if (row->fx[column].command == event.fx && row->fx[column].value == event.value) return 0;
+  if (row->fx[column].command == event.fx && row->fx[column].value == event.value)
+    return MotionRecordResult::unchanged;
   row->fx[column] = {event.fx, event.value};
-  return 1;
+  return MotionRecordResult::changed;
 }
 
 static void recordMidiCC(const MidiCCMapping& mapping, int mappingIndex, uint8_t cc) {
@@ -465,8 +469,9 @@ static void recordMidiCC(const MidiCCMapping& mapping, int mappingIndex, uint8_t
     if (phrase == EMPTY_VALUE_16 || phrase >= PROJECT_MAX_PHRASES) continue;
     foundTrack = true;
     if (fx != FX_ID_EMPTY && midiCCRecordLast[mappingIndex][track] != value) {
-      applyMotionRecordEvent({phrase, (uint8_t)state.phraseRow, fx, (uint8_t)value, 0});
-      midiCCRecordLast[mappingIndex][track] = value;
+      if (applyMotionRecordEvent({phrase, (uint8_t)state.phraseRow, fx, (uint8_t)value, 0}) !=
+          MotionRecordResult::failed)
+        midiCCRecordLast[mappingIndex][track] = value;
     }
   }
   if (foundTrack && fx == FX_ID_EMPTY)
@@ -1463,7 +1468,7 @@ void appOnEvent(MainLoopEventData eventData) {
     int motionRecordChanged = 0;
     MotionRecordEvent motionRecordEvent;
     while (chipnomadConsumeMotionRecordEvent(&motionRecordEvent))
-      motionRecordChanged |= applyMotionRecordEvent(motionRecordEvent);
+      motionRecordChanged |= applyMotionRecordEvent(motionRecordEvent) == MotionRecordResult::changed;
     MidiRecordEvent midiRecordEvent;
     while (chipnomadConsumeMidiRecordEvent(chipnomadState, &midiRecordEvent)) {
       if (!midiRecordApply(chipnomadState->project.phrases[midiRecordEvent.phrase].rows[midiRecordEvent.row], midiRecordEvent)) {
