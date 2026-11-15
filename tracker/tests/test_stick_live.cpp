@@ -1264,6 +1264,124 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI mute and solo toggle on presses while 
   CHECK(soloCalls == 3);
 }
 
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC motion records compatible FX on playing destination tracks") {
+  MidiButtonInput button;
+  auto& project = chipnomadState->project;
+  projectInitAY(&project);
+  project.tracksCount = 2;
+  for (auto& row : project.song) for (auto& cell : row) cell = EMPTY_VALUE_16;
+  getInstrumentFunctions(InstrumentType::Braids).init(&project.instruments[0]);
+  getInstrumentFunctions(InstrumentType::Braids).init(&project.instruments[1]);
+  for (int track = 0; track < 2; ++track) {
+    project.song[0][track] = track;
+    project.chains[track].rows[0].phrase = track;
+    project.patterns[track].length = 1;
+    project.patterns[track].bars[0].phrase = track;
+    project.phrases[track].rows[0].instrument = track;
+    project.phrases[track].rows[0].note = 48;
+  }
+  SUBCASE("classic") { project.viewMode = ViewMode::classic; }
+  SUBCASE("simplified") { project.viewMode = ViewMode::simplified; }
+  auto& mapping = project.midiCCMappings[0];
+  mapping = {1, 0, 41, 0, 3}; // Braids timbre
+  chipnomadInitChips(chipnomadState, 48000, nullptr);
+  playbackInit(&chipnomadState->playbackState, &chipnomadState->audioProject);
+  appOnEvent({MainLoopEvent::tick}); // Arm the mapping without replaying stale CC.
+  REQUIRE(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1));
+  float audio[2000]{};
+  chipnomadRender(chipnomadState, audio, 1000);
+  REQUIRE(chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].note.instrument == 0);
+  REQUIRE(chipnomadGetPlaybackStatus(chipnomadState)->tracks[1].note.instrument == 1);
+  auto send = [&](uint8_t value) {
+    button.values = {value};
+    appOnEvent({MainLoopEvent::tick});
+  };
+  auto& row = project.phrases[0].rows[0];
+  send(32);
+  CHECK(row.fx[2].command == FX_ID_EMPTY);
+  motion(keyMotionRecord, true);
+  send(64);
+  CHECK(row.fx[2].command == fxBTM);
+  CHECK(row.fx[2].value == 128);
+  CHECK(project.phrases[1].rows[0].fx[2].command == FX_ID_EMPTY);
+  send(127);
+  CHECK(row.fx[2].value == 254); // 32767 native maximum is quantized to 8 bits.
+  motion(keyMotionErase, true);
+  send(0);
+  CHECK(row.fx[2].value == 254);
+  motion(keyMotionErase, false);
+  motion(keyMotionRecord, false);
+  send(64);
+  CHECK(row.fx[2].value == 254);
+
+  mapping = {1, 0, 41, 1, midiCCDestinationTrackReverbSend};
+  appOnEvent({MainLoopEvent::tick});
+  motion(keyMotionRecord, true);
+  send(64);
+  CHECK(project.phrases[1].rows[0].fx[2].command == fxRSN);
+  CHECK(project.phrases[1].rows[0].fx[2].value * 100 / 255 == project.trackReverbSend[1]);
+  motion(keyMotionRecord, false);
+
+  mapping = {1, 0, 41, 0, midiCCDestinationAttack};
+  appOnEvent({MainLoopEvent::tick});
+  motion(keyMotionRecord, true);
+  send(127);
+  CHECK(row.fx[1].command == fxEAT);
+  CHECK(row.fx[1].value == 255);
+  motion(keyMotionRecord, false);
+
+  mapping.destination = 5; // Braids filter cutoff
+  appOnEvent({MainLoopEvent::tick});
+  motion(keyMotionRecord, true);
+  send(0);
+  CHECK(row.fx[0].command == fxBCF);
+  CHECK(row.fx[0].value == 0);
+  send(127);
+  CHECK(row.fx[0].value == 255);
+  motion(keyMotionRecord, false);
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC recording preserves full rows and reports unsupported destinations") {
+  MidiButtonInput button;
+  auto& project = chipnomadState->project;
+  projectInitAY(&project);
+  getInstrumentFunctions(InstrumentType::Braids).init(&project.instruments[0]);
+  project.song[0][0] = 0;
+  project.chains[0].rows[0].phrase = 0;
+  auto& row = project.phrases[0].rows[0];
+  row.note = 48;
+  row.instrument = 0;
+  row.fx[0] = {fxARP, 1};
+  row.fx[1] = {fxDEL, 0};
+  row.fx[2] = {fxBCL, 3};
+  auto& mapping = project.midiCCMappings[0];
+  mapping = {1, 0, 41, 0, 3};
+  chipnomadInitChips(chipnomadState, 48000, nullptr);
+  playbackInit(&chipnomadState->playbackState, &chipnomadState->audioProject);
+  appOnEvent({MainLoopEvent::tick});
+  REQUIRE(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1));
+  float audio[2000]{};
+  chipnomadRender(chipnomadState, audio, 1000);
+  motion(keyMotionRecord, true);
+  button.values = {64};
+  appOnEvent({MainLoopEvent::tick});
+  CHECK(chipnomadGetMotionRecordOverflow());
+  CHECK(row.fx[0].command == fxARP);
+  CHECK(row.fx[1].command == fxDEL);
+  CHECK(row.fx[2].command == fxBCL);
+  row.fx[2] = {FX_ID_EMPTY, 0};
+  button.values = {64};
+  appOnEvent({MainLoopEvent::tick});
+  CHECK(row.fx[2].command == fxBTM);
+  CHECK(row.fx[2].value == 128);
+  mapping.destination = 1; // Instrument volume has no absolute phrase FX.
+  appOnEvent({MainLoopEvent::tick});
+  button.values = {127};
+  appOnEvent({MainLoopEvent::tick});
+  CHECK(std::string(screenGetActiveMessage()).find("no corresponding recordable FX") != std::string::npos);
+  motion(keyMotionRecord, false);
+}
+
 TEST_CASE_FIXTURE(StickLiveFixture, "screenMidi shows device rows and links to channel mapping") {
   screenMidi.fullRedraw();
   REQUIRE(mockScreenData != nullptr);
