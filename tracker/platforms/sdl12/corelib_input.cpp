@@ -4,6 +4,10 @@
 #include <stdio.h>
 
 void inputInitDefaultKeyMapping(void) {
+  for (int i = 0; i < 3; ++i) {
+    appSettings.keyMapping.keyUndo[i] = {InputDeviceType::none, 0};
+    appSettings.keyMapping.keyRedo[i] = {InputDeviceType::none, 0};
+  }
   appSettings.keyMapping.keyUp[0] = (InputCode){InputDeviceType::keyboard, BTN_UP};
   appSettings.keyMapping.keyDown[0] = (InputCode){InputDeviceType::keyboard, BTN_DOWN};
   appSettings.keyMapping.keyLeft[0] = (InputCode){InputDeviceType::keyboard, BTN_LEFT};

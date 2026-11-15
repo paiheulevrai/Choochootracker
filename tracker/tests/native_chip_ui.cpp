@@ -11,6 +11,7 @@
 #include <cmath>
 #include "chipnomad_lib.h"
 #include "app.h"
+#include "edit_history.h"
 #include "screen_project.h"
 #include "screen_export.h"
 #include "midi/smf_file.h"
@@ -439,6 +440,211 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+  if(argc==3 && !strcmp(argv[2],"--pattern-copy-only")) {
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+    require(audioManager.start(48000, 256) == 0, "pattern copy audio fixture");
+    audioPause(1);
+    projectFree(&chipnomadState->project); projectInitAY(&chipnomadState->project);
+    auto& p = chipnomadState->project;
+    for (auto& row : p.song) for (auto& cell : row) cell = EMPTY_VALUE_16;
+    p.viewMode = ViewMode::simplified;
+    p.song[9][0] = 0;
+    p.patterns[0].bars[0].phrase = 7;
+    p.phrases[7].rows[0].note = 69;
+    appSettings.defaultPatternLength = 4;
+    screenSong.init();
+    *pSongRow = *pSongTrack = *pChainRow = 0;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    screenSetup(&screenSong, 0); appDraw();
+    editHistoryClear();
+    appChord(0, keyEdit);
+    require(p.song[0][0] == 0x10 && p.patterns[0x10].length == 4 &&
+      p.patterns[0x10].bars[0].phrase == EMPTY_VALUE_16,
+      "first pattern uses track bank and default length without copying unselected pattern zero");
+    p.patterns[0x10].bars[0].phrase = 5;
+    p.phrases[5].rows[0].note = 60;
+    appChord(0, keyDown);
+    editHistoryClear();
+    appChord(0, keyEdit);
+    const int copy = p.song[1][0];
+    require(copy == 0x11 && p.patterns[copy].length == 4, "tap copies pattern into next free track slot");
+    const int phrase = p.patterns[copy].bars[0].phrase;
+    require(phrase != 5 && phrase < PROJECT_MAX_PHRASES && p.phrases[phrase].rows[0].note == 60,
+      "tap makes an independent phrase copy");
+    appChord(0, keyUndo);
+    require(p.song[1][0] == EMPTY_VALUE_16 && p.phrases[phrase].rows[0].note == EMPTY_VALUE_8,
+      "undo removes copied pattern and phrase");
+    appChord(0, keyRedo);
+    require(p.song[1][0] == copy && p.phrases[phrase].rows[0].note == 60, "redo restores independent copy");
+    p.phrases[phrase].rows[0].note = 72;
+    require(p.phrases[5].rows[0].note == 60, "copy edits preserve source");
+    p.song[3][0] = 0x14;
+    p.patterns[0x14].length = 2;
+    p.patterns[0x14].bars[0].phrase = 6;
+    p.phrases[6].rows[0].note = 64;
+    appChord(0, keyDown); appChord(0, keyDown); appChord(0, keyUp);
+    appChord(0, keyEdit);
+    const int selectedCopy = p.song[2][0];
+    require(selectedCopy == 0x12 && p.patterns[selectedCopy].length == 2 &&
+      p.phrases[p.patterns[selectedCopy].bars[0].phrase].rows[0].note == 64,
+      "tap copies the last navigated pattern");
+    require(screenTouchTap(3, 6) && screenTouchTap(3, 7), "touch selects source and empty Song cells");
+    appChord(0, keyEdit);
+    const int touchCopy = p.song[4][0];
+    require(touchCopy == 0x13 && p.patterns[touchCopy].length == 2 &&
+      p.phrases[p.patterns[touchCopy].bars[0].phrase].rows[0].note == 64,
+      "tap copies the last touch-selected pattern");
+    screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+    const int empty = p.song[4][0];
+    require(empty == 0x15 && p.patterns[empty].length == 4 &&
+      p.patterns[empty].bars[0].phrase == EMPTY_VALUE_16, "double-tap creates a new empty pattern");
+    require(screenTouchTap(3, 6) && screenTouchTap(3, 8), "select source and another empty cell");
+    for (auto& full : p.phrases) full.rows[0].note = 48;
+    editHistoryClear(); projectModified = 0;
+    appChord(0, keyEdit);
+    require(p.song[5][0] == EMPTY_VALUE_16 && !projectModified &&
+      strstr(screenGetActiveMessage(), "No free phrases"), "full phrase pool refuses copying without a partial edit");
+    editHistoryClear(); audioManager.stop(); chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
+    gfxCleanup(); SDL_Quit();
+    printf("Simplified pattern copy UI passed\n");
+    return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--undo-only")) {
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+#ifdef BMP_STREAM_TEST
+    captureAudioCallback = true;
+#endif
+    require(audioManager.start(48000, 256) == 0, "undo audio fixture");
+    audioPause(1);
+    projectFree(&chipnomadState->project); projectInitAY(&chipnomadState->project);
+    auto& p = chipnomadState->project;
+    p.song[0][0] = 0; p.chains[0].rows[0].phrase = 0;
+    *pSongRow = *pSongTrack = *pChainRow = 0;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    auto undo = [&]() { appChord(0, keyUndo); };
+    auto redo = [&]() { appChord(0, keyRedo); };
+    auto open = [&](const AppScreen* screen, int value) { screenSetup(screen, value); appDraw(); };
+    editHistoryClear();
+    open(&screenPhrase, 0);
+    const Phrase empty = p.phrases[0];
+    appChord(keyEdit, keyUp);
+    const Phrase edited = p.phrases[0];
+    require(std::memcmp(&edited, &empty, sizeof(Phrase)), "production phrase edit");
+    undo();
+    require(!std::memcmp(&p.phrases[0], &empty, sizeof(Phrase)), "phrase undo");
+    redo();
+    require(!std::memcmp(&p.phrases[0], &edited, sizeof(Phrase)), "phrase redo");
+
+    editHistoryClear(); open(&screenChain, 0);
+    const Chain oldChain = p.chains[0];
+    appChord(keyEdit, keyUp); const Chain newChain = p.chains[0];
+    require(std::memcmp(&newChain, &oldChain, sizeof(Chain)), "production chain edit");
+    undo(); require(!std::memcmp(&p.chains[0], &oldChain, sizeof(Chain)), "chain undo");
+    redo(); require(!std::memcmp(&p.chains[0], &newChain, sizeof(Chain)), "chain redo");
+
+    editHistoryClear(); open(&screenTable, 7);
+    const Table oldTable = p.tables[7];
+    appChord(keyEdit, keyUp); const Table newTable = p.tables[7];
+    require(std::memcmp(&newTable, &oldTable, sizeof(Table)), "production table edit");
+    undo(); require(!std::memcmp(&p.tables[7], &oldTable, sizeof(Table)), "table undo preserves selected table");
+    redo(); require(!std::memcmp(&p.tables[7], &newTable, sizeof(Table)), "table redo");
+
+    editHistoryClear(); open(&screenSong, 0);
+    const auto oldCell = p.song[0][0];
+    appChord(keyEdit, keyUp);
+    require(p.song[0][0] != oldCell, "production song edit");
+    open(&screenSettings, 0);
+    require(screenTouchTap(2, 14), "touch history entry");
+    appChord(0, keyEdit);
+    require(currentScreen == &screenSelectionPopup, "touch/controller opens history menu");
+    appChord(0, keyEdit);
+    require(currentScreen == &screenSettings && p.song[0][0] == oldCell, "controller history menu undo");
+    redo(); require(p.song[0][0] != oldCell, "menu undo keeps redo");
+
+    p.song[0][0] = 0; p.chains[0].rows[0].phrase = 0; p.chains[0].rows[1].phrase = 0;
+    canonicalSimplifiedActive = true;
+    editHistoryClear(); open(&screenPhrase, 0);
+    appChord(keyEdit, keyUp);
+    const int fresh = p.chains[0].rows[0].phrase;
+    require(fresh != 0, "canonical edit isolates shared bar");
+    const Phrase isolated = p.phrases[fresh];
+    undo();
+    require(p.chains[0].rows[0].phrase == 0 && p.chains[0].rows[1].phrase == 0, "one undo restores shared references");
+    redo();
+    require(p.chains[0].rows[0].phrase == fresh && !std::memcmp(&p.phrases[fresh], &isolated, sizeof(Phrase)), "shared bar redo exact");
+    editHistoryClear();
+    p.chains[0].rows[0].phrase = p.chains[0].rows[1].phrase = 0;
+    open(&screenPhrase, 0);
+    auto rawJazz = [&](SDL_Keycode code, bool down) {
+      MainLoopEventData event{};
+      event.type = down ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
+      event.data.input = {InputDeviceType::keyboard, code};
+      appOnEvent(event); appDraw();
+    };
+    rawJazz(SDLK_ESCAPE, true); rawJazz(SDLK_ESCAPE, false);
+    rawJazz(SDLK_x, true); rawJazz(SDLK_x, false);
+    const auto jazzPhrase = p.chains[0].rows[0].phrase;
+    require(jazzPhrase != 0, "key jazz isolates shared bar");
+    undo(); require(p.chains[0].rows[0].phrase == 0, "key jazz undo includes release reconciliation");
+    redo(); require(p.chains[0].rows[0].phrase == jazzPhrase, "key jazz redo restores binding");
+    rawJazz(SDLK_ESCAPE, true); rawJazz(SDLK_ESCAPE, false);
+    canonicalSimplifiedActive = false;
+
+    auto& instrument = prepareHomepageInstrument(InstrumentType::Braids, "Undo");
+    open(&screenInstrument, 0); editHistoryClear();
+    const Instrument original = instrument;
+    require(instrumentCommonOnEdit(0, 0, CellEditAction::increase), "production instrument engine change");
+    appDraw();
+    const Instrument switched = instrument;
+    require(switched.type != original.type, "engine actually changes");
+    undo(); require(!std::memcmp(&instrument, &original, sizeof(Instrument)), "engine undo includes envelope and modulation");
+    redo(); require(!std::memcmp(&instrument, &switched, sizeof(Instrument)), "engine redo exact");
+    undo(); editHistoryClear();
+    screenInstrumentBraids.cursorRow = 3; screenInstrumentBraids.cursorCol = 0;
+    const auto oldModel = instrument.chip.braids.model;
+    appChord(keyEdit, keyRight);
+    const auto newModel = instrument.chip.braids.model;
+    require(newModel != oldModel, "production model edit");
+    undo(); require(instrument.chip.braids.model == oldModel, "model undo");
+    redo(); require(instrument.chip.braids.model == newModel, "model redo");
+
+    MainLoopEventData raw{};
+    raw.data.input = {InputDeviceType::keyboard, SDLK_z};
+    SDL_SetModState(KMOD_CTRL); raw.type = MainLoopEvent::keyDown; appOnEvent(raw); appDraw();
+    require(instrument.chip.braids.model == oldModel, "Ctrl-Z undoes before key jazz");
+    SDL_SetModState(KMOD_NONE); raw.type = MainLoopEvent::keyUp; appOnEvent(raw); appDraw();
+    SDL_SetModState(SDL_Keymod(KMOD_CTRL | KMOD_SHIFT)); raw.type = MainLoopEvent::keyDown; appOnEvent(raw); appDraw();
+    require(instrument.chip.braids.model == newModel, "Ctrl-Shift-Z redoes");
+    SDL_SetModState(KMOD_NONE); raw.type = MainLoopEvent::keyUp; appOnEvent(raw); appDraw();
+    editHistoryClear();
+    screenInstrumentBraids.cursorRow = 3; screenInstrumentBraids.cursorCol = 0;
+    appChord(0, keyEdit);
+    require(currentScreen == &screenSelectionPopup, "model popup opens");
+    appChord(0, keyRight); appChord(0, keyDown); appChord(0, keyEdit);
+    require(currentScreen == &screenInstrument && instrument.chip.braids.model != newModel, "model popup commits");
+    const auto popupModel = instrument.chip.braids.model;
+    undo(); require(instrument.chip.braids.model == newModel, "popup model undo");
+    redo(); require(instrument.chip.braids.model == popupModel, "popup model redo");
+
+    editHistoryClear();
+    auto& sampler = prepareHomepageInstrument(InstrumentType::Sample, "Undo PCM").chip.sample;
+    sampler.frameCount = 4; sampler.channels = 1; sampler.sampleRate = 48000;
+    sampler.data = static_cast<int16_t*>(malloc(8));
+    require(sampler.data != nullptr, "sampler undo PCM");
+    for (int i = 0; i < 4; ++i) sampler.data[i] = int16_t(1000 + i);
+    open(&screenInstrument, 0);
+    require(instrumentCommonOnEdit(0, 0, CellEditAction::increase), "sampler engine switch");
+    appDraw(); undo();
+    require(instrument.type == InstrumentType::Sample, "sampler engine undo");
+    for (int i = 0; i < 4; ++i) require(instrument.chip.sample.data[i] == 1000 + i, "sampler undo preserves PCM");
+    redo(); require(instrument.type != InstrumentType::Sample, "sampler engine redo");
+    require(editHistoryBytes() <= 256 * 1024 && editHistoryResourceBytes() <= 8 * 1024 * 1024, "bounded UI history");
+    capture("undo-model");
+    editHistoryClear(); audioManager.stop(); chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
+    gfxCleanup(); SDL_Quit();
+    printf("Undo production UI passed: Phrase, Chain, Song, Table, shared bars, engines, models, controller menu, desktop shortcuts\n");
+    return 0;
+  }
 #ifdef BMP_STREAM_TEST
   if(argc==3 && !strcmp(argv[2],"--project-options-only")) {
     settingsOverride = std::filesystem::absolute(std::filesystem::path(output) / "project-options-settings.txt").string();

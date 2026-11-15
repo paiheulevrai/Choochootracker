@@ -13,6 +13,7 @@ void appSetup(void);
 int appHasProject(void);
 int appContinueProject(void);
 void appActivateProject(void);
+void appPublishProjectEdit(void);
 void appCleanup(void);
 void appDraw(void);
 void appSetStickLiveMode(StickLiveMode mode);

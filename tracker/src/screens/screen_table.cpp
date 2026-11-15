@@ -1,4 +1,5 @@
 #include "screens.h"
+#include "edit_history.h"
 #include "common.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -95,9 +96,9 @@ static void init(void) {
 
 static void setup(int input) {
   isFxEdit = 0;
-  tableIdx = input & 0xff;
+  if (input != -2) tableIdx = input & 0xff;
   tableRows = chipnomadState->project.tables[tableIdx].rows;
-  backToPhrase = (input & 0x1000) != 0;
+  if (input != -2) backToPhrase = (input & 0x1000) != 0;
   screen.selectMode = 0;
 }
 
@@ -327,6 +328,9 @@ static int editCell(int col, int row, enum CellEditAction action) {
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
+  EditHistoryScope history("Table edit");
+  if (action != CellEditAction::copy && action != CellEditAction::switchSelection &&
+      !editHistoryCapture(EditObject::table, tableIdx)) return 1;
   int startCol, startRow, endCol, endRow;
   getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
 
@@ -439,7 +443,9 @@ static int inputScreenNavigation(int keys, int tapCount) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  EditHistoryScope history("Table FX");
   if (isFxEdit) {
+    if (!editHistoryCapture(EditObject::table, tableIdx)) return 1;
     int fxIdx = (screen.cursorCol - 3) / 2;
     int result = fxEditInput(keys, tapCount, &tableRows[screen.cursorRow - 1].fx[fxIdx], &lastFX);
     if (result) {

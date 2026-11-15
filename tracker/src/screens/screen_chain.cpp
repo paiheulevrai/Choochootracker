@@ -5,6 +5,7 @@
 #include "chipnomad_lib.h"
 #include "project_utils.h"
 #include "copy_paste.h"
+#include "edit_history.h"
 #include <string.h>
 
 static int chain = 0;
@@ -258,6 +259,9 @@ static int editCell(int col, int row, enum CellEditAction action) {
 }
 
 static int onEdit(int col, int row, enum CellEditAction action) {
+  EditHistoryScope history("Chain edit");
+  if (action != CellEditAction::copy && action != CellEditAction::switchSelection &&
+      !editHistoryCapture(EditObject::chain, chain)) return 1;
   int handled = 0;
 
   int startCol, startRow, endCol, endRow;
@@ -424,6 +428,8 @@ int chainKeyJazzHandleRawKey(InputCode input, int isDown) {
 
   if (isDown) {
     int row = screen.cursorRow;
+    EditHistoryScope history("Chain entry");
+    if (!editHistoryCapture(EditObject::chain, chain)) return 1;
     uint16_t current = chipnomadState->project.chains[chain].rows[row].phrase;
     uint16_t base = (row == keyJazzEditRow && current != EMPTY_VALUE_16) ? current : 0;
     int value = base * 16 + digit;

@@ -1,4 +1,5 @@
 #include "screen_view_convert.h"
+#include "edit_history.h"
 #include "screens.h"
 #include "screen_groovebox.h"
 #include "screen_project.h"
@@ -66,6 +67,7 @@ static void convertNow(void) {
   gfxUpdateScreen();
 
   audioManager.pause();
+  editHistoryBarrier();
   int result = (targetMode == ViewMode::simplified)
     ? convertChainsToPatterns(p)
     : convertPatternsToChains(p);

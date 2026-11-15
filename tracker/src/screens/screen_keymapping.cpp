@@ -25,7 +25,7 @@ static int captureCol = 0;
 static CaptureState captureState = STATE_NAVIGATION;
 static InputCode pendingCapture = {InputDeviceType::none, 0};
 #ifdef CCT_CONSOLE_CONTROLS
-static constexpr int doneRow = 12;
+static constexpr int doneRow = 14;
 static InputCode requiredCapture = {InputDeviceType::none, 0};
 static KeyMapping candidateMapping;
 static InputCode heldInputs[16];
@@ -46,7 +46,7 @@ static bool resetHeld = false;
 static int resetTaps = 0;
 static uint32_t resetTime;
 #else
-static constexpr int doneRow = 11;
+static constexpr int doneRow = 13;
 static InputCode captureTrigger = {InputDeviceType::none, 0};
 static InputCode captureIgnore = {InputDeviceType::none, 0};
 #endif
@@ -54,7 +54,7 @@ static void fullRedraw(void);
 static void applyPendingCapture(void);
 
 static const char* buttonNames[] = {
-  "Up", "Down", "Left", "Right", "Edit (A)", "Opt (B)", "Play", "Shift", "Stick live", "Motion rec", "Motion del"
+  "Up", "Down", "Left", "Right", "Edit (A)", "Opt (B)", "Play", "Shift", "Stick live", "Motion rec", "Motion del", "Undo", "Redo"
 };
 
 static InputCode* getKeySlot(KeyMapping& mapping, int row, int col) {
@@ -70,6 +70,8 @@ static InputCode* getKeySlot(KeyMapping& mapping, int row, int col) {
     case 8: return &mapping.keyMotionLive[col];
     case 9: return &mapping.keyMotionRecord[col];
     case 10: return &mapping.keyMotionErase[col];
+    case 11: return &mapping.keyUndo[col];
+    case 12: return &mapping.keyRedo[col];
   }
   return NULL;
 }
@@ -141,7 +143,7 @@ static void cancelCapture(const char* message) {
 
 static int mappedRow(InputCode input) {
   // Match the app's priority: motion controls are handled before navigation.
-  const int motionRows[] = {9, 8, 10};
+  const int motionRows[] = {11, 12, 9, 8, 10};
   for (int row : motionRows) {
     for (int col = 0; col < 3; ++col)
       if (sameInput(*getKeySlot(candidateMapping, row, col), input)) return row;
@@ -252,7 +254,7 @@ static void onRawInput(InputCode input, int isDown) {
 #endif
 
 static int getColumnCount(int row) {
-  if (row < 11) return 3;
+  if (row < 13) return 3;
   return 1;
 }
 
@@ -261,7 +263,7 @@ static void drawStatic(void) {
   gfxPrint(0, 0, "Key Mapping");
 
   gfxSetFgColor(appSettings.colorScheme.textLabel);
-  for (int i = 0; i < 11; i++) {
+  for (int i = 0; i < 13; i++) {
     gfxPrint(0, i + 2, buttonNames[i]);
   }
 
@@ -269,24 +271,24 @@ static void drawStatic(void) {
     gfxSetFgColor(appSettings.colorScheme.textValue);
 #ifdef CCT_CONSOLE_CONTROLS
     if (captureState == STATE_WAIT_RELEASE || captureState == STATE_WAIT_VERIFY)
-      gfxPrint(0, 16, "Release all buttons... (15s)");
+      gfxPrint(0, 17, "Release all buttons... (15s)");
     else if (captureState == STATE_VERIFYING || captureState == STATE_VERIFY_DONE)
-      gfxPrintf(0, 16, "Test: press %s (15s)", buttonNames[verifyStep < 8 ? verifyStep : extraVerifyRow]);
-    else if (calibrating) gfxPrintf(0, 16, "Press physical %s (15s)", buttonNames[captureRow]);
-    else gfxPrint(0, 16, "Press new key...");
-    gfxPrint(0, 17, calibrating ? "Hold any button 1s: restart" : "15s per step or changes cancel");
+      gfxPrintf(0, 17, "Test: press %s (15s)", buttonNames[verifyStep < 8 ? verifyStep : extraVerifyRow]);
+    else if (calibrating) gfxPrintf(0, 17, "Press physical %s (15s)", buttonNames[captureRow]);
+    else gfxPrint(0, 17, "Press new key...");
+    gfxPrint(0, 18, calibrating ? "Hold any button 1s: restart" : "15s per step or changes cancel");
 #else
-    gfxPrint(0, 16, "Press any key...");
+    gfxPrint(0, 17, "Press any key...");
 #endif
   } else {
     gfxSetFgColor(appSettings.colorScheme.textInfo);
-    gfxPrint(0, 16, "Tap unmapped key 5x");
-    gfxPrint(0, 17, "to reset defaults");
+    gfxPrint(0, 17, "Tap unmapped key 5x");
+    gfxPrint(0, 18, "to reset defaults");
   }
 }
 
 static void drawCursor(int col, int row) {
-  if (row < 11) {
+  if (row < 13) {
     InputCode* slot = getKeySlot(row, col);
     int width = slot ? strlen(inputGetKeyName(*slot)) : 3;
     gfxCursor(11 + col * 8, row + 2, width);
@@ -296,7 +298,7 @@ static void drawCursor(int col, int row) {
 }
 
 static void drawField(int col, int row, CellState state) {
-  if (row < 11) {
+  if (row < 13) {
     gfxClearRect(11 + col * 8, row + 2, 7, 1);
     InputCode* slot = getKeySlot(row, col);
     if (slot) {
@@ -328,7 +330,7 @@ static void drawColHeader(int col, CellState state) {
 
 static int onEdit(int col, int row, CellEditAction action) {
   if (captureState != STATE_NAVIGATION) return 1;
-  if (row < 11) {
+  if (row < 13) {
     if (action == CellEditAction::tap) {
       captureRow = row;
       captureCol = col;
@@ -341,7 +343,7 @@ static int onEdit(int col, int row, CellEditAction action) {
       fullRedraw();
 #endif
       return 1;
-    } else if (action == CellEditAction::clear && col > 0) {
+    } else if (action == CellEditAction::clear && (col > 0 || row >= 8)) {
 #ifdef CCT_CONSOLE_CONTROLS
       candidateMapping = appSettings.keyMapping;
       InputCode* slot = getKeySlot(candidateMapping, row, col);
@@ -371,7 +373,7 @@ static int onEdit(int col, int row, CellEditAction action) {
     screenSetup(&screenControlsSettings, 0);
     return 1;
 #ifdef CCT_CONSOLE_CONTROLS
-  } else if (row == 11 && action == CellEditAction::tap) {
+  } else if (row == 13 && action == CellEditAction::tap) {
     startCapture(true);
     return 1;
 #endif
@@ -447,7 +449,7 @@ static void applyPendingCapture(void) {
     InputCode previous = *slot;
 #ifdef CCT_CONSOLE_CONTROLS
     bool conflictsOtherRow = false;
-    for (int row = 0; row < 11; ++row)
+    for (int row = 0; row < 13; ++row)
       for (int col = 0; col < 3; ++col)
         if (row != captureRow && sameInput(*getKeySlot(candidateMapping, row, col), pendingCapture))
           conflictsOtherRow = true;
@@ -474,7 +476,7 @@ static void applyPendingCapture(void) {
 #endif
 
     // Find conflicting slot and swap
-    for (int row = 0; row < 11; row++) {
+    for (int row = 0; row < 13; row++) {
       for (int col = 0; col < 3; col++) {
         if (row == captureRow && col == captureCol) continue;
         InputCode* other = getKeySlot(row, col);

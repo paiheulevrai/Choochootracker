@@ -102,6 +102,7 @@ extern const AppScreen screenCreateFolder;
 extern const AppScreen screenEnterName;
 extern const AppScreen screenSong;
 int screenSongGetTopRow(void);
+void screenSongRememberSelected(void);
 extern const AppScreen screenGroovebox;
 extern const AppScreen screenChain;
 extern const AppScreen screenPhrase;

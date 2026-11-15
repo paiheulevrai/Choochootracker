@@ -30,10 +30,10 @@ struct NonConsoleMappingFixture {
 }
 
 TEST_CASE_FIXTURE(NonConsoleMappingFixture, "nonconsole mapping has no calibration or startup recovery") {
-  CHECK(mockScreenData->rows == 12);
+  CHECK(mockScreenData->rows == 14);
   CHECK(inputRawCallback == nullptr);
-  mockScreenData->drawField(0, 11, CellState::focus);
-  CHECK(std::string(mockGfxCells[13], 4) == "Done");
+  mockScreenData->drawField(0, 13, CellState::focus);
+  CHECK(std::string(mockGfxCells[15], 4) == "Done");
 }
 
 TEST_CASE_FIXTURE(NonConsoleMappingFixture, "nonconsole mapping applies on release without timed verification") {
@@ -41,7 +41,7 @@ TEST_CASE_FIXTURE(NonConsoleMappingFixture, "nonconsole mapping applies on relea
   mockScreenData->onEdit(0, 4, CellEditAction::tap);
   REQUIRE(inputRawCallback != nullptr);
   mockScreenData->drawStatic();
-  CHECK(std::string(mockGfxCells[16], 16) == "Press any key...");
+  CHECK(std::string(mockGfxCells[17], 16) == "Press any key...");
   inputRawCallback(key, 1);
   CHECK(appSettings.keyMapping.keyEdit[0].deviceType == InputDeviceType::none);
   inputRawCallback(key, 0);

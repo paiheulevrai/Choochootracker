@@ -1,4 +1,5 @@
 #include "project_utils.h"
+#include "edit_history.h"
 #include "pitch_table_utils.h"
 #include "playback_internal.h"
 #include "common.h"
@@ -227,7 +228,9 @@ static int instrumentIsUsedInPhrases(Project* project, int instrumentIdx) {
 // Find empty chain slot (empty and not used in project)
 int findEmptyChain(Project* project, int start) {
   for (int i = start; i < PROJECT_MAX_CHAINS; i++) {
-    if (chainIsEmpty(project, i) && !chainIsUsedInSong(project, i)) return i;
+    if (chainIsEmpty(project, i) && !chainIsUsedInSong(project, i)) {
+      return editHistoryCapture(project, EditObject::chain, i) ? i : EMPTY_VALUE_16;
+    }
   }
   return EMPTY_VALUE_16;
 }
@@ -235,7 +238,9 @@ int findEmptyChain(Project* project, int start) {
 // Find empty phrase slot (empty and not used in project)
 int findEmptyPhrase(Project* project, int start) {
   for (int i = start; i < PROJECT_MAX_PHRASES; i++) {
-    if (phraseIsEmpty(project, i) && !phraseIsUsedInChains(project, i)) return i;
+    if (phraseIsEmpty(project, i) && !phraseIsUsedInChains(project, i)) {
+      return editHistoryCapture(project, EditObject::phrase, i) ? i : EMPTY_VALUE_16;
+    }
   }
   return EMPTY_VALUE_16;
 }

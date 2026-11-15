@@ -1,4 +1,5 @@
 #include "screens.h"
+#include "edit_history.h"
 #include "screen_settings.h"
 #include "common.h"
 #include "corelib_gfx.h"
@@ -16,6 +17,7 @@
 
 // Screen state variables
 static uint16_t lastChainValue = 0;
+static bool lastPatternSelected = false;
 static bool sceneEditPending = false;
 static int sceneEditTaps = 1;
 
@@ -85,6 +87,16 @@ static ScreenData screen = {
   .getLoopRange = getLoopRange,
 };
 
+void screenSongRememberSelected(void) {
+  const Project& project = chipnomadState->project;
+  if (project.viewMode != ViewMode::simplified || screen.selectMode != 0) return;
+  uint16_t selected = project.song[screen.cursorRow][screen.cursorCol];
+  if (selected < PROJECT_MAX_PATTERNS) {
+    lastChainValue = selected;
+    lastPatternSelected = true;
+  }
+}
+
 static void selectedTrackBounds(int* first, int* last) {
   *first = screen.cursorCol;
   *last = screen.cursorCol;
@@ -147,6 +159,7 @@ static int livePlay(int tapCount) {
 
 static void init(void) {
   lastChainValue = 0;
+  lastPatternSelected = false;
   sceneEditPending = false;
   screen.cursorRow = 0;
   screen.cursorCol = 0;
@@ -342,6 +355,31 @@ static int inputScreenNavigation(int keys, int tapCount) {
 static int editCell(int col, int row, CellEditAction action) {
   bool groovebox = (grooveboxEditorActive || canonicalSimplifiedActive) &&
     chipnomadState->project.viewMode == ViewMode::classic;
+  Project& project = chipnomadState->project;
+  if (project.viewMode == ViewMode::simplified && action == CellEditAction::tap &&
+      project.song[row][col] == EMPTY_VALUE_16) {
+    int slot = findEmptyPatternForTrack(&project, col);
+    if (slot == EMPTY_VALUE_16) {
+      screenMessage(MESSAGE_TIME_ERROR, "No free patterns");
+      return 0;
+    }
+    if (lastPatternSelected && lastChainValue < PROJECT_MAX_PATTERNS &&
+        viewModeIsUsedElsewhere(&project, lastChainValue, -1, -1)) {
+      PatternCopyResult result = patternCopyIndependent(&project, lastChainValue, slot);
+      if (result != PatternCopyResult::success) {
+        if (result == PatternCopyResult::noFreePhrase) screenMessage(MESSAGE_TIME_ERROR, "No free phrases");
+        else if (result == PatternCopyResult::invalidPhrase) screenMessage(MESSAGE_TIME_ERROR, "Invalid pattern phrase");
+        return 0;
+      }
+    } else {
+      patternMaterializeIfPristine(&project, slot, -1, -1);
+    }
+    project.song[row][col] = (uint16_t)slot;
+    lastChainValue = (uint16_t)slot;
+    lastPatternSelected = true;
+    chipnomadQueueProjectRefresh(chipnomadState);
+    return 1;
+  }
   if (groovebox && action == CellEditAction::tap &&
       chipnomadState->project.song[row][col] == EMPTY_VALUE_16) {
     int slot = grooveboxFindFreeChain(&chipnomadState->project, col);
@@ -356,10 +394,13 @@ static int editCell(int col, int row, CellEditAction action) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
       int nextEmpty = groovebox ? grooveboxFindFreeChain(&chipnomadState->project, col) :
-        viewModeFindEmpty(&chipnomadState->project, current + 1);
+        chipnomadState->project.viewMode == ViewMode::simplified
+          ? findEmptyPatternForTrack(&chipnomadState->project, col)
+          : viewModeFindEmpty(&chipnomadState->project, current + 1);
       if (nextEmpty != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = nextEmpty;
         lastChainValue = nextEmpty;
+        if (project.viewMode == ViewMode::simplified) lastPatternSelected = true;
         if (patternMaterializeIfPristine(&chipnomadState->project, nextEmpty,
           row, col)) {
           projectModified = 1;
@@ -388,6 +429,7 @@ static int editCell(int col, int row, CellEditAction action) {
       if (cloned != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = cloned;
         lastChainValue = cloned;
+        if (project.viewMode == ViewMode::simplified) lastPatternSelected = true;
         return 1;
       }
     }
@@ -404,10 +446,16 @@ static int editCell(int col, int row, CellEditAction action) {
     }
     return 0;
   }
-  return edit16withLimit(action, &chipnomadState->project.song[row][col], &lastChainValue, 16, PROJECT_MAX_CHAINS - 1);
+  int handled = edit16withLimit(action, &project.song[row][col], &lastChainValue, 16, PROJECT_MAX_CHAINS - 1);
+  if (handled && project.viewMode == ViewMode::simplified && project.song[row][col] < PROJECT_MAX_PATTERNS)
+    lastPatternSelected = true;
+  return handled;
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
+  EditHistoryScope history("Song edit");
+  if (action != CellEditAction::copy && action != CellEditAction::switchSelection &&
+      !editHistoryCapture(EditObject::song)) return 1;
   int handled = 0;
   int startCol, startRow, endCol, endRow;
   getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
@@ -491,6 +539,7 @@ static int onEdit(int col, int row, CellEditAction action) {
 #define MERGE_REFUSAL_TEXT "Pattern too long to merge"
 
 static void songMergeSelectedPatternsUp(void) {
+  if (!editHistoryCapture(EditObject::song)) return;
   Project* p = &chipnomadState->project;
   if (p->viewMode != ViewMode::simplified) return;
   if (screen.selectMode != 1) return;
@@ -528,6 +577,7 @@ static void songMergeSelectedPatternsUp(void) {
     int target = p->song[rows[0]][col];
     for (int i = 1; i < count; i++) {
       int src = p->song[rows[i]][col];
+      if (!editHistoryCapture(EditObject::pattern, src)) return;
       if (patternAppendPattern(p, target, src) < 0) {
         // Cannot happen after the length check; guard anyway.
         refused = 1;
@@ -573,6 +623,7 @@ static void songMergeCanonicalUp() {
 #define CHAIN_MERGE_REFUSAL_TEXT "Chain too long to merge"
 
 static void songMergeSelectedChainsUp(void) {
+  if (!editHistoryCapture(EditObject::song)) return;
   Project* p = &chipnomadState->project;
   if (p->viewMode != ViewMode::classic) return;
   if (screen.selectMode != 1) return;
@@ -596,6 +647,7 @@ static void songMergeSelectedChainsUp(void) {
     // Length check BEFORE mutating: total phrase rows across all selected
     // chains must fit in one chain (16 rows).
     int target = p->song[rows[0]][col];
+    if (!editHistoryCapture(EditObject::chain, target)) return;
     int targetUsed = 0;
     for (int d = 0; d < 16; d++)
       if (p->chains[target].rows[d].phrase != EMPTY_VALUE_16) targetUsed++;
@@ -616,6 +668,7 @@ static void songMergeSelectedChainsUp(void) {
     while (write < 16 && p->chains[target].rows[write].phrase != EMPTY_VALUE_16) write++;
     for (int i = 1; i < count; i++) {
       int srcIdx = p->song[rows[i]][col];
+      if (!editHistoryCapture(EditObject::chain, srcIdx)) return;
       Chain* src = &p->chains[srcIdx];
       for (int d = 0; d < 16 && write < 16; d++) {
         if (src->rows[d].phrase == EMPTY_VALUE_16) continue;
@@ -645,6 +698,7 @@ static void songMergeSelectedChainsUp(void) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  EditHistoryScope history("Song edit");
   int handled = 0;
   if (grooveboxEditorActive && chipnomadState->project.viewMode == ViewMode::classic &&
       screen.selectMode == 0) {
@@ -719,6 +773,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
       case MUTE_SOLO_EMPTY:
         if (isKeyDown && keys == keyOpt) {
           if (tapCount == 3) {
+            if (!editHistoryCapture(EditObject::song)) return 1;
             // Toggle highlight on triple-tap Opt
             uint8_t* highlight = &chipnomadState->project.songHighlight[screen.cursorRow][screen.cursorCol];
             *highlight ^= 1;
@@ -829,6 +884,8 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   // Only call common input handling if we didn't handle Song-specific input
   if (!handled) {
     if (isKeyDown && screen.selectMode == 0 && inputScreenNavigation(keys, tapCount)) return 1;
+    if (isKeyDown && (keys == keyUp || keys == keyDown || keys == keyLeft || keys == keyRight))
+      screenSongRememberSelected();
     return screenInput(&screen, isKeyDown, keys, tapCount);
   }
 
@@ -882,6 +939,11 @@ static void keyJazzGetActiveRange(int* startCol, int* startRow, int* endCol, int
 }
 
 int songKeyJazzHandleRawKey(InputCode input, int isDown) {
+  EditHistoryScope history("Song entry");
+  if (isDown && keyJazzEnabled && input.deviceType == InputDeviceType::keyboard &&
+      (inputHexDigitValue(input) >= 0 || inputIsCutKey(input) ||
+       inputIsPasteKey(input) || inputIsDeleteKey(input) || inputIsBackspaceKey(input)) &&
+      !editHistoryCapture(EditObject::song)) return 1;
   if (input.deviceType != InputDeviceType::keyboard) return 0;
 
   if (inputIsKeyJazzToggle(input)) {
@@ -1005,6 +1067,7 @@ int songKeyJazzHandleRawKey(InputCode input, int isDown) {
     if (value > PROJECT_MAX_CHAINS - 1) value = PROJECT_MAX_CHAINS - 1;
     chipnomadState->project.song[row][col] = (uint16_t)value;
     lastChainValue = (uint16_t)value;
+    if (chipnomadState->project.viewMode == ViewMode::simplified) lastPatternSelected = true;
     keyJazzEditRow = row;
     keyJazzEditCol = col;
     // Simplified view: typing a pattern number onto a previously-empty row
