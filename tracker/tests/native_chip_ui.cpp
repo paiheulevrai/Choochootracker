@@ -440,6 +440,75 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+  if(argc==3 && !strcmp(argv[2],"--pattern-copy-only")) {
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+    require(audioManager.start(48000, 256) == 0, "pattern copy audio fixture");
+    audioPause(1);
+    projectFree(&chipnomadState->project); projectInitAY(&chipnomadState->project);
+    auto& p = chipnomadState->project;
+    for (auto& row : p.song) for (auto& cell : row) cell = EMPTY_VALUE_16;
+    p.viewMode = ViewMode::simplified;
+    p.song[9][0] = 0;
+    p.patterns[0].bars[0].phrase = 7;
+    p.phrases[7].rows[0].note = 69;
+    appSettings.defaultPatternLength = 4;
+    screenSong.init();
+    *pSongRow = *pSongTrack = *pChainRow = 0;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    screenSetup(&screenSong, 0); appDraw();
+    editHistoryClear();
+    appChord(0, keyEdit);
+    require(p.song[0][0] == 0x10 && p.patterns[0x10].length == 4 &&
+      p.patterns[0x10].bars[0].phrase == EMPTY_VALUE_16,
+      "first pattern uses track bank and default length without copying unselected pattern zero");
+    p.patterns[0x10].bars[0].phrase = 5;
+    p.phrases[5].rows[0].note = 60;
+    appChord(0, keyDown);
+    editHistoryClear();
+    appChord(0, keyEdit);
+    const int copy = p.song[1][0];
+    require(copy == 0x11 && p.patterns[copy].length == 4, "tap copies pattern into next free track slot");
+    const int phrase = p.patterns[copy].bars[0].phrase;
+    require(phrase != 5 && phrase < PROJECT_MAX_PHRASES && p.phrases[phrase].rows[0].note == 60,
+      "tap makes an independent phrase copy");
+    appChord(0, keyUndo);
+    require(p.song[1][0] == EMPTY_VALUE_16 && p.phrases[phrase].rows[0].note == EMPTY_VALUE_8,
+      "undo removes copied pattern and phrase");
+    appChord(0, keyRedo);
+    require(p.song[1][0] == copy && p.phrases[phrase].rows[0].note == 60, "redo restores independent copy");
+    p.phrases[phrase].rows[0].note = 72;
+    require(p.phrases[5].rows[0].note == 60, "copy edits preserve source");
+    p.song[3][0] = 0x14;
+    p.patterns[0x14].length = 2;
+    p.patterns[0x14].bars[0].phrase = 6;
+    p.phrases[6].rows[0].note = 64;
+    appChord(0, keyDown); appChord(0, keyDown); appChord(0, keyUp);
+    appChord(0, keyEdit);
+    const int selectedCopy = p.song[2][0];
+    require(selectedCopy == 0x12 && p.patterns[selectedCopy].length == 2 &&
+      p.phrases[p.patterns[selectedCopy].bars[0].phrase].rows[0].note == 64,
+      "tap copies the last navigated pattern");
+    require(screenTouchTap(3, 6) && screenTouchTap(3, 7), "touch selects source and empty Song cells");
+    appChord(0, keyEdit);
+    const int touchCopy = p.song[4][0];
+    require(touchCopy == 0x13 && p.patterns[touchCopy].length == 2 &&
+      p.phrases[p.patterns[touchCopy].bars[0].phrase].rows[0].note == 64,
+      "tap copies the last touch-selected pattern");
+    screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+    const int empty = p.song[4][0];
+    require(empty == 0x15 && p.patterns[empty].length == 4 &&
+      p.patterns[empty].bars[0].phrase == EMPTY_VALUE_16, "double-tap creates a new empty pattern");
+    require(screenTouchTap(3, 6) && screenTouchTap(3, 8), "select source and another empty cell");
+    for (auto& full : p.phrases) full.rows[0].note = 48;
+    editHistoryClear(); projectModified = 0;
+    appChord(0, keyEdit);
+    require(p.song[5][0] == EMPTY_VALUE_16 && !projectModified &&
+      strstr(screenGetActiveMessage(), "No free phrases"), "full phrase pool refuses copying without a partial edit");
+    editHistoryClear(); audioManager.stop(); chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
+    gfxCleanup(); SDL_Quit();
+    printf("Simplified pattern copy UI passed\n");
+    return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--undo-only")) {
     screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
 #ifdef BMP_STREAM_TEST

@@ -7,6 +7,48 @@
 
 // ── Pattern clone helpers (used by viewModeCloneToNext / viewModeDeepClone) ──
 
+PatternCopyResult patternCopyIndependent(Project* p, int srcIdx, int dstIdx) {
+  if (!p || srcIdx < 0 || srcIdx >= PROJECT_MAX_PATTERNS ||
+      dstIdx < 0 || dstIdx >= PROJECT_MAX_PATTERNS || srcIdx == dstIdx)
+    return PatternCopyResult::invalidPhrase;
+
+  static uint8_t used[PROJECT_MAX_PHRASES]; // UI-only scratch avoids a large handheld stack.
+  memset(used, 0, sizeof(used));
+  for (const auto& chain : p->chains)
+    for (const auto& row : chain.rows)
+      if (row.phrase < PROJECT_MAX_PHRASES) used[row.phrase] = 1;
+  for (const auto& pattern : p->patterns)
+    for (const auto& bar : pattern.bars)
+      if (bar.phrase < PROJECT_MAX_PHRASES) used[bar.phrase] = 1;
+
+  uint16_t source[PROJECT_MAX_PATTERN_LENGTH], destination[PROJECT_MAX_PATTERN_LENGTH];
+  int count = 0;
+  for (const auto& bar : p->patterns[srcIdx].bars) {
+    if (bar.phrase == EMPTY_VALUE_16) continue;
+    if (bar.phrase >= PROJECT_MAX_PHRASES) return PatternCopyResult::invalidPhrase;
+    int i = 0;
+    while (i < count && source[i] != bar.phrase) ++i;
+    if (i < count) continue;
+    int fresh = 0;
+    while (fresh < PROJECT_MAX_PHRASES && (used[fresh] || !phraseIsEmpty(p, fresh))) ++fresh;
+    if (fresh == PROJECT_MAX_PHRASES) return PatternCopyResult::noFreePhrase;
+    source[count] = bar.phrase;
+    destination[count++] = (uint16_t)fresh;
+    used[fresh] = 1;
+  }
+
+  if (!editHistoryCapture(p, EditObject::pattern, dstIdx)) return PatternCopyResult::historyFailure;
+  for (int i = 0; i < count; ++i)
+    if (!editHistoryCapture(p, EditObject::phrase, destination[i])) return PatternCopyResult::historyFailure;
+  p->patterns[dstIdx] = p->patterns[srcIdx];
+  for (int i = 0; i < count; ++i) {
+    p->phrases[destination[i]] = p->phrases[source[i]];
+    for (auto& bar : p->patterns[dstIdx].bars)
+      if (bar.phrase == source[i]) bar.phrase = destination[i];
+  }
+  return PatternCopyResult::success;
+}
+
 // Clone a pattern to the next empty slot. Returns the new pattern index, or
 // EMPTY_VALUE_16 if no empty slot is available.
 static int clonePatternToNext(Project* p, int srcIdx) {
