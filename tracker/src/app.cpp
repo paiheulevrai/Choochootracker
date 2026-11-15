@@ -35,6 +35,9 @@
 #include "chipnomad_lib_live_stick.h"
 #include "link/link_client.h"
 #include "midi/midi_backend_desktop.h"
+#include "midi_io.h"
+#include "launchpad_grid.h"
+#include "synth/multimode_filter.h"
 #include <math.h>
 #ifdef ANDROID_BUILD
 #include "midi/midi_backend_android.h"
@@ -80,11 +83,160 @@ static int audioProjectDirty;
 void appPublishProjectEdit(void) { audioProjectDirty = 1; }
 static MidiCCMapping midiCCApplied[PROJECT_MAX_MIDI_CC_MAPPINGS];
 static uint8_t midiCCAppliedValid[PROJECT_MAX_MIDI_CC_MAPPINGS];
+static int16_t midiCCRecordLast[PROJECT_MAX_MIDI_CC_MAPPINGS][PROJECT_MAX_TRACKS];
 static uint64_t playbackCounterTicks;
 static uint64_t playbackCounterMicros;
 static uint64_t playbackCounterStartMicros;
 static uint64_t playbackCounterPreviousTicks;
 static bool playbackCounterWasPlaying;
+#ifdef PORTMASTER_BUILD
+static int8_t launchpadLedCache[launchpadGrid::kWidth * launchpadGrid::kHeight + launchpadGrid::kHeight];
+static launchpadGrid::PressTracker launchpadPresses;
+static bool launchpadSongLayoutActive;
+static void appInput(int isKeyDown, int keys, int tapCount);
+
+static void launchpadInvalidateLeds(void) {
+  memset(launchpadLedCache, -1, sizeof(launchpadLedCache));
+}
+
+static void launchpadControlTick(void) {
+  if (!appSettings.launchpadMiniMk3Enabled) {
+    if (midiIoLaunchpadConnected()) midiIoLaunchpadStop();
+    launchpadInvalidateLeds();
+    launchpadSongLayoutActive = false;
+    launchpadPresses.reset();
+    return;
+  }
+  if (!midiIoLaunchpadConnected()) {
+    if (!midiIoLaunchpadStart()) return;
+    launchpadInvalidateLeds();
+  }
+
+  uint8_t status, note, velocity;
+  int pollResult;
+  const bool songVisible = currentScreen == &screenSong && chipnomadState;
+  const bool songLayoutActive = launchpadGrid::isScreenActive(appSettings.launchpadMiniMk3Enabled, songVisible);
+  if (songLayoutActive != launchpadSongLayoutActive) {
+    launchpadSongLayoutActive = songLayoutActive;
+    launchpadInvalidateLeds();
+    if (!songLayoutActive) launchpadPresses.reset();
+  }
+  launchpadPresses.tick();
+  while ((pollResult = midiIoLaunchpadPoll(&status, &note, &velocity)) > 0) {
+    if ((status & 0xf0) == 0xb0) {
+      int sceneRow = -1;
+      const bool sceneControl = launchpadGrid::songRowForSceneControl(note,
+        screenSongGetTopRow(), &sceneRow);
+      if (sceneControl) {
+        const int visibleRow = (89 - note) / 10;
+        const int target = launchpadGrid::PressTracker::kSceneTargetStart + visibleRow;
+        if (velocity == 0) {
+          launchpadPresses.release(target);
+        } else if (songLayoutActive && sceneRow >= 0 && sceneRow < PROJECT_MAX_LENGTH) {
+          const int taps = launchpadPresses.press(target, appSettings.doubleTapFrames);
+          if (taps > 0 &&
+              !chipnomadQueuePlaybackQueueLiveScene(chipnomadState, sceneRow, taps >= 2))
+            screenMessage(MESSAGE_TIME_ERROR, "Launchpad scene launch failed");
+        }
+        continue;
+      }
+    }
+    if (songLayoutActive) {
+      const launchpadGrid::SongNavigation navigation =
+        launchpadGrid::songNavigationForEvent(status, note);
+      if (navigation != launchpadGrid::SongNavigation::none) {
+        const int target = launchpadGrid::targetForNavigation(navigation);
+        if (velocity == 0) launchpadPresses.release(target);
+        else if (launchpadPresses.press(target, appSettings.doubleTapFrames) > 0) {
+          int key = 0;
+          switch (navigation) {
+            case launchpadGrid::SongNavigation::up: key = keyUp; break;
+            case launchpadGrid::SongNavigation::down: key = keyDown; break;
+            case launchpadGrid::SongNavigation::left: key = keyLeft; break;
+            case launchpadGrid::SongNavigation::right: key = keyRight; break;
+            default: break;
+          }
+          if (key) {
+            // Route through the existing Song screen navigation and cursor logic.
+            appInput(1, key, 1);
+            appInput(0, 0, 0);
+          }
+        }
+        continue;
+      }
+    }
+    int track, visibleRow;
+    if (!launchpadGrid::coordinatesForNote(note, &track, &visibleRow)) continue;
+    const int target = visibleRow * launchpadGrid::kWidth + track;
+    if ((status & 0xf0) == 0x80 || ((status & 0xf0) == 0x90 && velocity == 0)) {
+      launchpadPresses.release(target);
+      continue;
+    }
+    if ((status & 0xf0) != 0x90 || !songLayoutActive ||
+        track >= chipnomadState->project.tracksCount) continue;
+    const int taps = launchpadPresses.press(target, appSettings.doubleTapFrames);
+    if (taps == 0) continue;
+    const int songRow = launchpadGrid::songRowForVisibleRow(screenSongGetTopRow(), visibleRow);
+    if (songRow < 0 || songRow >= PROJECT_MAX_LENGTH) continue;
+    const int chain = chipnomadState->project.song[songRow][track];
+    const int destination = chain == EMPTY_VALUE_16 ? -1 : songRow;
+    if (!chipnomadQueuePlaybackQueueLiveChain(chipnomadState, track, destination, taps >= 2))
+      screenMessage(MESSAGE_TIME_ERROR, "Launchpad chain launch failed");
+  }
+  if (pollResult < 0) {
+    launchpadInvalidateLeds();
+    launchpadPresses.reset();
+    return;
+  }
+
+  const int topRow = songVisible ? screenSongGetTopRow() : -1;
+  const PlaybackStatus* playback = songVisible ? chipnomadGetPlaybackStatus(chipnomadState) : NULL;
+  for (int visibleRow = 0; visibleRow < launchpadGrid::kHeight; ++visibleRow) {
+    const int songRow = topRow < 0 ? -1 : launchpadGrid::songRowForVisibleRow(topRow, visibleRow);
+    bool scenePopulated = false, sceneQueued = false, sceneUrgent = false, scenePlaying = false;
+    for (int track = 0; track < launchpadGrid::kWidth; ++track) {
+      const int cacheIndex = visibleRow * launchpadGrid::kWidth + track;
+      const int noteNumber = launchpadGrid::noteFor(track, visibleRow);
+      const bool valid = songRow >= 0 && songRow < PROJECT_MAX_LENGTH &&
+        track < chipnomadState->project.tracksCount;
+      const bool populated = valid && chipnomadState->project.song[songRow][track] != EMPTY_VALUE_16;
+      const PlaybackTrackState* trackState = valid ? &playback->tracks[track] : NULL;
+      const bool playing = trackState && trackState->songRow == songRow &&
+        trackState->mode != PlaybackMode::stopped && trackState->mode != PlaybackMode::none;
+      const LiveQueueAction action = trackState ? trackState->queue.liveAction : LiveQueueAction::none;
+      const bool queuedChain = trackState &&
+        (action == LiveQueueAction::normal || action == LiveQueueAction::urgent) &&
+        trackState->queue.songRow == songRow;
+      const bool queuedStop = trackState && playing && trackState->songRow == songRow &&
+        (action == LiveQueueAction::stopNormal || action == LiveQueueAction::stopUrgent);
+      const bool urgent = action == LiveQueueAction::urgent || action == LiveQueueAction::stopUrgent;
+      const bool queued = queuedChain || queuedStop;
+      const launchpadGrid::LedState led = launchpadGrid::ledState(populated, queued, queued && urgent, playing);
+      const int8_t stateCode = (int8_t)led;
+      if (launchpadLedCache[cacheIndex] != stateCode) {
+        midiIoLaunchpadSetPad((uint8_t)noteNumber, launchpadGrid::colourForState(led), led == launchpadGrid::LedState::urgent);
+        launchpadLedCache[cacheIndex] = stateCode;
+      }
+      scenePopulated |= populated;
+      // The scene button acknowledges the queued destination where a chain
+      // is pending. Empty destinations are represented by the old playing
+      // cells above because stop queue state intentionally has no row target.
+      sceneQueued |= queuedChain || queuedStop;
+      sceneUrgent |= (queuedChain || queuedStop) && urgent;
+      scenePlaying |= playing;
+    }
+    const int sceneCacheIndex = launchpadGrid::kWidth * launchpadGrid::kHeight + visibleRow;
+    const launchpadGrid::LedState sceneLed = launchpadGrid::ledState(
+      scenePopulated, sceneQueued, sceneUrgent, scenePlaying);
+    const int8_t sceneStateCode = (int8_t)sceneLed;
+    if (launchpadLedCache[sceneCacheIndex] != sceneStateCode) {
+      const int sceneControl = launchpadGrid::sceneControlForVisibleRow(visibleRow);
+      midiIoLaunchpadSetButton((uint8_t)sceneControl, launchpadGrid::colourForState(sceneLed));
+      launchpadLedCache[sceneCacheIndex] = sceneStateCode;
+    }
+  }
+}
+#endif
 
 struct BatterySample { uint64_t time; int percent; };
 static BatterySample batterySamples[11];
@@ -393,26 +545,87 @@ static void refreshDynamicMidiConnections(void) {
 }
 #endif
 
-static int applyMotionRecordEvent(const MotionRecordEvent& event) {
-  if (event.phrase >= PROJECT_MAX_PHRASES || event.row >= 16 || event.fx >= fxTotalCount) return 0;
+enum class MotionRecordResult { failed, unchanged, changed };
+
+static MotionRecordResult applyMotionRecordEvent(const MotionRecordEvent& event) {
+  if (event.phrase >= PROJECT_MAX_PHRASES || event.row >= 16 || event.fx >= fxTotalCount)
+    return MotionRecordResult::failed;
   PhraseRow* row = &chipnomadState->project.phrases[event.phrase].rows[event.row];
   int column = -1;
   for (int i = 2; i >= 0; --i) if (row->fx[i].command == event.fx) { column = i; break; }
   if (event.erase) {
-    if (column < 0) return 0;
+    if (column < 0) return MotionRecordResult::unchanged;
     row->fx[column] = {FX_ID_EMPTY, 0};
-    return 1;
+    return MotionRecordResult::changed;
   }
 
   if (column < 0)
     for (int i = 2; i >= 0; --i) if (row->fx[i].command == FX_ID_EMPTY) { column = i; break; }
   if (column < 0) {
     chipnomadSetMotionRecordOverflow();
-    return 0;
+    return MotionRecordResult::failed;
   }
-  if (row->fx[column].command == event.fx && row->fx[column].value == event.value) return 0;
+  if (row->fx[column].command == event.fx && row->fx[column].value == event.value)
+    return MotionRecordResult::unchanged;
   row->fx[column] = {event.fx, event.value};
-  return 1;
+  return MotionRecordResult::changed;
+}
+
+static void recordMidiCC(const MidiCCMapping& mapping, int mappingIndex, uint8_t cc) {
+  if (!motionRecordHeld || motionEraseHeld) return;
+  Project& project = chipnomadState->project;
+  const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
+  const bool trackDestination = mapping.destination >= midiCCDestinationTrackMute &&
+    mapping.destination <= midiCCDestinationTrackDelaySend;
+  FXId fx = FX_ID_EMPTY;
+  int value = 0;
+  if (mapping.destination == midiCCDestinationTrackReverbSend ||
+      mapping.destination == midiCCDestinationTrackDelaySend) {
+    fx = mapping.destination == midiCCDestinationTrackReverbSend ? fxRSN : fxDSN;
+    int percent = (cc * 100 + 63) / 127;
+    value = (percent * 255 + 99) / 100;
+  } else if (!trackDestination && mapping.destination != midiCCDestinationSongPlayStop) {
+    Instrument* instrument = &project.instruments[mapping.instrument];
+    if (mapping.destination >= midiCCDestinationAttack && mapping.destination <= midiCCDestinationRelease) {
+      static const FXId envelopeFX[] = {fxEAT, fxEDC, fxESU, fxERL};
+      fx = envelopeFX[mapping.destination - midiCCDestinationAttack];
+      value = (cc * 255 + 63) / 127;
+    } else {
+      int base, range;
+      InstrumentMotionValue kind;
+      if (instrumentMotionDestination(instrument, mapping.destination, &fx, &base, &range, &kind)) {
+        if (kind == InstrumentMotionValue::cutoff) value = filterControlFromCutoff((float)base);
+        else if (kind == InstrumentMotionValue::speed) value = (base * 255 + 250) / 500;
+        else value = base;
+        if (instrument->type == InstrumentType::AChChid && fx == fxADC) {
+          int decay = instrument->chip.achchid.decay;
+          value = decay <= 200 ? 0 : ((decay - 200) * 255 + 900) / 1800;
+        } else if (instrument->type == InstrumentType::AChChid &&
+                   (fx == fxARS || fx == fxAEM || fx == fxAAC)) {
+          int percent = fx == fxARS ? instrument->chip.achchid.resonance :
+            fx == fxAEM ? instrument->chip.achchid.envMod : instrument->chip.achchid.accent;
+          value = (percent * 255 + 99) / 100;
+        }
+      }
+    }
+  }
+  bool foundTrack = false;
+  for (int track = 0; track < project.tracksCount; ++track) {
+    const PlaybackTrackState& state = playback->tracks[track];
+    if (state.mode == PlaybackMode::none || state.mode == PlaybackMode::stopped ||
+        state.mode == PlaybackMode::phraseRow || state.phraseRow < 0 || state.phraseRow >= 16) continue;
+    if (trackDestination ? track != mapping.instrument : state.note.instrument != mapping.instrument) continue;
+    uint16_t phrase = playbackResolvePhraseAt(&project, state.songRow, track, state.chainRow);
+    if (phrase == EMPTY_VALUE_16 || phrase >= PROJECT_MAX_PHRASES) continue;
+    foundTrack = true;
+    if (fx != FX_ID_EMPTY && midiCCRecordLast[mappingIndex][track] != value) {
+      if (applyMotionRecordEvent({phrase, (uint8_t)state.phraseRow, fx, (uint8_t)value, 0}) !=
+          MotionRecordResult::failed)
+        midiCCRecordLast[mappingIndex][track] = value;
+    }
+  }
+  if (foundTrack && fx == FX_ID_EMPTY)
+    screenMessage(MESSAGE_TIME_ERROR, "MIDI CC: no corresponding recordable FX");
 }
 
 static int isMotionRecordTrigger(InputCode input) {
@@ -553,6 +766,9 @@ static int isMotionEraseTrigger(InputCode input) {
 }
 
 static void updateMotionRecordMode(void) {
+  if (chipnomadMotionMode() != (motionEraseHeld ? 2 : motionRecordHeld ? 1 : 0))
+    for (auto& mapping : midiCCRecordLast)
+      for (auto& value : mapping) value = -1;
   chipnomadSetMotionRecordMode(motionRecordHeld, motionEraseHeld);
   chipnomadSetLiveStickEnabled(motionLiveActive() || motionRecordHeld || motionEraseHeld);
 }
@@ -877,6 +1093,9 @@ void appSetup(void) {
 #else
   midiRouterSetBackend(midiBackendDesktopGet());
 #endif
+#ifdef PORTMASTER_BUILD
+  launchpadInvalidateLeds();
+#endif
 
   // LOGD("--- ChipNomad started ---");
   // Initialize default key mappings if not loaded from settings
@@ -1076,6 +1295,7 @@ void appCleanup(void) {
   // cleanly, and any still-sounding note must get a Note Off while the port
   // is still open.
   chipnomadMidiPanic(chipnomadState);
+  midiIoLaunchpadStop();
   midiRouterCloseInput();
   midiRouterCloseOutput();
   midiRouterResetHeldNotes(chipnomadState->midiRouter);
@@ -1394,6 +1614,9 @@ void appOnEvent(MainLoopEventData eventData) {
     }
     break;
   case MainLoopEvent::tick: {
+#ifdef PORTMASTER_BUILD
+    launchpadControlTick();
+#endif
 #ifdef CCT_CONSOLE_CONTROLS
     screenKeyMappingTick();
 #endif
@@ -1402,7 +1625,7 @@ void appOnEvent(MainLoopEventData eventData) {
     int motionRecordChanged = 0;
     MotionRecordEvent motionRecordEvent;
     while (chipnomadConsumeMotionRecordEvent(&motionRecordEvent))
-      motionRecordChanged |= applyMotionRecordEvent(motionRecordEvent);
+      motionRecordChanged |= applyMotionRecordEvent(motionRecordEvent) == MotionRecordResult::changed;
     MidiRecordEvent midiRecordEvent;
     while (chipnomadConsumeMidiRecordEvent(chipnomadState, &midiRecordEvent)) {
       if (!midiRecordApply(chipnomadState->project.phrases[midiRecordEvent.phrase].rows[midiRecordEvent.row], midiRecordEvent)) {
@@ -1542,6 +1765,7 @@ void appOnEvent(MainLoopEventData eventData) {
           // after it is assigned, so MIDI Learn cannot overwrite a patch
           // with the controller's stale (often zero) position.
           midiCCAppliedSerial[i] = serial;
+          for (auto& recorded : midiCCRecordLast[i]) recorded = -1;
         } else if (valid && received && serial != midiCCAppliedSerial[i]) {
           const uint32_t presses = serial - midiCCAppliedSerial[i];
           midiCCAppliedSerial[i] = serial;
@@ -1566,6 +1790,7 @@ void appOnEvent(MainLoopEventData eventData) {
             instrumentSetCCDestination(&chipnomadState->project.instruments[mapping.instrument], mapping.destination, value);
             editHistoryBarrier();
           }
+          if (!toggle) recordMidiCC(mapping, i, value);
           projectModified = 1;
           audioProjectDirty = 1;
           if (currentScreen) currentScreen->fullRedraw();

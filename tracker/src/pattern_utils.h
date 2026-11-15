@@ -101,6 +101,10 @@ int patternFindClosestEmptyPhrase(Project* p, int patternIdx);
 // Returns EMPTY_VALUE_16 if patterns are full.
 int findClosestEmptyPattern(Project* p, int startIdx);
 
+// Allocate a new pattern in the selected track's 16-ID bank when possible,
+// then try the opposite bank and finally any remaining pattern slot.
+int findEmptyPatternForTrack(Project* p, int track);
+
 // Find the closest unallocated chain index to `startIdx`, scanning outward.
 // Returns EMPTY_VALUE_16 if chains are full.
 int findClosestEmptyChain(Project* p, int startIdx);
