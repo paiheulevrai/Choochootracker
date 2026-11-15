@@ -1923,6 +1923,10 @@ Use it to balance the 8 tracks, shape each track with Tilt EQ, and send audio to
 
 The mixer is track-based, not instrument-based. If a track changes instruments, its level, PAN, Tilt and sends remain attached to the track. Instruments also have their own `00-FF` **Vol** and **Pan** in the top row of the Instrument screen. Instrument PAN is applied first, then track PAN. Both preserve an existing stereo image at centre; they progressively attenuate the opposite side when moved left or right.
 
+Tilt EQ processes the combined sound of all chord voices and Layer children on a
+track once, before the track's instrument EQ and inserts. This also applies to its
+low-setting overdrive; it is not applied separately to each note.
+
 On the master row, select **MASTER FX** to open the master effects. **EQ** opens the master three-band EQ; the EQ screen identifies it as `FE`, the number reserved for the master. It uses the same controls as an instrument EQ, but affects the complete mix. Select **LEVEL** to adjust the overall output volume from `001%` to `100%`. This is the same **Mix volume** setting found in Settings > Mixer and is saved for the device, so it is useful on consoles without a physical volume control.
 
 During playback, the output limiter lowers sustained loud signals and isolated peaks, and removes DC offset. If a dense mix sounds quieter than expected, lower track levels or effect sends. Keep the console's own volume moderate when testing new sounds.

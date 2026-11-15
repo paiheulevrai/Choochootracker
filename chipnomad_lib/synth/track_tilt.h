@@ -10,6 +10,9 @@ class TrackTilt {
   bool isNeutral(uint8_t value, uint16_t pivotHz) const {
     return value == 0x80 && value_ == value && pivotHz_ == pivotHz && !smoothing_;
   }
+  bool tailActive() const {
+    return lowpass_[0] != 0.0f || lowpass_[1] != 0.0f || smoothing_;
+  }
   float passThrough(float input, int channel) {
     lowpass_[channel & 1] = input;
     return input;

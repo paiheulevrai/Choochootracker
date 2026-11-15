@@ -989,6 +989,15 @@ TEST_SUITE("track inserts") {
     CHECK(duck.s->sidechainSourceMask == 1);
     for (int i = 0; i < 512; ++i)
       CHECK(b[i] == doctest::Approx(a[i]).epsilon(1e-5));
+
+    uint8_t enabled[PROJECT_MAX_TRACKS]{};
+    enabled[1] = 1;
+    REQUIRE(chipnomadQueueTrackEnabled(duck.s, enabled));
+    for (int block = 0; block < 4; ++block)
+      REQUIRE(chipnomadRender(duck.s, b, 256) == 256);
+    CHECK_FALSE(duck.s->playbackState.trackEnabled[0]);
+    for (int i = 0; i < 256; ++i)
+      CHECK(duck.s->sidechainBuffer[i] == 0);
   }
   TEST_CASE("master inserts process the completed mix") {
     Engine dry, wet;

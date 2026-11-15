@@ -126,6 +126,7 @@ struct ChipNomadState {
   uint32_t insertResetSeen[PROJECT_MAX_TRACKS];
   uint8_t insertValues[PROJECT_MAX_TRACKS][2][8];
   uint8_t insertActive[PROJECT_MAX_TRACKS];
+  uint8_t trackMixMask;
   uint8_t audioInputRoutedTrackMask;
   uint8_t audioModTrackMask;
   uint8_t audioWaveTrackMask;
