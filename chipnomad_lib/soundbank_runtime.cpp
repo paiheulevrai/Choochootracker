@@ -6,7 +6,8 @@ namespace soundbank {
 namespace {
 struct Slot {
   uint32_t generation = 0;
-  std::shared_ptr<const PreparedPreset> preset;
+  // Only retain() pins the handle; ordinary preset owners must not block collection.
+  std::shared_ptr<std::shared_ptr<const PreparedPreset>> preset;
 };
 std::array<Slot, 1024> slots;
 }  // namespace
@@ -16,7 +17,7 @@ uint32_t publish(std::shared_ptr<const PreparedPreset> p) {
     if (!s.preset) {
       s.generation = (s.generation + 1) & 0x3fffff;
       if (!s.generation) ++s.generation;
-      s.preset = std::move(p);
+      s.preset = std::make_shared<std::shared_ptr<const PreparedPreset>>(std::move(p));
       return (s.generation << 10) | uint32_t(i);
     }
   }
@@ -25,12 +26,18 @@ uint32_t publish(std::shared_ptr<const PreparedPreset> p) {
 const PreparedPreset* prepared(uint32_t h) {
   if (!h) return nullptr;
   auto& s = slots[h & 1023];
-  return s.generation == (h >> 10) ? s.preset.get() : nullptr;
+  return s.generation == (h >> 10) && s.preset ? s.preset->get() : nullptr;
+}
+std::shared_ptr<const PreparedPreset> retain(uint32_t h) {
+  if (!h) return {};
+  auto& s = slots[h & 1023];
+  return s.generation == (h >> 10) && s.preset ?
+    std::shared_ptr<const PreparedPreset>(s.preset, s.preset->get()) : nullptr;
 }
 void collect(const std::function<bool(uint32_t)>& used) {
   for (size_t i = 0; i < slots.size(); ++i) {
     auto& s = slots[i];
-    if (s.preset && !used((s.generation << 10) | uint32_t(i))) s.preset.reset();
+    if (s.preset && s.preset.use_count() == 1 && !used((s.generation << 10) | uint32_t(i))) s.preset.reset();
   }
 }
 }  // namespace soundbank

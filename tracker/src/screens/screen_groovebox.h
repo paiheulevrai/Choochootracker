@@ -17,5 +17,6 @@ bool grooveboxPrepareScene(int songRow);
 uint8_t grooveboxMidiInstrument(void);
 enum class GrooveboxAction { makeIndependent, emptyBar, offBar, duplicateBar, doubleLength, shorten, copyScene, pasteScene, undo, halveLength, resetLength };
 bool grooveboxAction(GrooveboxAction action, int songRow, int track);
+void grooveboxDiscardUndo();
 
 #endif

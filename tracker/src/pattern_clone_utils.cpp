@@ -1,4 +1,5 @@
 #include "pattern_clone_utils.h"
+#include "edit_history.h"
 #include "pattern_utils.h"
 #include "copy_paste.h"
 #include "project_utils.h"
@@ -13,6 +14,7 @@ static int clonePatternToNext(Project* p, int srcIdx) {
   if (patternIsEmpty(p, srcIdx)) return EMPTY_VALUE_16;
   int dst = findClosestEmptyPattern(p, srcIdx + 1);
   if (dst == EMPTY_VALUE_16) return EMPTY_VALUE_16;
+  if (!editHistoryCapture(p, EditObject::pattern, dst)) return EMPTY_VALUE_16;
   p->patterns[dst] = p->patterns[srcIdx];
   // The clone does NOT inherit the original's chain mapping (it's a new
   // independent pattern). Pattern-to-chain map stays EMPTY_VALUE_16.
@@ -26,6 +28,7 @@ static int clonePatternToNext(Project* p, int srcIdx) {
 // (replaces its bar phrases with fresh clones), matching deepCloneChain's
 // in-place semantics.
 static int deepClonePattern(Project* p, int patternIdx) {
+  if (!editHistoryCapture(p, EditObject::pattern, patternIdx)) return 0;
   if (patternIdx < 0 || patternIdx >= PROJECT_MAX_PATTERNS) return 0;
   if (patternIsEmpty(p, patternIdx)) return 0;
   Pattern* pat = &p->patterns[patternIdx];

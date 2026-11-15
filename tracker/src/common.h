@@ -40,7 +40,7 @@ struct ColorScheme {
   int warning;
 };
 
-// Key mapping: 10 buttons × 3 keys each
+// Key mapping: 13 actions, three physical inputs each.
 struct KeyMapping {
   InputCode keyUp[3];
   InputCode keyDown[3];
@@ -53,6 +53,8 @@ struct KeyMapping {
   InputCode keyMotionLive[3];
   InputCode keyMotionRecord[3];
   InputCode keyMotionErase[3];
+  InputCode keyUndo[3];
+  InputCode keyRedo[3];
 };
 
 enum class StickLiveMode { hold, toggle, free };

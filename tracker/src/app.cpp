@@ -9,6 +9,7 @@
 #include "audio_input_manager.h"
 #include "corelib/corelib_audio.h"
 #include "app.h"
+#include "edit_history.h"
 #include "startup_timing.h"
 #include "screens.h"
 #include "screens/screen_groovebox.h"
@@ -34,6 +35,7 @@
 #include "chipnomad_lib_live_stick.h"
 #include "link/link_client.h"
 #include "midi/midi_backend_desktop.h"
+#include "synth/multimode_filter.h"
 #include <math.h>
 #ifdef ANDROID_BUILD
 #include "midi/midi_backend_android.h"
@@ -76,8 +78,10 @@ static int motionLiveLatched;
 static int quickHelpSelectHeld;
 static int quickHelpSelectAlone;
 static int audioProjectDirty;
+void appPublishProjectEdit(void) { audioProjectDirty = 1; }
 static MidiCCMapping midiCCApplied[PROJECT_MAX_MIDI_CC_MAPPINGS];
 static uint8_t midiCCAppliedValid[PROJECT_MAX_MIDI_CC_MAPPINGS];
+static int16_t midiCCRecordLast[PROJECT_MAX_MIDI_CC_MAPPINGS][PROJECT_MAX_TRACKS];
 static uint64_t playbackCounterTicks;
 static uint64_t playbackCounterMicros;
 static uint64_t playbackCounterStartMicros;
@@ -391,26 +395,87 @@ static void refreshDynamicMidiConnections(void) {
 }
 #endif
 
-static int applyMotionRecordEvent(const MotionRecordEvent& event) {
-  if (event.phrase >= PROJECT_MAX_PHRASES || event.row >= 16 || event.fx >= fxTotalCount) return 0;
+enum class MotionRecordResult { failed, unchanged, changed };
+
+static MotionRecordResult applyMotionRecordEvent(const MotionRecordEvent& event) {
+  if (event.phrase >= PROJECT_MAX_PHRASES || event.row >= 16 || event.fx >= fxTotalCount)
+    return MotionRecordResult::failed;
   PhraseRow* row = &chipnomadState->project.phrases[event.phrase].rows[event.row];
   int column = -1;
   for (int i = 2; i >= 0; --i) if (row->fx[i].command == event.fx) { column = i; break; }
   if (event.erase) {
-    if (column < 0) return 0;
+    if (column < 0) return MotionRecordResult::unchanged;
     row->fx[column] = {FX_ID_EMPTY, 0};
-    return 1;
+    return MotionRecordResult::changed;
   }
 
   if (column < 0)
     for (int i = 2; i >= 0; --i) if (row->fx[i].command == FX_ID_EMPTY) { column = i; break; }
   if (column < 0) {
     chipnomadSetMotionRecordOverflow();
-    return 0;
+    return MotionRecordResult::failed;
   }
-  if (row->fx[column].command == event.fx && row->fx[column].value == event.value) return 0;
+  if (row->fx[column].command == event.fx && row->fx[column].value == event.value)
+    return MotionRecordResult::unchanged;
   row->fx[column] = {event.fx, event.value};
-  return 1;
+  return MotionRecordResult::changed;
+}
+
+static void recordMidiCC(const MidiCCMapping& mapping, int mappingIndex, uint8_t cc) {
+  if (!motionRecordHeld || motionEraseHeld) return;
+  Project& project = chipnomadState->project;
+  const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
+  const bool trackDestination = mapping.destination >= midiCCDestinationTrackMute &&
+    mapping.destination <= midiCCDestinationTrackDelaySend;
+  FXId fx = FX_ID_EMPTY;
+  int value = 0;
+  if (mapping.destination == midiCCDestinationTrackReverbSend ||
+      mapping.destination == midiCCDestinationTrackDelaySend) {
+    fx = mapping.destination == midiCCDestinationTrackReverbSend ? fxRSN : fxDSN;
+    int percent = (cc * 100 + 63) / 127;
+    value = (percent * 255 + 99) / 100;
+  } else if (!trackDestination && mapping.destination != midiCCDestinationSongPlayStop) {
+    Instrument* instrument = &project.instruments[mapping.instrument];
+    if (mapping.destination >= midiCCDestinationAttack && mapping.destination <= midiCCDestinationRelease) {
+      static const FXId envelopeFX[] = {fxEAT, fxEDC, fxESU, fxERL};
+      fx = envelopeFX[mapping.destination - midiCCDestinationAttack];
+      value = (cc * 255 + 63) / 127;
+    } else {
+      int base, range;
+      InstrumentMotionValue kind;
+      if (instrumentMotionDestination(instrument, mapping.destination, &fx, &base, &range, &kind)) {
+        if (kind == InstrumentMotionValue::cutoff) value = filterControlFromCutoff((float)base);
+        else if (kind == InstrumentMotionValue::speed) value = (base * 255 + 250) / 500;
+        else value = base;
+        if (instrument->type == InstrumentType::AChChid && fx == fxADC) {
+          int decay = instrument->chip.achchid.decay;
+          value = decay <= 200 ? 0 : ((decay - 200) * 255 + 900) / 1800;
+        } else if (instrument->type == InstrumentType::AChChid &&
+                   (fx == fxARS || fx == fxAEM || fx == fxAAC)) {
+          int percent = fx == fxARS ? instrument->chip.achchid.resonance :
+            fx == fxAEM ? instrument->chip.achchid.envMod : instrument->chip.achchid.accent;
+          value = (percent * 255 + 99) / 100;
+        }
+      }
+    }
+  }
+  bool foundTrack = false;
+  for (int track = 0; track < project.tracksCount; ++track) {
+    const PlaybackTrackState& state = playback->tracks[track];
+    if (state.mode == PlaybackMode::none || state.mode == PlaybackMode::stopped ||
+        state.mode == PlaybackMode::phraseRow || state.phraseRow < 0 || state.phraseRow >= 16) continue;
+    if (trackDestination ? track != mapping.instrument : state.note.instrument != mapping.instrument) continue;
+    uint16_t phrase = playbackResolvePhraseAt(&project, state.songRow, track, state.chainRow);
+    if (phrase == EMPTY_VALUE_16 || phrase >= PROJECT_MAX_PHRASES) continue;
+    foundTrack = true;
+    if (fx != FX_ID_EMPTY && midiCCRecordLast[mappingIndex][track] != value) {
+      if (applyMotionRecordEvent({phrase, (uint8_t)state.phraseRow, fx, (uint8_t)value, 0}) !=
+          MotionRecordResult::failed)
+        midiCCRecordLast[mappingIndex][track] = value;
+    }
+  }
+  if (foundTrack && fx == FX_ID_EMPTY)
+    screenMessage(MESSAGE_TIME_ERROR, "MIDI CC: no corresponding recordable FX");
 }
 
 static int isMotionRecordTrigger(InputCode input) {
@@ -440,6 +505,7 @@ static void receiveMidiNote(void* userdata, const MidiPreviewIntent& intent) {
   const bool record = chipnomadMotionMode() == 1 && (intent.noteOn || (intent.stop && intent.timestampMicros));
   if (record && intent.noteOn && !playing && intent.autoChannel && currentScreen == &screenPhrase &&
       phraseScreenRecordMidi(intent.note, (uint8_t)intent.instrument, intent.velocity)) {
+    editHistoryBarrier();
     audioProjectDirty = 1;
   }
   if (record && intent.noteOn && !playing && !intent.autoChannel && currentScreen == &screenPhrase)
@@ -550,6 +616,9 @@ static int isMotionEraseTrigger(InputCode input) {
 }
 
 static void updateMotionRecordMode(void) {
+  if (chipnomadMotionMode() != (motionEraseHeld ? 2 : motionRecordHeld ? 1 : 0))
+    for (auto& mapping : midiCCRecordLast)
+      for (auto& value : mapping) value = -1;
   chipnomadSetMotionRecordMode(motionRecordHeld, motionEraseHeld);
   chipnomadSetLiveStickEnabled(motionLiveActive() || motionRecordHeld || motionEraseHeld);
 }
@@ -760,6 +829,8 @@ static bool inputBranchNavigation(int keys) {
 }
 
 static void appInput(int isKeyDown, int keys, int tapCount) {
+  editHistoryGesture(keys != 0);
+  EditHistoryScope history("Editor");
   // Stop phrase row and preview. While the sample settings screen is doing
   // a LAZY full-sample playback (tap PLAY toggles it), the PLAY release
   // must not kill the preview - the screen owns the preview's lifetime.
@@ -980,6 +1051,7 @@ int appContinueProject(void) {
 }
 
 void appActivateProject(void) {
+  editHistoryClear();
   StartupTiming timing("engine and audio/MIDI devices");
   if (projectActive) return;
   projectActive = true;
@@ -1060,6 +1132,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int webSaveBrowserState() {
 * @brief Release all resources before closing the application
 */
 void appCleanup(void) {
+  editHistoryClear();
   projectActive = false;
   backgroundCleanup();
   audioManager.stop();
@@ -1219,6 +1292,7 @@ void appOnEvent(MainLoopEventData eventData) {
 
     if (quickHelpSelectHeld && !rawInputActive && value != keyShift) quickHelpSelectAlone = 0;
 
+    if (!rawInputActive && editHistoryInput(eventData.data.input, true)) break;
 #ifdef DESKTOP_BUILD
     // After the quick-help-alone bookkeeping above (it must see every key,
     // even ones key jazz fully consumes below - otherwise releasing Shift
@@ -1305,6 +1379,7 @@ void appOnEvent(MainLoopEventData eventData) {
     break;
   }
   case MainLoopEvent::keyUp: {
+    if (!inputRawCallback && editHistoryInput(eventData.data.input, false)) break;
 #ifdef DESKTOP_BUILD
     if (currentScreen == &screenPhrase && phraseKeyJazzHandleRawKey(eventData.data.input, 0)) break;
     if (currentScreen == &screenSong && songKeyJazzHandleRawKey(eventData.data.input, 0)) break;
@@ -1393,7 +1468,7 @@ void appOnEvent(MainLoopEventData eventData) {
     int motionRecordChanged = 0;
     MotionRecordEvent motionRecordEvent;
     while (chipnomadConsumeMotionRecordEvent(&motionRecordEvent))
-      motionRecordChanged |= applyMotionRecordEvent(motionRecordEvent);
+      motionRecordChanged |= applyMotionRecordEvent(motionRecordEvent) == MotionRecordResult::changed;
     MidiRecordEvent midiRecordEvent;
     while (chipnomadConsumeMidiRecordEvent(chipnomadState, &midiRecordEvent)) {
       if (!midiRecordApply(chipnomadState->project.phrases[midiRecordEvent.phrase].rows[midiRecordEvent.row], midiRecordEvent)) {
@@ -1404,6 +1479,7 @@ void appOnEvent(MainLoopEventData eventData) {
     if (chipnomadGetMidiRecordOverflow(chipnomadState))
       screenMessage(MESSAGE_TIME_ERROR, "MIDI record overflow: notes lost");
     if (motionRecordChanged) {
+      editHistoryBarrier();
       projectModified = 1;
       audioProjectDirty = 1;
       if (currentScreen == &screenPhrase) currentScreen->fullRedraw();
@@ -1532,6 +1608,7 @@ void appOnEvent(MainLoopEventData eventData) {
           // after it is assigned, so MIDI Learn cannot overwrite a patch
           // with the controller's stale (often zero) position.
           midiCCAppliedSerial[i] = serial;
+          for (auto& recorded : midiCCRecordLast[i]) recorded = -1;
         } else if (valid && received && serial != midiCCAppliedSerial[i]) {
           const uint32_t presses = serial - midiCCAppliedSerial[i];
           midiCCAppliedSerial[i] = serial;
@@ -1554,7 +1631,9 @@ void appOnEvent(MainLoopEventData eventData) {
               chipnomadState->project.trackDelaySend[track] = (uint8_t)((value * 100 + 63) / 127);
           } else {
             instrumentSetCCDestination(&chipnomadState->project.instruments[mapping.instrument], mapping.destination, value);
+            editHistoryBarrier();
           }
+          if (!toggle) recordMidiCC(mapping, i, value);
           projectModified = 1;
           audioProjectDirty = 1;
           if (currentScreen) currentScreen->fullRedraw();

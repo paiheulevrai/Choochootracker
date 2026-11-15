@@ -2109,7 +2109,22 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   if (!enabled && chipnomadMotionRateResetPending()) enabled = 1;
   playbackUpdateLiveStickModulation(&state->playbackState, axes, enabled);
   state->frameSampleCounter += state->sampleRate / state->audioProject.tickRate;
+  uint8_t liveStopPending = 0;
+  for (int t = 0; t < state->audioProject.tracksCount; ++t) {
+    const auto action = state->playbackState.tracks[t].queue.liveAction;
+    if (action == LiveQueueAction::stopNormal || action == LiveQueueAction::stopUrgent)
+      liveStopPending |= 1u << t;
+  }
   int allTracksStopped = playbackNextFrame(state);
+  // A Live stop resets the track before voice events can release MIDI notes.
+  for (int t = 0; t < state->audioProject.tracksCount; ++t) {
+    if (!(liveStopPending & (1u << t)) || state->playbackState.tracks[t].mode != PlaybackMode::stopped) continue;
+    for (int slot = 0; slot < CHORD_MAX_VOICES; ++slot) {
+      midiRouterEmitNoteOff(state->midiRouter, t, slot, dueMicros);
+      for (int lane = 0; lane < INSTRUMENT_LAYER_COUNT; ++lane)
+        midiRouterEmitNoteOff(state->midiRouter, PROJECT_MAX_TRACKS + t * INSTRUMENT_LAYER_COUNT + lane, slot, dueMicros);
+    }
+  }
   state->audioCommands->recordMidiTick(state->playbackState, dueMicros);
   state->layerVoiceTrackMask |= state->playbackState.layerTrackMask;
   updateVoiceOwnerCount(state);

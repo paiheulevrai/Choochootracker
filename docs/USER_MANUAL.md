@@ -9,6 +9,41 @@ Back up projects before upgrading: existing Bogie Clap presets load with the
 redesigned sound, and removed experimental engine-specific audio FM/PM modes
 are rejected explicitly. See [the changelog](../CHANGELOG.md) for release details.
 
+## Undo / redo
+
+Phrase, Chain, Song and Table edits share a session-only undo/redo history.
+It includes cell/selection edits, fills, clipboard edits, clones, structural
+bar/length edits and Song highlights. Shared-bar isolation and end-of-gesture
+reference reconciliation are restored together; redo restores the recorded
+result, rather than rerunning a random fill. Held-button repeats form one
+action. Navigation, copying and unchanged edits do not discard redo.
+
+- Desktop: **Ctrl+Z** and **Ctrl+Shift+Z**; macOS: **Cmd+Z** and
+  **Cmd+Shift+Z**. Shortcuts are unavailable inside text entry, mapping capture,
+  selection popups or active motion/MIDI REC.
+- Controller/touch: **Settings > Edit history > Undo / Redo**.
+- **Settings > Controls > Key mapping** also provides optional **Undo** and
+  **Redo** actions, initially unmapped. Each has three physical input slots.
+
+Instrument engine/type changes are included, preserving the previous patch,
+envelopes, modulation and sample/wavetable data. Model changes are included for
+Braids, Plaits/Plaits-Alt, Bogie/DigiSophie, MME, Sintered and aChChid.
+Undoing an engine change briefly pauses audio and rebuilds the required engines;
+it does not restore running voices, playback position or an effect tail.
+
+The journal is limited to **64 actions / 256 KiB**, plus **8 MiB** of retained
+instrument resources. Oldest undo actions are dropped when space is needed.
+If an action itself cannot fit, it is explicitly refused and its captured
+changes are rolled back. Large sampler engine changes can therefore be refused.
+SoundFont history retains prepared data, not another synthesizer instance.
+History is not saved in project files.
+
+Loading/replacing projects, recorded MIDI/motion edits, sample/bank resource
+operations and instrument parameter/preset edits outside the scope above clear
+the history with a message. Other editors keep their existing local undo;
+using Groovebox's local Tools undo also clears this shared history. A new
+recorded edit after undo discards redo; clearing history never changes the music.
+
 ## Three-view text prototype
 
 Project -> View mode - Editing style -> Mode cycles through Classic, Groovebox and Simplified with
@@ -610,6 +645,8 @@ You can keep multiple sub-songs in a project by creating "islands": sections sep
 Double-tap **OPT** to enter or leave Live Mode; `LIVE` replaces the Song title. The switch happens a moment after the second tap, so tapping **OPT** 3 times adds a highlight without entering or leaving Live Mode. In Live Mode, **PLAY** queues the selected chain for the next chain boundary. A playing track finishes its own chain; a stopped track waits for the first active track (lowest track number) to finish its chain. When no track is playing, playback starts immediately. Selected stopped tracks launch together on their reference boundary. Press **PLAY** twice for an urgent change at the next phrase boundary instead. A selected empty Song cell queues a quantised stop on a playing track, or cancels a stopped track's pending launch. `+` marks a queued chain, `!` an urgent chain and `-` a queued stop.
 
 Select one Song row across several columns to queue or stop those tracks together. Multi-row selections are deliberately rejected. Live queues are cleared while a Song range loop is active. Live is a performance mode and is not saved in the project.
+
+In Simplified view, chain boundaries follow the playing pattern's length and bars. If playback is looping a single phrase or an active bar, that phrase or bar's end is the boundary for a normal Live change and for stopped tracks waiting on it.
 
 #### Controls
 
@@ -2200,6 +2237,8 @@ Desktop and PortMaster. Settings > **MIDI** opens this submenu: **MIDI In** / **
 - **MIDI CC mapping**: 64 mapping rows are available per project; each row shows **ON**, **CH**, **CC**, and **DESTINATION**. Press **EDIT** on **CC** to learn a controller. On **DESTINATION**, press **EDIT** to open the category popup: choose **Song**, a track, or a named instrument on the left, then its parameter on the right. This selects the target and parameter together, for example `Track 2: Mute` or `03 Bass: Cutoff`. **EDIT + Left/Right** cycles through the same choices without opening the popup. Choose **Unassigned** to clear a destination. Disabled rows retain their destination label. **PLAY** starts or stops the song from this screen.
 
   Use momentary buttons for **Song play/stop**, **Mute**, and **Solo**. Each press toggles playback or the selected track's mute/solo state; releasing the button leaves that state unchanged. Each transition from `0-63` to `64-127` counts as a press. A new mapping ignores the CC that learned/configured it and takes effect on the next physical movement, so setting up mappings during playback cannot reset a patch to zero.
+
+  During playback, hold **MOTION RECORD** to record incoming mapped CC changes as FX in each playing phrase using the mapped instrument, or in the mapped track for reverb and delay sends. The same three-slot and overflow rules as stick motion apply; repeated unchanged values are not written again. If a row is full, free an FX slot and send the CC value again to retry. CC changes continue to update the mapped project parameter. Only destinations with a corresponding absolute FX can be recorded: instrument and track volume, AY controls without absolute FX, and song/mute/solo controls cannot be captured. An unsupported continuous destination shows a message while recording. Some FX have coarser or narrower ranges than their instrument controls (for example aChChid decay); playback uses the nearest available FX value. **MOTION ERASE** remains specific to stick destinations.
 - **Driving an external MIDI device**: give a track the [MIDI Out](#midi-out) instrument type and set its Channel; triggering notes on that track sends real MIDI to the selected MIDI Out device instead of making sound in ChooChooTracker.
 - **Send clock / Send transport**: in Settings > MIDI, select a **MIDI Out** device and enable either switch as needed. Both default to OFF and are remembered for this device. **Send clock** sends 24 pulses per quarter note during sequencer playback, following the internal tempo or the Ableton Link session. **Send transport** sends **Start** when playback begins and **Stop** when it ends; note and row previews do not start external gear. Each playback starts the receiver from its beginning; Continue and song-position pointers are not sent. Both outputs are suppressed while **Sync** is **MIDI** to prevent feedback; the switches retain their settings. Enable external MIDI sync on the receiving device.
 - **MIDI delay**: delay the outgoing notes, controllers, clock and transport together by `0–200 ms` to align an external synth with ChooChooTracker's audio output. Start at `0 ms`, then increase it if the external synth sounds early. Compare short attacks recorded together and fine-tune in `1 ms` steps; larger edits move by `10 ms`. The setting is saved. Switching between the console jack and a USB audio interface may require a different value.

@@ -1,4 +1,5 @@
 #include "pattern_utils.h"
+#include "edit_history.h"
 #include "project_utils.h"
 #include "common.h"
 #include <algorithm>
@@ -45,11 +46,11 @@ int patternFindClosestEmptyPhrase(Project* p, int targetIdx) {
     int hi = targetIdx + offset;
     int lo = targetIdx - offset;
     if (hi >= 0 && hi < PROJECT_MAX_PHRASES && !used[hi] && phraseIsEmpty(p, hi)) {
-      return hi;
+      return editHistoryCapture(p, EditObject::phrase, hi) ? hi : EMPTY_VALUE_16;
     }
     if (lo >= 0 && lo < PROJECT_MAX_PHRASES && !used[lo] && phraseIsEmpty(p, lo) &&
         lo != hi) {
-      return lo;
+      return editHistoryCapture(p, EditObject::phrase, lo) ? lo : EMPTY_VALUE_16;
     }
   }
   return EMPTY_VALUE_16;
@@ -82,6 +83,8 @@ int chainEnsureBarExclusive(Project* p, int chainIdx, int barIdx) {
   if (!shared) return phrase;
   for (int fresh = 0; fresh < PROJECT_MAX_PHRASES; ++fresh) {
     if (used[fresh] || !phraseIsEmpty(p, fresh)) continue;
+    if (!editHistoryCapture(p, EditObject::chain, chainIdx) ||
+        !editHistoryCapture(p, EditObject::phrase, fresh)) return EMPTY_VALUE_16;
     p->phrases[fresh] = p->phrases[phrase];
     bar.phrase = (uint16_t)fresh;
     return fresh;
@@ -108,6 +111,8 @@ int chainReconcileEditedBar(Project* p, int chainIdx, int barIdx, int ownedPhras
     if (f == editedPhrase || !references[f] ||
         memcmp(&p->phrases[f], &p->phrases[editedPhrase], sizeof(Phrase)) != 0)
       continue;
+    if (!editHistoryCapture(p, EditObject::chain, chainIdx) ||
+        !editHistoryCapture(p, EditObject::phrase, ownedPhrase)) return EMPTY_VALUE_16;
     p->chains[chainIdx].rows[barIdx].phrase = (uint16_t)f;
     if (ownedPhrase >= 0 && references[ownedPhrase] == 1) phraseClear(&p->phrases[ownedPhrase]);
     return f;
@@ -172,6 +177,7 @@ int findClosestEmptyChain(Project* p, int startIdx) {
 // ── Pattern length editing ──────────────────────────────────────────────────
 
 int patternMultiplyLengthByTwo(Project* p, int patternIdx) {
+  if (!editHistoryCapture(p, EditObject::pattern, patternIdx)) return 0;
   if (patternIdx < 0 || patternIdx >= PROJECT_MAX_PATTERNS) return 0;
   Pattern* pat = &p->patterns[patternIdx];
   int curLen = pat->length;
@@ -203,6 +209,7 @@ int patternMultiplyLengthByTwo(Project* p, int patternIdx) {
       return 0;
     }
     // Copy content so the clone plays like the original until edited.
+    if (!editHistoryCapture(p, EditObject::phrase, emptyPhrase)) return 0;
     p->phrases[emptyPhrase] = p->phrases[srcPhrase];
     pat->bars[b] = pat->bars[b - curLen];
     pat->bars[b].phrase = (uint16_t)emptyPhrase;
@@ -213,6 +220,7 @@ int patternMultiplyLengthByTwo(Project* p, int patternIdx) {
 }
 
 int patternHalveLengthByTwo(Project* p, int patternIdx) {
+  if (!editHistoryCapture(p, EditObject::pattern, patternIdx)) return 0;
   if (patternIdx < 0 || patternIdx >= PROJECT_MAX_PATTERNS) return 0;
   Pattern* pat = &p->patterns[patternIdx];
   int curLen = pat->length;
@@ -227,6 +235,7 @@ int patternHalveLengthByTwo(Project* p, int patternIdx) {
 }
 
 int patternAddEmptyBar(Project* p, int patternIdx) {
+  if (!editHistoryCapture(p, EditObject::pattern, patternIdx)) return 0;
   if (patternIdx < 0 || patternIdx >= PROJECT_MAX_PATTERNS) return 0;
   Pattern* pat = &p->patterns[patternIdx];
   int curLen = pat->length;
@@ -245,6 +254,7 @@ int patternAddEmptyBar(Project* p, int patternIdx) {
 }
 
 int patternRemoveLastBar(Project* p, int patternIdx) {
+  if (!editHistoryCapture(p, EditObject::pattern, patternIdx)) return 0;
   if (patternIdx < 0 || patternIdx >= PROJECT_MAX_PATTERNS) return 0;
   Pattern* pat = &p->patterns[patternIdx];
   int curLen = pat->length;
@@ -308,6 +318,7 @@ int patternMaterializeIfPristine(Project* p, int patternIdx, int excludeRow,
     ? appSettings.defaultPatternLength : 1;
   if (target > PROJECT_MAX_PATTERN_LENGTH) target = PROJECT_MAX_PATTERN_LENGTH;
   if (p->patterns[patternIdx].length == target) return 0;
+  if (!editHistoryCapture(p, EditObject::pattern, patternIdx)) return 0;
   patternClear(&p->patterns[patternIdx]);
   p->patterns[patternIdx].length = target;
   return 1;
@@ -547,6 +558,7 @@ static int conversionShiftedPairEqual(Project* p, int a, int aTranspose,
 // PROJECT_MAX_PATTERN_LENGTH (no changes made in that case) or src is empty.
 // Bars are copied as references (phrase + hidden transpose).
 int patternAppendPattern(Project* p, int targetIdx, int srcIdx) {
+  if (!editHistoryCapture(p, EditObject::pattern, targetIdx)) return -1;
   Pattern* target = &p->patterns[targetIdx];
   const Pattern* src = &p->patterns[srcIdx];
   int tLen = target->length;
@@ -601,6 +613,8 @@ int patternEnsureBarExclusive(Project* p, ConversionPhraseState* st,
   int fresh = st ? conversionAllocatePhraseSlot(p, st, 0, 0)
                  : patternFindClosestEmptyPhrase(p, patternIdx);
   if (fresh == EMPTY_VALUE_16) return EMPTY_VALUE_16;  // pool exhausted
+  if (!editHistoryCapture(p, EditObject::pattern, patternIdx) ||
+      !editHistoryCapture(p, EditObject::phrase, fresh)) return EMPTY_VALUE_16;
   p->phrases[fresh] = p->phrases[phrase];
   if (st) conversionClaimSlot(st, fresh);
   pat->bars[barIdx].phrase = (uint16_t)fresh;

@@ -1,4 +1,5 @@
 #include "screens.h"
+#include "edit_history.h"
 #include "screen_settings.h"
 #include "common.h"
 #include "corelib_gfx.h"
@@ -410,6 +411,9 @@ static int editCell(int col, int row, CellEditAction action) {
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
+  EditHistoryScope history("Song edit");
+  if (action != CellEditAction::copy && action != CellEditAction::switchSelection &&
+      !editHistoryCapture(EditObject::song)) return 1;
   int handled = 0;
   int startCol, startRow, endCol, endRow;
   getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
@@ -493,6 +497,7 @@ static int onEdit(int col, int row, CellEditAction action) {
 #define MERGE_REFUSAL_TEXT "Pattern too long to merge"
 
 static void songMergeSelectedPatternsUp(void) {
+  if (!editHistoryCapture(EditObject::song)) return;
   Project* p = &chipnomadState->project;
   if (p->viewMode != ViewMode::simplified) return;
   if (screen.selectMode != 1) return;
@@ -530,6 +535,7 @@ static void songMergeSelectedPatternsUp(void) {
     int target = p->song[rows[0]][col];
     for (int i = 1; i < count; i++) {
       int src = p->song[rows[i]][col];
+      if (!editHistoryCapture(EditObject::pattern, src)) return;
       if (patternAppendPattern(p, target, src) < 0) {
         // Cannot happen after the length check; guard anyway.
         refused = 1;
@@ -575,6 +581,7 @@ static void songMergeCanonicalUp() {
 #define CHAIN_MERGE_REFUSAL_TEXT "Chain too long to merge"
 
 static void songMergeSelectedChainsUp(void) {
+  if (!editHistoryCapture(EditObject::song)) return;
   Project* p = &chipnomadState->project;
   if (p->viewMode != ViewMode::classic) return;
   if (screen.selectMode != 1) return;
@@ -598,6 +605,7 @@ static void songMergeSelectedChainsUp(void) {
     // Length check BEFORE mutating: total phrase rows across all selected
     // chains must fit in one chain (16 rows).
     int target = p->song[rows[0]][col];
+    if (!editHistoryCapture(EditObject::chain, target)) return;
     int targetUsed = 0;
     for (int d = 0; d < 16; d++)
       if (p->chains[target].rows[d].phrase != EMPTY_VALUE_16) targetUsed++;
@@ -618,6 +626,7 @@ static void songMergeSelectedChainsUp(void) {
     while (write < 16 && p->chains[target].rows[write].phrase != EMPTY_VALUE_16) write++;
     for (int i = 1; i < count; i++) {
       int srcIdx = p->song[rows[i]][col];
+      if (!editHistoryCapture(EditObject::chain, srcIdx)) return;
       Chain* src = &p->chains[srcIdx];
       for (int d = 0; d < 16 && write < 16; d++) {
         if (src->rows[d].phrase == EMPTY_VALUE_16) continue;
@@ -647,6 +656,7 @@ static void songMergeSelectedChainsUp(void) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  EditHistoryScope history("Song edit");
   int handled = 0;
   if (grooveboxEditorActive && chipnomadState->project.viewMode == ViewMode::classic &&
       screen.selectMode == 0) {
@@ -721,6 +731,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
       case MUTE_SOLO_EMPTY:
         if (isKeyDown && keys == keyOpt) {
           if (tapCount == 3) {
+            if (!editHistoryCapture(EditObject::song)) return 1;
             // Toggle highlight on triple-tap Opt
             uint8_t* highlight = &chipnomadState->project.songHighlight[screen.cursorRow][screen.cursorCol];
             *highlight ^= 1;
@@ -884,6 +895,11 @@ static void keyJazzGetActiveRange(int* startCol, int* startRow, int* endCol, int
 }
 
 int songKeyJazzHandleRawKey(InputCode input, int isDown) {
+  EditHistoryScope history("Song entry");
+  if (isDown && keyJazzEnabled && input.deviceType == InputDeviceType::keyboard &&
+      (inputHexDigitValue(input) >= 0 || inputIsCutKey(input) ||
+       inputIsPasteKey(input) || inputIsDeleteKey(input) || inputIsBackspaceKey(input)) &&
+      !editHistoryCapture(EditObject::song)) return 1;
   if (input.deviceType != InputDeviceType::keyboard) return 0;
 
   if (inputIsKeyJazzToggle(input)) {

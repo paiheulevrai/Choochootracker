@@ -1,4 +1,5 @@
 #include "copy_paste.h"
+#include "edit_history.h"
 #include "screens.h"
 #include "project_utils.h"
 #include <string.h>
@@ -95,6 +96,7 @@ int pasteGroove(int grooveIdx, int startRow) {
 }
 
 void copySong(int startCol, int startRow, int endCol, int endRow, int isCut) {
+  if (isCut && !editHistoryCapture(EditObject::song)) return;
   if (isCut) {
     bool empty = true;
     for (int row = startRow; row <= endRow && empty; ++row)
@@ -127,6 +129,7 @@ void copySong(int startCol, int startRow, int endCol, int endRow, int isCut) {
 }
 
 int pasteSong(int startCol, int startRow) {
+  if (!editHistoryCapture(EditObject::song)) return 0;
   // Push down existing data in the paste area
   for (int col = startCol; col < startCol + cpBufSongCols && col < PROJECT_MAX_TRACKS; col++) {
     for (int row = PROJECT_MAX_LENGTH - 1; row >= startRow + cpBufSongRows; row--) {
@@ -146,6 +149,7 @@ int pasteSong(int startCol, int startRow) {
 }
 
 void shiftSongColumnUp(int col, int startRow) {
+  if (!editHistoryCapture(EditObject::song)) return;
   for (int row = startRow; row < PROJECT_MAX_LENGTH - 1; row++) {
     chipnomadState->project.song[row][col] = chipnomadState->project.song[row + 1][col];
   }
@@ -153,6 +157,7 @@ void shiftSongColumnUp(int col, int startRow) {
 }
 
 void copyChain(int chainIdx, int startCol, int startRow, int endCol, int endRow, int isCut) {
+  if (isCut && !editHistoryCapture(EditObject::chain, chainIdx)) return;
   cpBufChainRows = endRow - startRow + 1;
   cpBufChainStartCol = startCol;
   cpBufChainEndCol = endCol;
@@ -168,6 +173,7 @@ void copyChain(int chainIdx, int startCol, int startRow, int endCol, int endRow,
 }
 
 int pasteChain(int chainIdx, int startCol, int startRow) {
+  if (!editHistoryCapture(EditObject::chain, chainIdx)) return 0;
   // Only paste if column types match
   if (startCol != cpBufChainStartCol) return 0;
 
@@ -188,6 +194,7 @@ int pasteChain(int chainIdx, int startCol, int startRow) {
 }
 
 void copyPhrase(int phraseIdx, int startCol, int startRow, int endCol, int endRow, int isCut) {
+  if (isCut && !editHistoryCapture(EditObject::phrase, phraseIdx)) return;
   cpBufPhraseRows = endRow - startRow + 1;
   cpBufPhraseStartCol = startCol;
   cpBufPhraseEndCol = endCol;
@@ -216,6 +223,7 @@ int canPastePhrase(int startCol) {
 }
 
 int pastePhrase(int phraseIdx, int startCol, int startRow) {
+  if (!editHistoryCapture(EditObject::phrase, phraseIdx)) return 0;
   if (!canPastePhrase(startCol)) return 0;
   if (canPasteFX(8, startCol)) {
     int rowsPasted = 0;
@@ -479,6 +487,7 @@ int switchSongSelectionMode(ScreenData* screen) {
 // Clone chain (shallow)
 int cloneChain(int srcIdx, int dstIdx) {
   if (srcIdx >= PROJECT_MAX_CHAINS || dstIdx >= PROJECT_MAX_CHAINS) return 0;
+  if (!editHistoryCapture(EditObject::chain, dstIdx)) return 0;
   chipnomadState->project.chains[dstIdx] = chipnomadState->project.chains[srcIdx];
   return 1;
 }
@@ -486,21 +495,20 @@ int cloneChain(int srcIdx, int dstIdx) {
 // Clone phrase
 int clonePhrase(int srcIdx, int dstIdx) {
   if (srcIdx >= PROJECT_MAX_PHRASES || dstIdx >= PROJECT_MAX_PHRASES) return 0;
+  if (!editHistoryCapture(EditObject::phrase, dstIdx)) return 0;
   chipnomadState->project.phrases[dstIdx] = chipnomadState->project.phrases[srcIdx];
   return 1;
 }
 
 // Clone instrument
 int cloneInstrument(int srcIdx, int dstIdx) {
-  if (srcIdx >= PROJECT_MAX_INSTRUMENTS || dstIdx >= PROJECT_MAX_INSTRUMENTS) return 0;
-  chipnomadState->project.instruments[dstIdx] = chipnomadState->project.instruments[srcIdx];
-  chipnomadState->project.tables[dstIdx] = chipnomadState->project.tables[srcIdx];
-  return 1;
+  return editHistoryCloneInstrument(srcIdx, dstIdx);
 }
 
 // Deep clone phrases within an existing chain
 int deepCloneChain(int chainIdx) {
   if (chainIdx >= PROJECT_MAX_CHAINS) return 0;
+  if (!editHistoryCapture(EditObject::chain, chainIdx)) return 0;
 
   // Find all distinct phrases used in the chain
   uint16_t usedPhrases[16];

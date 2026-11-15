@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "edit_history.h"
 #include "field_style.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -16,6 +17,8 @@ static void setEngine(int value) {
   d.engine = (DrumSynthEngine)value;
 }
 static void selectEngine(int value) {
+  EditHistoryScope history("Instrument model");
+  if (!editHistoryCaptureModel(cInstrument)) return;
   setEngine(value);
   projectModified = 1;
   screenSetup(&screenInstrument, cInstrument);

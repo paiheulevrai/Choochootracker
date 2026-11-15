@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <string.h>
 #include "audio_manager.h"
+#include "edit_history.h"
 #include "app.h"
 #include "audio_input_manager.h"
 #include "output_safety_limiter.h"
@@ -360,6 +361,7 @@ static int refreshDevices(void) {
 
 static void replaceProject(Project* replacement) {
   if (!replacement || !chipnomadState) return;
+  editHistoryClear();
   pause();
   chipnomadDiscardQueuedProject(chipnomadState);
   projectFree(&chipnomadState->project);
@@ -392,6 +394,7 @@ static void ensureInstrumentVoices(InstrumentType type) {
 
 static int mutateProject(ProjectMutation* mutation, void* userdata) {
   if (!mutation || !chipnomadState) return 1;
+  editHistoryBarrier();
   pause();
   int result = mutation(userdata);
   chipnomadInitChips(chipnomadState, aSampleRate, NULL);
