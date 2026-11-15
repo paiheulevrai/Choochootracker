@@ -108,12 +108,12 @@ struct KeyMappingFixture {
 }
 
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping menu keeps Done last and calibration immediately above it") {
-  REQUIRE(mockScreenData->rows == 13);
-  mockScreenData->drawField(0, 11, CellState::focus);
-  mockScreenData->drawField(0, 12, CellState::focus);
-  CHECK(std::string(mockGfxCells[13], 18) == "Calibrate controls");
-  CHECK(std::string(mockGfxCells[14], 4) == "Done");
-  mockScreenData->cursorRow = 12;
+  REQUIRE(mockScreenData->rows == 15);
+  mockScreenData->drawField(0, 13, CellState::focus);
+  mockScreenData->drawField(0, 14, CellState::focus);
+  CHECK(std::string(mockGfxCells[15], 18) == "Calibrate controls");
+  CHECK(std::string(mockGfxCells[16], 4) == "Done");
+  mockScreenData->cursorRow = 14;
   screenKeyMapping.onInput(1, keyOpt, 1);
   CHECK(currentScreen == &screenControlsSettings);
   CHECK(std::filesystem::exists(settingsPath));
@@ -184,7 +184,7 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping verification needs every core cont
   CHECK(inputRawCallback == nullptr);
   CHECK(appSettings.keyMapping.keyEdit[0].code == replacement.code);
   CHECK_FALSE(std::filesystem::exists(settingsPath));
-  REQUIRE(mockScreenData->onEdit(0, 12, CellEditAction::tap) == 1);
+  REQUIRE(mockScreenData->onEdit(0, 14, CellEditAction::tap) == 1);
   CHECK(std::filesystem::exists(settingsPath));
 }
 
@@ -263,7 +263,7 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping capture rejects logical buttons an
   tap({InputDeviceType::logical, keyEdit});
   CHECK(unchanged());
   CHECK(std::string(screenGetActiveMessage()).find("physical") != std::string::npos);
-  mockScreenData->onEdit(0, 12, CellEditAction::tap);
+  mockScreenData->onEdit(0, 14, CellEditAction::tap);
   CHECK(inputRawCallback != nullptr);
   CHECK_FALSE(std::filesystem::exists(settingsPath));
   tap(replacement);
@@ -368,21 +368,21 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "cancelled startup calibration preserves th
 }
 
 TEST_CASE_FIXTURE(KeyMappingFixture, "calibration restarts on a one-second hold without capturing the held button") {
-  edit(11);
+  edit(13);
   tap(keys[1]); // Accidentally assign Down to Up.
   raw(keys[0], true);
   advance(999);
   CHECK(unchanged());
   mockScreenData->drawStatic();
-  CHECK(std::string(mockGfxCells[16], 40).find("Press physical Down") != std::string::npos);
+  CHECK(std::string(mockGfxCells[17], 40).find("Press physical Down") != std::string::npos);
   advance(1);
   mockScreenData->drawStatic();
-  CHECK(std::string(mockGfxCells[16], 40).find("Release all buttons") != std::string::npos);
+  CHECK(std::string(mockGfxCells[17], 40).find("Release all buttons") != std::string::npos);
   advance(500); // Still held: must not enter capture or restart repeatedly.
   raw(keys[0], false);
   advance(150);
   mockScreenData->drawStatic();
-  CHECK(std::string(mockGfxCells[16], 40).find("Press physical Up") != std::string::npos);
+  CHECK(std::string(mockGfxCells[17], 40).find("Press physical Up") != std::string::npos);
   for (InputCode key : keys) tap(key);
   advance(150);
   verify(-1);
@@ -392,7 +392,7 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "calibration restarts on a one-second hold 
 }
 
 TEST_CASE_FIXTURE(KeyMappingFixture, "calibration can restart during verification with duplicate held inputs") {
-  edit(11);
+  edit(13);
   for (InputCode key : keys) tap(key);
   advance(150);
   raw(keys[0], true);

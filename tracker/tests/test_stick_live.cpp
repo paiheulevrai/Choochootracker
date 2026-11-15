@@ -746,7 +746,7 @@ TEST_CASE_FIXTURE(StickLiveFixture, "Settings menus and audio controls align") {
     REQUIRE(screenGraphicsSettings.setup != nullptr);
   screenSettings.fullRedraw();
   REQUIRE(mockScreenData != nullptr);
-  CHECK(mockScreenData->rows == 8);
+  CHECK(mockScreenData->rows == 9);
   auto* screen = mockScreenData;
   const char* labels[] = {"Controls", "Audio", "MIDI", "Synths", "Mixer", "Graphics", "Quit ChooChooTracker"};
   const int lines[] = {2, 3, 4, 5, 6, 7, 18};
@@ -754,7 +754,7 @@ TEST_CASE_FIXTURE(StickLiveFixture, "Settings menus and audio controls align") {
   const AppScreen* destinations[] = {&screenControlsSettings, &screenAudioSettings, &screenMidi, &screenSynthSettings, &screenMixerSettings, &screenGraphicsSettings};
   mockQuitTriggered = 0;
   for (int i = 0; i < 7; ++i) {
-    int row = i < 6 ? i : 7;
+    int row = i < 6 ? i : 8;
     screen->drawField(0, row, CellState::focus);
     CHECK(std::string(mockGfxCells[lines[i]], std::string(labels[i]).size()) == labels[i]);
     screen->drawCursor(0, row);

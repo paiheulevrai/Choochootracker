@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "edit_history.h"
 #include "field_style.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -6,7 +7,12 @@
 #include <string.h>
 
 static int modelButtonDown;
-static void selectModel(int value) { chipnomadState->project.instruments[cInstrument].chip.sintered.model = (SinteredModel)value; projectModified = 1; screenSetup(&screenInstrument, cInstrument); }
+static void selectModel(int value) {
+  EditHistoryScope history("Instrument model");
+  if (!editHistoryCaptureModel(cInstrument)) return;
+  chipnomadState->project.instruments[cInstrument].chip.sintered.model = (SinteredModel)value;
+  projectModified = 1; screenSetup(&screenInstrument, cInstrument);
+}
 static void cancelModelSelection() { screenSetup(&screenInstrument, cInstrument); }
 static void openModelSelection() {
   InstrumentSintered* s = &chipnomadState->project.instruments[cInstrument].chip.sintered;

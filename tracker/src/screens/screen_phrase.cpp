@@ -1,4 +1,5 @@
 #include "screens.h"
+#include "edit_history.h"
 #include "common.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -166,9 +167,11 @@ static void setup(int input) {
       // Lazy allocation: new projects start with empty song rows, so a bar
       // may have no phrase yet. Allocate one on the fly so notes entered
       // here stick (and survive scrolling away and back).
-      if (phraseIdx == EMPTY_VALUE_16) {
+      if (phraseIdx == EMPTY_VALUE_16 && input != -2) {
         int fresh = patternFindClosestEmptyPhrase(p, currentPatternIdx);
         if (fresh != EMPTY_VALUE_16) {
+          if (!editHistoryCapture(p, EditObject::pattern, currentPatternIdx) ||
+              !editHistoryCapture(p, EditObject::phrase, fresh)) return;
           phraseClear(&p->phrases[fresh]);
           pat->bars[bar].phrase = (uint16_t)fresh;
           phraseIdx = fresh;
@@ -180,7 +183,7 @@ static void setup(int input) {
       // pattern) or any chain row gets its own copy BEFORE the user edits it,
       // so typing notes into one bar never mutates its siblings or the
       // classic view's phrases.
-      if (phraseIdx != EMPTY_VALUE_16) {
+      if (phraseIdx != EMPTY_VALUE_16 && input != -2) {
         int exclusive = patternEnsureBarExclusive(p, NULL, currentPatternIdx,
           bar);
         if (exclusive != EMPTY_VALUE_16 && exclusive != phraseIdx) {
@@ -1003,6 +1006,8 @@ static const char* velocityApplyPattern(int startRow, int endRow, int pattern) {
 // keep navigating tracks and phrases. Key-ups reset the cycles whenever
 // B is no longer held, in any mode.
 static int fillInput(int isKeyDown, int keys) {
+  if (isKeyDown && screen.selectMode == 1 && (keys & keyOpt) &&
+      !editHistoryCapture(EditObject::phrase, phraseIdx)) return 1;
   if (isKeyDown) {
     if (screen.selectMode != 1) return 0;
     if (keys != (keyOpt | keyLeft) && keys != (keyOpt | keyRight) &&
@@ -1302,6 +1307,10 @@ static int editCell(int col, int row, CellEditAction action) {
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
+  EditHistoryScope history("Phrase edit");
+  if (action != CellEditAction::copy && action != CellEditAction::switchSelection &&
+      (!editHistoryCapture(EditObject::phrase, phraseIdx) ||
+       !editHistoryCapture(EditObject::playhead))) return 1;
   int handled = 0;
   if (canonicalSimplifiedActive && chipnomadState->project.viewMode == ViewMode::classic &&
       patternHeaderField) {
@@ -1333,6 +1342,7 @@ static int onEdit(int col, int row, CellEditAction action) {
       handled = 1;
     } else if (patternHeaderField == 3) {
       if (!canonicalWritable(false)) return 1;
+      if (!editHistoryCapture(EditObject::chain, currentPatternIdx)) return 1;
       handled = edit8noLimit(action, &p->chains[currentPatternIdx].rows[*pChainRow].transpose,
         &lastBarTranspose, p->pitchTable.octaveSize);
     }
@@ -1724,6 +1734,9 @@ static int inputScreenNavigation(int keys, int tapCount) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  EditHistoryScope history("Phrase edit");
+  if ((isFxEdit || canonicalEditPending || (isKeyDown && screen.selectMode == 1 && (keys & keyOpt))) &&
+      !editHistoryCapture(EditObject::phrase, phraseIdx)) return 1;
   // ── Pattern header navigation (simplified view only) ──────────────────────
   // When the cursor is on the pattern header (patternHeaderField != 0),
   // LEFT/RIGHT move between the Length / Loop fields and UP/DOWN exit the
@@ -1933,6 +1946,8 @@ int phraseKeyJazzHandleRawKey(InputCode input, int isDown) {
   }
 
   if (!keyJazzEnabled) return 0;
+  editHistoryGesture(isDown != 0);
+  EditHistoryScope history("Phrase entry");
   if (!isDown) canonicalFinishEdit();
 
   if (inputIsShiftKey(input)) return 1; // Swallow: see inputIsShiftKey's doc comment
@@ -1970,6 +1985,7 @@ int phraseKeyJazzHandleRawKey(InputCode input, int isDown) {
     screenMessage(MESSAGE_TIME_ERROR, "No compatible Phrase clipboard");
     return 1;
   }
+  if (isDown && writes && !editHistoryCapture(EditObject::phrase, phraseIdx)) return 1;
   if (isDown && writes && !canonicalWritable()) return 1;
 
   if (inputIsCtrlHeld()) {

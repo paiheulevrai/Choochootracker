@@ -9,6 +9,41 @@ Back up projects before upgrading: existing Bogie Clap presets load with the
 redesigned sound, and removed experimental engine-specific audio FM/PM modes
 are rejected explicitly. See [the changelog](../CHANGELOG.md) for release details.
 
+## Undo / redo
+
+Phrase, Chain, Song and Table edits share a session-only undo/redo history.
+It includes cell/selection edits, fills, clipboard edits, clones, structural
+bar/length edits and Song highlights. Shared-bar isolation and end-of-gesture
+reference reconciliation are restored together; redo restores the recorded
+result, rather than rerunning a random fill. Held-button repeats form one
+action. Navigation, copying and unchanged edits do not discard redo.
+
+- Desktop: **Ctrl+Z** and **Ctrl+Shift+Z**; macOS: **Cmd+Z** and
+  **Cmd+Shift+Z**. Shortcuts are unavailable inside text entry, mapping capture,
+  selection popups or active motion/MIDI REC.
+- Controller/touch: **Settings > Edit history > Undo / Redo**.
+- **Settings > Controls > Key mapping** also provides optional **Undo** and
+  **Redo** actions, initially unmapped. Each has three physical input slots.
+
+Instrument engine/type changes are included, preserving the previous patch,
+envelopes, modulation and sample/wavetable data. Model changes are included for
+Braids, Plaits/Plaits-Alt, Bogie/DigiSophie, MME, Sintered and aChChid.
+Undoing an engine change briefly pauses audio and rebuilds the required engines;
+it does not restore running voices, playback position or an effect tail.
+
+The journal is limited to **64 actions / 256 KiB**, plus **8 MiB** of retained
+instrument resources. Oldest undo actions are dropped when space is needed.
+If an action itself cannot fit, it is explicitly refused and its captured
+changes are rolled back. Large sampler engine changes can therefore be refused.
+SoundFont history retains prepared data, not another synthesizer instance.
+History is not saved in project files.
+
+Loading/replacing projects, recorded MIDI/motion edits, sample/bank resource
+operations and instrument parameter/preset edits outside the scope above clear
+the history with a message. Other editors keep their existing local undo;
+using Groovebox's local Tools undo also clears this shared history. A new
+recorded edit after undo discards redo; clearing history never changes the music.
+
 ## Three-view text prototype
 
 Project -> View mode - Editing style -> Mode cycles through Classic, Groovebox and Simplified with

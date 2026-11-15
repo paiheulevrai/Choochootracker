@@ -1,4 +1,5 @@
 #include "screen_groovebox.h"
+#include "edit_history.h"
 #include "corelib_gfx.h"
 #include "project_utils.h"
 #include "utils.h"
@@ -79,7 +80,9 @@ struct GrooveboxUndo {
   }
 };
 static std::unique_ptr<GrooveboxUndo> undo;
+void grooveboxDiscardUndo() { undo.reset(); }
 static void changed() {
+  if (grooveboxEditorActive && !canonicalSimplifiedActive) editHistoryBarrier();
   projectModified = true;
   chipnomadQueueProjectRefresh(chipnomadState);
 }
@@ -99,7 +102,7 @@ int grooveboxFindFreeChain(Project* p, int col) {
   if (!p || col < 0 || col >= p->tracksCount) return EMPTY_VALUE_16;
   GrooveboxReferences refs(p);
   int slot = allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (col + 1) * 16, 16);
-  return slot < 0 ? EMPTY_VALUE_16 : slot;
+  return slot < 0 || !editHistoryCapture(p, EditObject::chain, slot) ? EMPTY_VALUE_16 : slot;
 }
 
 bool grooveboxMergePatternsUp(int firstRow, int lastRow, int firstCol, int lastCol) {
@@ -142,6 +145,7 @@ bool grooveboxMergePatternsUp(int firstRow, int lastRow, int firstCol, int lastC
   bool merged = false;
   for (int col = firstCol; col <= lastCol; ++col) {
     if (slots[col] < 0) continue;
+    if (!editHistoryCapture(EditObject::song) || !editHistoryCapture(EditObject::chain, slots[col])) return false;
     p->chains[slots[col]] = chains[col];
     for (int row = firstRow; row <= lastRow; ++row) p->song[row][col] = EMPTY_VALUE_16;
     p->song[firstRow][col] = slots[col];
@@ -191,10 +195,12 @@ bool grooveboxPrepareScene(int row) {
   auto& snapshot = *undo->preparedScene;
   for (int t = 0; t < p.tracksCount; ++t) {
     int c = chains[t], i = snapshot.chainCount++;
+    if (!editHistoryCapture(EditObject::song) || !editHistoryCapture(EditObject::chain, c)) return false;
     snapshot.chainSlots[i] = c; snapshot.chains[i] = p.chains[c];
     chainClear(&p.chains[c]);
     for (int b = 0; b < length; ++b) {
       int f = phrases[t][b], n = snapshot.phraseCount++;
+      if (!editHistoryCapture(EditObject::phrase, f)) return false;
       snapshot.phraseSlots[n] = f; snapshot.phrases[n] = p.phrases[f];
       phraseClear(&p.phrases[f]);
       p.chains[c].rows[b].phrase = f;
@@ -264,6 +270,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     return false;
   }
   if (action == GrooveboxAction::undo) {
+    editHistoryBarrier();
     if (!undo || undo->owner != chipnomadState) {
       screenMessage(MESSAGE_TIME_ERROR, "No Groovebox action to undo");
       return false;
@@ -299,6 +306,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     return true;
   }
   if (action == GrooveboxAction::pasteScene) {
+    if (!editHistoryCapture(EditObject::song)) return false;
     if (!sceneCopied) { screenMessage(MESSAGE_TIME_ERROR, "Copy a scene first"); return false; }
     for (auto c : p.song[row])
       if (c != EMPTY_VALUE_16) { screenMessage(MESSAGE_TIME_ERROR, "Paste into an empty scene"); return false; }
@@ -328,6 +336,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     if (length == 0) { screenMessage(MESSAGE_TIME_ERROR, "Track already has no bars"); return false; }
     undo = std::make_unique<GrooveboxUndo>(row);
     undo->saveChain(c);
+    if (!editHistoryCapture(EditObject::chain, c)) return false;
     int next = action == GrooveboxAction::shorten ? length - 1 :
       action == GrooveboxAction::halveLength ? length / 2 : reset;
     for (int i = next; i < length; ++i) p.chains[c].rows[i].phrase = EMPTY_VALUE_16;
@@ -382,6 +391,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
   }
   undo = std::make_unique<GrooveboxUndo>(row);
   undo->saveChain(target);
+  if (!editHistoryCapture(EditObject::song) || !editHistoryCapture(EditObject::chain, target)) return false;
   if (clone) p.chains[target] = p.chains[c];
   else if (c < 0) chainClear(&p.chains[target]);
   for (int i = 0; i < count; ++i) {
@@ -392,6 +402,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     }
     if (slots[i] < 0) continue;
     undo->savePhrase(slots[i]);
+    if (!editHistoryCapture(EditObject::phrase, slots[i])) return false;
     if (sources[i] >= 0) p.phrases[slots[i]] = p.phrases[sources[i]];
     else {
       phraseClear(&p.phrases[slots[i]]);
@@ -426,9 +437,12 @@ static PhraseRow* writableStep(bool recordUndo = true) {
   int chain = chainAt(p, scene, track);
   int phrase = grooveboxPhraseAt(p, scene, track, bar);
   if (phrase >= 0) {
+    if (!editHistoryCapture(p, EditObject::phrase, phrase)) return NULL;
     if (recordUndo) {
       undo = std::make_unique<GrooveboxUndo>(scene);
       undo->savePhrase(phrase);
+      if (!editHistoryCapture(EditObject::song) || !editHistoryCapture(EditObject::chain, chain) ||
+          !editHistoryCapture(EditObject::phrase, phrase)) return NULL;
     }
     return &p->phrases[phrase].rows[step];
   }
