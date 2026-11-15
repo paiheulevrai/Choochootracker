@@ -295,8 +295,11 @@ python3 -m unittest discover -s tracker/tests -p 'test_portmaster_*.py'
 The `PortMaster` GitHub Actions workflow produces the normal installable ZIP
 and a `choochootracker-portmaster-library` artifact. The latter contains
 `ports/choochootracker/`, `PR_BODY.md` and `provenance.json`. Metadata is moved
-to the Library source root; component/font licenses are flattened without
-changing their contents. All runtime assets are retained.
+to the Library source root; component/font notices are flattened without
+changing their contents or duplicating filename extensions. Preset source banks
+and conversion files are also placed under `sources/chip-banks/expansion`
+instead of being presented as license texts. The original `data.tar.gz` and
+all runtime assets and source material are retained.
 
 Publishing a GitHub release triggers preparation automatically. Its source
 is the release tag. The workflow replaces that release's versioned PortMaster

@@ -144,7 +144,10 @@ def prepare(archive, manifest, output, tag, source_sha, run_url):
             if re.match(r"lib(SDL|c[.-]|stdc\+\+|pthread|GL|EGL)", path.name):
                 raise ValueError(f"Do not bundle system libraries: {member.name}")
             assets[name] = data.extractfile(member).read()
-            if "licenses" in path.parts:
+            if path.parts[:3] == ("licenses", "chip-banks", "expansion") and (
+                    path.name != "README.txt" and not path.name.endswith(".LICENSE")):
+                files[f"{PORT}/sources/chip-banks/expansion/{path.name}"] = assets[name]
+            elif "licenses" in path.parts:
                 files[f"{PORT}/{name}"] = assets[name]
     for name in ("catalog.tsv", "builtins.tsv"):
         if not assets.get(f"instruments/FACTORY/{name}"):
@@ -177,7 +180,13 @@ def prepare(archive, manifest, output, tag, source_sha, run_url):
         if len(parts) == 2 and parts[1] in METADATA:
             relative = parts[1]
         elif "licenses" in parts:
-            relative = f"{PORT}/licenses/LICENSE." + ".".join(parts[1:]) + ".txt"
+            license_parts = parts[1:]
+            if license_parts[0] == "licenses":
+                license_parts = license_parts[1:]
+            filename = "LICENSE." + ".".join(license_parts)
+            if not filename.lower().endswith((".txt", ".md")):
+                filename += ".txt"
+            relative = f"{PORT}/licenses/{filename}"
         else:
             relative = name
         if relative.casefold() in written:
