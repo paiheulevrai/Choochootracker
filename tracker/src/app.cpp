@@ -9,6 +9,7 @@
 #include "audio_input_manager.h"
 #include "corelib/corelib_audio.h"
 #include "app.h"
+#include "edit_history.h"
 #include "startup_timing.h"
 #include "screens.h"
 #include "screens/screen_groovebox.h"
@@ -77,6 +78,7 @@ static int motionLiveLatched;
 static int quickHelpSelectHeld;
 static int quickHelpSelectAlone;
 static int audioProjectDirty;
+void appPublishProjectEdit(void) { audioProjectDirty = 1; }
 static MidiCCMapping midiCCApplied[PROJECT_MAX_MIDI_CC_MAPPINGS];
 static uint8_t midiCCAppliedValid[PROJECT_MAX_MIDI_CC_MAPPINGS];
 static int16_t midiCCRecordLast[PROJECT_MAX_MIDI_CC_MAPPINGS][PROJECT_MAX_TRACKS];
@@ -498,6 +500,7 @@ static void receiveMidiNote(void* userdata, const MidiPreviewIntent& intent) {
   const bool record = chipnomadMotionMode() == 1 && (intent.noteOn || (intent.stop && intent.timestampMicros));
   if (record && intent.noteOn && !playing && intent.autoChannel && currentScreen == &screenPhrase &&
       phraseScreenRecordMidi(intent.note, (uint8_t)intent.instrument, intent.velocity)) {
+    editHistoryBarrier();
     audioProjectDirty = 1;
   }
   if (record && intent.noteOn && !playing && !intent.autoChannel && currentScreen == &screenPhrase)
@@ -821,6 +824,8 @@ static bool inputBranchNavigation(int keys) {
 }
 
 static void appInput(int isKeyDown, int keys, int tapCount) {
+  editHistoryGesture(keys != 0);
+  EditHistoryScope history("Editor");
   // Stop phrase row and preview. While the sample settings screen is doing
   // a LAZY full-sample playback (tap PLAY toggles it), the PLAY release
   // must not kill the preview - the screen owns the preview's lifetime.
@@ -1041,6 +1046,7 @@ int appContinueProject(void) {
 }
 
 void appActivateProject(void) {
+  editHistoryClear();
   StartupTiming timing("engine and audio/MIDI devices");
   if (projectActive) return;
   projectActive = true;
@@ -1121,6 +1127,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int webSaveBrowserState() {
 * @brief Release all resources before closing the application
 */
 void appCleanup(void) {
+  editHistoryClear();
   projectActive = false;
   backgroundCleanup();
   audioManager.stop();
@@ -1280,6 +1287,7 @@ void appOnEvent(MainLoopEventData eventData) {
 
     if (quickHelpSelectHeld && !rawInputActive && value != keyShift) quickHelpSelectAlone = 0;
 
+    if (!rawInputActive && editHistoryInput(eventData.data.input, true)) break;
 #ifdef DESKTOP_BUILD
     // After the quick-help-alone bookkeeping above (it must see every key,
     // even ones key jazz fully consumes below - otherwise releasing Shift
@@ -1366,6 +1374,7 @@ void appOnEvent(MainLoopEventData eventData) {
     break;
   }
   case MainLoopEvent::keyUp: {
+    if (!inputRawCallback && editHistoryInput(eventData.data.input, false)) break;
 #ifdef DESKTOP_BUILD
     if (currentScreen == &screenPhrase && phraseKeyJazzHandleRawKey(eventData.data.input, 0)) break;
     if (currentScreen == &screenSong && songKeyJazzHandleRawKey(eventData.data.input, 0)) break;
@@ -1465,6 +1474,7 @@ void appOnEvent(MainLoopEventData eventData) {
     if (chipnomadGetMidiRecordOverflow(chipnomadState))
       screenMessage(MESSAGE_TIME_ERROR, "MIDI record overflow: notes lost");
     if (motionRecordChanged) {
+      editHistoryBarrier();
       projectModified = 1;
       audioProjectDirty = 1;
       if (currentScreen == &screenPhrase) currentScreen->fullRedraw();
@@ -1616,6 +1626,7 @@ void appOnEvent(MainLoopEventData eventData) {
               chipnomadState->project.trackDelaySend[track] = (uint8_t)((value * 100 + 63) / 127);
           } else {
             instrumentSetCCDestination(&chipnomadState->project.instruments[mapping.instrument], mapping.destination, value);
+            editHistoryBarrier();
           }
           if (!toggle) recordMidiCC(mapping, i, value);
           projectModified = 1;

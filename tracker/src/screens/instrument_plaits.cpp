@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "edit_history.h"
 #include "field_style.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -38,6 +39,8 @@ static bool lpgControlsActive(const InstrumentPlaits* p) {
 }
 
 static void selectEngine(int value) {
+  EditHistoryScope history("Instrument model");
+  if (!editHistoryCaptureModel(cInstrument)) return;
   chipnomadState->project.instruments[cInstrument].chip.plaits.engine = (uint8_t)value;
   projectModified = 1;
   screenSetup(&screenInstrument, cInstrument);

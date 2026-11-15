@@ -2,6 +2,7 @@
 #include "screen_midi.h"
 #include "common.h"
 #include "app.h"
+#include "edit_history.h"
 #include "corelib_gfx.h"
 #include "corelib_mainloop.h"
 #include "screens.h"
@@ -13,16 +14,18 @@
 // Android adds a "Working folder" row (row 7) before Quit.
 #ifdef ANDROID_BUILD
 #define SETTINGS_WORKING_FOLDER_ROW 7
-#define SETTINGS_QUIT_ROW 8
-#define SETTINGS_TOTAL_ROWS 9
+#define SETTINGS_QUIT_ROW 9
+#define SETTINGS_TOTAL_ROWS 10
+#define SETTINGS_HISTORY_ROW 8
 static char workingFolderStatus[256];
 static void refreshWorkingFolderStatus(void) {
   if (fileGetWorkingFolderStatus(workingFolderStatus, sizeof(workingFolderStatus)) != 0)
     snprintf(workingFolderStatus, sizeof(workingFolderStatus), "Unavailable");
 }
 #else
-#define SETTINGS_QUIT_ROW 7
-#define SETTINGS_TOTAL_ROWS 8
+#define SETTINGS_QUIT_ROW 8
+#define SETTINGS_TOTAL_ROWS 9
+#define SETTINGS_HISTORY_ROW 7
 #endif
 
 static int columnCount(int) { return 1; }
@@ -37,6 +40,7 @@ static void drawStatic(void) { gfxSetFgColor(appSettings.colorScheme.textTitles)
 static void drawCursor(int, int row) {
   if (row < 6) { static const int widths[] = {8, 5, 4, 6, 5, 8}; gfxCursor(0, 2 + row, widths[row]); }
   else if (row == 6) gfxCursor(0, 10, 14);
+  else if (row == SETTINGS_HISTORY_ROW) gfxCursor(0, 14, 12);
 #ifdef ANDROID_BUILD
   else if (row == SETTINGS_WORKING_FOLDER_ROW) gfxCursor(0, 12, 14);
 #endif
@@ -48,6 +52,7 @@ static void drawField(int, int row, CellState state) {
   gfxSetFgColor(cs.textDefault);
   if (row < 6) { static const char* labels[] = {"Controls", "Audio", "MIDI", "Synths", "Mixer", "Graphics"}; gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, 2 + row, labels[row]); }
   else if (row == 6) { gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, 10, "Support report"); }
+  else if (row == SETTINGS_HISTORY_ROW) { gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, 14, "Edit history"); }
 #ifdef ANDROID_BUILD
   else if (row == SETTINGS_WORKING_FOLDER_ROW) {
     gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
@@ -90,6 +95,7 @@ static int onEdit(int, int row, CellEditAction action) {
     return 0;
   }
 #endif
+  else if (row == SETTINGS_HISTORY_ROW) { editHistoryOpenMenu(); return 1; }
   else if (row == SETTINGS_QUIT_ROW) { mainLoopTriggerQuit(); return 1; }
   return 0;
 }

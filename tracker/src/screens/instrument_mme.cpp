@@ -1,5 +1,6 @@
 #include "field_style.h"
 #include "screen_instrument.h"
+#include "edit_history.h"
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "model_catalog.h"
@@ -16,6 +17,8 @@ static void drawPreview(const InstrumentMME* mme) {
   gfxDrawBitmap(previewBitmap, 0, 16);
 }
 static void selectModel(int value) {
+  EditHistoryScope history("Instrument model");
+  if (!editHistoryCaptureModel(cInstrument)) return;
   chipnomadState->project.instruments[cInstrument].chip.mme.model = (MMEModel)value;
   projectModified = 1; screenSetup(&screenInstrument, cInstrument);
 }

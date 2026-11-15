@@ -98,6 +98,10 @@ void inputInitNativeGamepadMapping(void) {
 
 void inputInitDefaultKeyMapping(void) {
   KeyboardLayout layout = detectKeyboardLayout();
+  for (int i = 0; i < 3; ++i) {
+    appSettings.keyMapping.keyUndo[i] = {InputDeviceType::none, 0};
+    appSettings.keyMapping.keyRedo[i] = {InputDeviceType::none, 0};
+  }
 
   // Keyboard mappings (all platforms)
   appSettings.keyMapping.keyUp[0] = (InputCode){InputDeviceType::keyboard, BTN_UP};
@@ -305,6 +309,14 @@ int inputIsCopyKey(InputCode input) { return inputToScancode(input) == SDL_SCANC
 int inputIsCutKey(InputCode input) { return inputToScancode(input) == SDL_SCANCODE_X; }
 int inputIsPasteKey(InputCode input) { return inputToScancode(input) == SDL_SCANCODE_V; }
 int inputIsSaveKey(InputCode input) { return inputToScancode(input) == SDL_SCANCODE_S; }
+int inputIsUndoKey(InputCode input) { return inputToScancode(input) == SDL_SCANCODE_Z; }
+int inputIsHistoryModifierHeld(void) {
+#ifdef __APPLE__
+  return (SDL_GetModState() & KMOD_GUI) != 0;
+#else
+  return inputIsCtrlHeld();
+#endif
+}
 
 int inputIsDeleteKey(InputCode input) {
   return inputToScancode(input) == SDL_SCANCODE_DELETE;

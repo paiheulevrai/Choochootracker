@@ -17,6 +17,7 @@
 #include "selection_popup.h"
 #include "simple_chip_presets.h"
 #include "audio_manager.h"
+#include "edit_history.h"
 #include "synth/instrument_eq.h"
 #include "screen_audio_input.h"
 #include "audio_input_manager.h"
@@ -256,12 +257,14 @@ static bool instrumentReferencedByLayer(int slot) {
 }
 
 static void setInstrumentType(InstrumentType newType) {
+  EditHistoryScope history("Instrument engine");
   Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
   InstrumentType oldType = instrument->type;
   if (oldType == newType) {
     screenSetup(&screenInstrument, cInstrument);
     return;
   }
+  if (!editHistoryCaptureInstrument(cInstrument)) return;
   const bool liveSwitch = chipnomadState->sampleRate > 0 &&
     !instrumentReferencedByLayer(cInstrument) &&
     chipnomadCanSwitchInstrumentLive(oldType) &&
@@ -273,6 +276,7 @@ static void setInstrumentType(InstrumentType newType) {
   if (preserveEnvelope) savedEnvelope = *oldPost;
   const uint8_t savedEQ = instrument->eq;
   const Instrument previous = *instrument;
+  if (!liveSwitch) audioManager.pause();
   getInstrumentFunctions(oldType).free(instrument);
   instrument->type = newType;
   getInstrumentFunctions(newType).init(instrument);
@@ -289,8 +293,10 @@ static void setInstrumentType(InstrumentType newType) {
       post->envelopeShape = savedEnvelope.envelopeShape;
     }
   }
-  if (!liveSwitch && audioManager.reinitializeChips)
-    audioManager.reinitializeChips();
+  if (!liveSwitch) {
+    if (audioManager.reinitializeChips) audioManager.reinitializeChips();
+    audioManager.resume();
+  }
   ScreenData* screen = instrumentScreen();
   screen->cursorRow = screen->cursorCol = screen->topRow = 0;
   projectModified = 1;
@@ -1114,6 +1120,8 @@ static int editEQBank(CellEditAction action, uint8_t* bank) {
 }
 
 int instrumentCommonOnEdit(int col, int row, enum CellEditAction action) {
+  EditHistoryScope history("Instrument edit");
+  if (!editHistoryCaptureModel(cInstrument)) return 1;
   int handled = 0;
   if (row == 0 && col == 0) {
     // Instrument type
@@ -1373,6 +1381,8 @@ static int inputScreenNavigation(int keys, int tapCount) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  EditHistoryScope history("Instrument model");
+  if (!editHistoryCaptureModel(cInstrument)) return 1;
   // Stop preview when keys are released
   if (keys == 0) {
     chipnomadQueuePlaybackStopPreview(chipnomadState, *pSongTrack);
