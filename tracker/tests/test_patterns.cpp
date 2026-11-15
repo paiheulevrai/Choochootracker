@@ -14,6 +14,7 @@
 #include "chipnomad_lib.h"
 #include "playback_internal.h"
 #include "pattern_utils.h"
+#include "pattern_clone_utils.h"
 #include "project_utils.h"
 #include "pitch_table_utils.h"
 #include "common.h"
@@ -56,6 +57,66 @@ TEST_CASE_FIXTURE(PatternFixture, "patternClear sets length=1 with empty bar") {
     CHECK(pat.bars[b].phrase == EMPTY_VALUE_16);
     CHECK(pat.bars[b].transpose == 0);
   }
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "new patterns use track ID banks like classic chains") {
+  CHECK(findEmptyPatternForTrack(project.get(), 0) == 0x10);
+  CHECK(findEmptyPatternForTrack(project.get(), 1) == 0x20);
+
+  for (int pattern = 0x10; pattern < 0x20; ++pattern)
+    project->patterns[pattern].bars[0].phrase = 0;
+  CHECK(findEmptyPatternForTrack(project.get(), 0) == 0x90);
+
+  project->patternToChainMap[0x90] = 4;
+  CHECK(findEmptyPatternForTrack(project.get(), 0) == 0x91);
+  CHECK(findEmptyPatternForTrack(project.get(), -1) == EMPTY_VALUE_16);
+  CHECK(findEmptyPatternForTrack(project.get(), PROJECT_MAX_TRACKS) == EMPTY_VALUE_16);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "pattern allocation skips referenced and retained patterns") {
+  project->viewMode = ViewMode::simplified;
+  project->song[0][0] = 0x10;
+  project->patterns[0x11].bars[5].phrase = 7;
+  project->patterns[0x12].bars[0].transpose = 1;
+  project->patternToChainMap[0x13] = 4;
+  CHECK(findEmptyPatternForTrack(project.get(), 0) == 0x14);
+  project->patterns[0x0f].bars[0].phrase = 1;
+  int clone = viewModeCloneToNext(project.get(), 0x0f);
+  CHECK(clone == 0x0e);
+  CHECK(project->song[0][0] == 0x10);
+  CHECK(project->patterns[0x10].bars[0].phrase == EMPTY_VALUE_16);
+  for (int i = 0; i < PROJECT_MAX_PATTERNS; ++i) project->song[i][0] = i;
+  CHECK(findEmptyPatternForTrack(project.get(), 0) == EMPTY_VALUE_16);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "independent pattern copies preserve bars without sharing phrases") {
+  auto& source = project->patterns[3];
+  source.length = 4;
+  source.bars[0] = {7, 2};
+  source.bars[1] = {7, 0};
+  source.bars[2] = {8, 1};
+  project->phrases[7].rows[0].note = 60;
+  project->phrases[8].rows[0].note = 62;
+  project->patterns[9].bars[15].phrase = 0;
+  REQUIRE(patternCopyIndependent(project.get(), 3, 0x10) == PatternCopyResult::success);
+  auto& copy = project->patterns[0x10];
+  CHECK(copy.length == 4);
+  CHECK(copy.bars[0].transpose == 2);
+  CHECK(copy.bars[0].phrase == copy.bars[1].phrase);
+  CHECK(copy.bars[0].phrase != 0);
+  CHECK(copy.bars[0].phrase != 7);
+  CHECK(copy.bars[2].phrase != 8);
+  CHECK(project->phrases[copy.bars[0].phrase].rows[0].note == 60);
+  project->phrases[copy.bars[0].phrase].rows[0].note = 72;
+  CHECK(project->phrases[7].rows[0].note == 60);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "independent pattern copy refuses a full phrase pool") {
+  project->patterns[3].bars[0].phrase = 0;
+  for (auto& phrase : project->phrases) phrase.rows[0].note = 48;
+  Pattern before = project->patterns[0x10];
+  CHECK(patternCopyIndependent(project.get(), 3, 0x10) == PatternCopyResult::noFreePhrase);
+  CHECK(std::memcmp(&before, &project->patterns[0x10], sizeof(Pattern)) == 0);
 }
 
 TEST_CASE_FIXTURE(PatternFixture, "patternMaterializeIfPristine: pristine pattern adopts defaultPatternLength") {

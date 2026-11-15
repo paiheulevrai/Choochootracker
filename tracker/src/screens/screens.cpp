@@ -641,6 +641,7 @@ int screenTouchTap(int col, int row) {
   row -= screenScopeRows(currentScreen);
   int targetCol, targetRow;
   if (!screenTouchCellAt(col, row, &targetCol, &targetRow)) return 0;
+  if (currentScreen == &screenSong) screenSongRememberSelected();
   touchScreenData->cursorCol = targetCol;
   touchScreenData->cursorRow = targetRow;
   // Button cells activate on the tap itself; value cells only select so

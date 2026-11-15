@@ -2096,8 +2096,14 @@ interpreted:
   created patterns. It applies when you type a pattern number onto an
   empty Song row (the pattern starts that long) and when clearing the
   Length field on the Phrase screen header.
+- Tap an empty Song cell to copy the last selected pattern independently,
+  including its phrases; if none is selected, a new empty pattern uses the
+  default length. Pattern IDs use the selected track's `10`, `20`, `30`…
+  bank. If that bank is full, other IDs are searched. A double-tap on an
+  occupied cell selects a new empty pattern.
 - **Playhead** (visible in Simplified mode) chooses between looping the bar
-  the cursor views and playing the whole pattern.
+  the cursor views and playing the whole pattern. In **PAT**, playback starts
+  at the viewed bar, then continues through and loops the full pattern.
 
 ### Ableton Link
 

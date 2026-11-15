@@ -3,6 +3,8 @@
 
 #include "chipnomad_lib.h"
 
+enum class PatternCopyResult { success, noFreePhrase, invalidPhrase, historyFailure };
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -22,6 +24,8 @@ extern "C" {
 // Clone the song cell (chain or pattern) at srcIdx to the next empty slot.
 // Returns the new index, or EMPTY_VALUE_16 if no empty slot is available.
 int viewModeCloneToNext(Project* p, int srcIdx);
+
+PatternCopyResult patternCopyIndependent(Project* p, int srcIdx, int dstIdx);
 
 // Deep-clone the song cell (chain or pattern) at srcIdx: clone the cell AND
 // each phrase it references. Returns 1 on success, 0 on failure.
