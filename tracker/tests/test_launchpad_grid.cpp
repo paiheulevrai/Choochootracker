@@ -63,6 +63,22 @@ TEST_CASE("Launchpad double presses track the same released control and reject h
   CHECK(presses.press(64, 20) == 1); // scene controls have separate identities
 }
 
+TEST_CASE("Launchpad grid, scene and navigation controls are held independently") {
+  launchpadGrid::PressTracker presses;
+  for (int target = 0; target < presses.kTargetCount; ++target)
+    CHECK(presses.press(target, 20) == 1);
+  for (int target = 0; target < presses.kTargetCount; ++target)
+    CHECK(presses.press(target, 20) == 0);
+  presses.release(64);
+  CHECK(presses.press(0, 20) == 0);
+  CHECK(presses.press(64, 20) > 0);
+  presses.release(0);
+  CHECK(presses.press(64, 20) == 0);
+  presses.reset();
+  CHECK(presses.press(0, 20) == 1);
+  CHECK(presses.press(64, 20) == 1);
+}
+
 TEST_CASE("Launchpad LED state reflects playing, urgent queue, queued stop and screen scope") {
   using launchpadGrid::LedState;
   CHECK(launchpadGrid::ledState(false, false, false, false) == LedState::off);

@@ -34,7 +34,7 @@ inline uint8_t colourForState(LedState state) {
 
 inline bool isScreenActive(bool enabled, bool songScreen) { return enabled && songScreen; }
 
-// One identity space for 64 grid pads plus eight scene buttons. The first
+// One identity space for grid pads, scene buttons, and navigation. The first
 // press acts immediately; a released repeat inside the app's tap interval
 // upgrades that same target to urgent. Held duplicate MIDI events are ignored.
 class PressTracker {
@@ -43,7 +43,7 @@ class PressTracker {
   static constexpr int kNavigationTargetStart = kSceneTargetStart + kHeight;
   static constexpr int kTargetCount = kNavigationTargetStart + 4;
   void reset() {
-    held_ = 0;
+    for (auto& bits : held_) bits = 0;
     lastTarget_ = -1;
     remainingFrames_ = 0;
   }
@@ -52,19 +52,21 @@ class PressTracker {
   }
   int press(int target, int intervalFrames) {
     if (target < 0 || target >= kTargetCount) return 0;
-    const uint64_t mask = UINT64_C(1) << target;
-    if (held_ & mask) return 0;
-    held_ |= mask;
+    uint64_t& bits = held_[target / 64];
+    const uint64_t mask = UINT64_C(1) << (target % 64);
+    if (bits & mask) return 0;
+    bits |= mask;
     const int taps = target == lastTarget_ && remainingFrames_ > 0 ? 2 : 1;
     lastTarget_ = target;
     remainingFrames_ = intervalFrames > 0 ? intervalFrames : 1;
     return taps;
   }
   void release(int target) {
-    if (target >= 0 && target < kTargetCount) held_ &= ~(UINT64_C(1) << target);
+    if (target >= 0 && target < kTargetCount)
+      held_[target / 64] &= ~(UINT64_C(1) << (target % 64));
   }
  private:
-  uint64_t held_ = 0;
+  uint64_t held_[(kTargetCount + 63) / 64] = {};
   int lastTarget_ = -1;
   int remainingFrames_ = 0;
 };

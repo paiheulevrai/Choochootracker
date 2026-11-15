@@ -142,7 +142,8 @@ int midiIoLaunchpadPoll(uint8_t* status, uint8_t* note, uint8_t* velocity) {
       g_launchpadLastPresenceCheck = now;
     }
     std::vector<unsigned char> message;
-    if (g_launchpadIn->getMessage(&message) <= 0.0 || message.empty()) return 0;
+    g_launchpadIn->getMessage(&message); // Return value is a delta, not a success flag.
+    if (message.empty()) return 0;
     if (message.size() >= 3) {
       *status = message[0]; *note = message[1]; *velocity = message[2];
       return 1;
