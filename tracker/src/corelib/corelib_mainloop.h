@@ -20,6 +20,7 @@ enum class MainLoopEvent {
   audioDeviceRemoved,
   // UI-thread MIDI polling between redraws; no animation or musical tick.
   midiInput,
+  inputSourceReleased,
 };
 
 struct MainLoopEventData {

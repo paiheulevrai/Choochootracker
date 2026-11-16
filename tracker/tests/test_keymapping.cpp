@@ -3,6 +3,8 @@
 #include "app_ui_mock.h"
 #include "corelib_file.h"
 #include "screen_keymapping.h"
+#include "console_input.h"
+#include "chipnomad_lib_live_stick.h"
 #include <chrono>
 #include <cstring>
 #include <filesystem>
@@ -210,7 +212,7 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping verification cannot use an old ali
   CHECK(appSettings.keyMapping.keyEdit[0].code == replacement.code);
 }
 
-TEST_CASE_FIXTURE(KeyMappingFixture, "mapping a pad into a keyboard column swaps pad bindings without losing Edit") {
+TEST_CASE_FIXTURE(KeyMappingFixture, "mapping swaps canonical inputs without a transport-specific slot") {
   const InputCode padA = {InputDeviceType::gamepad, 0};
   const InputCode padB = {InputDeviceType::gamepad, 1};
   appSettings.keyMapping.keyEdit[1] = padA;
@@ -221,27 +223,164 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping a pad into a keyboard column swaps
   advance(150);
   CHECK(unchanged());
   for (int row = 0; row < 8; ++row) {
-    if (row == 4) tap(padB);
+    if (row == 4) tap(keys[5]);
     else if (row == 5) tap(padA);
     else tap(keys[row]);
   }
   CHECK(inputRawCallback == nullptr);
   CHECK(appSettings.keyMapping.keyEdit[0].code == keys[4].code);
-  CHECK(appSettings.keyMapping.keyEdit[1].deviceType == InputDeviceType::gamepad);
-  CHECK(appSettings.keyMapping.keyEdit[1].code == padB.code);
+  CHECK(appSettings.keyMapping.keyEdit[1].deviceType == InputDeviceType::keyboard);
+  CHECK(appSettings.keyMapping.keyEdit[1].code == keys[5].code);
   CHECK(appSettings.keyMapping.keyOpt[0].code == padA.code);
-  CHECK(appSettings.keyMapping.keyOpt[1].deviceType == InputDeviceType::keyboard);
-  CHECK(appSettings.keyMapping.keyOpt[1].code == keys[5].code);
+  CHECK(appSettings.keyMapping.keyOpt[1].deviceType == InputDeviceType::gamepad);
+  CHECK(appSettings.keyMapping.keyOpt[1].code == padB.code);
 }
 
-TEST_CASE_FIXTURE(KeyMappingFixture, "mapping refuses a cross-device swap without an equivalent binding") {
+TEST_CASE_FIXTURE(KeyMappingFixture, "mapping tests a swap even when the previous input uses another transport") {
   appSettings.keyMapping.keyEdit[1] = replacement;
   original = appSettings.keyMapping;
   edit(5);
   tap(replacement);
-  CHECK(inputRawCallback == nullptr);
+  CHECK(inputRawCallback != nullptr);
   CHECK(unchanged());
-  CHECK(std::string(screenGetActiveMessage()).find("Calibrate") != std::string::npos);
+  advance(150);
+  for (int row = 0; row < 8; ++row)
+    tap(row == 4 ? keys[5] : row == 5 ? replacement : keys[row]);
+  CHECK(inputRawCallback == nullptr);
+  CHECK(appSettings.keyMapping.keyOpt[0].code == replacement.code);
+}
+
+TEST_CASE("console button aliases merge overlapping sources in either order without delaying taps") {
+  int count;
+  const auto* aliases = inputConsoleAliases(&count);
+  for (int i = 0; i < count; ++i) {
+    for (bool keyboardFirst : {false, true}) {
+      for (bool keyboardReleasedFirst : {false, true}) {
+        consoleInput::Buttons buttons;
+        const InputCode key{InputDeviceType::keyboard, aliases[i].keyboard};
+        const InputCode pad{InputDeviceType::gamepad, aliases[i].gamepad};
+        auto first = keyboardFirst ? key : pad;
+        auto second = keyboardFirst ? pad : key;
+        CHECK(buttons.update(first, true));
+        CHECK(consoleInput::same(first, pad));
+        CHECK_FALSE(buttons.update(second, true));
+        second = keyboardFirst ? pad : key;
+        CHECK_FALSE(buttons.update(second, true));
+        first = keyboardReleasedFirst ? key : pad;
+        second = keyboardReleasedFirst ? pad : key;
+        CHECK_FALSE(buttons.update(first, false));
+        CHECK(buttons.update(second, false));
+        for (int tap = 0; tap < 2; ++tap) {
+          auto input = key;
+          CHECK(buttons.update(input, true));
+          input = key;
+          CHECK(buttons.update(input, false));
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("console mapping migration preserves custom inputs and rejects alias conflicts without mutation") {
+  KeyMapping mapping{};
+  mapping.keyEdit[0] = {InputDeviceType::keyboard, 'x'};
+  mapping.keyEdit[1] = {InputDeviceType::gamepad, 0};
+  mapping.keyOpt[0] = {InputDeviceType::keyboard, 'z'};
+  mapping.keyUndo[0] = keys[4];
+  REQUIRE(consoleInput::migrate(mapping));
+  CHECK(mapping.keyEdit[0].deviceType == InputDeviceType::gamepad);
+  CHECK(mapping.keyEdit[1].deviceType == InputDeviceType::none);
+  CHECK(consoleInput::same(mapping.keyUndo[0], keys[4]));
+  const KeyMapping normalized = mapping;
+  REQUIRE(consoleInput::migrate(mapping));
+  CHECK(std::memcmp(&normalized, &mapping, sizeof(mapping)) == 0);
+  mapping.keyOpt[1] = {InputDeviceType::keyboard, 'x'};
+  const KeyMapping conflicting = mapping;
+  CHECK_FALSE(consoleInput::migrate(mapping));
+  CHECK(std::memcmp(&conflicting, &mapping, sizeof(mapping)) == 0);
+}
+
+TEST_CASE("console source removal releases only buttons whose last source disappeared") {
+  consoleInput::Buttons buttons;
+  InputCode key{InputDeviceType::keyboard, 'x'};
+  InputCode pad{InputDeviceType::gamepad, 0};
+  REQUIRE(buttons.update(key, true));
+  REQUIRE_FALSE(buttons.update(pad, true));
+  int releases = 0;
+  buttons.release(InputDeviceType::gamepad, [&](InputCode) { ++releases; });
+  CHECK(releases == 0);
+  buttons.release(InputDeviceType::keyboard, [&](InputCode input) {
+    CHECK(consoleInput::same(input, pad));
+    ++releases;
+  });
+  CHECK(releases == 1);
+}
+
+TEST_CASE_FIXTURE(KeyMappingFixture, "console capture and verification share keyboard and pad identities") {
+  edit();
+  raw({InputDeviceType::gamepad, 0}, true);
+  raw({InputDeviceType::keyboard, 'x'}, true);
+  raw({InputDeviceType::gamepad, 0}, false);
+  advance(150);
+  CHECK(unchanged());
+  raw({InputDeviceType::keyboard, 'x'}, false);
+  advance(150);
+  advance(150);
+  verify(4, {InputDeviceType::keyboard, 'x'});
+  CHECK(inputRawCallback == nullptr);
+  CHECK(appSettings.keyMapping.keyEdit[0].deviceType == InputDeviceType::gamepad);
+  CHECK(appSettings.keyMapping.keyEdit[0].code == 0);
+}
+
+TEST_CASE_FIXTURE(KeyMappingFixture, "duplicate console D-pad navigation does not trigger unmapped recovery") {
+  int count;
+  const auto up = inputConsoleAliases(&count)[0];
+  appSettings.keyMapping.keyUp[0] = {InputDeviceType::gamepad, up.gamepad};
+  for (int i = 0; i < 6; ++i) {
+    raw({InputDeviceType::keyboard, up.keyboard}, true);
+    raw({InputDeviceType::gamepad, up.gamepad}, true);
+    raw({InputDeviceType::keyboard, up.keyboard}, false);
+    raw({InputDeviceType::gamepad, up.gamepad}, false);
+    advance(100);
+    CHECK(inputRawCallback == nullptr);
+  }
+}
+
+TEST_CASE_FIXTURE(KeyMappingFixture, "console Motion remains held until both trigger paths release") {
+  appSettings.keyMapping.keyMotionRecord[0] = {InputDeviceType::gamepad, gamepadTriggerLeft};
+  raw({InputDeviceType::keyboard, 'w'}, true);
+  raw({InputDeviceType::gamepad, gamepadTriggerLeft}, true);
+  CHECK(chipnomadMotionMode() == 1);
+  raw({InputDeviceType::keyboard, 'w'}, false);
+  CHECK(chipnomadMotionMode() == 1);
+  MainLoopEventData removed{};
+  removed.type = MainLoopEvent::inputSourceReleased;
+  removed.data.value = static_cast<int>(InputDeviceType::gamepad);
+  appOnEvent(removed);
+  CHECK(chipnomadMotionMode() == 0);
+}
+
+TEST_CASE_FIXTURE(KeyMappingFixture, "conflicting console migration keeps original settings until calibration succeeds") {
+  appSettings.keyMapping.keyEdit[0] = {InputDeviceType::keyboard, 'x'};
+  appSettings.keyMapping.keyOpt[0] = {InputDeviceType::gamepad, 0};
+  original = appSettings.keyMapping;
+  open(2);
+  CHECK(inputRawCallback != nullptr);
+  CHECK(unchanged());
+  advance(15000);
+  CHECK(inputRawCallback != nullptr);
+  CHECK(unchanged());
+  advance(150);
+  for (int row = 0; row < 8; ++row) tap(keys[row]);
+  advance(150);
+  verify(-1);
+  CHECK(inputRawCallback == nullptr);
+  CHECK(currentScreen == &screenTitle);
+  CHECK(appSettings.keyMapping.keyEdit[0].code == keys[4].code);
+  CHECK_FALSE(std::filesystem::exists(markerPath));
+  appSettings.keyMapping = {};
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.keyMapping.keyEdit[0].code == keys[4].code);
 }
 
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping verification rejects a physical press mapped to two different actions") {
@@ -258,6 +397,36 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping verification rejects a physical pr
   CHECK(appSettings.keyMapping.keyEdit[0].code == replacement.code);
 }
 
+TEST_CASE_FIXTURE(KeyMappingFixture, "console recovery clears only ambiguous optional aliases after eight-control calibration") {
+  appSettings.keyMapping.keyMotionLive[0] = {InputDeviceType::keyboard, 'q'};
+  appSettings.keyMapping.keyMotionRecord[0] = {InputDeviceType::gamepad, 9};
+  appSettings.keyMapping.keyUndo[0] = {InputDeviceType::keyboard, 'q'};
+  appSettings.keyMapping.keyUndo[1] = replacement;
+  appSettings.keyMapping.keyRedo[0] = {InputDeviceType::keyboard, 'r'};
+  original = appSettings.keyMapping;
+  std::ofstream(markerPath).close();
+  REQUIRE(screenKeyMappingRecoveryRequested() == 1);
+  open(3);
+  CHECK(std::string(screenGetActiveMessage()).find("Motion/Undo") != std::string::npos);
+  CHECK(unchanged());
+  advance(15000);
+  CHECK(inputRawCallback != nullptr);
+  CHECK(unchanged());
+  CHECK(std::filesystem::exists(markerPath));
+  advance(150);
+  for (int row = 0; row < 8; ++row) tap(keys[row]);
+  advance(150);
+  verify(-1);
+  CHECK(inputRawCallback == nullptr);
+  CHECK_FALSE(std::filesystem::exists(markerPath));
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.keyMapping.keyMotionLive[0].deviceType == InputDeviceType::none);
+  CHECK(appSettings.keyMapping.keyMotionRecord[0].deviceType == InputDeviceType::none);
+  CHECK(appSettings.keyMapping.keyUndo[0].deviceType == InputDeviceType::none);
+  CHECK(consoleInput::same(appSettings.keyMapping.keyUndo[1], replacement));
+  CHECK(appSettings.keyMapping.keyRedo[0].code == 10);
+}
+
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping capture rejects logical buttons and cannot be bypassed by touch edits") {
   edit();
   tap({InputDeviceType::logical, keyEdit});
@@ -270,6 +439,41 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping capture rejects logical buttons an
   advance(150);
   verify();
   CHECK(appSettings.keyMapping.keyEdit[0].code == replacement.code);
+}
+
+TEST_CASE_FIXTURE(KeyMappingFixture, "console migration retries after sleep and save failure without replacing the original") {
+  appSettings.keyMapping.keyEdit[0] = {InputDeviceType::keyboard, 'x'};
+  appSettings.keyMapping.keyOpt[0] = {InputDeviceType::gamepad, 0};
+  original = appSettings.keyMapping;
+  open(2);
+  advance(150);
+  tap(keys[0]);
+  appOnEvent({MainLoopEvent::sleep, {}});
+  CHECK(unchanged());
+  REQUIRE(settingsLoad() == 0);
+  CHECK(unchanged());
+  appOnEvent({MainLoopEvent::wake, {}});
+  advance(150);
+  CHECK(inputRawCallback != nullptr);
+  std::filesystem::remove(settingsPath);
+  std::filesystem::create_directory(settingsPath);
+  advance(150);
+  for (InputCode key : keys) tap(key);
+  advance(150);
+  verify(-1);
+  CHECK(unchanged());
+  CHECK(currentScreen == &screenKeyMapping);
+  CHECK(inputRawCallback != nullptr);
+  CHECK(std::string(screenGetActiveMessage()).find("Could not save") != std::string::npos);
+  std::filesystem::remove(settingsPath);
+  advance(150);
+  for (InputCode key : keys) tap(key);
+  advance(150);
+  verify(-1);
+  CHECK(inputRawCallback == nullptr);
+  CHECK(currentScreen == &screenTitle);
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.keyMapping.keyEdit[0].code == keys[4].code);
 }
 
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping reset counts one raw input rather than its duplicate or repeats") {

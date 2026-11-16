@@ -83,6 +83,36 @@ ChooChooTracker fonctionne idéalement avec une manette disposant d’une croix 
 
 Les mappings peuvent être modifiés dans **Settings > Controls > Key mapping**, y compris sur Android avec une manette externe. Sur PortMaster, sauvegardez un nouveau mapping avec **Done**, puis relâchez le bouton avant de continuer dans Settings.
 
+Sur **PortMaster et NextUI uniquement**, les entrées clavier connues du pont
+de commandes et leurs équivalents manette SDL partagent un seul nom et une
+seule affectation (`A`, `B`, `L2`, etc.), y compris pendant le remappage.
+Si les deux sources signalent le même bouton avec des maintiens qui se
+chevauchent, une seule pression est produite ; le bouton reste maintenu
+jusqu'au relâchement des deux sources. Aucun délai anti-rebond ne ralentit
+les frappes rapides. Deux cycles pression/relâchement entièrement séparés
+restent impossibles à distinguer de deux vraies frappes. Les touches
+correspondantes d'un clavier USB partagent aussi ces affectations ; les
+autres touches restent indépendantes.
+
+Les anciens mappings sont convertis automatiquement en conservant les entrées
+personnalisées et les emplacements laissés vides. Les alias redondants d'une
+même action sont supprimés. Si un même bouton se retrouve affecté à plusieurs
+actions, le démarrage impose une calibration explicite plutôt que de deviner.
+Le mapping sauvegardé n'est remplacé qu'après calibration et vérification
+réussies.
+
+Avant chaque capture, relâchez tous les boutons. Chaque modification est
+vérifiée en pressant puis relâchant les huit commandes principales, ainsi que
+la commande Motion modifiée le cas échéant : vous avez 15 secondes par étape.
+Réaffecter une entrée déjà utilisée l'échange avec l'emplacement édité, puis
+teste le résultat. **Calibrate controls** reconstruit les huit commandes
+principales ; les affectations Motion sont conservées sauf conflit.
+Les alias en conflit entre commandes optionnelles Motion/Undo/Redo sont
+laissés non assignés, avec un avertissement ; réaffectez-les ensuite si besoin.
+Pendant la calibration ou son test, maintenez un bouton une seconde pour
+recommencer depuis **Up**, puis relâchez tout avant de continuer. Une veille,
+une sortie ou un test inachevé ne remplace pas le mapping sauvegardé.
+
 ### Navigation
 
 - Utilisez **[HAUT/BAS/GAUCHE/DROITE]** pour déplacer le curseur.

@@ -30,6 +30,7 @@
 #include "corelib_power.h"
 #include "screens/screen_quick_help.h"
 #include "screens/screen_keymapping.h"
+#include "console_input.h"
 #include "screens/screen_instrument.h"
 #include "midi/midi_router.h"
 #include "chipnomad_lib_live_stick.h"
@@ -52,6 +53,9 @@
 // Raw input callback for key mapping screen
 void (*inputRawCallback)(InputCode input, int isDown) = NULL;
 static InputCode currentInput = {InputDeviceType::none, 0};
+#ifdef CCT_CONSOLE_CONTROLS
+static consoleInput::Buttons consoleButtons;
+#endif
 
 InputCode appCurrentInput(void) {
   return currentInput;
@@ -1099,12 +1103,15 @@ void appSetup(void) {
 
   // LOGD("--- ChipNomad started ---");
   // Initialize default key mappings if not loaded from settings
-  if (appSettings.keyMapping.keyUp[0].deviceType == InputDeviceType::none) {
+  if (appSettings.keyMapping.keyUp[0].deviceType == InputDeviceType::none
+#ifdef CCT_CONSOLE_CONTROLS
+      && appSettings.keyMapping.keyUp[1].deviceType == InputDeviceType::none
+      && appSettings.keyMapping.keyUp[2].deviceType == InputDeviceType::none
+#endif
+  ) {
     inputInitDefaultKeyMapping();
   }
-#ifdef PORTMASTER_BUILD
-  inputInitNativeGamepadMapping();
-#endif
+#ifndef CCT_CONSOLE_CONTROLS
   if (appSettings.keyMapping.keyMotionLive[0].deviceType == InputDeviceType::none) {
     appSettings.keyMapping.keyMotionLive[0] = (InputCode){InputDeviceType::keyboard, BTN_L1};
     if (appSettings.keyMapping.keyMotionRecord[0].deviceType == InputDeviceType::none ||
@@ -1113,6 +1120,11 @@ void appSetup(void) {
       appSettings.keyMapping.keyMotionErase[0] = (InputCode){InputDeviceType::keyboard, BTN_R2};
     }
   }
+#endif
+#ifdef CCT_CONSOLE_CONTROLS
+  const bool controlsConflict = !consoleInput::migrate(appSettings.keyMapping);
+  consoleButtons.clear();
+#endif
 
   // Keyboard input reset
   appResetInputState();
@@ -1143,7 +1155,9 @@ void appSetup(void) {
   screensInitAll();
   screenSetup(&screenTitle, 0);
 #ifdef CCT_CONSOLE_CONTROLS
-  if (screenKeyMappingRecoveryRequested()) screenSetup(&screenKeyMapping, 1);
+  const int controlsRecovery = screenKeyMappingRecoveryRequested();
+  if (controlsRecovery || controlsConflict)
+    screenSetup(&screenKeyMapping, controlsRecovery | (controlsConflict ? 2 : 0));
 #endif
 }
 
@@ -1427,11 +1441,33 @@ static void refreshAudioDevices(bool showNotification) {
   }
 }
 
+static void appOnNormalizedEvent(MainLoopEventData eventData);
 void appOnEvent(MainLoopEventData eventData) {
+#ifdef CCT_CONSOLE_CONTROLS
+  if (eventData.type == MainLoopEvent::inputSourceReleased) {
+    consoleButtons.release(static_cast<InputDeviceType>(eventData.data.value),
+      [](InputCode input) {
+        MainLoopEventData release{};
+        release.type = MainLoopEvent::keyUp;
+        release.data.input = input;
+        appOnNormalizedEvent(release);
+      });
+    return;
+  }
+  if (eventData.type == MainLoopEvent::keyDown || eventData.type == MainLoopEvent::keyUp) {
+    if (!consoleButtons.update(eventData.data.input, eventData.type == MainLoopEvent::keyDown)) return;
+  }
+#endif
+  appOnNormalizedEvent(eventData);
+}
+
+static void appOnNormalizedEvent(MainLoopEventData eventData) {
   static int dPadMask = keyLeft | keyRight | keyUp | keyDown;
   static int doubleTapMask = keyEdit | keyOpt | keyUnmapped | keyPlay;
 
   switch (eventData.type) {
+  case MainLoopEvent::inputSourceReleased:
+    break;
   case MainLoopEvent::keyDown: {
     int value = inputCodeToKey(eventData.data.input);
     int rawInputActive = inputRawCallback != NULL;
@@ -1845,6 +1881,10 @@ void appOnEvent(MainLoopEventData eventData) {
     break;
   case MainLoopEvent::sleep: {
 #ifdef CCT_CONSOLE_CONTROLS
+    consoleButtons.clear();
+    appResetInputState();
+    motionRecordHeld = motionEraseHeld = motionLiveHeld = 0;
+    updateMotionRecordMode();
     if (currentScreen == &screenKeyMapping) {
       screenKeyMappingCancel();
       currentScreen->fullRedraw();

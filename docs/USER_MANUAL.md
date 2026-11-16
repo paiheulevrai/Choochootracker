@@ -425,15 +425,29 @@ Each change (including clearing a binding or resetting defaults) is tested:
 press and release the eight core controls when prompted. A changed motion
 control is tested too. You have 15 seconds per step; if the test cannot be
 completed, the previous mapping stays active. Only tested mappings can be
-saved with **Done**. `A`/`B` on handheld builds name keyboard inputs;
-`Pad A`/`Pad B` name SDL controller inputs, not extra physical buttons.
-When reassigning an already used input, swaps stay within its keyboard or
-controller path. If no equivalent binding exists, use **Calibrate controls**
-instead of removing another action's only controller binding.
+saved with **Done**.
+
+On these two builds, known keyboard-bridge and SDL controller inputs share
+one console-button name and binding (`A`, `B`, `L2`, etc.). Either input path
+works, including while remapping. Overlapping reports of the same button
+produce one press; it stays held until both sources release it. There is no
+timed debounce, so rapid separate taps are preserved. Fully separate duplicate
+press/release pairs cannot be distinguished from real taps. Matching keys on a
+USB keyboard share these bindings too; other keys remain independent.
+Reassigning an occupied binding swaps it with the edited slot, then tests
+the result.
+
+Existing mappings are converted automatically, keeping custom inputs and
+intentionally empty slots. Redundant aliases within one action are removed.
+If aliases now assign the same console button to different actions, startup
+requires explicit calibration instead of guessing. The saved mapping is not
+replaced until calibration and verification succeed.
 
 **Calibrate controls**, immediately above **Done** on the Key mapping screen, rebuilds the eight core
 controls from physical button presses, then tests them. Existing motion
 bindings are kept unless they conflict with the new controls.
+Conflicting aliases shared by different optional Motion/Undo/Redo actions are
+also left unassigned, with a warning; reassign them afterwards if needed.
 If you make a mistake during calibration or its test, hold any button for
 one second to restart from **Up**, then release all buttons before continuing.
 Repeating an incorrect assignment during the test cannot reveal that physical

@@ -7,6 +7,7 @@
 #include "corelib_input.h"
 #include "corelib_keymap.h"
 #include "app.h"
+#include "console_input.h"
 #include <errno.h>
 #include <string.h>
 
@@ -37,6 +38,8 @@ static constexpr uint32_t stepTimeoutMs = 15000;
 static constexpr uint32_t restartHoldMs = 1000;
 static bool calibrating = false;
 static bool startupRecovery = false;
+static bool migrationRecovery = false;
+static bool recoveryFile = false;
 static int verifyStep = 0;
 static bool verifyConflict = false;
 static int extraVerifyRow = -1;
@@ -52,6 +55,9 @@ static InputCode captureIgnore = {InputDeviceType::none, 0};
 #endif
 static void fullRedraw(void);
 static void applyPendingCapture(void);
+#ifdef CCT_CONSOLE_CONTROLS
+static void startCapture(bool calibration, bool keepHeld = false);
+#endif
 
 static const char* buttonNames[] = {
   "Up", "Down", "Left", "Right", "Edit (A)", "Opt (B)", "Play", "Shift", "Stick live", "Motion rec", "Motion del", "Undo", "Redo"
@@ -84,39 +90,6 @@ static InputCode* getKeySlot(int row, int col) {
 #endif
 }
 
-#ifdef PORTMASTER_BUILD
-// PortMaster normally delivers every physical control twice: once through
-// SDL's controller API and once through gptokeyb as a keyboard key.  Keep
-// saved mappings keyboard-based, but use the controller event as a reliable
-// fallback when Knulli does not deliver the keyboard event to the capture UI.
-static int portMasterGamepadToKeyboard(InputCode input, InputCode* output) {
-  const char* nextui = getenv("CCT_NEXTUI");
-  if (nextui && strcmp(nextui, "1") == 0) return 0;
-  if (input.deviceType != InputDeviceType::gamepad) return 0;
-
-  int key = 0;
-  switch (input.code) {
-    case SDL_CONTROLLER_BUTTON_DPAD_UP: key = BTN_UP; break;
-    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: key = BTN_DOWN; break;
-    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: key = BTN_LEFT; break;
-    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: key = BTN_RIGHT; break;
-    case SDL_CONTROLLER_BUTTON_A: key = BTN_A; break;
-    case SDL_CONTROLLER_BUTTON_B: key = BTN_B; break;
-    case SDL_CONTROLLER_BUTTON_X: key = BTN_X; break;
-    case SDL_CONTROLLER_BUTTON_Y: key = BTN_Y; break;
-    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: key = BTN_L1; break;
-    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: key = BTN_R1; break;
-    case SDL_CONTROLLER_BUTTON_BACK: key = BTN_SELECT; break;
-    case SDL_CONTROLLER_BUTTON_START: key = BTN_START; break;
-    case gamepadTriggerLeft: key = BTN_L2; break;
-    case gamepadTriggerRight: key = BTN_R2; break;
-    default: return 0;
-  }
-  *output = (InputCode){InputDeviceType::keyboard, key};
-  return 1;
-}
-#endif
-
 static bool sameInput(InputCode first, InputCode second) {
   return first.deviceType == second.deviceType && first.code == second.code;
 }
@@ -136,7 +109,8 @@ void screenKeyMappingCancel(void) {
 
 static void cancelCapture(const char* message) {
   screenKeyMappingCancel();
-  if (startupRecovery) screenSetup(&screenTitle, 0);
+  if (migrationRecovery) startCapture(true);
+  else if (startupRecovery) screenSetup(&screenTitle, 0);
   else fullRedraw();
   screenMessage(MESSAGE_TIME_ERROR, "%s", message);
 }
@@ -188,10 +162,6 @@ static void onRawInput(InputCode input, int isDown) {
     return;
   }
   if (captureState == STATE_CAPTURING) {
-#ifdef PORTMASTER_BUILD
-    InputCode translatedInput;
-    if (portMasterGamepadToKeyboard(input, &translatedInput)) input = translatedInput;
-#endif
     pendingCapture = input;
     captureState = STATE_CAPTURE_DONE;
   } else if (captureState == STATE_VERIFYING || captureState == STATE_VERIFY_DONE) {
@@ -210,17 +180,39 @@ static void onRawInput(InputCode input, int isDown) {
   }
 }
 
-static void startCapture(bool calibration, bool keepHeld = false) {
+static void startCapture(bool calibration, bool keepHeld) {
   calibrating = calibration;
   candidateMapping = appSettings.keyMapping;
   extraVerifyRow = -1;
   requiredCapture = {InputDeviceType::none, 0};
   verifyConflict = false;
   if (calibration) {
+    for (int row = 0; row < 13; ++row)
+      for (int col = 0; col < 3; ++col)
+        *getKeySlot(candidateMapping, row, col) =
+          consoleInput::normalize(*getKeySlot(candidateMapping, row, col));
     captureRow = captureCol = 0;
     for (int row = 0; row < 8; ++row)
       for (int col = 0; col < 3; ++col)
         *getKeySlot(candidateMapping, row, col) = {InputDeviceType::none, 0};
+    bool cleared = false;
+    for (int row = 8; row < 13; ++row) {
+      for (int col = 0; col < 3; ++col) {
+        const InputCode input = *getKeySlot(candidateMapping, row, col);
+        if (consoleInput::aliasIndex(input) < 0) continue;
+        bool conflict = false;
+        for (int other = row + 1; other < 13; ++other)
+          for (int slot = 0; slot < 3; ++slot)
+            if (sameInput(input, *getKeySlot(candidateMapping, other, slot))) conflict = true;
+        if (!conflict) continue;
+        for (int other = row; other < 13; ++other)
+          for (int slot = 0; slot < 3; ++slot)
+            if (sameInput(input, *getKeySlot(candidateMapping, other, slot)))
+              *getKeySlot(candidateMapping, other, slot) = {InputDeviceType::none, 0};
+        cleared = true;
+      }
+    }
+    if (cleared) screenMessage(MESSAGE_TIME_ERROR, "Conflicting Motion/Undo bindings cleared");
   }
   if (!keepHeld) {
     heldCount = 0;
@@ -412,7 +404,11 @@ static void setup(int input) {
   screenKeyMappingData.cursorCol = 0;
 #ifdef CCT_CONSOLE_CONTROLS
   screenKeyMappingCancel();
-  startupRecovery = input == 1;
+  startupRecovery = input != 0;
+  migrationRecovery = (input & 2) != 0;
+  recoveryFile = (input & 1) != 0;
+  if (migrationRecovery)
+    screenMessage(MESSAGE_TIME_ERROR, "Conflicting controls; calibrate to keep changes");
   if (startupRecovery) startCapture(true);
 #else
   captureState = STATE_NAVIGATION;
@@ -447,34 +443,6 @@ static void applyPendingCapture(void) {
     }
 #endif
     InputCode previous = *slot;
-#ifdef CCT_CONSOLE_CONTROLS
-    bool conflictsOtherRow = false;
-    for (int row = 0; row < 13; ++row)
-      for (int col = 0; col < 3; ++col)
-        if (row != captureRow && sameInput(*getKeySlot(candidateMapping, row, col), pendingCapture))
-          conflictsOtherRow = true;
-
-    if (!calibrating && conflictsOtherRow && previous.deviceType != pendingCapture.deviceType) {
-      // Swap within the captured device path, not a keyboard key into a pad slot.
-      InputCode* deviceSlot = NULL;
-      for (int col = 0; col < 3; ++col) {
-        InputCode* other = getKeySlot(candidateMapping, captureRow, col);
-        if (col != captureCol && other->deviceType == pendingCapture.deviceType &&
-            !sameInput(*other, pendingCapture)) {
-          deviceSlot = other;
-          break;
-        }
-      }
-      if (!deviceSlot) {
-        cancelCapture("Use Calibrate controls for this swap");
-        return;
-      }
-      InputCode displaced = *deviceSlot;
-      *deviceSlot = previous;
-      previous = displaced;
-    }
-#endif
-
     // Find conflicting slot and swap
     for (int row = 0; row < 13; row++) {
       for (int col = 0; col < 3; col++) {
@@ -512,7 +480,10 @@ void screenKeyMappingTick(void) {
     if (inputRawCallback == onRawInput) screenKeyMappingCancel();
     return;
   }
-  if (captureState == STATE_NAVIGATION) return;
+  if (captureState == STATE_NAVIGATION) {
+    if (migrationRecovery) startCapture(true);
+    return;
+  }
   uint32_t now = mainLoopGetTicks();
   if (calibrating && captureState != STATE_WAIT_RELEASE && heldCount &&
       now - pressStartTime >= restartHoldMs) {
@@ -546,14 +517,20 @@ void screenKeyMappingTick(void) {
     } else {
       KeyMapping previous = appSettings.keyMapping;
       appSettings.keyMapping = candidateMapping;
+      if (!consoleInput::migrate(appSettings.keyMapping)) {
+        appSettings.keyMapping = previous;
+        cancelCapture("Conflicting controls; calibrate again");
+        return;
+      }
       if (startupRecovery && settingsSave() != 0) {
         appSettings.keyMapping = previous;
         cancelCapture("Could not save controls; try again");
         return;
       }
+      migrationRecovery = false;
       screenKeyMappingCancel();
       if (startupRecovery) {
-        int deleted = fileDelete(recoveryPath);
+        int deleted = recoveryFile ? fileDelete(recoveryPath) : 0;
         screenSetup(&screenTitle, 0);
         screenMessage(deleted ? MESSAGE_TIME_ERROR : MESSAGE_TIME,
                       deleted ? "Controls saved; remove configure-controls" : "Controls calibrated and saved");

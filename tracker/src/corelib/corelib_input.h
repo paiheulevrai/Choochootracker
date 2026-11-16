@@ -44,9 +44,14 @@ enum GamepadInputCode {
 // Initialize default key mappings based on platform/keyboard layout
 void inputInitDefaultKeyMapping(void);
 
-#ifdef PORTMASTER_BUILD
-// Enable native controller defaults for NextUI, including existing installs.
-void inputInitNativeGamepadMapping(void);
+#if defined(PORTMASTER_BUILD) || defined(TEST_PORTMASTER_INPUT)
+struct ConsoleInputAlias {
+  int keyboard;
+  int gamepad;
+  const char* name;
+};
+constexpr int consoleInputButtonCount = 14;
+extern "C" const ConsoleInputAlias* inputConsoleAliases(int* count);
 #endif
 
 // Convert input code to human-readable name

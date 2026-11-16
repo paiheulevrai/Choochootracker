@@ -30,6 +30,14 @@ extern void androidPerformTouchHaptic(void);
 
 static int requestedFps = FPS;
 static int frameTimeUs;
+#ifdef PORTMASTER_BUILD
+static void releaseConsoleSource(void (*onEvent)(MainLoopEventData), InputDeviceType source) {
+  MainLoopEventData event{};
+  event.type = MainLoopEvent::inputSourceReleased;
+  event.data.value = static_cast<int>(source);
+  onEvent(event);
+}
+#endif
 
 void mainLoopSetTargetFps(int fps) {
 #if defined(PORTMASTER_BUILD) || defined(MIYOOPORTS_BUILD)
@@ -114,7 +122,12 @@ static void closeFallbackJoystick(void) {
   if (!fallbackJoystick) return;
   SDL_JoystickClose(fallbackJoystick);
   fallbackJoystick = NULL;
-  for (int i = 0; i < 4; ++i) fallbackAxisDir[i] = fallbackHatDir[i] = 0;
+  for (int i = 0; i < 4; ++i) {
+    fallbackAxisDir[i] = fallbackHatDir[i] = 0;
+#ifdef PORTMASTER_BUILD
+    fallbackSentDir[i] = 0;
+#endif
+  }
 }
 
 static void openFallbackJoystick(void) {
@@ -374,6 +387,11 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     while (SDL_PollEvent(&event)) {
       interactionUntil = SDL_GetTicks() + 250;
 #ifdef PORTMASTER_BUILD
+      if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+        releaseConsoleSource(onEvent, InputDeviceType::keyboard);
+        releaseConsoleSource(onEvent, InputDeviceType::gamepad);
+        menu = 0;
+      }
       if (nextuiPowerEnabled && (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
           event.key.keysym.scancode == SDL_SCANCODE_POWER) {
         if (nextuiPower.update(event.type == SDL_KEYDOWN, SDL_GetTicks(), event.key.repeat != 0)) {
@@ -513,6 +531,11 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
       }
 #ifdef GAMEPAD_SUPPORT
       if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
+#ifdef PORTMASTER_BUILD
+        if (!gameController ||
+            event.cbutton.which != SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gameController)))
+          continue;
+#endif
         eventData.type = event.type == SDL_CONTROLLERBUTTONDOWN ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
         eventData.data.input = (InputCode){InputDeviceType::gamepad, event.cbutton.button};
         onEvent(eventData);
@@ -522,7 +545,15 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           for (int i = 0; i < SDL_NumJoysticks(); i++) {
             if (SDL_IsGameController(i)) {
               gameController = SDL_GameControllerOpen(i);
-              if (gameController) break;
+              if (gameController) {
+#ifdef PORTMASTER_BUILD
+                if (fallbackJoystick) {
+                  releaseConsoleSource(onEvent, InputDeviceType::gamepad);
+                  closeFallbackJoystick();
+                }
+#endif
+                break;
+              }
             }
           }
         }
@@ -535,6 +566,9 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
       }
       else if (event.type == SDL_JOYDEVICEREMOVED) {
         if (fallbackJoystick && event.jdevice.which == SDL_JoystickInstanceID(fallbackJoystick)) {
+#ifdef PORTMASTER_BUILD
+          releaseConsoleSource(onEvent, InputDeviceType::gamepad);
+#endif
           closeFallbackJoystick();
           fallbackSendDpad(onEvent);
         }
@@ -578,6 +612,10 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
       }
       else if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
         if (gameController && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gameController))) {
+#ifdef PORTMASTER_BUILD
+          releaseConsoleSource(onEvent, InputDeviceType::gamepad);
+          gamepadTriggerDown[0] = gamepadTriggerDown[1] = 0;
+#endif
           SDL_GameControllerClose(gameController);
           gameController = NULL;
           // A raw pad may have remained connected while the mapped controller

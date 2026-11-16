@@ -5,6 +5,32 @@
 #include <locale.h>
 #include <ctype.h>
 #include "corelib_keymap.h"
+#ifdef PORTMASTER_BUILD
+#include "console_input.h"
+
+const ConsoleInputAlias* inputConsoleAliases(int* count) {
+  static const ConsoleInputAlias aliases[] = {
+    {BTN_UP, SDL_CONTROLLER_BUTTON_DPAD_UP, "Up"},
+    {BTN_DOWN, SDL_CONTROLLER_BUTTON_DPAD_DOWN, "Down"},
+    {BTN_LEFT, SDL_CONTROLLER_BUTTON_DPAD_LEFT, "Left"},
+    {BTN_RIGHT, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, "Right"},
+    {BTN_A, SDL_CONTROLLER_BUTTON_A, "A"},
+    {BTN_B, SDL_CONTROLLER_BUTTON_B, "B"},
+    {BTN_X, SDL_CONTROLLER_BUTTON_X, "X"},
+    {BTN_Y, SDL_CONTROLLER_BUTTON_Y, "Y"},
+    {BTN_SELECT, SDL_CONTROLLER_BUTTON_BACK, "Select"},
+    {BTN_START, SDL_CONTROLLER_BUTTON_START, "Start"},
+    {BTN_L1, SDL_CONTROLLER_BUTTON_LEFTSHOULDER, "L1"},
+    {BTN_R1, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, "R1"},
+    {BTN_L2, gamepadTriggerLeft, "L2"},
+    {BTN_R2, gamepadTriggerRight, "R2"},
+  };
+  static_assert(sizeof(aliases) / sizeof(aliases[0]) == consoleInputButtonCount,
+                "Console source state must cover every alias");
+  *count = sizeof(aliases) / sizeof(aliases[0]);
+  return aliases;
+}
+#endif
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -66,36 +92,6 @@ static KeyboardLayout detectKeyboardLayout(void) {
   return LAYOUT_QWERTY;
 }
 
-// PortMaster uses gptokeyb; NextUI launches the same binary without it.
-#ifdef PORTMASTER_BUILD
-void inputInitNativeGamepadMapping(void) {
-  const char* nextui = getenv("CCT_NEXTUI");
-  if (!nextui || strcmp(nextui, "1") != 0) return;
-  struct Binding { InputCode* slots; int code; };
-  Binding bindings[] = {
-    {appSettings.keyMapping.keyUp, SDL_CONTROLLER_BUTTON_DPAD_UP},
-    {appSettings.keyMapping.keyDown, SDL_CONTROLLER_BUTTON_DPAD_DOWN},
-    {appSettings.keyMapping.keyLeft, SDL_CONTROLLER_BUTTON_DPAD_LEFT},
-    {appSettings.keyMapping.keyRight, SDL_CONTROLLER_BUTTON_DPAD_RIGHT},
-    {appSettings.keyMapping.keyEdit, SDL_CONTROLLER_BUTTON_A},
-    {appSettings.keyMapping.keyOpt, SDL_CONTROLLER_BUTTON_B},
-    {appSettings.keyMapping.keyPlay, SDL_CONTROLLER_BUTTON_START},
-    {appSettings.keyMapping.keyShift, SDL_CONTROLLER_BUTTON_BACK},
-    {appSettings.keyMapping.keyMotionLive, SDL_CONTROLLER_BUTTON_LEFTSHOULDER},
-    {appSettings.keyMapping.keyMotionRecord, gamepadTriggerLeft},
-    {appSettings.keyMapping.keyMotionErase, gamepadTriggerRight},
-  };
-  // Repair the keyboard-only defaults saved by the first NextUI package.
-  // Preserve existing controller customizations, including cleared bindings.
-  for (const Binding& binding : bindings)
-    for (int i = 0; i < 3; ++i)
-      if (binding.slots[i].deviceType == InputDeviceType::gamepad) return;
-  for (const Binding& binding : bindings)
-    if (binding.slots[1].deviceType == InputDeviceType::none)
-      binding.slots[1] = {InputDeviceType::gamepad, binding.code};
-}
-#endif
-
 void inputInitDefaultKeyMapping(void) {
   KeyboardLayout layout = detectKeyboardLayout();
   for (int i = 0; i < 3; ++i) {
@@ -109,6 +105,9 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyLeft[0] = (InputCode){InputDeviceType::keyboard, BTN_LEFT};
   appSettings.keyMapping.keyRight[0] = (InputCode){InputDeviceType::keyboard, BTN_RIGHT};
   appSettings.keyMapping.keyOpt[0] = (InputCode){InputDeviceType::keyboard, (layout == LAYOUT_QWERTZ) ? SDLK_y : BTN_B};
+#ifdef PORTMASTER_BUILD
+  appSettings.keyMapping.keyOpt[0].code = BTN_B;
+#endif
   appSettings.keyMapping.keyPlay[0] = (InputCode){InputDeviceType::keyboard, BTN_START};
   appSettings.keyMapping.keyShift[0] = (InputCode){InputDeviceType::keyboard, BTN_SELECT};
   appSettings.keyMapping.keyMotionLive[0] = (InputCode){InputDeviceType::keyboard, BTN_L1};
@@ -130,7 +129,7 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyMotionRecord[1] = (InputCode){InputDeviceType::gamepad, gamepadTriggerLeft};
   appSettings.keyMapping.keyMotionErase[1] = (InputCode){InputDeviceType::gamepad, gamepadTriggerRight};
 #else
-  // PortMaster: keyboard only
+  // Other targets use a single binding per control.
   appSettings.keyMapping.keyUp[1] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyDown[1] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyLeft[1] = (InputCode){InputDeviceType::none, 0};
@@ -157,12 +156,19 @@ void inputInitDefaultKeyMapping(void) {
   appSettings.keyMapping.keyMotionRecord[2] = (InputCode){InputDeviceType::none, 0};
   appSettings.keyMapping.keyMotionErase[2] = (InputCode){InputDeviceType::none, 0};
 #ifdef PORTMASTER_BUILD
-  inputInitNativeGamepadMapping();
+  consoleInput::migrate(appSettings.keyMapping);
 #endif
 }
 
 const char* inputGetKeyName(InputCode input) {
   if (input.deviceType == InputDeviceType::none) return "---";
+#ifdef PORTMASTER_BUILD
+  const int alias = consoleInput::aliasIndex(input);
+  if (alias >= 0) {
+    int count;
+    return inputConsoleAliases(&count)[alias].name;
+  }
+#endif
 
   if (input.deviceType == InputDeviceType::gamepad) {
     switch (input.code) {
