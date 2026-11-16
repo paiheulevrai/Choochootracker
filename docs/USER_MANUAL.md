@@ -627,6 +627,8 @@ RetroC64 and RetroWorkbench offer additional optional five-size retro styles.
 See Retro-README.txt for sources, licenses and conversion details.
 Segment14 is a 14-segment display font; lowercase letters look like capitals,
 and several punctuation glyphs are supplied by IBM Plex Mono.
+Elektron is an unofficial fan recreation of an instrument-display font; most
+lowercase letters look like capitals.
 CodeMono and MachineMono are five-size conversions of mononoki and IBM Plex
 Mono, respectively; their names differ from the upstream Reserved Font Names.
 

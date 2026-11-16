@@ -32,6 +32,17 @@ Segment14.cnfont: derived from DSEG14 Classic Regular by keshikan,
   by IBM Plex Mono glyphs; see MachineMono below for source and license.
   Lowercase letters have the same appearance as uppercase in this source.
 
+Elektron.cnfont: derived from Elektron Pixel Font by savingaurora,
+  Copyright 2008. Creative Commons Attribution-ShareAlike 3.0 Unported.
+  https://fontstruct.com/fontstructions/show/70152/elektron-pixel-font
+  This is an unofficial fan recreation, not an official Elektron font.
+  Source: elektron-pixel-font.ttf from the FontStruct download archive.
+  SHA-256: 9a603457247c5950e735f8dec3084cbe7f1efb54e81df867902b2d14601dc8b4
+  License: ../licenses/CC-BY-SA-3.0.txt
+  This adaptation rasterizes the original ASCII glyphs in fixed-width cells
+  at five sizes and is distributed under the same license. Most lowercase
+  letters look like capitals.
+
 CodeMono.cnfont: derived from mononoki Regular by Matthias Tellen,
   Copyright 2022. SIL Open Font License 1.1; "mononoki" is a Reserved Font
   Name, so this conversion has a different name.
@@ -52,6 +63,6 @@ MachineMono.cnfont: derived from IBM Plex Mono Regular, Copyright 2017 IBM
 
 The local font converter was adapted for these conversions: glyphs are
 monochrome, centered in fixed-width cells with a shared baseline, and padded
-to fit; the pixel-built bitmaps are enlarged by integer scaling. Segment 14,
-Code Mono and Machine Mono are rasterized separately for each cell size.
+to fit; the pixel-built bitmaps are enlarged by integer scaling. Elektron,
+Segment 14, Code Mono and Machine Mono are rasterized separately for each cell size.
 These are converted adaptations, not the upstream font releases.
