@@ -54,6 +54,7 @@
 .sound-features h3 { margin:0 0 12px; font-size:1.2rem; }
 .sound-features ul { margin:0; padding-left:1.2em; }
 .sound-features li+li { margin-top:8px; }
+.cross-modulation { align-items:center; margin-bottom:36px; }
 .community-band { background:#ff6600; color:#1e2022; padding-block:64px; }
 .community-layout { display:grid; grid-template-columns:1fr 1fr; gap:70px; }
 .community-band .eyebrow { color:#382212; }

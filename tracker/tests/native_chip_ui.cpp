@@ -203,6 +203,9 @@ static void captureHomepage() {
       case 17: return sampleSlicesTheme;
       case 18: return insertTheme;
       case 19: return reverbTheme;
+      case 20: return "IDEColorThemes/GruvLight.cth";
+      case 21: return "IDEColorThemes/MatchaDark.cth";
+      case 22: return "IDEColorThemes/TokyoNightDark.cth";
       default: return baseTheme;
     }
   };
@@ -330,8 +333,36 @@ static void captureHomepage() {
   key(1, keyShift | keyUp);
   capture("reverb");
   screenMessage(0, "");
+
+  Instrument& fatty = prepareHomepageInstrument(InstrumentType::Bass808, "Deep Glide");
+  fatty.chip.bass808.subWaveform = 3; fatty.chip.bass808.subLevel = 176;
+  fatty.chip.bass808.drive = 112; fatty.chip.bass808.glide = 68;
+  fatty.chip.bass808.filterCutoffHz = 2345; fatty.chip.bass808.filterResonance = 128;
+  show(20, "engine-fatty", &screenInstrument);
+
+  Instrument& sophie = prepareHomepageInstrument(InstrumentType::DigiSophie, "Metallic Shard");
+  sophie.chip.drumSynth.engine = static_cast<DrumSynthEngine>(3);
+  sophie.chip.drumSynth.decay = 144; sophie.chip.drumSynth.tone = 164;
+  sophie.chip.drumSynth.sweep = 152; sophie.chip.drumSynth.noise = 104;
+  sophie.chip.drumSynth.fm = 96; sophie.chip.drumSynth.drive = 88;
+  show(21, "engine-digisophie", &screenInstrument);
+
+  auto& source = chipnomadState->project.instruments[1];
+  getInstrumentFunctions(source.type).free(&source);
+  memset(&source, 0, sizeof(source));
+  getInstrumentFunctions(InstrumentType::Monk).init(&source);
+  snprintf(source.name, sizeof(source.name), "Vowel Source");
+  source.volume = 224; source.pan = 128;
+  Instrument& carrier = prepareHomepageInstrument(InstrumentType::Braids, "Vocoded CSAW");
+  carrier.chip.braids.model = 0;
+  carrier.chip.braids.attack = carrier.chip.braids.decay = 0;
+  carrier.chip.braids.sustain = 255;
+  carrier.modulation[0] = {ModulationType::Audio, 1, 127, 0, 0, 64, 64,
+    (uint8_t)AudioModulationMode::vocoder};
+  *pSongTrack = 1;
+  show(22, "track-vocoder", &screenModulation);
   soundbankShutdown();
-  printf("Captured 20 homepage screens as 640x480 BMPs.\n");
+  printf("Captured 23 homepage screens as 640x480 BMPs.\n");
 }
 int main(int argc,char** argv){
   if(argc!=2&&argc!=3) return 1;

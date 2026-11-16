@@ -18,6 +18,14 @@ engines:
     category: Drum synthesis
     image: engine-bogie.png
     description: Traditional drum machine sounds. Fully synthesized, no samples. An entire x0x kit complete with cowbells. 12 engines.
+  - name: Fatty
+    category: Bass synthesis
+    image: engine-fatty.png
+    description: Modern 808-style bass synth. Main oscillator, octave-down sub, drive and glide. From deep subs to gritty basslines.
+  - name: DigiSophie
+    category: Drum synthesis
+    image: engine-digisophie.png
+    description: Metallic digital percussion. Four models — FUSE, BOOM, PIPE and SHARD — with color, sweep, feedback and wavefolding. No samples.
   - name: Sintered
     category: Drum synthesis
     image: engine-sintered.png

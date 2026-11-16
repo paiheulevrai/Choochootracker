@@ -31,6 +31,13 @@ const applicationSchema = {
   offers: { '@type': 'Offer', price: 0 },
   screenshot: new URL(`${base}/homepage-screenshots/song.png`, Astro.site).href,
 };
+const websiteSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'ChooChooTracker',
+  alternateName: 'ChooChoo Tracker',
+  url: new URL(home, Astro.site).href,
+};
 ---
 <!doctype html>
 <html lang="en">
@@ -48,6 +55,7 @@ const applicationSchema = {
     <link rel="canonical" href={new URL(path, Astro.site)} />
     <link rel="icon" type="image/png" href={appIcon.src} />
     {isHome && <script type="application/ld+json" set:html={JSON.stringify(applicationSchema).replace(/</g, '\\u003c')} />}
+    {isHome && <script type="application/ld+json" set:html={JSON.stringify(websiteSchema).replace(/</g, '\\u003c')} />}
     <title>{documentTitle}</title>
   </head>
   <body>

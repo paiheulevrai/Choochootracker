@@ -2,7 +2,7 @@
 eyebrow: A Multiengine tracker for handheld consoles
 title: ChooChooTracker
 tagline: Don't miss your stop.
-description: Free, open-source multiengine tracker for handhelds, Android, Linux, Windows, macOS (experimental) and web. 120+ sound engines, Braids and Plaits models, soundfonts, and advanced sampling.
+description: Free music tracker for PortMaster handhelds and Linux consoles. 120+ sound engines, sampling and track-to-track vocoder. Also on Android, PC and web.
 openingScreens:
   - position: left
     image: engine-achchid.png
@@ -17,7 +17,7 @@ openingScreens:
     alt: Eight-channel mixer
     caption: Performance
 ---
-Music tracker for Portmaster consoles, Android, Linux and computers.
+Music tracker for PortMaster, Linux gaming consoles and handheld devices, as well as Android, Linux, Windows, macOS (experimental) and the web.
 
 With advanced sampling, soundfonts, wavetables, chips, synths, effects, joysticks and more.
 
