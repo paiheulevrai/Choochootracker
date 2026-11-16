@@ -43,6 +43,23 @@ Elektron.cnfont: derived from Elektron Pixel Font by savingaurora,
   at five sizes and is distributed under the same license. Most lowercase
   letters look like capitals.
 
+OldCamcorder.cnfont: derived from OldCamcordersOSD by Sunbertrs,
+  an open-source font inspired by camcorder and VCR displays.
+  https://github.com/Sunbertrs/OldCamcorder-OSD-font
+  Revision: f9230bd322c383eb4e0655313ee792f62d60cea3
+  Source: OldCamcordersOSD.fon
+  SHA-256: 2527e8a475423a29074962a3f7f031a02dca38daeb524b363c75e280bd88445e
+  License: ../licenses/OldCamcorder-OFL.txt (SIL Open Font License 1.1).
+  The original 14x21 bitmap is padded at 16x24 and resized with
+  nearest-neighbor sampling at other sizes, including reduction at 12x16.
+
+PixelOperator.cnfont: derived from Pixel Operator Mono by Jayvee Enaguas
+  (HarvettFox96), Copyright 2009-2018. Creative Commons CC0 1.0.
+  https://www.dafont.com/pixel-operator.font
+  Source: PixelOperatorMono.ttf from pixel-operator.zip, version 2018.10.04-1.
+  SHA-256: e171000f12d196e7a8a1a91c1a429ef3264a0ff007d5f62fa3dc44ef8df51226
+  License: ../licenses/PixelOperator-CC0.txt
+
 CodeMono.cnfont: derived from mononoki Regular by Matthias Tellen,
   Copyright 2022. SIL Open Font License 1.1; "mononoki" is a Reserved Font
   Name, so this conversion has a different name.
@@ -64,5 +81,7 @@ MachineMono.cnfont: derived from IBM Plex Mono Regular, Copyright 2017 IBM
 The local font converter was adapted for these conversions: glyphs are
 monochrome, centered in fixed-width cells with a shared baseline, and padded
 to fit; the pixel-built bitmaps are enlarged by integer scaling. Elektron,
-Segment 14, Code Mono and Machine Mono are rasterized separately for each cell size.
+Segment 14, Pixel Operator, Code Mono and Machine Mono are rasterized
+separately for each cell size. OldCamcorder uses the bitmap conversion
+described above.
 These are converted adaptations, not the upstream font releases.
