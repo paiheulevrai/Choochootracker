@@ -1,0 +1,13 @@
+colorBackground: 0x0000aa
+colorTextEmpty: 0x7777bb
+colorTextInfo: 0xaaaaaa
+colorTextDefault: 0xffffff
+colorTextLabels: 0xaaaaaa
+colorTextNames: 0x55ffff
+colorValueBars: 0xffff55
+colorTextValue: 0xffff55
+colorTextTitles: 0xaaaaaa
+colorPlayMarkers: 0xffff55
+colorCursor: 0x00aaaa
+colorSelection: 0x00aaaa
+colorWarning: 0xff7777

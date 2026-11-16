@@ -618,7 +618,7 @@ A song has 8 tracks. Each track contains a sequence of chains, and each chain co
 
 Settings → Load font → fonts/Pixel16x24 contains TechMonoAudit (converted from Share Tech Mono), Departure Mono, Spleen and Cozette. Each supplies the complete printable ASCII set in 16×24 cells for a 640×480 display. Pixel-built fonts keep their native pixels or integer scaling with padding; Cozette remains smaller because doubling its 13-pixel ink height would exceed the cell. The NostromoAmberDa2 theme is available through Settings → Edit color theme → Load. It retains the Nostromo amber background and informational text, with red primary text, darker orange values and a teal cursor. Loading the assets does not change your selected font or theme. See the accompanying README.txt for attribution and licenses.
 
-The themes folder also includes Bb22200, Eclair, Greydark and Reddeep. NostromoAmberDa2 is in the IDEColorThemes subfolder.
+The themes folder also includes Bb22200, Bliss, Eclair, Greydark and Reddeep. Bliss uses a classic blue installer palette with cyan and yellow accents. NostromoAmberDa2 is in the IDEColorThemes subfolder.
 
 ### Project page spacing
 

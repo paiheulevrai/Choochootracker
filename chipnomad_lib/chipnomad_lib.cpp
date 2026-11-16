@@ -3969,6 +3969,27 @@ static void configureFMAmp(InstrumentFMAmp& amp, const PlaybackTrackState* track
   amp.attack=attack;amp.decay=decay;amp.sustain=sustain;amp.release=release;amp.envelopeShape=shape;
 }
 
+struct NativeFMGainPitch {
+  float gain;
+  int pitch;
+};
+
+static inline NativeFMGainPitch nativeFMGainPitch(const PlaybackState* playback,
+                                                   const PlaybackTrackState* track,
+                                                   const Instrument* instrument) {
+  NativeFMGainPitch result{phraseGain(playback, track, instrument), 0};
+  for (const auto& mod : track->note.modulation) {
+    if (!mod.modulation) continue;
+    if (mod.modulation->destination == 1) {
+      float value = playbackModScaleToRange(mod.outValue, 255) / 255.0f;
+      result.gain = modulationIsAdditive(mod.modulation->type) ? result.gain + value : value;
+    } else if (mod.modulation->destination == 2) {
+      result.pitch += playbackModScaleToRange(mod.outValue, 1200);
+    }
+  }
+  return result;
+}
+
 static void updateOPLLVoices(ChipNomadState* state) {
   if (!state->opllVoices[0][0]) return;
   auto* project = &state->audioProject;
@@ -3982,14 +4003,8 @@ static void updateOPLLVoices(ChipNomadState* state) {
       continue;
     }
     auto* instrument = &project->instruments[track->note.instrument];
-    float gain = phraseGain(playback, track, instrument); int pitch = 0;
-    for (auto& mod : track->note.modulation) {
-      if (!mod.modulation) continue;
-      if (mod.modulation->destination == 1) {
-        float value = playbackModScaleToRange(mod.outValue, 255) / 255.0f;
-        gain = modulationIsAdditive(mod.modulation->type) ? gain + value : value;
-      } else if (mod.modulation->destination == 2) pitch += playbackModScaleToRange(mod.outValue, 1200);
-    }
+    const auto levels = nativeFMGainPitch(playback, track, instrument);
+    float gain = levels.gain; int pitch = levels.pitch;
     auto configured=instrument->chip.opll;
     configureFMAmp(configured.amp,track,instrument->type);
     configureOperatorLevels(configured.tone,track,instrument);
@@ -4029,14 +4044,8 @@ static void updateOPLVoices(ChipNomadState* state) {
       continue;
     }
     auto* instrument = &project->instruments[track->note.instrument];
-    float gain = phraseGain(playback, track, instrument); int pitch = 0;
-    for (auto& mod : track->note.modulation) {
-      if (!mod.modulation) continue;
-      if (mod.modulation->destination == 1) {
-        float value = playbackModScaleToRange(mod.outValue, 255) / 255.0f;
-        gain = modulationIsAdditive(mod.modulation->type) ? gain + value : value;
-      } else if (mod.modulation->destination == 2) pitch += playbackModScaleToRange(mod.outValue, 1200);
-    }
+    const auto levels = nativeFMGainPitch(playback, track, instrument);
+    float gain = levels.gain; int pitch = levels.pitch;
     auto configured=instrument->chip.opl;
     configureFMAmp(configured.amp,track,instrument->type);
     configureOperatorLevels(configured.tone,track,instrument);
@@ -4068,14 +4077,8 @@ static void updateFourOpVoices(ChipNomadState* state) {
       continue;
     }
     auto* instrument = &project->instruments[track->note.instrument];
-    float gain = phraseGain(playback, track, instrument); int pitch = 0;
-    for (auto& mod : track->note.modulation) {
-      if (!mod.modulation) continue;
-      if (mod.modulation->destination == 1) {
-        float value = playbackModScaleToRange(mod.outValue, 255) / 255.0f;
-        gain = modulationIsAdditive(mod.modulation->type) ? gain + value : value;
-      } else if (mod.modulation->destination == 2) pitch += playbackModScaleToRange(mod.outValue, 1200);
-    }
+    const auto levels = nativeFMGainPitch(playback, track, instrument);
+    float gain = levels.gain; int pitch = levels.pitch;
     auto configured=instrument->chip.fourOp;
     configureFMAmp(configured.amp,track,instrument->type);
     configureOperatorLevels(configured.tone,track,instrument);
@@ -4158,14 +4161,8 @@ static void updateDX7Voices(ChipNomadState* state) {
       continue;
     }
     auto* instrument = &project->instruments[track->note.instrument];
-    float gain = phraseGain(playback, track, instrument); int pitch = 0;
-    for (auto& mod : track->note.modulation) {
-      if (!mod.modulation) continue;
-      if (mod.modulation->destination == 1) {
-        float value = playbackModScaleToRange(mod.outValue, 255) / 255.0f;
-        gain = modulationIsAdditive(mod.modulation->type) ? gain + value : value;
-      } else if (mod.modulation->destination == 2) pitch += playbackModScaleToRange(mod.outValue, 1200);
-    }
+    const auto levels = nativeFMGainPitch(playback, track, instrument);
+    float gain = levels.gain; int pitch = levels.pitch;
     auto configured=instrument->chip.dx7;
     configureFMAmp(configured.amp,track,instrument->type);
     configureOperatorLevels(configured.tone,track,instrument);
