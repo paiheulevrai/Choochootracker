@@ -34,7 +34,12 @@ for (const name of ['Fatty', 'DigiSophie']) {
 }
 assert(homepage.includes('A modular sound-design playground in a portable tracker'), 'Homepage: cross-modulation feature');
 assert(homepage.includes('OUTPUT destination and VOCODER mode'), 'Homepage: vocoder screenshot description');
-for (const image of ['engine-fatty', 'engine-digisophie', 'track-vocoder']) {
+const modulationHeading = homepage.indexOf('Four modulation slots per instrument');
+assert(modulationHeading >= 0 && modulationHeading < homepage.indexOf('A modular sound-design playground in a portable tracker'), 'Homepage: instrument modulation before advanced intertrack audio');
+for (const source of ['ADSR and AHD envelopes', 'LFOs with multiple shapes', 'tempo-synced cycles', 'Joystick control']) {
+  assert(homepage.includes(source), `Homepage: modulation source ${source}`);
+}
+for (const image of ['engine-fatty', 'engine-digisophie', 'modulation', 'track-vocoder']) {
   const path = `homepage-screenshots/${image}.png`;
   assert(homepage.includes(`src="${base}${path}"`), `Homepage: visible ${image} screenshot`);
   const png = await readFile(new URL(path, dist));

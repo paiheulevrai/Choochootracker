@@ -39,8 +39,9 @@ to resume editing; Markdown changes do not update a production preview.
 - [Engine descriptions](src/content/featured-engines.md): all engine cards, their
   descriptions and optional screenshots. This is the homepage engine content.
 - [Sampling](src/content/03-sampling.md) and [effects](src/content/04-effects.md):
-  section headings and text, including the track-to-track audio modulation
-  feature and its vocoder screenshot. Workflow steps are in the home introduction.
+  section headings and text, including the four-slot instrument modulation
+  matrix (envelopes, LFOs and performance sources), followed by track-to-track
+  audio modulation and its vocoder screenshot. Workflow steps are in the home introduction.
 - `01-workflow.md` and `02-engines.md` are older drafts, not rendered on the site.
 - [Project story](src/content/about.md), [downloads](src/content/downloads.md),
   [learning introduction](src/content/learn.md).

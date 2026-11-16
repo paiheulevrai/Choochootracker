@@ -5,6 +5,16 @@ title: Shape your sound further
 image: mixer.png
 imageAlt: The eight-channel mixer with volume, tone, reverb and delay sends
 caption: Bring the parts together in the mixer.
+modulation:
+  title: Four modulation slots per instrument
+  description: Build movement into your sounds with a 4-slot modulation matrix. Each slot has its own source, destination and positive or negative amount, with destinations tailored to the engine.
+  sources:
+    - ADSR and AHD envelopes for evolving timbres and percussive shapes.
+    - LFOs with multiple shapes, tempo-synced cycles, slow sweeps and audio-rate FLFO.
+    - Joystick control, sequenced pitch and volume, rhythmic trance gates and track audio envelope followers.
+  image: modulation.png
+  imageAlt: Four-slot modulation matrix with an ADSR envelope targeting volume and a retriggered sine LFO targeting pitch
+  caption: Shape volume with an envelope, animate pitch with an LFO, and keep two slots free for more movement.
 crossModulation:
   title: A modular sound-design playground in a portable tracker
   description: Make your tracks interact. Use one track to wavefold, ring-modulate or vocode another, reshape it with diode, XOR and compare modes, or drive its pitch and synth parameters with audio.

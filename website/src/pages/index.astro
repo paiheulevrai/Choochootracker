@@ -53,13 +53,13 @@ const homeShots = `${base}/homepage-screenshots`;
     </section>
     <section id="effects" class="sound-workbench wrap" aria-labelledby="effects-title">
       <header><p class="eyebrow">{effects.eyebrow}</p><h2 id="effects-title">{effects.title}</h2></header>
-      <div class="cross-modulation sound-features">
-        <div class="sound-description"><h3>{effects.crossModulation.title}</h3><p>{effects.crossModulation.description}</p></div>
+      {[effects.modulation, effects.crossModulation].map(feature => <div class="cross-modulation sound-features">
+        <div class="sound-description"><h3>{feature.title}</h3><p>{feature.description}</p>{'sources' in feature && <ul>{feature.sources.map(source => <li>{source}</li>)}</ul>}</div>
         <figure>
-          <a class="engine-capture" href={`${homeShots}/${effects.crossModulation.image}`}><img src={`${homeShots}/${effects.crossModulation.image}`} alt={effects.crossModulation.imageAlt} width="640" height="480" loading="lazy" /></a>
-          <figcaption>{effects.crossModulation.caption}</figcaption>
+          <a class="engine-capture" href={`${homeShots}/${feature.image}`}><img src={`${homeShots}/${feature.image}`} alt={feature.imageAlt} width="640" height="480" loading="lazy" /></a>
+          <figcaption>{feature.caption}</figcaption>
         </figure>
-      </div>
+      </div>)}
       <div class="sound-screens">
         <a href={`${homeShots}/insert-fx.png`}><img src={`${homeShots}/insert-fx.png`} alt="Track insert effect controls" width="640" height="480" loading="lazy" /></a>
         <a href={`${homeShots}/reverb.png`}><img src={`${homeShots}/reverb.png`} alt="Reverb send effect controls" width="640" height="480" loading="lazy" /></a>
