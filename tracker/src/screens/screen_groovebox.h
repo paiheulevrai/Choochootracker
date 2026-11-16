@@ -15,7 +15,7 @@ int grooveboxFindFreeChain(Project* project, int track);
 bool grooveboxMergePatternsUp(int firstRow, int lastRow, int firstCol, int lastCol);
 bool grooveboxPrepareScene(int songRow);
 uint8_t grooveboxMidiInstrument(void);
-enum class GrooveboxAction { makeIndependent, emptyBar, offBar, duplicateBar, doubleLength, shorten, copyScene, pasteScene, undo, halveLength, resetLength };
+enum class GrooveboxAction { makeIndependent, emptyBar, offBar, duplicateBar, doubleLength, shorten, copyScene, pasteScene, undo, halveLength, resetLength, newPattern };
 bool grooveboxAction(GrooveboxAction action, int songRow, int track);
 void grooveboxDiscardUndo();
 

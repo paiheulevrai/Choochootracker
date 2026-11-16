@@ -4,7 +4,7 @@
 #include "chipnomad_lib.h"
 #include "common.h"
 
-static const char viewLabel[] = "View";
+static const char viewLabel[] = "Editing mode";
 
 static int getColumnCount(int row) {
   if (row < SCR_PROJECT_ROWS) return projectCommonColumnCount(row);

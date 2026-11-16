@@ -260,6 +260,23 @@ TEST_CASE("MIDI Note Off fills empty steps, with musical notes taking priority i
   CHECK(phrase.rows[1].fx[2].command == FX_ID_EMPTY);
 }
 
+TEST_CASE("MIDI held-note release preserves a filled row when DEL cannot be written") {
+  Phrase phrase;
+  phraseClear(&phrase);
+  auto& row = phrase.rows[3];
+  row.note = 60;
+  row.instrument = 2;
+  row.volume = 90;
+  row.fx[0] = {fxPAN, 80};
+  row.fx[1] = {fxPIT, 1};
+  row.fx[2] = {fxVOL, 1};
+  const PhraseRow before = row;
+  MidiRecordEvent off{0, 3, NOTE_OFF, 0, 0, 2};
+  off.replaceExisting = true;
+  CHECK_FALSE(midiRecordApply(row, off));
+  CHECK(std::memcmp(&row, &before, sizeof(row)) == 0);
+}
+
 TEST_CASE_FIXTURE(RecordingFixture, "Observing playback never queues MIDI edits without recorded notes") {
   tick(100000, 3, 0);
   tick(120000, 3, 1);
@@ -269,6 +286,102 @@ TEST_CASE_FIXTURE(RecordingFixture, "Observing playback never queues MIDI edits 
   tick(150000, 0, 0, 1);
   CHECK_FALSE(recording.consume(&event));
   CHECK_FALSE(recording.overflow());
+}
+
+TEST_CASE_FIXTURE(RecordingFixture, "Held MIDI note clears intervening steps up to its timestamped release") {
+  tick(100000, 0, 0);
+  recording.record(0, 48, 0, 100, 100000, MidiRecordMode::free);
+  tick(110000, 1, 0);
+  tick(120000, 2, 0);
+  tick(130000, 3, 0);
+  recording.record(0, NOTE_OFF, 0, 0, 125000, MidiRecordMode::free);
+  MidiRecordEvent on{}, erase{}, off{};
+  REQUIRE(recording.consume(&on));
+  REQUIRE(recording.consume(&erase));
+  REQUIRE(recording.consume(&off));
+  CHECK(on.note == 48);
+  CHECK(erase.eraseMask == (1u << 1));
+  CHECK(erase.sequence == on.sequence);
+  CHECK(off.note == NOTE_OFF);
+  CHECK(off.row == 2);
+  CHECK(off.replaceExisting);
+  CHECK(off.sequence == on.sequence);
+  CHECK_FALSE(recording.consume(&off));
+
+  Phrase phrase;
+  phraseClear(&phrase);
+  for (int i = 0; i < 4; ++i) {
+    phrase.rows[i].note = 60 + i;
+    phrase.rows[i].instrument = 2;
+    phrase.rows[i].volume = 80;
+    phrase.rows[i].fx[0] = {fxPAN, 90};
+    phrase.rows[i].fx[1] = {fxDEL, 2};
+  }
+  REQUIRE(midiRecordApply(phrase.rows[on.row], on));
+  for (int row = 0; row < 16; ++row)
+    if (erase.eraseMask & (1u << row)) midiRecordEraseNote(phrase.rows[row]);
+  REQUIRE(midiRecordApply(phrase.rows[off.row], off));
+  CHECK(phrase.rows[0].note == 48);
+  CHECK(phrase.rows[1].note == EMPTY_VALUE_8);
+  CHECK(phrase.rows[1].instrument == EMPTY_VALUE_8);
+  CHECK(phrase.rows[1].volume == EMPTY_VALUE_16);
+  CHECK(phrase.rows[1].fx[0].command == fxPAN);
+  CHECK(phrase.rows[1].fx[1].command == FX_ID_EMPTY);
+  CHECK(phrase.rows[2].note == NOTE_OFF);
+  CHECK(phrase.rows[3].note == 63);
+}
+
+TEST_CASE_FIXTURE(RecordingFixture, "Held MIDI recording retains earlier rows after tick history wraps") {
+  tick(100000, 0, 0);
+  recording.record(0, 48, 0, 100, 100000, MidiRecordMode::quantized);
+  for (int i = 1; i <= 80; ++i) tick(100000 + i * 1000, i % 16, 0);
+  recording.record(0, NOTE_OFF, 0, 0, 180000, MidiRecordMode::quantized);
+  MidiRecordEvent event{};
+  REQUIRE(recording.consume(&event));
+  REQUIRE(recording.consume(&event));
+  CHECK(event.eraseMask == 0xfffe);
+  REQUIRE(recording.consume(&event));
+  CHECK(event.note == NOTE_OFF);
+  CHECK_FALSE(recording.overflow());
+}
+
+TEST_CASE_FIXTURE(RecordingFixture, "Stopping recording closes a held MIDI span without writing Note Off") {
+  tick(100000, 0, 0);
+  recording.record(0, 48, 0, 100, 100000, MidiRecordMode::quantized);
+  tick(110000, 1, 0);
+  recording.observe(state->playbackState, 120000, false);
+  MidiRecordEvent event{};
+  REQUIRE(recording.consume(&event));
+  CHECK(event.note == 48);
+  REQUIRE(recording.consume(&event));
+  CHECK(event.eraseMask == (1u << 1));
+  CHECK_FALSE(recording.consume(&event));
+}
+
+TEST_CASE_FIXTURE(RecordingFixture, "An unrepresentable MIDI release cannot erase a later take") {
+  tick(100000, 0, 0);
+  recording.record(0, 48, 0, 100, 100000, MidiRecordMode::free);
+  tick(110000, 1, 300);
+  recording.record(0, NOTE_OFF, 0, 0, 110000, MidiRecordMode::free);
+  CHECK(recording.overflow());
+  tick(120000, 2, 0);
+  recording.record(0, 52, 0, 100, 120000, MidiRecordMode::quantized);
+  MidiRecordEvent event{};
+  REQUIRE(recording.consume(&event));
+  CHECK(event.note == 48);
+  REQUIRE(recording.consume(&event));
+  CHECK(event.note == 52);
+  CHECK_FALSE(recording.consume(&event));
+}
+
+TEST_CASE("MIDI held-note erasure leaves FX-only rows untouched") {
+  Phrase phrase;
+  phraseClear(&phrase);
+  phrase.rows[0].fx[0] = {fxDEL, 3};
+  phrase.rows[0].instrument = 4;
+  const PhraseRow before = phrase.rows[0];
+  midiRecordEraseNote(phrase.rows[0]);
+  CHECK(std::memcmp(&before, &phrase.rows[0], sizeof(before)) == 0);
 }
 
 TEST_CASE_FIXTURE(AudioFixture, "Audio records a MIDI release as NOTE OFF at its arrival step and tick") {

@@ -112,25 +112,30 @@ class AudioCommandQueue {
       const auto& command = midiInputs_[tail];
       playbackMidiInput(&state->playbackState, command.a, (uint8_t)command.b,
                         (uint8_t)command.c, command.d & 0x7f);
-      if (command.d & 0x300) midiRecords_[midiRecordCount_++] = command;
+      midiRecords_[midiRecordCount_++] = command;
       tail = (tail + 1) % kCommandCapacity;
     }
     midiTail_.store(tail, std::memory_order_release);
     const unsigned release = midiReleaseMask_.exchange(0, std::memory_order_acq_rel);
     for (int t = 0; t < state->audioProject.tracksCount; ++t)
-      if (release & (1u << t)) playbackMidiInput(&state->playbackState, t, 0, 0, 0);
+      if (release & (1u << t)) {
+        playbackMidiInput(&state->playbackState, t, 0, 0, 0);
+        midiRecording.cancel(t);
+      }
     return changed || release != 0;
   }
   void recordMidiTick(const PlaybackState& playback, uint64_t dueMicros) {
-    midiRecording.observe(playback, dueMicros);
+    midiRecording.observe(playback, dueMicros, chipnomadMotionMode() == 1);
     recordPendingMidi();
   }
   void recordPendingMidi() {
     for (unsigned i = 0; i < midiRecordCount_; ++i) {
       const auto& command = midiRecords_[i];
-      midiRecording.record(command.a, (command.d & 0x7f) ? (uint8_t)command.b : NOTE_OFF, (uint8_t)command.c,
-        command.d & 0x7f, command.timestamp,
-        command.d & 0x200 ? MidiRecordMode::free : MidiRecordMode::quantized);
+      if (command.d & 0x300)
+        midiRecording.record(command.a, (command.d & 0x7f) ? (uint8_t)command.b : NOTE_OFF, (uint8_t)command.c,
+          command.d & 0x7f, command.timestamp,
+          command.d & 0x200 ? MidiRecordMode::free : MidiRecordMode::quantized);
+      else midiRecording.finish(command.a, command.timestamp);
     }
     midiRecordCount_ = 0;
   }
@@ -641,6 +646,8 @@ class AudioCommandQueue {
 
 static int16_t motionRecordLast[PROJECT_MAX_TRACKS][fxTotalCount][7];
 static int motionRecordLastMode = -1;
+static MotionRecordEvent midiCCEraseLast[PROJECT_MAX_TRACKS];
+static bool midiCCEraseLastValid[PROJECT_MAX_TRACKS];
 
 static int slewEngineFX(PlaybackTrackState* track, FX fx, int target) {
   int index = (int)fx;
@@ -764,16 +771,31 @@ static void motionRecordFrame(ChipNomadState* state) {
   int mode = chipnomadMotionMode();
   if (mode != motionRecordLastMode) {
     resetMotionRecordLast();
+    for (auto& valid : midiCCEraseLastValid) valid = false;
     motionRecordLastMode = mode;
   }
   if (!mode) return;
 
+  const bool eraseMidiCC = mode == 2 && chipnomadMidiCCEraseEnabled();
   for (int trackIdx = 0; trackIdx < state->audioProject.tracksCount; ++trackIdx) {
     PlaybackTrackState* track = &state->playbackState.tracks[trackIdx];
-    if (track->note.instrument == EMPTY_VALUE_8) continue;
+    if (track->note.instrument == EMPTY_VALUE_8 && !eraseMidiCC) continue;
     uint16_t phrase;
     uint8_t row;
     if (!motionPhraseLocation(state, trackIdx, &phrase, &row)) continue;
+    if (eraseMidiCC) {
+      MotionRecordEvent event = {phrase, row, FX_ID_EMPTY, 0, motionRecordEraseMidiCC,
+                                 (uint8_t)trackIdx, track->note.instrument};
+      const auto& last = midiCCEraseLast[trackIdx];
+      if (!midiCCEraseLastValid[trackIdx] || last.phrase != phrase || last.row != row ||
+          last.instrument != event.instrument) {
+        if (chipnomadMotionPushEvent(event)) {
+          midiCCEraseLast[trackIdx] = event;
+          midiCCEraseLastValid[trackIdx] = true;
+        } else chipnomadMotionSetOverflow();
+      }
+    } else midiCCEraseLastValid[trackIdx] = false;
+    if (track->note.instrument == EMPTY_VALUE_8) continue;
     Instrument* instrument = &state->audioProject.instruments[track->note.instrument];
 
     FX targets[4];

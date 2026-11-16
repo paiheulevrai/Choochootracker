@@ -849,7 +849,7 @@ int main(int argc,char** argv){
     require(!probe.receive && !audible(local), "Receive Off stops remote audio");
     back();
     touch(2,16); require(currentScreen == &screenScale, "Scale stays directly accessible"); back();
-    touch(2,17); require(currentScreen == &screenViewSettings, "View stays directly accessible");
+    touch(10,17); require(currentScreen == &screenViewSettings, "Editing mode stays directly accessible");
     audioManager.stop(); chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
     linkClientSetBackend(nullptr);
     require(std::filesystem::remove(samplePath), "remove audio fixture");
@@ -1096,7 +1096,7 @@ int main(int argc,char** argv){
     return 0;
   }
 #endif
-  if(argc==3 && !strcmp(argv[2],"--midi-recording-only")) {
+  if(argc==3 && (!strcmp(argv[2],"--midi-recording-only") || !strcmp(argv[2],"--midi-step-undo-only"))) {
     screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
     projectInitAY(&chipnomadState->project);
     auto& p = chipnomadState->project;
@@ -1141,6 +1141,17 @@ int main(int argc,char** argv){
     send(0x90, 64, 90);
     require(p.phrases[0].rows[6].note == 52, "next stopped MIDI advances one row");
     send(0x80, 64, 0);
+    if (!strcmp(argv[2], "--midi-step-undo-only")) {
+      rec.type = MainLoopEvent::keyUp; appOnEvent(rec);
+      require(editHistoryUndo(), "step MIDI note can be undone");
+      require(p.phrases[0].rows[6].note == EMPTY_VALUE_8 && p.phrases[0].rows[5].note == 48,
+        "step MIDI undo preserves the previous note");
+      require(editHistoryRedo() && p.phrases[0].rows[6].note == 52, "step MIDI note can be redone");
+      midiRouterSetBackend(nullptr);
+      editHistoryClear(); chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit();
+      printf("Stopped MIDI step undo and redo passed\n");
+      return 0;
+    }
     chipnomadQueuePlaybackStop(chipnomadState);
     require(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1), "start before stopping");
     chipnomadRender(chipnomadState, audio, 2048);
@@ -2135,6 +2146,32 @@ int main(int argc,char** argv){
       fixture, mode, frames / 48000.0, frames);
     chipnomadDestroy(state);
     chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit(); return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--simplified-new-pattern-only")) {
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+    projectFree(&chipnomadState->project);
+    projectInitAY(&chipnomadState->project);
+    auto& p = chipnomadState->project;
+    for (auto& row : p.song) for (auto& cell : row) cell = EMPTY_VALUE_16;
+    canonicalSimplifiedActive = true;
+    grooveboxEditorActive = false;
+    appSettings.defaultPatternLength = 2;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    screenSong.init();
+    screenSetup(&screenSong, 0);
+    tapEdit();
+    require(p.song[0][0] < PROJECT_MAX_CHAINS, "Song tap creates a pattern");
+    require(grooveboxTrackLength(&p, 0, 0) == 2, "new Simplified pattern has two real bars");
+    const int first = p.song[0][0];
+    screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+    require(p.song[0][0] != first && grooveboxTrackLength(&p, 0, 0) == 2,
+      "double-tap creates another two-bar pattern");
+    appChord(keyShift, keyRight);
+    require(currentScreen == &screenPhrase && grooveboxTrackLength(&p, 0, 0) == 2,
+      "Phrase opens the configured two-bar pattern");
+    chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit();
+    printf("Simplified Song creation uses the configured pattern length\n");
+    return 0;
   }
   if(argc==3 && (!strcmp(argv[2],"--canonical-simple-only") || !strcmp(argv[2],"--canonical-audio-only"))) {
     auto renderFixture = [&](const std::string& path, bool canonical, bool converted) {

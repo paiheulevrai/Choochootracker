@@ -316,9 +316,10 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     changed();
     return true;
   }
-  int c = chainAt(&p, row, col);
+  const bool newPattern = action == GrooveboxAction::newPattern;
+  int c = newPattern ? -1 : chainAt(&p, row, col);
   GrooveboxReferences refs(&p);
-  int length = grooveboxTrackLength(&p, row, col);
+  int length = newPattern ? 0 : grooveboxTrackLength(&p, row, col);
   int reset = std::clamp((int)appSettings.defaultPatternLength, 1, 16);
   if (action != GrooveboxAction::makeIndependent && !canonicalSimplifiedActive &&
       c >= 0 && refs.chains[c] > 1) {
@@ -347,7 +348,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     screenMessage(MESSAGE_TIME_ERROR, "No chain to make independent");
     return false;
   }
-  if (c < 0 && p.song[row][col] != EMPTY_VALUE_16) {
+  if (!newPattern && c < 0 && p.song[row][col] != EMPTY_VALUE_16) {
     screenMessage(MESSAGE_TIME_ERROR, "Invalid chain: open Classic");
     return false;
   }
@@ -359,7 +360,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
   if (target < 0) { screenMessage(MESSAGE_TIME_ERROR, "No free chain"); return false; }
   int first = clone ? 0 : length;
   int count = clone ? 16 : action == GrooveboxAction::doubleLength ? length :
-    action == GrooveboxAction::resetLength ? reset - length : 1;
+    (action == GrooveboxAction::resetLength || newPattern) ? reset - length : 1;
   if (!clone && (length + count > 16 || count == 0)) {
     screenMessage(MESSAGE_TIME_ERROR, "Length must fit 1..16 bars");
     return false;

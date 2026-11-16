@@ -100,6 +100,11 @@ struct KeyMappingFixture {
   void prepareChange() {
     edit();
     tap(replacement);
+    CHECK(inputRawCallback == nullptr);
+  }
+  void done() {
+    REQUIRE(mockScreenData->onEdit(0, 14, CellEditAction::tap) == 1);
+    REQUIRE(inputRawCallback != nullptr);
     advance(150);
   }
   void verify(int replacedRow = 4, InputCode changed = replacement) {
@@ -141,7 +146,8 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping capture waits for both input paths
   CHECK(unchanged());
   advance(1);
   tap(replacement);
-  advance(150);
+  CHECK(inputRawCallback == nullptr);
+  done();
   verify();
   CHECK(appSettings.keyMapping.keyEdit[0].deviceType == replacement.deviceType);
   CHECK(appSettings.keyMapping.keyEdit[0].code == replacement.code);
@@ -154,17 +160,22 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "unverified mappings never change live sett
   appSettings.keyMapping = {};
   REQUIRE(settingsLoad() == 0);
   CHECK(unchanged());
+  done();
   tap(keys[0]);
   advance(14999);
   CHECK(inputRawCallback != nullptr);
   advance(1);
   CHECK(inputRawCallback == nullptr);
   CHECK(unchanged());
-  CHECK(std::string(screenGetActiveMessage()).find("timed out") != std::string::npos);
+  CHECK(std::string(screenGetActiveMessage()).find("active controls unchanged") != std::string::npos);
+  done();
+  verify();
+  CHECK(appSettings.keyMapping.keyEdit[0].code == replacement.code);
 }
 
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping verification needs every core control and all releases") {
   prepareChange();
+  done();
   tap(keys[5]); // Not Up: must not advance verification.
   CHECK(unchanged());
   for (int row = 0; row < 7; ++row) {
@@ -185,8 +196,6 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping verification needs every core cont
   advance(1);
   CHECK(inputRawCallback == nullptr);
   CHECK(appSettings.keyMapping.keyEdit[0].code == replacement.code);
-  CHECK_FALSE(std::filesystem::exists(settingsPath));
-  REQUIRE(mockScreenData->onEdit(0, 14, CellEditAction::tap) == 1);
   CHECK(std::filesystem::exists(settingsPath));
 }
 
@@ -198,10 +207,107 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping capture times out even if a key ne
   CHECK(unchanged());
 }
 
+TEST_CASE_FIXTURE(KeyMappingFixture, "multiple remaps stay staged until one final verification") {
+  const InputCode changes[] = {
+    {InputDeviceType::gamepad, 210}, {InputDeviceType::gamepad, 211},
+    {InputDeviceType::gamepad, 212}, {InputDeviceType::gamepad, 213}
+  };
+  for (int row = 0; row < 4; ++row) {
+    edit(row);
+    tap(changes[row]);
+    CHECK(inputRawCallback == nullptr);
+    CHECK(unchanged());
+  }
+  edit(4);
+  raw(replacement, true);
+  advance(15000);
+  CHECK(inputRawCallback == nullptr);
+  CHECK(unchanged());
+
+  done();
+  for (int row = 0; row < 8; ++row) tap(row < 4 ? changes[row] : keys[row]);
+  CHECK(currentScreen == &screenControlsSettings);
+  CHECK(appSettings.keyMapping.keyUp[0].code == changes[0].code);
+  CHECK(appSettings.keyMapping.keyDown[0].code == changes[1].code);
+  CHECK(appSettings.keyMapping.keyLeft[0].code == changes[2].code);
+  CHECK(appSettings.keyMapping.keyRight[0].code == changes[3].code);
+  appSettings.keyMapping = {};
+  REQUIRE(settingsLoad() == 0);
+  CHECK(appSettings.keyMapping.keyRight[0].code == changes[3].code);
+}
+
+TEST_CASE_FIXTURE(KeyMappingFixture, "final verification tests all newly assigned optional and extra inputs") {
+  edit(4, 1);
+  tap(replacement);
+  edit(4, 2);
+  tap(duplicate);
+  edit(8);
+  tap({InputDeviceType::gamepad, 210});
+  edit(9);
+  tap({InputDeviceType::gamepad, 211});
+  done();
+  for (int row = 0; row < 8; ++row) tap(row == 4 ? replacement : keys[row]);
+  CHECK(unchanged());
+  tap(duplicate);
+  tap({InputDeviceType::gamepad, 210});
+  CHECK(unchanged());
+  tap({InputDeviceType::gamepad, 211});
+  CHECK(currentScreen == &screenControlsSettings);
+  CHECK(consoleInput::same(appSettings.keyMapping.keyEdit[2], duplicate));
+  CHECK(appSettings.keyMapping.keyMotionRecord[0].code == 211);
+}
+
+TEST_CASE_FIXTURE(KeyMappingFixture, "old edit button navigates until final verification") {
+  prepareChange();
+  mockScreenData->cursorRow = 14;
+  tap(replacement);
+  CHECK(inputRawCallback == nullptr);
+  raw(keys[4], true);
+  REQUIRE(inputRawCallback != nullptr);
+  raw(keys[4], false);
+  advance(150);
+  verify();
+  CHECK(currentScreen == &screenControlsSettings);
+  CHECK(appSettings.keyMapping.keyEdit[0].code == replacement.code);
+}
+
+TEST_CASE_FIXTURE(KeyMappingFixture, "calibration also verifies staged optional bindings before saving") {
+  edit(8);
+  tap(replacement);
+  edit(13);
+  for (InputCode key : keys) tap(key);
+  advance(150);
+  verify(-1);
+  CHECK(inputRawCallback != nullptr);
+  CHECK(unchanged());
+  tap(replacement);
+  CHECK(inputRawCallback == nullptr);
+  CHECK(unchanged());
+  REQUIRE(mockScreenData->onEdit(0, 14, CellEditAction::tap) == 1);
+  CHECK(currentScreen == &screenControlsSettings);
+  CHECK(appSettings.keyMapping.keyMotionLive[0].code == replacement.code);
+}
+
+TEST_CASE_FIXTURE(KeyMappingFixture, "final save failure keeps the active mapping and allows retry") {
+  prepareChange();
+  std::filesystem::create_directory(settingsPath);
+  done();
+  verify();
+  CHECK(unchanged());
+  CHECK(currentScreen == &screenKeyMapping);
+  CHECK(std::string(screenGetActiveMessage()).find("Could not save") != std::string::npos);
+  std::filesystem::remove(settingsPath);
+  REQUIRE(mockScreenData->onEdit(0, 14, CellEditAction::tap) == 1);
+  CHECK(currentScreen == &screenControlsSettings);
+  CHECK(appSettings.keyMapping.keyEdit[0].code == replacement.code);
+}
+
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping verification cannot use an old alias instead of the newly captured input") {
   appSettings.keyMapping.keyEdit[1] = keys[4];
   original = appSettings.keyMapping;
+  open();
   prepareChange();
+  done();
   for (int row = 0; row < 4; ++row) tap(keys[row]);
   tap(keys[4]);
   CHECK(unchanged());
@@ -218,10 +324,11 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping swaps canonical inputs without a t
   appSettings.keyMapping.keyEdit[1] = padA;
   appSettings.keyMapping.keyOpt[1] = padB;
   original = appSettings.keyMapping;
+  open();
   edit(5);
   tap(padA);
-  advance(150);
   CHECK(unchanged());
+  done();
   for (int row = 0; row < 8; ++row) {
     if (row == 4) tap(keys[5]);
     else if (row == 5) tap(padA);
@@ -239,11 +346,12 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping swaps canonical inputs without a t
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping tests a swap even when the previous input uses another transport") {
   appSettings.keyMapping.keyEdit[1] = replacement;
   original = appSettings.keyMapping;
+  open();
   edit(5);
   tap(replacement);
-  CHECK(inputRawCallback != nullptr);
+  CHECK(inputRawCallback == nullptr);
   CHECK(unchanged());
-  advance(150);
+  done();
   for (int row = 0; row < 8; ++row)
     tap(row == 4 ? keys[5] : row == 5 ? replacement : keys[row]);
   CHECK(inputRawCallback == nullptr);
@@ -325,7 +433,7 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "console capture and verification share key
   CHECK(unchanged());
   raw({InputDeviceType::keyboard, 'x'}, false);
   advance(150);
-  advance(150);
+  done();
   verify(4, {InputDeviceType::keyboard, 'x'});
   CHECK(inputRawCallback == nullptr);
   CHECK(appSettings.keyMapping.keyEdit[0].deviceType == InputDeviceType::gamepad);
@@ -385,6 +493,7 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "conflicting console migration keeps origin
 
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping verification rejects a physical press mapped to two different actions") {
   prepareChange();
+  done();
   raw(keys[0], true);
   raw(keys[1], true); // A second OS path claims Down while testing Up.
   raw(keys[0], false);
@@ -436,7 +545,7 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping capture rejects logical buttons an
   CHECK(inputRawCallback != nullptr);
   CHECK_FALSE(std::filesystem::exists(settingsPath));
   tap(replacement);
-  advance(150);
+  done();
   verify();
   CHECK(appSettings.keyMapping.keyEdit[0].code == replacement.code);
 }
@@ -489,8 +598,9 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping reset counts one raw input rather 
     CHECK(inputRawCallback == nullptr);
   }
   tap(first);
-  CHECK(inputRawCallback != nullptr);
+  CHECK(inputRawCallback == nullptr);
   CHECK(unchanged());
+  done();
 }
 
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping timeouts remain correct across the SDL tick counter wrap") {
@@ -507,7 +617,7 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping timeouts remain correct across the
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping verification includes the changed motion control") {
   edit(8);
   tap(replacement);
-  advance(150);
+  done();
   verify(-1);
   CHECK(inputRawCallback != nullptr);
   CHECK(unchanged());
@@ -518,16 +628,20 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "mapping verification includes the changed 
 TEST_CASE_FIXTURE(KeyMappingFixture, "mapping clear and default reset also require verification") {
   appSettings.keyMapping.keyEdit[1] = replacement;
   original = appSettings.keyMapping;
+  open();
   mockScreenData->onEdit(1, 4, CellEditAction::clear);
   CHECK(unchanged());
+  CHECK(inputRawCallback == nullptr);
+  done();
   advance(15000);
   CHECK(unchanged());
 
   // Unmapped controller taps must reach the reset path, not be discarded
   // by the PortMaster duplicate filter.
   for (int i = 0; i < 5; ++i) tap({InputDeviceType::gamepad, 999});
-  REQUIRE(inputRawCallback != nullptr);
+  CHECK(inputRawCallback == nullptr);
   CHECK(unchanged());
+  done();
   advance(15000);
   CHECK(unchanged());
 }
@@ -640,4 +754,15 @@ TEST_CASE_FIXTURE(KeyMappingFixture, "sleep and exit cannot save an unverified m
     REQUIRE(settingsLoad() == 0);
     CHECK(unchanged());
   }
+}
+
+TEST_CASE_FIXTURE(KeyMappingFixture, "sleep discards staged changes from the open editor") {
+  prepareChange();
+  appOnEvent({MainLoopEvent::sleep, {}});
+  appOnEvent({MainLoopEvent::wake, {}});
+  CHECK(unchanged());
+  REQUIRE(mockScreenData->onEdit(0, 14, CellEditAction::tap) == 1);
+  CHECK(inputRawCallback == nullptr);
+  CHECK(currentScreen == &screenControlsSettings);
+  CHECK(unchanged());
 }

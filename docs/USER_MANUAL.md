@@ -12,7 +12,7 @@ are rejected explicitly. See [the changelog](../CHANGELOG.md) for release detail
 ## Undo / redo
 
 Phrase, Chain, Song and Table edits share a session-only undo/redo history.
-It includes cell/selection edits, fills, clipboard edits, clones, structural
+It includes recorded MIDI notes, cell/selection edits, fills, clipboard edits, clones, structural
 bar/length edits and Song highlights. Shared-bar isolation and end-of-gesture
 reference reconciliation are restored together; redo restores the recorded
 result, rather than rerunning a random fill. Held-button repeats form one
@@ -38,7 +38,7 @@ changes are rolled back. Large sampler engine changes can therefore be refused.
 SoundFont history retains prepared data, not another synthesizer instance.
 History is not saved in project files.
 
-Loading/replacing projects, recorded MIDI/motion edits, sample/bank resource
+Loading/replacing projects, recorded motion/CC edits, sample/bank resource
 operations and instrument parameter/preset edits outside the scope above clear
 the history with a message. Other editors keep their existing local undo;
 using Groovebox's local Tools undo also clears this shared history. A new
@@ -46,7 +46,7 @@ recorded edit after undo discards redo; clearing history never changes the music
 
 ## Three-view text prototype
 
-Project -> View mode - Editing style -> Mode cycles through Classic, Groovebox and Simplified with
+Project -> Editing mode -> Editing style -> Mode cycles through Classic, Groovebox and Simplified with
 EDIT + LEFT/RIGHT. There is one Simplified behaviour: bars isolate automatically
 when edited, directly in the canonical Song/Chains/Phrases arrangement.
 Changing editor does not convert the project.
@@ -73,8 +73,8 @@ source file unchanged. The combined writer still retains historical arrays/maps.
   UP/DOWN returns to notes; a second SHIFT + UP opens Groove.
 - Length: EDIT + LEFT/RIGHT removes/adds a bar, EDIT + UP/DOWN doubles/halves,
   B + A resets the default. Limits are 1..16. Added bars reference independent
-  no-event phrases; no-event does not force silence. New empty patterns are
-  materialized at the configured default length on the first edit, not browse.
+  no-event phrases; no-event does not force silence. New patterns created in
+  Song use the configured default length immediately, without allocating on browse.
   Doubling copies bar references; each bar isolates automatically on editing.
   Length edits affect every Song occurrence of the same pattern.
 - Loop BAR uses the existing phrase loop; PAT uses the existing chain loop.
@@ -419,13 +419,14 @@ The calibration and tested-remapping workflow below is exclusive to
 **PortMaster and NextUI Pak** builds. Other builds keep the direct mapping
 editor without calibration, timed tests or startup recovery.
 
-On PortMaster and NextUI, before capturing a replacement, release all buttons. Keyboard and controller
-events from the same press are allowed to finish before the next step.
-Each change (including clearing a binding or resetting defaults) is tested:
-press and release the eight core controls when prompted. A changed motion
-control is tested too. You have 15 seconds per step; if the test cannot be
-completed, the previous mapping stays active. Only tested mappings can be
-saved with **Done**.
+On PortMaster and NextUI, release all buttons before capturing a replacement.
+Make as many changes as needed; the previous mapping remains active for
+navigation while you edit. **Done** tests the eight core controls once, plus
+any newly assigned inputs, then saves the result. Clearing a binding and
+resetting defaults are included in this final test. You have 15 seconds per
+step; if a capture or test times out, the previous mapping stays active and
+the other staged changes remain available to edit or retry. Leaving the
+editor, sleep or exit discards staged changes.
 
 On these two builds, known keyboard-bridge and SDL controller inputs share
 one console-button name and binding (`A`, `B`, `L2`, etc.). Either input path
@@ -434,8 +435,8 @@ produce one press; it stays held until both sources release it. There is no
 timed debounce, so rapid separate taps are preserved. Fully separate duplicate
 press/release pairs cannot be distinguished from real taps. Matching keys on a
 USB keyboard share these bindings too; other keys remain independent.
-Reassigning an occupied binding swaps it with the edited slot, then tests
-the result.
+Reassigning an occupied binding swaps it with the edited slot; the final
+test checks the result.
 
 Existing mappings are converted automatically, keeping custom inputs and
 intentionally empty slots. Redundant aliases within one action are removed.
@@ -1594,7 +1595,7 @@ LFO trigger types:
 - **STICK LIVE** (`L1` by default) applies stick modulation without changing the phrase. In **Settings > Stick live mode**, `HOLD` (the default) enables it while held; `TOGGLE` enables it on one press and disables it on the next; `FREE` leaves it permanently enabled. Releasing the button in `TOGGLE` leaves it enabled.
 - During playback, hold **MOTION RECORD** (`L2`) to apply stick modulation and record changed destinations as absolute FX values.
 - Hold **MOTION ERASE** (`R2`) to remove matching destination FX from the current row.
-- **MOTION ERASE** (the **DEL** control) only removes FX matching the active stick modulation destinations. It never clears notes, instruments, velocity or the `DEL` note-delay FX, whether notes were entered manually or recorded over MIDI. Without stick mappings, it does not change the phrase. Phrases do not store FX provenance: a manually entered FX matching a stick destination is also removed.
+- **MOTION ERASE** (the **DEL** control) removes FX matching active stick destinations and enabled MIDI CC mappings on playing tracks, even without moving the controller. It never clears notes, instruments, velocity or the `DEL` note-delay FX. Phrases do not store FX provenance: matching FX entered manually are also removed.
 
 The bottom-right `~` indicates active Stick live. Record (`*`, or `!` for overflow) and Erase (`x`) take indicator priority and remain momentary in both modes. Both enable live stick processing while held; releasing them leaves a separately enabled live toggle intact.
 
@@ -2268,12 +2269,12 @@ Desktop and PortMaster. Settings > **MIDI** opens this submenu: **MIDI In** / **
 - **MIDI recording** uses the existing **MOTION RECORD** control alongside stick automation. At rest, in the Phrase screen, Auto Channel Note On writes the note, instrument and velocity at the cursor and advances one row, staying on row `F` at the end. Dedicated channels remain play-only at rest. If REC receives another channel, a message shows its actual number and the configured Auto Channel: match these to enable step entry. During sequencer playback, REC records incoming Note On events from any channel into the selected destination track's playing phrase, even on another screen.
 - **MIDI record** selects `QUANTIZED` (default) or `FREE`. Quantized writes to the step current at the note's arrival, never the next step. Free uses that same step and adds `DEL` for the preceding audio tick, not the nearest or following tick. Tick `0` needs no `DEL`. Timestamped input is matched against actual playback ticks, including groove and track-speed changes. Both settings are saved.
 
-  Only one note is stored per phrase step: the last recorded note replaces the previous note, instrument and volume. Releasing the last held MIDI key records `NOTE OFF` while REC and playback are active, using the same Quantized/Free timing. A musical note always takes priority over `NOTE OFF` on the same step, regardless of message order; an OFF never replaces a musical note. Releasing a key while another remains held resumes that note without inserting OFF. Recording replaces/removes an existing `DEL`, but preserves unrelated FX. If Free needs `DEL` and all three FX slots are occupied, the event is not written and an error is shown; the original row stays intact. Notes are never spilled onto neighboring tracks. Shared phrases change at every occurrence. Save the project normally to retain recorded notes.
+  Only one note is stored per phrase step: the last recorded note replaces the previous note, instrument and volume. While a recorded note is held during playback, existing notes on the intervening played rows are cleared; their unrelated FX remain. Releasing the last held MIDI key records `NOTE OFF` while REC and playback are active, using the same Quantized/Free timing. A note on the trigger step takes priority over `NOTE OFF` on that same step; on a later covered step, the release replaces the old note. Releasing a key while another remains held resumes that note without inserting OFF. Stopping playback or releasing REC closes the held span without writing OFF. An intervening edit causes the pending erase to be skipped with a warning to protect newer changes. Recording replaces/removes an existing `DEL`, but preserves unrelated FX. If Free needs `DEL` and all three FX slots are occupied, the event is not written and an error is shown; the original row stays intact. Notes are never spilled onto neighboring tracks. Shared phrases change at every occurrence. Recorded MIDI notes support undo/redo; save the project normally to retain them.
 - **MIDI CC mapping**: 64 mapping rows are available per project; each row shows **ON**, **CH**, **CC**, and **DESTINATION**. Press **EDIT** on **CC** to learn a controller. On **DESTINATION**, press **EDIT** to open the category popup: choose **Song**, a track, or a named instrument on the left, then its parameter on the right. This selects the target and parameter together, for example `Track 2: Mute` or `03 Bass: Cutoff`. **EDIT + Left/Right** cycles through the same choices without opening the popup. Choose **Unassigned** to clear a destination. Disabled rows retain their destination label. **PLAY** starts or stops the song from this screen.
 
   Use momentary buttons for **Song play/stop**, **Mute**, and **Solo**. Each press toggles playback or the selected track's mute/solo state; releasing the button leaves that state unchanged. Each transition from `0-63` to `64-127` counts as a press. A new mapping ignores the CC that learned/configured it and takes effect on the next physical movement, so setting up mappings during playback cannot reset a patch to zero.
 
-  During playback, hold **MOTION RECORD** to record incoming mapped CC changes as FX in each playing phrase using the mapped instrument, or in the mapped track for reverb and delay sends. The same three-slot and overflow rules as stick motion apply; repeated unchanged values are not written again. If a row is full, free an FX slot and send the CC value again to retry. CC changes continue to update the mapped project parameter. Only destinations with a corresponding absolute FX can be recorded: instrument and track volume, AY controls without absolute FX, and song/mute/solo controls cannot be captured. An unsupported continuous destination shows a message while recording. Some FX have coarser or narrower ranges than their instrument controls (for example aChChid decay); playback uses the nearest available FX value. **MOTION ERASE** remains specific to stick destinations.
+  During playback, hold **MOTION RECORD** to record incoming mapped CC changes as FX in each playing phrase using the mapped instrument, or in the mapped track for reverb and delay sends. The same three-slot and overflow rules as stick motion apply; repeated unchanged values are not written again. If a row is full, free an FX slot and send the CC value again to retry. CC changes continue to update the mapped project parameter. Only destinations with a corresponding absolute FX can be recorded: instrument and track volume, AY controls without absolute FX, and song/mute/solo controls cannot be captured. An unsupported continuous destination shows a message while recording. Some FX have coarser or narrower ranges than their instrument controls (for example aChChid decay); playback uses the nearest available FX value. **MOTION ERASE** removes matching mapped FX, including manually entered ones.
 - **Driving an external MIDI device**: give a track the [MIDI Out](#midi-out) instrument type and set its Channel; triggering notes on that track sends real MIDI to the selected MIDI Out device instead of making sound in ChooChooTracker.
 - **Send clock / Send transport**: in Settings > MIDI, select a **MIDI Out** device and enable either switch as needed. Both default to OFF and are remembered for this device. **Send clock** sends 24 pulses per quarter note during sequencer playback, following the internal tempo or the Ableton Link session. **Send transport** sends **Start** when playback begins and **Stop** when it ends; note and row previews do not start external gear. Each playback starts the receiver from its beginning; Continue and song-position pointers are not sent. Both outputs are suppressed while **Sync** is **MIDI** to prevent feedback; the switches retain their settings. Enable external MIDI sync on the receiving device.
 - **MIDI delay**: delay the outgoing notes, controllers, clock and transport together by `0–200 ms` to align an external synth with ChooChooTracker's audio output. Start at `0 ms`, then increase it if the external synth sounds early. Compare short attacks recorded together and fine-tune in `1 ms` steps; larger edits move by `10 ms`. The setting is saved. Switching between the console jack and a USB audio interface may require a different value.

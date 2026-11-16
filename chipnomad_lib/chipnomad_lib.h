@@ -55,7 +55,10 @@ struct MotionRecordEvent {
   FXId fx;
   uint8_t value;
   uint8_t erase;
+  uint8_t track = 0;
+  uint8_t instrument = EMPTY_VALUE_8;
 };
+constexpr uint8_t motionRecordEraseMidiCC = 2;
 
 // UI-facing copy of the audio state.  The callback never exposes its mutable
 // PlaybackState to the UI.
@@ -320,6 +323,7 @@ void chipnomadSetLiveStickAxes(float leftVertical, float leftHorizontal,
                                float rightVertical, float rightHorizontal);
 void chipnomadSetLiveStickEnabled(int enabled);
 void chipnomadSetMotionRecordMode(int record, int erase);
+void chipnomadSetMidiCCEraseEnabled(int enabled);
 int chipnomadConsumeMotionRecordEvent(MotionRecordEvent* event);
 int chipnomadGetMotionRecordOverflow(void);
 unsigned int chipnomadGetMotionRecordDroppedCount(void);

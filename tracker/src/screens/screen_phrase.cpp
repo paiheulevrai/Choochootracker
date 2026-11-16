@@ -303,11 +303,13 @@ int phraseScreenRecordMidi(uint8_t note, uint8_t instrument, uint8_t velocity) {
     screenMessage(MESSAGE_TIME_ERROR, "Exit phrase selection/FX edit to record");
     return 0;
   }
+  EditHistoryScope history("MIDI note");
   if (!canonicalWritable(true)) return 0;
   if (!hasPhrase) {
     screenMessage(MESSAGE_TIME_ERROR, "No phrase at cursor");
     return 0;
   }
+  if (!editHistoryCapture(EditObject::phrase, phraseIdx)) return 0;
   note = noteLockSnap(note, 0);
   midiRecordStep(chipnomadState->project.phrases[phraseIdx], screen.cursorRow, note, instrument, velocity);
   lastNote = note;

@@ -36,6 +36,7 @@ struct Change {
 struct Action {
   const char* label = "";
   uint64_t gesture = 0;
+  uint32_t midiSequence = 0;
   int modifiedBefore = 0;
   std::vector<Change> changes;
   size_t bytes() const {
@@ -56,6 +57,7 @@ unsigned depth = 0;
 bool failed = false, restoring = false;
 bool gestureHeld = false, joinGesture = false;
 uint64_t gestureId = 0;
+uint64_t revision = 0;
 ChipNomadState* owner = nullptr;
 const AppScreen* menuOwner = nullptr;
 
@@ -251,6 +253,7 @@ bool apply(bool redo) {
     audioManager.resume();
   }
   projectModified = 1;
+  ++revision;
   grooveboxDiscardUndo();
   appPublishProjectEdit();
   refreshScreen();
@@ -277,6 +280,24 @@ EditHistoryScope::EditHistoryScope(const char* label) {
     } else {
       pending.label = label;
       pending.gesture = gestureHeld || joinGesture ? gestureId : 0;
+      pending.modifiedBefore = projectModified;
+    }
+    joinGesture = false;
+    failed = false;
+  }
+}
+EditHistoryScope::EditHistoryScope(const char* label, uint32_t midiSequence) {
+  if (owner != chipnomadState) editHistoryClear();
+  if (!depth++) {
+    owner = chipnomadState;
+    if (midiSequence && count && cursor == count &&
+        actions[count - 1].midiSequence == midiSequence) {
+      pending = std::move(actions[--count]);
+      actions[count] = {};
+      --cursor;
+    } else {
+      pending.label = label;
+      pending.midiSequence = midiSequence;
       pending.modifiedBefore = projectModified;
     }
     joinGesture = false;
@@ -336,6 +357,7 @@ EditHistoryScope::~EditHistoryScope() {
       actions[count++] = std::move(pending);
       cursor = count;
       projectModified = 1;
+      ++revision;
     }
   }
   pending = {};
@@ -439,7 +461,7 @@ bool editHistoryCloneInstrument(int source, int destination) {
   }
   return true;
 }
-void editHistoryClear() { for (auto& a : actions) a = {}; pending = {}; count = cursor = depth = 0; failed = gestureHeld = joinGesture = false; owner = chipnomadState; }
+void editHistoryClear() { for (auto& a : actions) a = {}; pending = {}; count = cursor = depth = 0; failed = gestureHeld = joinGesture = false; owner = chipnomadState; ++revision; }
 void editHistoryGesture(bool held) {
   joinGesture = gestureHeld;
   if (!gestureHeld) ++gestureId;
@@ -454,6 +476,7 @@ bool editHistoryUndo() { return apply(false); }
 bool editHistoryRedo() { return apply(true); }
 bool editHistoryCanUndo() { return owner == chipnomadState && cursor > 0; }
 bool editHistoryCanRedo() { return owner == chipnomadState && cursor < count; }
+uint64_t editHistoryRevision() { return revision; }
 size_t editHistoryBytes() { return totalBytes(); }
 size_t editHistoryResourceBytes() { return totalResources(); }
 void editHistoryOpenMenu() {

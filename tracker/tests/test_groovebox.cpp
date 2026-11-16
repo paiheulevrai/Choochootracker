@@ -634,6 +634,26 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox simplified Length header resize
   CHECK(grooveboxEditorActive);
 }
 
+TEST_CASE_FIXTURE(GrooveboxUIFixture, "Simplified new patterns use default length without changing the previous pattern") {
+  auto& p = chipnomadState->project;
+  canonicalSimplifiedActive = true;
+  appSettings.defaultPatternLength = 2;
+  p.song[0][0] = EMPTY_VALUE_16;
+  REQUIRE(grooveboxAction(GrooveboxAction::newPattern, 0, 0));
+  const int first = p.song[0][0];
+  REQUIRE(first < PROJECT_MAX_CHAINS);
+  CHECK(grooveboxTrackLength(&p, 0, 0) == 2);
+  p.phrases[p.chains[first].rows[0].phrase].rows[0].note = 60;
+  REQUIRE(grooveboxAction(GrooveboxAction::newPattern, 0, 0));
+  CHECK(p.song[0][0] != first);
+  CHECK(grooveboxTrackLength(&p, 0, 0) == 2);
+  CHECK(p.phrases[p.chains[first].rows[0].phrase].rows[0].note == 60);
+  for (auto& phrase : p.phrases) phrase.rows[0].note = 48;
+  const int previous = p.song[0][0];
+  CHECK_FALSE(grooveboxAction(GrooveboxAction::newPattern, 0, 0));
+  CHECK(p.song[0][0] == previous);
+}
+
 TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox full-size new scene and Length limits are bounded") {
   auto& p = chipnomadState->project;
   appSettings.defaultPatternLength = 16;

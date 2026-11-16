@@ -101,11 +101,17 @@ actions, le démarrage impose une calibration explicite plutôt que de deviner.
 Le mapping sauvegardé n'est remplacé qu'après calibration et vérification
 réussies.
 
-Avant chaque capture, relâchez tous les boutons. Chaque modification est
-vérifiée en pressant puis relâchant les huit commandes principales, ainsi que
-la commande Motion modifiée le cas échéant : vous avez 15 secondes par étape.
-Réaffecter une entrée déjà utilisée l'échange avec l'emplacement édité, puis
-teste le résultat. **Calibrate controls** reconstruit les huit commandes
+Avant chaque capture, relâchez tous les boutons. Effectuez autant de
+modifications que nécessaire : l'ancien mapping reste actif pour naviguer.
+**Done** teste une seule fois les huit commandes principales et les nouvelles
+affectations, puis sauvegarde le résultat. Les suppressions et le retour aux
+valeurs par défaut sont inclus dans ce test. Vous avez 15 secondes par étape ;
+en cas d'expiration, l'ancien mapping reste actif et les autres modifications
+restent disponibles pour être corrigées ou retestées. Quitter l'éditeur,
+mettre en veille ou quitter l'application les annule. Réaffecter une entrée
+déjà utilisée l'échange avec l'emplacement édité ; le test final vérifie le
+résultat.
+**Calibrate controls** reconstruit les huit commandes
 principales ; les affectations Motion sont conservées sauf conflit.
 Les alias en conflit entre commandes optionnelles Motion/Undo/Redo sont
 laissés non assignés, avec un avertissement ; réaffectez-les ensuite si besoin.
@@ -967,7 +973,7 @@ Types de déclenchement LFO :
 
 - **STICK LIVE** (`L1` par défaut) applique la modulation stick sans changer la phrase. Dans **Settings > Stick live mode**, `HOLD` (par défaut) l’active pendant que le bouton est maintenu ; `TOGGLE` l’active à la première pression et le désactive à la suivante ; `FREE` le laisse en permanence activé. Relâcher le bouton en mode `TOGGLE` laisse l’activation active.
 - Pendant la lecture, maintenez **MOTION RECORD** (`L2`) pour appliquer la modulation stick et enregistrer les destinations modifiées comme valeurs FX absolues.
-- Maintenez **MOTION ERASE** (`R2`) pour retirer les FX destination correspondants de la ligne en cours.
+- Maintenez **MOTION ERASE** (`R2`, ou **DEL**) pour retirer les FX correspondant aux destinations stick et aux mappings MIDI CC actifs sur les pistes en lecture. Les FX correspondants saisis manuellement sont aussi supprimés ; les notes et le FX de délai `DEL` restent intacts.
 
 Le `~` en bas à droite indique que Stick live est actif. Record (`*`, ou `!` en cas de débordement) et Erase (`x`) ont la priorité d’affichage et restent momentanés dans les deux modes. Ces deux actions activent le traitement live du stick pendant qu’elles sont maintenues ; les relâcher laisse un toggle live séparément activé intact.
 
@@ -1525,7 +1531,8 @@ Ajustez Repeat delay et Repeat speed dans Paramètres. Si une seule pression pro
 
 Paramètres > **MIDI** ouvre ce sous-menu : **MIDI In** / **MIDI Out** choisit un appareil connecté, en faisant défiler les ports détectés avec `OFF` aux extrémités ; un appareil doit être sélectionné dans chaque sens.
 
-- **Préécoute sonore d’un clavier MIDI** : avec un appareil MIDI In sélectionné, jouer des notes sur le clavier connecté auditionne un instrument sur n’importe quel écran, comme le raccourci à l’écran **EDIT + PLAY** sur la page [Instrument](#5-instruments). C’est une préécoute seulement — cela ne saisit pas les notes dans la chanson.
+- **Clavier MIDI** : avec un appareil MIDI In sélectionné, les notes auditionnent un instrument sur n’importe quel écran. Sans REC, elles ne modifient pas les phrases.
+- **Enregistrement MIDI** : maintenez **MOTION RECORD** pour saisir les notes ; à l’arrêt, le canal Auto écrit à la position du curseur dans Phrase. Pendant la lecture, les notes existantes sur les lignes parcourues entre l’attaque et le relâchement sont effacées, sans supprimer leurs autres FX. La saisie MIDI peut être annulée et rétablie. Si une autre modification intervient pendant une note tenue, l’effacement en attente est ignoré avec un avertissement pour protéger les nouvelles données. Les phrases partagées changent à toutes leurs occurrences.
 - **Affectation des canaux** : ouvre la liste des 16 canaux MIDI; assignez à chacun un instrument (`OFF` par défaut) pour que les notes reçues sur ce canal préécoutent cet instrument quelle que soit la sélection sur la page Instrument — par ex. canal `01` → instrument `05`. Un canal laissé `OFF` revient à l’instrument actuellement sélectionné, comportement original. Cette affectation est sauvegardée dans settings.txt.
 - **Mapping MIDI CC** : mappe un contrôleur entrant à un paramètre d’instrument, y compris son **Volume**, ou à des contrôles globaux. Les lignes globales affichent `TRK 1`-`TRK 8` au lieu d’un instrument et fournissent les commandes piste **Mute**, **Solo**, **Volume**, **Send Reverb**, et **Send Delay** ; la commande **Song play/stop** n’a pas de cible. Un nouveau mapping ignore le CC qui l’a appris/configuré et prend effet au prochain mouvement physique, donc configurer pendant la lecture ne remet pas un patch à zéro. Silence et solo utilisent `0-63` = off, `64-127` = on.
 - **Synchronisation par horloge MIDI** : avec un appareil MIDI In sélectionné, réglez **Clock source** de l’écran Project sur **Midi Clock** pour suivre un séquenceur externe. Le tracker mesure le tempo sur l’horloge entrante (24 impulsions par noire) et l’affiche sur la ligne **Tempo** grisée ; les messages **Start**, **Continue** et **Stop** contrôlent la lecture. La source d’horloge est mémorisée dans settings.txt.

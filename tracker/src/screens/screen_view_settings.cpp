@@ -8,7 +8,7 @@
 #include <string.h>
 #include <chrono>
 
-// View settings window: opened from the Project screen's "View" row.
+// Editing mode settings, opened from the Project screen.
 //   row 0: Mode            active project view mode. Editing it (left/right
 //                          or tap) opens the CONVERSION screen - switching
 //                          modes converts the whole song structure.
@@ -89,7 +89,7 @@ static int getColumnCount(int) { return 1; }
 static void noHeader(int, CellState) {}
 static void viewStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
-  gfxPrint(0, 0, "VIEW");
+  gfxPrint(0, 0, "EDITING MODE");
 }
 
 // Fixed description shown under the cursor while it rests on the Mode row

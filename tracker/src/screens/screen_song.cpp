@@ -382,6 +382,11 @@ static int editCell(int col, int row, CellEditAction action) {
   }
   if (groovebox && action == CellEditAction::tap &&
       chipnomadState->project.song[row][col] == EMPTY_VALUE_16) {
+    if (canonicalSimplifiedActive) {
+      if (!grooveboxAction(GrooveboxAction::newPattern, row, col)) return 0;
+      lastChainValue = project.song[row][col];
+      return 1;
+    }
     int slot = grooveboxFindFreeChain(&chipnomadState->project, col);
     if (slot == EMPTY_VALUE_16) screenMessage(MESSAGE_TIME_ERROR, "No free chains");
     else {
@@ -393,6 +398,11 @@ static int editCell(int col, int row, CellEditAction action) {
   if (action == CellEditAction::doubleTap) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
+      if (canonicalSimplifiedActive && project.viewMode == ViewMode::classic) {
+        if (!grooveboxAction(GrooveboxAction::newPattern, row, col)) return 0;
+        lastChainValue = project.song[row][col];
+        return 1;
+      }
       int nextEmpty = groovebox ? grooveboxFindFreeChain(&chipnomadState->project, col) :
         chipnomadState->project.viewMode == ViewMode::simplified
           ? findEmptyPatternForTrack(&chipnomadState->project, col)

@@ -7,6 +7,7 @@
 static std::atomic<int32_t> liveStickAxes[4];
 static std::atomic<int> liveStickEnabled;
 static std::atomic<int> motionRecordMode;
+static std::atomic<int> midiCCEraseEnabled;
 static std::atomic<int> motionRecordRateReset;
 static std::atomic<int> motionRecordOverflow;
 static std::atomic<unsigned int> motionRecordDropped;
@@ -33,6 +34,7 @@ void chipnomadSetLiveStickAxes(float leftVertical, float leftHorizontal,
 }
 
 void chipnomadSetLiveStickEnabled(int enabled) { liveStickEnabled.store(enabled ? 1 : 0, std::memory_order_relaxed); }
+void chipnomadSetMidiCCEraseEnabled(int enabled) { midiCCEraseEnabled.store(enabled ? 1 : 0, std::memory_order_relaxed); }
 
 void chipnomadSetMotionRecordMode(int record, int erase) {
   int mode = erase ? 2 : record ? 1 : 0;
@@ -63,6 +65,7 @@ int chipnomadLiveStickIsEnabled(void) { return liveStickEnabled.load(std::memory
 int chipnomadMotionTakeRateReset(void) { return motionRecordRateReset.exchange(0, std::memory_order_relaxed); }
 int chipnomadMotionRateResetPending(void) { return motionRecordRateReset.load(std::memory_order_relaxed); }
 int chipnomadMotionMode(void) { return motionRecordMode.load(std::memory_order_relaxed); }
+int chipnomadMidiCCEraseEnabled(void) { return midiCCEraseEnabled.load(std::memory_order_relaxed); }
 void chipnomadMotionSetOverflow(void) { chipnomadSetMotionRecordOverflow(); }
 int chipnomadMotionPushEvent(const MotionRecordEvent& event) {
   unsigned int head = motionQueueHead.load(std::memory_order_relaxed);

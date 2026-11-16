@@ -8,6 +8,7 @@ enum class EditObject { song, chain, phrase, table, pattern, playhead };
 class EditHistoryScope {
  public:
   explicit EditHistoryScope(const char* label);
+  EditHistoryScope(const char* label, uint32_t midiSequence);
   ~EditHistoryScope();
   EditHistoryScope(const EditHistoryScope&) = delete;
   EditHistoryScope& operator=(const EditHistoryScope&) = delete;
@@ -25,6 +26,7 @@ bool editHistoryUndo();
 bool editHistoryRedo();
 bool editHistoryCanUndo();
 bool editHistoryCanRedo();
+uint64_t editHistoryRevision();
 size_t editHistoryBytes();
 size_t editHistoryResourceBytes();
 void editHistoryOpenMenu();

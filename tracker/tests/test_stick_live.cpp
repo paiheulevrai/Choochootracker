@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "common.h"
 #include "app.h"
+#include "edit_history.h"
 #include "app_ui_mock.h"
 #include "chipnomad_lib_live_stick.h"
 #include "corelib_file.h"
@@ -1349,6 +1350,152 @@ TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC motion records compatible FX on pla
   send(127);
   CHECK(row.fx[0].value == 255);
   motion(keyMotionRecord, false);
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC erase follows playing rows without controller movement") {
+  auto& project = chipnomadState->project;
+  projectInitAY(&project);
+  project.tickRate = 48;
+  project.tracksCount = 2;
+  getInstrumentFunctions(InstrumentType::Braids).init(&project.instruments[0]);
+  getInstrumentFunctions(InstrumentType::Braids).init(&project.instruments[1]);
+  for (int track = 0; track < 2; ++track) {
+    project.song[0][track] = track;
+    project.chains[track].rows[0].phrase = track;
+    auto& row = project.phrases[track].rows[0];
+    row.note = 48; row.instrument = track; row.volume = 90;
+    row.fx[0] = {fxBTM, 80};
+    row.fx[1] = {fxDEL, 2};
+    row.fx[2] = {fxRSN, 100};
+  }
+  project.midiCCMappings[0] = {1, 0, 41, 0, 3};
+  project.midiCCMappings[1] = {1, 0, 42, 1, midiCCDestinationTrackReverbSend};
+  project.midiCCMappings[2] = {0, 0, 43, 1, 3};
+  chipnomadInitChips(chipnomadState, 48000, nullptr);
+  playbackInit(&chipnomadState->playbackState, &chipnomadState->audioProject);
+  REQUIRE(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1));
+  float audio[2000]{};
+  chipnomadRender(chipnomadState, audio, 1000);
+  motion(keyMotionErase, true);
+  for (int i = 0; i < 3; ++i) chipnomadRender(chipnomadState, audio, 1000);
+  appOnEvent({MainLoopEvent::tick});
+  CHECK(project.phrases[0].rows[0].fx[0].command == FX_ID_EMPTY);
+  CHECK(project.phrases[0].rows[0].fx[2].command == fxRSN);
+  CHECK(project.phrases[1].rows[0].fx[0].command == fxBTM);
+  CHECK(project.phrases[1].rows[0].fx[2].command == FX_ID_EMPTY);
+  for (int track = 0; track < 2; ++track) {
+    CHECK(project.phrases[track].rows[0].note == 48);
+    CHECK(project.phrases[track].rows[0].fx[1].command == fxDEL);
+  }
+  motion(keyMotionErase, false);
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "live MIDI note and held-note replacement undo and redo together") {
+  MidiNoteInput midi;
+  auto savedPhraseInstrument = mockPhraseMidiInstrument;
+  mockPhraseMidiInstrument = 0;
+  auto& project = chipnomadState->project;
+  projectInitAY(&project);
+  project.tickRate = 48;
+  project.tracksCount = 1;
+  project.instruments[0].type = InstrumentType::AY1;
+  project.song[0][0] = 0;
+  project.chains[0].rows[0].phrase = 0;
+  for (int row = 0; row < 16; ++row) {
+    project.phrases[0].rows[row].note = 40 + row;
+    project.phrases[0].rows[row].instrument = 0;
+    project.phrases[0].rows[row].volume = 80;
+    project.phrases[0].rows[row].fx[0] = {fxPAN, 90};
+  }
+  const Phrase before = project.phrases[0];
+  chipnomadInitChips(chipnomadState, 48000, nullptr);
+  playbackInit(&chipnomadState->playbackState, &chipnomadState->audioProject);
+  REQUIRE(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1));
+  float audio[2000]{};
+  auto render = [&] { chipnomadRender(chipnomadState, audio, 1000); midi.now += 20833; };
+  render();
+  currentScreen = &screenPhrase;
+  *pSongTrack = 0;
+  editHistoryClear();
+  motion(keyMotionRecord, true);
+  midi.events.push_back({midi.now, 0x90, 15, 60, 100});
+  appOnEvent({MainLoopEvent::tick});
+  render();
+  appOnEvent({MainLoopEvent::tick});
+  REQUIRE(project.phrases[0].rows[0].note == 48);
+  bool intervened = false;
+  SUBCASE("no intervening edit") {}
+  SUBCASE("intervening edit is preserved") {
+    EditHistoryScope edit("later phrase edit");
+    REQUIRE(editHistoryCapture(EditObject::phrase, 0));
+    project.phrases[0].rows[1].note = 77;
+    intervened = true;
+  }
+  while (chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].phraseRow < 2) render();
+  const int releaseRow = chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].phraseRow;
+  midi.events.push_back({midi.now, 0x80, 15, 60, 0});
+  appOnEvent({MainLoopEvent::tick});
+  render();
+  appOnEvent({MainLoopEvent::tick});
+  motion(keyMotionRecord, false);
+  if (intervened) {
+    CHECK(project.phrases[0].rows[1].note == 77);
+    CHECK(project.phrases[0].rows[releaseRow].note == before.rows[releaseRow].note);
+    REQUIRE(editHistoryUndo());
+    CHECK(project.phrases[0].rows[1].note == before.rows[1].note);
+    REQUIRE(editHistoryUndo());
+    CHECK(std::memcmp(&before, &project.phrases[0], sizeof(Phrase)) == 0);
+    mockPhraseMidiInstrument = savedPhraseInstrument;
+    return;
+  }
+  CHECK(project.phrases[0].rows[1].note == EMPTY_VALUE_8);
+  CHECK(project.phrases[0].rows[releaseRow].note == NOTE_OFF);
+  const Phrase recorded = project.phrases[0];
+  REQUIRE(editHistoryUndo());
+  CHECK(std::memcmp(&before, &project.phrases[0], sizeof(Phrase)) == 0);
+  REQUIRE(editHistoryRedo());
+  CHECK(std::memcmp(&recorded, &project.phrases[0], sizeof(Phrase)) == 0);
+  mockPhraseMidiInstrument = savedPhraseInstrument;
+}
+
+TEST_CASE_FIXTURE(StickLiveFixture, "a refused free MIDI note never erases later rows") {
+  MidiNoteInput midi;
+  auto savedPhraseInstrument = mockPhraseMidiInstrument;
+  mockPhraseMidiInstrument = 0;
+  auto& project = chipnomadState->project;
+  projectInitAY(&project);
+  project.tickRate = 48;
+  project.tracksCount = 1;
+  project.instruments[0].type = InstrumentType::AY1;
+  project.song[0][0] = 0;
+  project.chains[0].rows[0].phrase = 0;
+  for (int row = 0; row < 16; ++row) {
+    project.phrases[0].rows[row].note = 40 + row;
+    project.phrases[0].rows[row].instrument = 0;
+  }
+  auto& first = project.phrases[0].rows[0];
+  first.fx[0] = {fxPAN, 80}; first.fx[1] = {fxPIT, 1}; first.fx[2] = {fxVOL, 1};
+  const Phrase before = project.phrases[0];
+  chipnomadInitChips(chipnomadState, 48000, nullptr);
+  playbackInit(&chipnomadState->playbackState, &chipnomadState->audioProject);
+  REQUIRE(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1));
+  float audio[2000]{};
+  auto render = [&] { chipnomadRender(chipnomadState, audio, 1000); midi.now += 20833; };
+  render(); render();
+  currentScreen = &screenPhrase;
+  *pSongTrack = 0;
+  editHistoryClear();
+  appSettings.midiRecordMode = MidiRecordMode::free;
+  motion(keyMotionRecord, true);
+  midi.events.push_back({midi.now, 0x90, 15, 60, 100});
+  appOnEvent({MainLoopEvent::tick}); render(); appOnEvent({MainLoopEvent::tick});
+  CHECK(std::memcmp(&before, &project.phrases[0], sizeof(Phrase)) == 0);
+  while (chipnomadGetPlaybackStatus(chipnomadState)->tracks[0].phraseRow < 2) render();
+  midi.events.push_back({midi.now, 0x80, 15, 60, 0});
+  appOnEvent({MainLoopEvent::tick}); render(); appOnEvent({MainLoopEvent::tick});
+  motion(keyMotionRecord, false);
+  CHECK(std::memcmp(&before, &project.phrases[0], sizeof(Phrase)) == 0);
+  mockPhraseMidiInstrument = savedPhraseInstrument;
 }
 
 TEST_CASE_FIXTURE(StickLiveFixture, "MIDI CC recording preserves full rows and reports unsupported destinations") {
