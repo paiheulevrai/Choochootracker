@@ -142,7 +142,8 @@ void SCWFVoice::render(float* output, size_t frames) {
   for (size_t i = 0; i < frames; ++i) {
     if (!post_.envelopeActive()) { kill(); break; }
     float value = sampleAt(0, phase_[0]) * (1.0f - blend) + sampleAt(1, phase_[1]) * blend;
-    for (int channel = 0; channel < 2; ++channel) output[i * 2 + channel] = post_.process(value, channel);
+    output[i * 2] = output[i * 2 + 1] = value;
+    post_.processStereo(output + i * 2);
     phase_[0] += step_[0];
     phase_[1] += step_[1];
   }

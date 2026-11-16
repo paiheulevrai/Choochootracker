@@ -17,6 +17,62 @@ static InstrumentSintered sinteredFixture(SinteredModel model) {
   s.filterEnabled = 1; s.filterCharacter = 1; s.filterCutoffHz = 20000; return s;
 }
 
+TEST_CASE("Sintered chord voice retriggers remain continuous across filter types") {
+  for (int character = 0; character <= 6; ++character) {
+    float worst = 0.0f;
+    for (int mode = 0; mode < 3; ++mode) for (int slope = 0; slope < 2; ++slope)
+    for (int model = 0; model < (int)SinteredModel::totalCount; ++model) {
+      InstrumentSintered s = sinteredFixture((SinteredModel)model);
+      s.gate = 1;
+      s.filterCharacter = character;
+      s.filterMode = mode;
+      s.filterSlope24dB = slope;
+      for (int offset : {1200, 1900, 2800}) {
+        SinteredVoice voice;
+        voice.init(48000);
+        voice.configure(&s, 6000, 1, 2000, 100);
+        voice.noteOn();
+        std::vector<float> audio(offset);
+        voice.render(audio.data(), audio.size());
+        CHECK(std::fabs(audio.front()) < 0.025f);
+        voice.noteOn();
+        float next = 0;
+        voice.render(&next, 1);
+        worst = std::max(worst, std::fabs(next - audio.back()));
+      }
+    }
+    INFO("character=", character, " worst=", worst);
+    CHECK(worst < 0.04f);
+  }
+}
+
+TEST_CASE("Sintered cut tails are continuous and independent of block size") {
+  for (float rate : {32000.0f, 48000.0f}) {
+    InstrumentSintered s = sinteredFixture(SinteredModel::shard);
+    s.gate = 1;
+    SinteredVoice whole, chunked;
+    whole.init(rate); chunked.init(rate);
+    whole.configure(&s, 6000, 1, 20000, 0);
+    chunked.configure(&s, 6000, 1, 20000, 0);
+    whole.noteOn(); chunked.noteOn();
+    std::vector<float> before(601), other(before.size());
+    whole.render(before.data(), before.size());
+    chunked.render(other.data(), other.size());
+    REQUIRE(std::fabs(before.back()) > 0.04f);
+    whole.kill(); chunked.kill();
+    chunked.kill();
+    REQUIRE(whole.active());
+    std::vector<float> a(256), b(a.size());
+    whole.render(a.data(), a.size());
+    for (size_t i = 0; i < b.size(); ++i) chunked.render(&b[i], 1);
+    CHECK(a == b);
+    CHECK(std::fabs(a.front() - before.back()) < 0.04f);
+    CHECK(a.back() == 0.0f);
+    CHECK_FALSE(whole.active());
+    CHECK_FALSE(chunked.active());
+  }
+}
+
 TEST_CASE("Sintered renders bounded deterministic one shots") {
   for (int model = 0; model < (int)SinteredModel::totalCount; ++model) {
     InstrumentSintered s = sinteredFixture((SinteredModel)model); SinteredVoice a, b; a.init(48000); b.init(48000);
@@ -112,6 +168,7 @@ TEST_CASE("Sintered gate sustains all models and releases with decay") {
       voice.render(release.data(), release.size());
       CHECK(voice.envelopeLevel() == 1);
       voice.kill();
+      voice.render(release.data(), release.size());
       CHECK_FALSE(voice.active());
     }
   }
@@ -187,6 +244,13 @@ TEST_CASE("Sintered sequencer note off releases sustained chord voices") {
     CHECK(state->sinteredVoices[0][slot]->active());
     CHECK(state->sinteredVoices[0][slot]->envelopeLevel() == 1);
   }
+  auto* removedVoice = state->sinteredVoices[0][3];
+  removedVoice->kill();
+  state->playbackState.tracks[0].chordVoiceCount = 1;
+  REQUIRE(chipnomadRender(state.get(), audio.data(), 480) == 480);
+  CHECK_FALSE(removedVoice->active());
+  state->playbackState.tracks[0].chordVoiceCount = 4;
+  removedVoice->noteOn();
   for (int block = 0; block < 100; ++block)
     REQUIRE(chipnomadRender(state.get(), audio.data(), 480) == 480);
   for (int slot = 0; slot < 4; ++slot)

@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cstring>
 void SimpleChipVoice::init(float rate){
- rate_=std::max(rate,8000.f);if(apu_)apu_quit(apu_);apu_=apu_init(4194304,rate_);
+ rate_=std::max(rate,8000.f);declick_.init(rate_);if(apu_)apu_quit(apu_);apu_=apu_init(4194304,rate_);
  if(apu_){apu_reset(apu_,GbApuType_DMG);apu_set_bass(apu_,20);}
  sega_={};sega_.clk=3579545;SNG_set_rate(&sega_,3579545/16);SNG_set_quality(&sega_,0);SNG_reset(&sega_);
  resampler_.init(3579545/16,rate_);post_.init(rate_);dcPole_=std::exp(-2*3.141592653589793*20/rate_);kill();
@@ -60,12 +60,13 @@ void SimpleChipVoice::registers(bool trigger){
 }
 void SimpleChipVoice::noteOn(){
  if(type_!=InstrumentType::SegaPSG&&!apu_)return;
+ declick_.trigger(active_||declick_.tailActive());
  if(type_==InstrumentType::SegaPSG)SNG_reset(&sega_);else{apu_reset(apu_,GbApuType_DMG);sequencerRemaining_=8192;}
  macros_.reset(patch_.program);macroPhase_=0;macroRelease_=false;
  resampler_.reset();previous_=dc_=0;registers(true);post_.noteOn(true);active_=true;
 }
 void SimpleChipVoice::noteOff(){macroRelease_=macros_.releaseTail(patch_.program,0);macros_.release(patch_.program);if(!macroRelease_)post_.noteOff();}
-void SimpleChipVoice::kill(){active_=false;post_.kill();lastFrequency_=lastMode_=lastNoise_=lastEnvelope_=-1;previous_=dc_=0;}
+void SimpleChipVoice::kill(){declick_.cut(active_);active_=false;post_.kill();lastFrequency_=lastMode_=lastNoise_=lastEnvelope_=-1;previous_=dc_=0;}
 float SimpleChipVoice::segaSample(){float left,right;resampler_.next([&](float& l,float& r){l=r=SNG_calc(&sega_)/4096.f;},left,right);float out=left-previous_+dcPole_*dc_;previous_=left;dc_=out;return out;}
 float SimpleChipVoice::gbSample(){
  int clocks=apu_clocks_needed(apu_,2);
@@ -75,6 +76,6 @@ float SimpleChipVoice::gbSample(){
  }
  short samples[2]{};apu_read_samples(apu_,samples,2);return (samples[0]+samples[1])/65536.f;
 }
-void SimpleChipVoice::render(float* mono,size_t frames){for(size_t i=0;i<frames;++i){if(!active_){mono[i]=0;continue;}
+void SimpleChipVoice::render(float* mono,size_t frames){for(size_t i=0;i<frames;++i){if(!active_){declick_.renderTail(mono+i,frames-i);break;}
  if(patch_.program.format){macroPhase_+=patch_.program.rate/double(rate_);if(macroPhase_>=1){macroPhase_-=1;macros_.tick(patch_.program);registers(false);if(macroRelease_&&macros_.done(0))post_.noteOff();}}
- mono[i]=post_.process(type_==InstrumentType::SegaPSG?segaSample():gbSample())*nativeChipGain(type_)*macroGain_;if(!post_.envelopeActive())kill();}}
+ mono[i]=declick_.process(post_.process(type_==InstrumentType::SegaPSG?segaSample():gbSample())*nativeChipGain(type_)*macroGain_);if(!post_.envelopeActive())kill();}}

@@ -1032,6 +1032,8 @@ Existing Clap instruments remain loadable, but sound different: their former Noi
 
 Every model can use the shared LP/BP/HP multimode filter, with Clean, Classic, Aggro, Acid, Roar or Snarl character, cutoff and resonance. Clean, Classic, Aggro and Acid expose `12`/`24 dB` slope; Roar and Snarl expose Color instead. Bogie supports all of its active macros plus Volume, Pitch, Cutoff and Resonance as modulation and motion-recording destinations. Use short Decay with Cowbell for sharp phonk attacks; increase FM for a harder, more metallic bell.
 
+Bogie and DigiSophie smooth retriggers and cuts over 2 ms to reduce clicks; Bogie's initial percussive attack is unchanged.
+
 On the Modulation screen, press **EDIT** on a source to choose a family (Envelopes, LFO or Sticks), then its source. **Left** and **Right** still cycle sources directly.
 
 Changing an instrument's **Type** keeps its four modulation sources, all source
@@ -1079,6 +1081,8 @@ target-console performance check.
 The seventh control, **Gate**, is a toggle: **OFF** preserves the one-shot decay (including in older projects); **ON** sustains the note while its gate is open, then fades out using **Decay** on note-off. Press **EDIT** to toggle it. Motion and the initial impact still run once per trigger; retriggering resets the voice in either mode.
 
 Motion is an internal macro envelope, not pitch glide: values below `80` use an AD shape, `80` disables it, and values above `80` use a decay-only shape. Moving farther from the centre makes the sweep deeper and longer. Its destinations are fixed per model, so Sintered stays predictable in tracker patterns: Knot animates Mod/Fold; Crease Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive; Squall FM. All models reset their state on a note trigger and bound internal feedback for repeatable hits.
+
+Sintered smooths note attacks, retriggers and cuts over 2 ms to reduce clicks, including when playing chords.
 
 ### MonkSynth
 
@@ -2524,7 +2528,8 @@ respectively. The additions cover linked/periodic Sega noise, GB pitch sweeps,
 short percussion, metallic noise, drones and rises. These are original programs,
 not extracted game sounds.
 The page offers native mode/duty/width, envelope/sweep/noise controls as
-applicable, plus a software amplitude ADSR. These save in version-6 native files.
+applicable, plus a software amplitude ADSR. Retriggers and cuts are smoothed
+over 2 ms; the initial chip attack is unchanged. These save in version-6 native files.
 Automated ARM64 performance/audio checks pass within the reported workload
 limits; human listening remains pending.
 

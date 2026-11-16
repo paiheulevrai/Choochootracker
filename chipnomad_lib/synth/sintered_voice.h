@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "voice_post_processor.h"
+#include "voice_declick.h"
 #include "../project_instruments.h"
 
 class SinteredVoice {
@@ -15,7 +16,7 @@ class SinteredVoice {
   void noteOff();
   void kill();
   void render(float* output, size_t frames);
-  bool active() const { return active_; }
+  bool active() const { return active_ || declick_.tailActive(); }
   float envelopeLevel() const { return active_ ? amplitude_ : 0.0f; }
 
  private:
@@ -24,6 +25,7 @@ class SinteredVoice {
   float random();
   InstrumentSintered parameters_{};
   VoicePostProcessor<> post_;
+  VoiceDeclick declick_;
   float sampleRate_ = 48000.0f, frequency_ = 440.0f, age_ = 0.0f, duration_ = 0.1f, amplitude_ = 0.0f;
   float decayAge_ = 0.0f;
   float phase_[5]{}, feedback_ = 0.0f, dc_ = 0.0f, noiseLow_ = 0.0f, comb_[64]{};

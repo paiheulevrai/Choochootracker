@@ -2314,13 +2314,13 @@ static void renderChipTracks(ChipNomadState* state, int frames) {
 }
 
 template <typename Voice>
-static void renderMonoVoiceTracks(ChipNomadState* state, Voice* const voices[][CHORD_MAX_VOICES], int frames) {
+static void renderMonoVoiceTracks(ChipNomadState* state, Voice* const voices[][CHORD_MAX_VOICES], int frames, bool includeReleaseSlots = false) {
   for (int owner = 0; owner < voiceOwnerLimit(state); ++owner) {
     if (!voiceOwnerValid(state, owner)) continue;
     const int trackIdx = voiceOwnerTrack(owner);
     PlaybackTrackState* voiceTrack = voiceOwnerState(state, owner);
     if (!trackNeedsRender(state, trackIdx)) continue;
-    for (int slot = 0; slot < voiceTrack->chordVoiceCount; ++slot) {
+    for (int slot = 0; slot < (includeReleaseSlots ? CHORD_MAX_VOICES : voiceTrack->chordVoiceCount); ++slot) {
       Voice* voice = voices[owner][slot];
       if (!voice || !voice->active()) continue;
       float* rendered = state->mixBuffer;
@@ -2576,10 +2576,10 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
     renderMonoVoiceTracks(state, state->plaitsVoices, frames);
     renderMonoVoiceTracks(state, state->plaitsAltVoices, frames);
     renderMonoVoiceTracks(state, state->achchidVoices, frames);
-    renderMonoVoiceTracks(state, state->drumSynthVoices, frames);
+    renderMonoVoiceTracks(state, state->drumSynthVoices, frames, true);
     renderStereoVoiceTracks(state, state->monkVoices, frames, true);
     renderMonoVoiceTracks(state, state->mmeVoices, frames);
-    renderMonoVoiceTracks(state, state->sinteredVoices, frames);
+    renderMonoVoiceTracks(state,state->sinteredVoices,frames,true);
     renderMonoVoiceTracks(state, state->bass808Voices, frames);
     renderMonoVoiceTracks(state, state->opllVoices, frames);
     for(int t=0;t<voiceOwnerLimit(state);++t) {
@@ -2605,7 +2605,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
 
     renderStereoVoiceTracks(state,state->fourOpVoices,frames);
     renderStereoVoiceTracks(state,state->oplVoices,frames);
-    renderMonoVoiceTracks(state,state->simpleChipVoices,frames);
+    renderMonoVoiceTracks(state,state->simpleChipVoices,frames,true);
     SIDVoice* sidPool[VOICE_OWNER_COUNT*CHORD_MAX_VOICES];int sidCount=0;
     // Order roots first across tracks; deterministic stealing retains new roots.
     if (state->sidVoices[0][0]) {

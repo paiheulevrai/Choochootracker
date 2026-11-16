@@ -122,6 +122,32 @@ TEST_CASE("SampleVoice smooths the first trigger and retrigger without shifting 
   CHECK(output[2 * 95] == doctest::Approx(firstAttackEnd).epsilon(0.05));
 }
 
+TEST_CASE("SampleVoice loop crossfade advances its stereo attack once per frame") {
+  int16_t pcm[1024];
+  for (auto& sample : pcm) sample = 16000;
+  InstrumentSample sample{};
+  sample.sampleRate = 48000;
+  sample.frameCount = 512;
+  sample.channels = 1;
+  sample.data = pcm;
+  sample.end = 255;
+  sample.sustain = 255;
+  sample.attack = 64;
+  sample.envelopeShape = 128;
+  for (int channels : {1, 2}) for (int mode : {2, 4}) for (int filter : {0, 1}) {
+    sample.channels = channels;
+    sample.filterEnabled = filter;
+    sample.filterCharacter = 1;
+    SampleVoice voice;
+    voice.init(48000);
+    voice.configure(&sample, 0, 1, 100, 0, 255, mode, 2000, 80);
+    voice.noteOn();
+    std::vector<float> output(2048 * 2);
+    voice.render(output.data(), 2048);
+    for (int i = 0; i < 2048; ++i) CHECK(output[2 * i] == output[2 * i + 1]);
+  }
+}
+
 TEST_CASE("SampleVoice start and end delimit playback") {
   int16_t pcm[64];
   for (int i = 0; i < 64; ++i) pcm[i] = 12000;

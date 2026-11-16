@@ -801,15 +801,14 @@ void SampleVoice::render(float* output, size_t frames) {
       if (monoSource) {
         const float sample = xfade_.sample(
           [this](double pos, int ch) { return sampleAt(pos, ch); }, 0);
-        output[i * 2] = post_.process(sample, 0);
-        output[i * 2 + 1] = post_.process(sample, 1);
+        output[i * 2] = output[i * 2 + 1] = sample;
       } else {
         for (int channel = 0; channel < 2; channel++) {
-          output[i * 2 + channel] = post_.process(
-            xfade_.sample([this](double pos, int ch) { return sampleAt(pos, ch); }, channel),
-            channel);
+          output[i * 2 + channel] =
+            xfade_.sample([this](double pos, int ch) { return sampleAt(pos, ch); }, channel);
         }
       }
+      post_.processStereo(output + i * 2);
       finishFrame(output + i * 2);
       if (!xfade_.advance(step_)) {
         xfade_.takeIncoming(&position_, &direction_);
@@ -860,15 +859,14 @@ void SampleVoice::render(float* output, size_t frames) {
       if (monoSource) {
         const float sample = xfade_.sample(
           [this](double pos, int ch) { return sampleAt(pos, ch); }, 0);
-        output[i * 2] = post_.process(sample, 0);
-        output[i * 2 + 1] = post_.process(sample, 1);
+        output[i * 2] = output[i * 2 + 1] = sample;
       } else {
         for (int channel = 0; channel < 2; channel++) {
-          output[i * 2 + channel] = post_.process(
-            xfade_.sample([this](double pos, int ch) { return sampleAt(pos, ch); }, channel),
-            channel);
+          output[i * 2 + channel] =
+            xfade_.sample([this](double pos, int ch) { return sampleAt(pos, ch); }, channel);
         }
       }
+      post_.processStereo(output + i * 2);
       finishFrame(output + i * 2);
       if (!xfade_.advance(step_)) {
         xfade_.takeIncoming(&position_, &direction_);

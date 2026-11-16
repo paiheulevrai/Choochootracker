@@ -9,6 +9,7 @@ static constexpr float pi = 3.14159265358979323846f;
 
 void DrumSynthVoice::init(float sampleRate) {
   sampleRate_ = sampleRate > 0.0f ? sampleRate : 48000.0f;
+  declick_.init(sampleRate_);
   instrument_ = nullptr; active_ = false; age_ = duration_ = envelope_ = 0.0f;
   frequency_ = 110.0f; noiseLow_ = 0.0f; randomState_ = 0x43525452u;
   memset(phase_, 0, sizeof(phase_)); post_.init(sampleRate_);
@@ -95,6 +96,7 @@ void DrumSynthVoice::configure(const InstrumentDrumSynth* instrument, float pitc
 
 void DrumSynthVoice::noteOn() {
   if (!instrument_) return;
+  declick_.trigger(active_ || declick_.tailActive());
   age_ = 0.0f; envelope_ = 1.0f; noiseLow_ = 0.0f; active_ = true;
   memset(phase_, 0, sizeof(phase_));
   float d = instrument_->decay / 255.0f;
@@ -114,7 +116,7 @@ void DrumSynthVoice::noteOn() {
   }
 }
 void DrumSynthVoice::noteOff() { if (digiSophie_) post_.noteOff(); }
-void DrumSynthVoice::kill() { active_ = false; post_.kill(); }
+void DrumSynthVoice::kill() { declick_.cut(active_); active_ = false; post_.kill(); }
 
 float DrumSynthVoice::random() {
   randomState_ = randomState_ * 1664525u + 1013904223u;
@@ -149,15 +151,15 @@ void DrumSynthVoice::renderClap(float* output, size_t frames) {
       clapCountdown_ = clapSpacing_;
     }
     if (!clapRemaining_ && clapSlap_ < 0.001f && clapTail_ < 0.001f) {
-      kill(); memset(output + i, 0, (frames - i) * sizeof(float)); break;
+      kill(); declick_.renderTail(output + i, frames - i); break;
     }
     const float n = random();
     clapLow_ += clapLowAlpha_ * (n - clapLow_);
     clapHigh_ += clapHighAlpha_ * (n - clapHigh_);
     envelope_ = (clapSlap_ + 0.55f * clapTail_) / 1.55f;
     const float sample = (clapHigh_ - clapLow_) * clapMakeup_;
-    output[i] = post_.process(audioTanh(sample * drive) * inverseDriveSaturation *
-      envelope_ * 1.352630f);
+    output[i] = declick_.process(post_.process(audioTanh(sample * drive) * inverseDriveSaturation *
+      envelope_ * 1.352630f));
     clapSlap_ *= clapSlapDecay_;
     clapTail_ *= clapTailDecay_;
     age_ += 1.0f / sampleRate_;
@@ -167,14 +169,14 @@ void DrumSynthVoice::renderClap(float* output, size_t frames) {
 
 void DrumSynthVoice::render(float* output, size_t frames) {
   if (!output) return;
-  if (!active_ || !instrument_) { memset(output, 0, frames * sizeof(float)); return; }
+  if (!active_ || !instrument_) { declick_.renderTail(output, frames); return; }
   if (digiSophie_) {
     const float step = 48000.0f / sampleRate_;
     for (size_t i = 0; i < frames; ++i) {
       if (!post_.envelopeActive() || envelope_ < 0.001f) {
-        kill(); memset(output + i, 0, (frames - i) * sizeof(float)); break;
+        kill(); declick_.renderTail(output + i, frames - i); break;
       }
-      output[i] = post_.process((sophieLeft_ + (sophieRight_ - sophieLeft_) * sophiePosition_) * envelope_);
+      output[i] = declick_.process(post_.process((sophieLeft_ + (sophieRight_ - sophieLeft_) * sophiePosition_) * envelope_));
       envelope_ *= sophieDecay_;
       sophiePosition_ += step;
       while (sophiePosition_ >= 1.0f) {
@@ -200,7 +202,7 @@ void DrumSynthVoice::render(float* output, size_t frames) {
   const float inverseDriveSaturation = 1.0f / audioTanh(drive);
   const float fmRatio = .25f * powf(2.0f, tone * 2.5f);
   for (size_t i = 0; i < frames; ++i) {
-    if (age_ >= duration_) { kill(); memset(output + i, 0, (frames - i) * sizeof(float)); break; }
+    if (age_ >= duration_) { kill(); declick_.renderTail(output + i, frames - i); break; }
     float progress = age_ / duration_, fast = expf(-age_ / (0.006f + 0.050f * (1.0f - tone)));
     envelope_ = expf(-5.5f * progress);
     float n = random(); noiseLow_ += (n - noiseLow_) * (0.015f + tone * 0.25f);
@@ -280,7 +282,7 @@ void DrumSynthVoice::render(float* output, size_t frames) {
       default: break;
     }
     sample = audioTanh(sample * drive) * inverseDriveSaturation * envelope_;
-    output[i] = post_.process(sample * calibration);
+    output[i] = declick_.process(post_.process(sample * calibration));
     age_ += 1.0f / sampleRate_;
   }
 }

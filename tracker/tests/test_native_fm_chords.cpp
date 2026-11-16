@@ -14,7 +14,8 @@
 
 namespace {
 std::vector<float> renderTiltChord(InstrumentType type, uint8_t tilt, int blockSize,
-                                   int sampleRate = 48000, int tickRate = 8, bool chord = true) {
+                                   int sampleRate = 48000, int tickRate = 8, bool chord = true,
+                                   int sinteredFilter = -1) {
   auto state = std::unique_ptr<ChipNomadState, decltype(&chipnomadDestroy)>(
     chipnomadCreate(), chipnomadDestroy);
   REQUIRE(state);
@@ -28,7 +29,9 @@ std::vector<float> renderTiltChord(InstrumentType type, uint8_t tilt, int blockS
     for (auto& speed : groove.speed) speed = 2;
   getInstrumentFunctions(type).init(&p.instruments[0]);
   if (type == InstrumentType::Layer) {
-    const InstrumentType children[] = {InstrumentType::VRC7, InstrumentType::OPL2, InstrumentType::AudioIn};
+    const InstrumentType children[] = {
+      sinteredFilter >= 0 ? InstrumentType::Sintered : InstrumentType::VRC7,
+      InstrumentType::OPL2, InstrumentType::AudioIn};
     for (int child = 0; child < 3; ++child) {
       auto& instrument = p.instruments[child + 1];
       getInstrumentFunctions(children[child]).init(&instrument);
@@ -52,6 +55,14 @@ std::vector<float> renderTiltChord(InstrumentType type, uint8_t tilt, int blockS
     input.filterEnabled = 0;
     input.attack = input.decay = input.release = 0;
     input.sustain = 255;
+  }
+  if (sinteredFilter >= 0) {
+    auto& sintered = p.instruments[type == InstrumentType::Layer ? 1 : 0].chip.sintered;
+    sintered.gate = 1;
+    sintered.filterEnabled = sinteredFilter != 0;
+    sintered.filterCharacter = sinteredFilter;
+    sintered.filterCutoffHz = 2000;
+    sintered.filterResonance = 100;
   }
   p.trackTilt[0] = tilt;
   p.trackVolume[0] = 100;
@@ -118,6 +129,17 @@ TEST_CASE("Track tilt on mono, stereo and Layer chords is independent of render 
           CHECK(maxDifference(reference, renderTiltChord(type, tilt, frames, rate, tickRate)) < 1e-7f);
         }
       }
+}
+
+TEST_CASE("Sintered filtered chords and Layer retriggers are independent of render blocks") {
+  for (auto type : {InstrumentType::Sintered, InstrumentType::Layer}) {
+    for (int filter = 0; filter <= 6; ++filter) {
+      CAPTURE(type); CAPTURE(filter);
+      const auto reference = renderTiltChord(type, 128, 32, 48000, 8, true, filter);
+      for (int frames : {137, 512})
+        CHECK(maxDifference(reference, renderTiltChord(type, 128, frames, 48000, 8, true, filter)) < 1e-7f);
+    }
+  }
 }
 
 TEST_CASE("Track tilt filters the summed signal once including Layer children and overdrive") {

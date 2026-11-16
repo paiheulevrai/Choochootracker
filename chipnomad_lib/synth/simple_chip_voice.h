@@ -4,6 +4,7 @@
 #include "../external/gb_apu/gb_apu.h"
 #include "native_resampler.h"
 #include "voice_post_processor.h"
+#include "voice_declick.h"
 #include "../chip_program.h"
 class SimpleChipVoice {
  public:
@@ -12,11 +13,11 @@ class SimpleChipVoice {
   SimpleChipVoice(const SimpleChipVoice&)=delete;SimpleChipVoice& operator=(const SimpleChipVoice&)=delete;
   void init(float rate);void configure(InstrumentType type,const InstrumentSimpleChip* patch,float cents,float gain);
   void noteOn();void noteOff();void kill();void render(float* mono,size_t frames);
-  bool active()const{return active_;}float envelopeLevel()const{return active_?post_.envelopeLevel():0;}
+  bool active()const{return active_||declick_.tailActive();}float envelopeLevel()const{return active_?post_.envelopeLevel():0;}
  private:
   void registers(bool trigger);void gbWrite(unsigned reg,unsigned value){apu_write_io(apu_,reg,value,0);}
   float gbSample();float segaSample();
-  SNG sega_{};GbApu* apu_=nullptr;NativeResampler resampler_;VoicePostProcessor<> post_;
+  SNG sega_{};GbApu* apu_=nullptr;NativeResampler resampler_;VoicePostProcessor<> post_;VoiceDeclick declick_;
   InstrumentType type_=InstrumentType::none;InstrumentSimpleChip patch_{};
   float rate_=48000,cents_=6000,dc_=0,previous_=0,dcPole_=.997f;
   unsigned sequencerRemaining_=8192;
