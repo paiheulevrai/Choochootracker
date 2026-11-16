@@ -620,6 +620,14 @@ Settings → Load font → fonts/Pixel16x24 contains TechMonoAudit (converted fr
 
 The themes folder also includes Bb22200, Bliss, Eclair, Greydark and Reddeep. Bliss uses a classic blue installer palette with cyan and yellow accents. NostromoAmberDa2 is in the IDEColorThemes subfolder.
 
+The fonts folder also includes Minitel, a five-size pixel font based on the
+Minitel-Canvas font. It is optional and does not change the default font;
+see Minitel-README.txt for its source, license and character adaptation.
+RetroC64 and RetroWorkbench offer additional optional five-size retro styles.
+See Retro-README.txt for sources, licenses and conversion details.
+CodeMono and MachineMono are five-size conversions of mononoki and IBM Plex
+Mono, respectively; their names differ from the upstream Reserved Font Names.
+
 ### Project page spacing
 
 The Project page puts the application version on its own line and separates Load, Save, New, Export and Manage from the project metadata with blank rows. Cursor positions and touch targets follow the displayed fields; project settings and file operations are unchanged.
