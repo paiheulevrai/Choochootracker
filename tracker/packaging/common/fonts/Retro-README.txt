@@ -21,6 +21,17 @@ RetroWorkbench.cnfont: derived from Workbench by the Workbench Project
   License: ../licenses/Workbench-OFL.txt
   The source's vertically doubled raster is reduced to square pixels.
 
+Segment14.cnfont: derived from DSEG14 Classic Regular by keshikan,
+  Copyright 2017. SIL Open Font License 1.1; "DSEG" is a Reserved Font
+  Name, so this conversion has a different name.
+  https://github.com/keshikan/DSEG/releases/tag/v0.46
+  Source: DSEG14Classic-Regular.ttf from fonts-DSEG_v046.zip.
+  SHA-256: 0106818dd2e2c9ac9c6b5b7edbbe193df367397d48a18377a58090b00580d4e6
+  License: ../licenses/DSEG-OFL.txt
+  Missing ASCII # ; [ ] { } and the display-specific ! and ~ are replaced
+  by IBM Plex Mono glyphs; see MachineMono below for source and license.
+  Lowercase letters have the same appearance as uppercase in this source.
+
 CodeMono.cnfont: derived from mononoki Regular by Matthias Tellen,
   Copyright 2022. SIL Open Font License 1.1; "mononoki" is a Reserved Font
   Name, so this conversion has a different name.
@@ -41,6 +52,6 @@ MachineMono.cnfont: derived from IBM Plex Mono Regular, Copyright 2017 IBM
 
 The local font converter was adapted for these conversions: glyphs are
 monochrome, centered in fixed-width cells with a shared baseline, and padded
-to fit; the pixel-built bitmaps are enlarged by integer scaling. Code Mono
-and Machine Mono are rasterized separately for each cell size.
+to fit; the pixel-built bitmaps are enlarged by integer scaling. Segment 14,
+Code Mono and Machine Mono are rasterized separately for each cell size.
 These are converted adaptations, not the upstream font releases.

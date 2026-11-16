@@ -625,6 +625,8 @@ Minitel-Canvas font. It is optional and does not change the default font;
 see Minitel-README.txt for its source, license and character adaptation.
 RetroC64 and RetroWorkbench offer additional optional five-size retro styles.
 See Retro-README.txt for sources, licenses and conversion details.
+Segment14 is a 14-segment display font; lowercase letters look like capitals,
+and several punctuation glyphs are supplied by IBM Plex Mono.
 CodeMono and MachineMono are five-size conversions of mononoki and IBM Plex
 Mono, respectively; their names differ from the upstream Reserved Font Names.
 
