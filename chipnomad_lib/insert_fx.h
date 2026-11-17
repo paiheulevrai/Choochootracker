@@ -72,10 +72,10 @@ class InsertChain {
   // Audio-thread attachment of a producer-prepared lease, before sync().
   void attachBeads(int slot, const BeadsPool::Handle&);
   void reset();
-  // The tracker clock is 24 ticks per quarter note. Tempo is updated at its
-  // frame boundary, while trigger() aligns track gates with note-on events.
+  // The tracker clock is 24 ticks per quarter note. User gates can keep
+  // their phase when playback triggers a new note.
   void setTempo(float tickRate);
-  void trigger();
+  void trigger(bool keepUserPatternPhase = false);
   uint16_t sync(const InsertConfig config[2], InsertAutomation*, bool rendered = true);
   bool active() const;
   void process(float* interleaved, int frames, const uint8_t effective[2][8],

@@ -576,6 +576,79 @@ TEST_SUITE("track inserts") {
       CHECK(renderLevel() > 0.1f);
     }
   }
+  TEST_CASE("user trance gate follows sixteen sequencer steps with notes on every row") {
+    Engine engine;
+    auto& p = engine.s->project;
+    p.song[0][0] = 0;
+    p.chains[0].rows[0].phrase = 0;
+    phraseClear(&p.phrases[0]);
+    const uint16_t pattern = 0xd634;
+    for (int step = 0; step < 16; ++step) {
+      p.phrases[0].rows[step].note = 45;
+      p.phrases[0].rows[step].instrument = 0;
+      p.phrases[0].rows[step].volume = 100;
+      p.ayWavetables[0][step] = pattern & (0x8000u >> step) ? 15 : 0;
+    }
+    auto& gate = p.trackInserts[0][0];
+    insertSelect(&gate, insertTranceGate);
+    insertEdit(&gate, 0, 64);
+    insertEdit(&gate, 1, 9);
+    insertEdit(&gate, 3, 255);
+    insertEdit(&gate, 6, 0);
+    auto& mod = p.instruments[0].modulation[0];
+    mod = {};
+    mod.type = ModulationType::Sequence;
+    mod.destination = 3;
+    mod.amount = 127;
+    mod.p1 = static_cast<uint8_t>(SequenceSource::tranceGate);
+    sequenceGateDefaults(&mod);
+    sequenceGateSetPattern(&mod, 64);
+    chipnomadInitChips(engine.s, 48000, nullptr);
+    chipnomadQueuePlaybackStartSong(engine.s, 0, 0, 1);
+    float out[480];
+    for (int step = 0; step < 16; ++step) {
+      float level = 0;
+      for (int block = 0; block < 24; ++block) {
+        REQUIRE(chipnomadRender(engine.s, out, 240) == 240);
+        if (block >= 20) for (float sample : out) level += fabsf(sample);
+      }
+      CAPTURE(step);
+      CAPTURE(engine.s->playbackState.tracks[0].phraseRow);
+      bool open = (pattern & (0x8000u >> step)) != 0;
+      CHECK(engine.s->playbackState.tracks[0].phraseRow == step);
+      CHECK(engine.s->playbackState.tracks[0].note.modulation[0].outValue == (open ? 16192 : 0));
+      if (open) CHECK(level > 0.1f);
+      else CHECK(level < 0.001f);
+    }
+  }
+  TEST_CASE("transport note triggers preserve only user gate phase") {
+    uint8_t waves[8][32]{};
+    waves[0][0] = 15;
+    for (int pattern : {1, 64}) {
+      InsertConfig config[2]{};
+      InsertAutomation automation{};
+      insertSelect(&config[0], insertTranceGate);
+      config[0].values[0] = pattern;
+      config[0].values[1] = 12;
+      config[0].values[3] = 255;
+      config[0].values[6] = 0;
+      InsertChain chain(48000);
+      chain.setTempo(120);
+      chain.sync(config, &automation);
+      uint8_t effective[2][8]; values(config, effective);
+      std::vector<float> warm(1500 * 2, .25f);
+      chain.process(warm.data(), 1500, effective, nullptr, waves);
+      chain.trigger(true);
+      std::vector<float> after(200 * 2, .25f);
+      chain.process(after.data(), 200, effective, nullptr, waves);
+      if (pattern == 64) CHECK(after.back() < .001f);
+      else CHECK(after.back() > .2f);
+      chain.trigger();
+      std::fill(after.begin(), after.end(), .25f);
+      chain.process(after.data(), 200, effective, nullptr, waves);
+      CHECK(after.back() > .2f);
+    }
+  }
   TEST_CASE("all DSP modules handle both slots, silence, stereo and variable blocks") {
     for (float rate : {32000.f, 44100.f, 48000.f, 96000.f})
       for (int m = 1; m < insertModuleCount; ++m)

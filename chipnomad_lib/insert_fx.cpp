@@ -984,9 +984,12 @@ void InsertChain::reset() {
 void InsertChain::setTempo(float tickRate) {
   if (impl_) impl_->tickRate = std::max(1.0f, tickRate);
 }
-void InsertChain::trigger() {
+void InsertChain::trigger(bool keepUserPatternPhase) {
   if (!ready()) return;
   for (auto& s : impl_->slots) {
+    if (keepUserPatternPhase && s.module == insertTranceGate &&
+        s.previous[0] >= tranceGateUserFirst &&
+        s.previous[0] < tranceGateUserFirst + tranceGateUserCount) continue;
     s.gateFrames = 0;
     s.gateLevel = 0;
   }
