@@ -53,6 +53,7 @@
 // Raw input callback for key mapping screen
 void (*inputRawCallback)(InputCode input, int isDown) = NULL;
 static InputCode currentInput = {InputDeviceType::none, 0};
+static uint32_t shownBlendErrorCount = 0;
 #ifdef CCT_CONSOLE_CONTROLS
 static consoleInput::Buttons consoleButtons;
 #endif
@@ -1033,6 +1034,7 @@ static int autosaveProject(void) {
 * @brief Prepare the title UI without loading a project or opening audio devices.
 */
 void appSetup(void) {
+  shownBlendErrorCount = 0;
   StartupTiming timing("app setup without project");
   projectActive = false;
   unopenedAutosave = true;
@@ -1679,6 +1681,12 @@ static void appOnNormalizedEvent(MainLoopEventData eventData) {
     }
     if (chipnomadGetMidiRecordOverflow(chipnomadState))
       screenMessage(MESSAGE_TIME_ERROR, "MIDI record overflow: notes lost");
+    const auto* blendStatus = chipnomadGetPlaybackStatus(chipnomadState);
+    if (blendStatus->blendErrorCount && blendStatus->blendErrorCount != shownBlendErrorCount) {
+      screenMessage(MESSAGE_TIME_ERROR, blendStatus->blendError == BlendError::destination ?
+        "BEG/END needs a continuous absolute FX" : "BEG: missing or changed END");
+    }
+    shownBlendErrorCount = blendStatus->blendErrorCount;
     if (midiRecordChanged) {
       projectModified = 1;
       audioProjectDirty = 1;

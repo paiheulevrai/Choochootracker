@@ -7,6 +7,7 @@
 #include "playback_chips.h"
 #include "playback_modulation.h"
 #include "chord.h"
+#include "playback_blend.h"
 
 struct ChipNomadState;
 
@@ -55,6 +56,8 @@ struct PlaybackTableState {
   PlaybackFXState heldFX[4];
   PlaybackRepeatState repeat[4];
   FXCell currentFX[4];
+  PlaybackBlendState blend[4];
+  uint8_t blendNextRow[4];
 };
 
 struct PlaybackNoteState {
@@ -148,7 +151,11 @@ struct PlaybackTrackState {
   uint32_t conditionRandom;
   uint16_t conditionPhrase;
   PlaybackRepeatState repeat[3];
+  PlaybackBlendState blend[3];
+  uint32_t blendNextPosition;
   PlaybackEuclideanState euclidean;
+  uint8_t modulationEvents;
+  uint8_t modulationPreTriggerEvents;
 
   // What the engine last played for liveInstrument's sound controls.
   uint8_t liveInstrument;
@@ -243,6 +250,9 @@ struct StopRange {
 
 struct PlaybackState {
   Project* p;
+  const PreparedBlends* blends;
+  BlendError blendError;
+  uint32_t blendErrorCount;
   PlaybackTrackState tracks[PROJECT_MAX_TRACKS];
   PlaybackTrackState layerTracks[PROJECT_MAX_TRACKS][INSTRUMENT_LAYER_COUNT];
   uint8_t layerTrackMask;

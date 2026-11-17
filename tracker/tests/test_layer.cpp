@@ -8,6 +8,7 @@
 #include "soundbank_runtime.h"
 #include "midi/midi_router.h"
 #include "midi/midi_recording.h"
+#include "playback_internal.h"
 #include <cstdio>
 #include <cmath>
 #include <cstring>
@@ -56,6 +57,106 @@ struct LayerPlayback {
 
 } // namespace
 
+TEST_CASE("Layer forwards modulator kill and retrigger once to its active children") {
+  LayerPlayback e;
+  e.state->project.instruments[1].modulation[0] =
+    {ModulationType::LFO, 2, 127, 0, uint8_t(LFOTrigger::free), 32, 0};
+  e.init();
+  e.note(0, 0);
+  e.render();
+  auto& playback = e.state->playbackState;
+  auto& mod = playback.layerTracks[0][0].note.modulation[0];
+  REQUIRE(mod.modulation);
+  FXCell fx{fxMKL, 1};
+  initFX(&playback, 0, &fx, nullptr, -1);
+  e.render();
+  CHECK(mod.modulation == nullptr);
+  fx.command = fxMRT;
+  initFX(&playback, 0, &fx, nullptr, -1);
+  e.render();
+  REQUIRE(mod.modulation);
+  CHECK(mod.counter == 1);
+  e.render();
+  CHECK(mod.counter == 2);
+}
+
+TEST_CASE("BEG Layer benchmark evaluates eight parent lanes without creating more voices") {
+  LayerPlayback e(8);
+  auto& p = e.state->project;
+  for (auto& entry : p.instruments[0].chip.layer.entries) entry = {1, 128, 255};
+  p.chains[0].rows[0].phrase = 0;
+  p.phrases[0].rows[0].note = 48;
+  p.phrases[0].rows[0].instrument = 0;
+  p.phrases[0].rows[0].fx[0] = {fxPAN, 0};
+  for (int t = 0; t < 8; ++t) p.song[0][t] = 0;
+  e.init();
+  auto measure = [&]() {
+    REQUIRE(chipnomadQueuePlaybackStartSong(e.state.get(), 0, 0, 1));
+    e.render();
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < 128; ++i) e.render();
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+  };
+  const double baseline = measure();
+  const int owners = e.state->voiceOwnerCount;
+  p.phrases[0].rows[1].fx[0] = {fxBEG, 128};
+  p.phrases[0].rows[15].fx[0] = {fxEND, 255};
+  REQUIRE(chipnomadQueueProjectRefresh(e.state.get()));
+  const double automated = measure();
+  CHECK(e.state->voiceOwnerCount == owners);
+  CHECK(e.state->playbackState.blendErrorCount == 0);
+  std::printf("BEG 8 tracks x 3 Layer children: baseline %.2f ms, automated %.2f ms / 122880 frames; %d owners\n",
+              baseline, automated, owners);
+}
+
+TEST_CASE("Layer preserves table versus note ordering for modulation kills") {
+  LayerPlayback e;
+  auto& p = e.state->project;
+  p.song[0][0] = 0;
+  p.chains[0].rows[0].phrase = 0;
+  for (int row = 0; row < 3; ++row) {
+    p.phrases[0].rows[row].note = 48;
+    p.phrases[0].rows[row].instrument = 0;
+  }
+  p.instruments[0].tableSpeed = 4;
+  p.tables[0].retriggerMode = TableRetriggerMode::free;
+  p.tables[0].rows[1].fx[0] = {fxMKL, 3};
+  p.phrases[0].rows[2].fx[0] = {fxMKL, 3};
+  for (auto& speed : p.grooves[0].speed) speed = 4;
+  p.instruments[1].modulation[0] =
+    {ModulationType::LFO, 2, 127, 0, uint8_t(LFOTrigger::retrig), 32, 0};
+  p.instruments[1].modulation[1] =
+    {ModulationType::LFO, 2, 127, 0, uint8_t(LFOTrigger::free), 32, 0};
+  e.init();
+  REQUIRE(chipnomadQueuePlaybackStartSong(e.state.get(), 0, 0, 1));
+  e.render();
+  for (int i = 0; i < 4; ++i) e.render();
+  auto& child = e.state->playbackState.layerTracks[0][0];
+  CHECK(child.note.modulation[0].modulation != nullptr);
+  CHECK(child.note.modulation[1].modulation == nullptr);
+  for (int i = 0; i < 4; ++i) e.render();
+  CHECK(child.note.modulation[0].modulation == nullptr);
+  CHECK(child.note.modulation[1].modulation == nullptr);
+}
+
+TEST_CASE("MKL bypasses an absolute volume envelope instead of silencing the voice") {
+  LayerPlayback e;
+  e.state->project.instruments[1].modulation[0] =
+    {ModulationType::ADSR, 1, 127, 255, 0, 127, 0};
+  e.init();
+  e.note(0, 0);
+  e.render();
+  const float enveloped = std::fabs(e.output[800]);
+  FXCell fx{fxMKL, 1};
+  initFX(&e.state->playbackState, 0, &fx, nullptr, -1);
+  e.render();
+  CHECK(std::fabs(e.output[800]) > enveloped * 4);
+  CHECK(std::fabs(e.output[800]) > .01f);
+  fx.command = fxMRT;
+  initFX(&e.state->playbackState, 0, &fx, nullptr, -1);
+  e.render();
+  CHECK(std::fabs(e.output[800]) < .01f);
+}
 TEST_CASE("Unused Layer children are not copied or visited by the voice engine") {
   LayerPlayback e;
   SUBCASE("no Layer preset") {

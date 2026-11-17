@@ -1138,6 +1138,45 @@ Les Tracker FX forçent les valeurs du séquenceur ou du moteur sonore sur les 
 | `SPD` | signé `XX` | Sélectionne un ratio horloge persistant par piste ; voir le tableau de vitesse ci-dessous. |
 | `SLE` | `00-FF` ticks | Définit un glide persistant par piste pour les FX moteur continus. `00` est immédiat. Valeur remise à `00` à l’arrêt de la lecture. |
 
+### Transitions de paramètre : BEG / END
+
+Écrire la valeur initiale, `BEG` et `END` dans **la même colonne FX** :
+
+```text
+DCF 20
+BEG 80
+...
+END E0
+```
+
+`BEG` reprend la commande et la valeur précédentes de sa colonne. Sa valeur
+règle la courbe : `00` décélère fortement (type logarithmique), `80` est
+linéaire et `FF` accélère fortement (type exponentiel). Les valeurs
+intermédiaires font varier la courbe continûment. Ce sont des courbes
+quadratiques, pas des logarithmes ou exponentielles exacts. `END` donne la
+cible, atteinte dès l'entrée sur sa ligne.
+
+La transition évolue à chaque tick selon le groove/SPD, ou la vitesse de
+la colonne de table. Elle peut traverser plusieurs mesures, phrases et
+lignes de chanson, dans les deux vues, et fonctionne dans les deux tables.
+Les notes et changements d'instrument n'annulent pas une transition de
+phrase. L'échelle et la résolution du paramètre restent inchangées.
+
+Seuls les contrôles **absolus continus** conviennent : `PAN`, `TPN`, cutoff,
+vitesse de sample, temps d'enveloppe, envois et paramètres continus d'insert.
+Les commandes relatives cumulatives (`VOL`, `VSL`, `PIT`, offsets de
+modulation), triggers et sélecteurs discrets sont exclus. Une destination
+invalide ou une cible absente produit une notification. Utiliser VSL pour
+les slides de volume ; REP/RTO restent inchangés.
+
+Une nouvelle commande dans la colonne interrompt la transition. Les sauts,
+retours de boucle, redémarrages de table, l'arrêt et Clear Track FX
+l'annulent aussi. La recherche d'END suit uniquement le parcours naturel
+vers l'avant. Démarrer au milieu ne reconstruit pas un BEG antérieur ; END
+applique néanmoins sa cible si la colonne connaît une commande compatible.
+Une modification de la cible pendant la lecture repart de la valeur courante
+sur les lignes restantes ; supprimer ou déplacer la cible annule la transition.
+
 ### Envoyés d’Audio FX
 
 | FX | Valeur | Comportement détaillé |
@@ -1201,6 +1240,20 @@ Les multiplicateurs très élevés peuvent dépasser la résolution de l’ordon
 
 Phrase et table FX peuvent changer une modulation sans modifier l’instrument :
 
+`MRT XX` redéclenche les slots sélectionnés depuis leur début.
+`MKL XX` les désactive immédiatement, y compris les enveloppes absolues,
+sans note-off ni coupure de la note. Ces commandes ponctuelles fonctionnent
+en phrase et en table, y compris sur les enfants actifs d'un Layer.
+
+La valeur est un masque : `01` = slot 1, `02` = slot 2, `04` = slot 3,
+`08` = slot 4. Additionner les bits pour combiner (`05` = 1+3,
+`0F` = les quatre). `00` ne sélectionne rien ; les quatre bits de poids
+fort sont ignorés. MKL dure jusqu'à MRT ou au prochain trigger normal du
+modulateur, selon son mode (note, phrase ou chaîne). Une source libre reste
+désactivée entre les notes, jusqu'à MRT ou un changement d'instrument.
+MRT conserve les offsets FX et ne modifie pas l'instrument ; les entrées
+externes stick/séquence restent des entrées externes.
+
 | Modèle FX | Signification |
 |---|---|
 | `M1A`, `M2A`, `M3A`, `M4A` | Décalage relatif d’Amplitude pour les slots de modulation 1-4 |
@@ -1209,7 +1262,7 @@ Phrase et table FX peuvent changer une modulation sans modifier l’instrument :
 | `M31`, `M32`, `M33`, `M34` | Décalages relatifs P1-P4 pour slot 3 |
 | `M41`, `M42`, `M43`, `M44` | Décalages relatifs P1-P4 pour slot 4 |
 
-La valeur est interprétée comme un changement relatif signé de 8 bits (`01` ajoute `1`, `FF` soustrait `1`). Les commandes répétées s’accumulent. Les valeurs effectives sont clampées dans leur plage valide.
+Pour ces FX d'offset, la valeur est interprétée comme un changement relatif signé de 8 bits (`01` ajoute `1`, `FF` soustrait `1`). Les commandes répétées s’accumulent. Les valeurs effectives sont clampées dans leur plage valide.
 
 `P5` n’est pas exposé en phrase ou table FX. Il est disponible en destination modulation `M1–M4 Wavetable`, un modulateur peut donc scanner l’index AYWavetable d’un autre.
 

@@ -158,6 +158,30 @@ const char* helpFXHint(const FXCell& fx, int isTable, uint8_t instrumentIdx) {
     case fxRTO:
       snprintf(buffer, bufferSize, "Repeat stops at %02X", fx.value);
       break;
+    case fxBEG:
+      snprintf(buffer, bufferSize, "BEG %02X: %s to END (same col)", fx.value,
+        fx.value < 0x80 ? "ease-out" : fx.value == 0x80 ? "linear" : "ease-in");
+      break;
+    case fxEND:
+      snprintf(buffer, bufferSize, "END %02X: same-column FX target", fx.value);
+      break;
+    case fxMRT: case fxMKL: {
+      char slots[8];
+      int length = 0;
+      for (int slot = 0; slot < 4; ++slot) {
+        if (!(fx.value & (1u << slot))) continue;
+        if (length) slots[length++] = '+';
+        slots[length++] = '1' + slot;
+      }
+      slots[length] = 0;
+      if (!length)
+        snprintf(buffer, bufferSize, "%s: no mods selected", fx.command == fxMRT ? "MRT" : "MKL");
+      else if (fx.command == fxMRT)
+        snprintf(buffer, bufferSize, "Retrig mods %s (no note retrig)", slots);
+      else
+        snprintf(buffer, bufferSize, "Bypass mods %s until trigger/MRT", slots);
+      break;
+    }
     case fxTIC: // Table speed
       snprintf(buffer, bufferSize, "Set table speed to %hhu tics", fx.value);
       break;

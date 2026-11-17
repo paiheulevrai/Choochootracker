@@ -201,14 +201,23 @@ class AudioCommandQueue {
         for (auto& child : state->playbackState.layerTracks[t]) refreshModulations(child);
     }
     state->audioProject = snapshot.project;
+    state->playbackState.blends = &snapshot.blends;
     for (auto& handle : snapshot.beads) handle = {};
     for (auto& handle : snapshot.vocoders) handle = {};
-    projectSlots_[slot].state.store(kFree, std::memory_order_release);
+    if (activeProjectSlot_ >= 0)
+      projectSlots_[activeProjectSlot_].state.store(kFree, std::memory_order_release);
+    activeProjectSlot_ = slot;
   }
 
   // Called with audio stopped, after old chains have released their leases.
   void initializeBeads(ChipNomadState* state) {
     discardProject();
+    if (activeProjectSlot_ >= 0) {
+      projectSlots_[activeProjectSlot_].state.store(kFree, std::memory_order_release);
+      activeProjectSlot_ = -1;
+    }
+    initialBlends_.prepare(state->audioProject);
+    state->playbackState.blends = &initialBlends_;
     beadsSampleRate_ = (float)state->sampleRate;
     for (auto& handle : activeVocoders_) handle = {};
     vocoderPool_.collect();
@@ -460,6 +469,8 @@ class AudioCommandQueue {
     memcpy(status.trackEnabled, playback->trackEnabled, sizeof(status.trackEnabled));
     status.isPlaying = playbackIsPlaying(const_cast<PlaybackState*>(playback));
     status.transportPlaying = playbackTransportIsPlaying(playback);
+    status.blendError = playback->blendError;
+    status.blendErrorCount = playback->blendErrorCount;
     status.linkPhaseTicks = linkPhaseTicks;
     status.linkPhaseTickMicros = linkPhaseTickMicros;
     statusSlots_[slot].state.store(kPublished, std::memory_order_release);
@@ -484,6 +495,7 @@ class AudioCommandQueue {
   struct Settings { uint64_t trackMask = ~UINT64_C(0); LoopRange loopRange{}; uint8_t loopDirty = 0; };
   struct ProjectSnapshot {
     Project project;
+    PreparedBlends blends;
     BeadsPool::Handle beads[BeadsPool::capacity];
     VocoderPool::Handle vocoders[VOICE_OWNER_COUNT * 4];
   };
@@ -528,6 +540,7 @@ class AudioCommandQueue {
     int slot = findFree(projectSlots_);
     if (slot < 0) return 0;
     projectSlots_[slot].value.project = project;
+    projectSlots_[slot].value.blends.prepare(project);
     prepareBeads(project, projectSlots_[slot].value.beads);
     prepareVocoders(project, projectSlots_[slot].value.vocoders);
     projectSlots_[slot].state.store(kPublished, std::memory_order_release);
@@ -625,6 +638,8 @@ class AudioCommandQueue {
   VocoderPool::Handle activeVocoders_[VOICE_OWNER_COUNT * 4];
   float beadsSampleRate_ = 0;
   Slot<ProjectSnapshot> projectSlots_[kSlotCount];
+  PreparedBlends initialBlends_;
+  int activeProjectSlot_ = -1;
   Slot<Settings> settingsSlots_[kSlotCount];
   Slot<PlaybackStatus> statusSlots_[kSlotCount];
   Slot<PendingStart> pendingStartSlots_[kSlotCount];

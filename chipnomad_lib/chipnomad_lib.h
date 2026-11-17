@@ -74,6 +74,8 @@ struct PlaybackStatus {
   uint8_t trackEnabled[PROJECT_MAX_TRACKS];
   uint8_t isPlaying;
   uint8_t transportPlaying;
+  BlendError blendError;
+  uint32_t blendErrorCount;
   // Audio-thread tick counter and the host timestamp of that tick. They are
   // published with the status snapshot so the UI can follow Link phase
   // without racing the audio callback.

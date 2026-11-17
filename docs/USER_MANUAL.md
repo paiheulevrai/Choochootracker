@@ -1751,6 +1751,45 @@ a new command stops REP. A repeated relative FX still has its usual relative
 meaning; RTO stops reapplying it after the final value. Playback stop or Clear
 Track FX resets the repetition state.
 
+### Parameter transitions: BEG / END
+
+Write the starting absolute FX, `BEG` and `END` in **the same FX column**:
+
+```text
+DCF 20
+BEG 80
+...
+END E0
+```
+
+`BEG` inherits that column's preceding command and value. Its value controls
+the curve: `00` decelerates strongly (log-like), `80` is linear, and `FF`
+accelerates strongly (exp-like); intermediate values vary the curve continuously.
+`END` supplies the target, reached on entry to its row. These are quadratic
+easing curves, not literal logarithmic/exponential functions.
+
+Transitions update every tracker tick, following groove/SPD or the table
+column's speed. They can span many bars, phrases and song rows, in classic
+and simplified views, and work independently in both tables. Notes and
+instrument triggers do not cancel a phrase transition. The destination keeps
+its existing control scale and resolution: for example a cutoff control
+already mapped logarithmically stays logarithmic.
+
+Use continuous **absolute** controls, such as `PAN`, `TPN`, filter cutoff,
+sample speed, envelope times, sends and continuous insert parameters.
+Cumulative relative commands (`VOL`, `VSL`, `PIT`, modulation offsets),
+triggers and discrete selectors cannot be transition destinations; invalid
+destinations or missing endpoints produce a notification. Use VSL for volume
+slides. REP/RTO retain their existing behavior.
+
+A replacement command in that column interrupts the transition. Jumps,
+backward wraps, table restarts, stop and Clear Track FX cancel it too; END
+is sought only along the natural forward arrangement, not through jumps.
+Starting midway does not reconstruct a previous BEG. An END with known
+eligible command context still applies its target. Editing the target during
+playback rebases from the current value over the remaining rows; removing
+or moving the endpoint cancels the active transition.
+
 ### Audio FX sends
 
 | FX | Value | Detailed behaviour |
@@ -1804,6 +1843,19 @@ Very high multipliers can exceed the resolution of the tracker tick scheduler an
 
 Phrase and table FX can change a modulation slot without editing the instrument:
 
+`MRT XX` retriggers selected modulation slots from their beginning.
+`MKL XX` immediately bypasses them, including absolute envelopes: it does
+not send note-off, kill the note or reset other slots. Both commands are
+one-shot and work in phrases and tables, including active Layer children.
+
+Their value is a bitmask: `01` = slot 1, `02` = slot 2, `04` = slot 3,
+`08` = slot 4; add bits to combine slots (`05` = 1+3, `0F` = all four).
+`00` selects none; the upper four bits are ignored. MKL lasts until MRT or
+that modulator's next normal trigger (note, phrase or chain, according to
+its mode). Free-running sources stay bypassed across notes until MRT or an
+instrument change. MRT preserves FX offsets and does not change the
+instrument definition; external stick/sequence inputs remain external inputs.
+
 | FX pattern | Meaning |
 |---|---|
 | `M1A`, `M2A`, `M3A`, `M4A` | Relative Amount offset for modulation slots 1-4 |
@@ -1812,7 +1864,7 @@ Phrase and table FX can change a modulation slot without editing the instrument:
 | `M31`, `M32`, `M33`, `M34` | Relative P1-P4 offsets for modulation slot 3 |
 | `M41`, `M42`, `M43`, `M44` | Relative P1-P4 offsets for modulation slot 4 |
 
-The value is interpreted as a signed `8-bit` relative change (`01` adds `1`, `FF` subtracts `1`). Repeated commands accumulate. Effective values are clamped to their valid range.
+For these offset FX, the value is interpreted as a signed `8-bit` relative change (`01` adds `1`, `FF` subtracts `1`). Repeated commands accumulate. Effective values are clamped to their valid range.
 
 `P5` is not exposed as a phrase or table FX. It is available as the `M1–M4 Wavetable` modulation destination, so one modulator can scan the AYWavetable index of another.
 

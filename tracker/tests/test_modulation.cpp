@@ -7,6 +7,35 @@
 
 TEST_SUITE("modulation") {
 
+TEST_CASE("Explicit modulator retrigger preserves offsets and wavetables while kill bypasses audio sources") {
+  for (ModulationType type : {ModulationType::ADSR, ModulationType::AHD, ModulationType::LFO,
+                             ModulationType::FLFO, ModulationType::Audio, ModulationType::Sequence}) {
+    Modulation definition{type, 2, 127, 0, 0, 24, 0};
+    PlaybackModState runtime{};
+    playbackModInit(&runtime, &definition);
+    runtime.amountOffset = -12;
+    runtime.p3Offset = 4;
+    runtime.counter = 99;
+    runtime.outValue = 32000;
+    playbackModKill(&runtime);
+    playbackModKill(&runtime);
+    playbackModNext(&runtime);
+    playbackModNextAudioFrames(&runtime, 48000, 8);
+    playbackModNextAudioEnvelope(&runtime, 48000, 8, 1.0f);
+    playbackModNoteOff(&runtime);
+    CHECK(runtime.modulation == nullptr);
+    CHECK(runtime.outValue == 0);
+    CHECK(runtime.counter == 99);
+    playbackModRetrigger(&runtime);
+    CHECK(runtime.modulation == &definition);
+    CHECK(runtime.stoppedModulation == nullptr);
+    CHECK(runtime.amountOffset == -12);
+    CHECK(runtime.p3Offset == 4);
+    CHECK(runtime.counter == 0);
+    CHECK(runtime.outValue == 0);
+    CHECK(runtime.phase == 0);
+  }
+}
 
 // ============================================================================
 // TEST STAND: Helper function for visualizing modulation output

@@ -262,6 +262,9 @@ enum FX : FXId {
   fxB80CF, // Bass808 filter cutoff
   fxB80RS, // Bass808 filter resonance
 
+  fxBEG, fxEND, // Per-column parameter transition and target
+  fxMRT, fxMKL,
+
   // Total count - must be last
   fxTotalCount
 };

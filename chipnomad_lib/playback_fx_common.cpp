@@ -424,6 +424,7 @@ static void handleFX_PSL(PlaybackState* state, PlaybackTrackState* track, int tr
 //
 
 void initFX(PlaybackState* state, int trackIdx, const FXCell* fx, PlaybackTableState* tableState, int tableFXColumn) {
+  if (fx->command == fxBEG || fx->command == fxEND) return;
   if (fx->command == FX_ID_EMPTY || fx->command >= fxTotalCount) return;
   if (fx->command == fxEUC || fx->command == fxREP || fx->command == fxRTO) return;
   if (tableState != NULL && (fx->command == fxSCL || fx->command == fxCRD)) return;

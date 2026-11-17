@@ -6,6 +6,7 @@
 
 struct PlaybackModState {
   const Modulation* modulation; // Pointer to the source Modulation struct
+  const Modulation* stoppedModulation;
   int16_t amountOffset;
   int16_t p1Offset;
   int16_t p2Offset;
@@ -36,9 +37,11 @@ struct PlaybackModState {
   uint8_t cachedP2; // For LFO trigger mode detection
 };
 
-void playbackModInit(PlaybackModState* state, Modulation* mod);
+void playbackModInit(PlaybackModState* state, const Modulation* mod);
 void playbackModSetAYWavetables(PlaybackModState* state, const uint8_t (*ayWavetables)[32]);
 void playbackModRestart(PlaybackModState* state);
+void playbackModKill(PlaybackModState* state);
+void playbackModRetrigger(PlaybackModState* state);
 void playbackModNext(PlaybackModState* state);
 void playbackModNextAudio(PlaybackModState* state, float sampleRate);
 void playbackModNextAudioFrames(PlaybackModState* state, float sampleRate, int frames);

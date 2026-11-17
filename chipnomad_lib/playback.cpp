@@ -162,10 +162,89 @@ FXCell playbackRepeatFX(PlaybackRepeatState* repeat, FXCell cell, int advance) {
   return repeat->last;
 }
 
-static PhraseRow resolvePhraseFX(PlaybackTrackState* track, const PhraseRow* row, int advance) {
+static void blendError(PlaybackState* state, BlendError error) {
+  state->blendError = error;
+  ++state->blendErrorCount;
+}
+
+static bool blendAllowed(PlaybackState* state, int trackIdx, FXId command) {
+  if (!blendDestination(command)) return false;
+  if (command >= fxF11 && command <= fxF28) {
+    const int address = command - fxF11;
+    const auto& config = state->p->trackInserts[trackIdx][address / 8];
+    const auto& descriptor = insertDescriptor(config.module);
+    return address % 8 < descriptor.count &&
+      descriptor.parameters[address % 8].mapping != InsertMapping::discrete;
+  }
+  return true;
+}
+
+static FXCell resolveBlendFX(PlaybackState* state, int trackIdx, PlaybackRepeatState& repeat,
+                             PlaybackBlendState& blend, FXCell cell, uint32_t key) {
+  if (cell.command == fxBEG) {
+    blend.active = 0;
+    repeat.active = 0;
+    if (!blendAllowed(state, trackIdx, repeat.last.command)) {
+      blendError(state, BlendError::destination);
+      return {FX_ID_EMPTY, 0};
+    }
+    const auto* segment = state->blends ? state->blends->find(key) : nullptr;
+    if (!segment || !segment->rows) {
+      blendError(state, BlendError::endpoint);
+      return {FX_ID_EMPTY, 0};
+    }
+    blend = {};
+    blend.begin = key;
+    blend.end = segment->end;
+    blend.rows = segment->rows;
+    blend.target = segment->target;
+    blend.curve = cell.value;
+    blend.start = blendValue(repeat.last.command, repeat.last.value) * 65536;
+    blend.current = blend.start;
+    blend.active = 1;
+    return repeat.last;
+  }
+  if (blend.active) ++blend.elapsed;
+  if (cell.command == fxEND) {
+    blend.active = 0;
+    repeat.active = 0;
+    if (!blendAllowed(state, trackIdx, repeat.last.command)) {
+      blendError(state, BlendError::destination);
+      return {FX_ID_EMPTY, 0};
+    }
+    repeat.last.value = cell.value;
+    return repeat.last;
+  }
+  if (cell.command != FX_ID_EMPTY) blend.active = 0;
+  return playbackRepeatFX(&repeat, cell);
+}
+
+static FXCell resolveTableFX(PlaybackState* state, int trackIdx, PlaybackTableState* table, int column) {
+  const int row = table->rows[column];
+  if (row != table->blendNextRow[column]) table->blend[column].active = 0;
+  table->blendNextRow[column] = row + 1;
+  return resolveBlendFX(state, trackIdx, table->repeat[column], table->blend[column],
+    state->p->tables[table->tableIdx].rows[row].fx[column],
+    blendTableKey(table->tableIdx, column, row));
+}
+
+static PhraseRow resolvePhraseFX(PlaybackState* state, int trackIdx, const PhraseRow* row) {
+  auto* track = &state->tracks[trackIdx];
+  const uint32_t position = blendPhraseKey(0, 0, track->songRow, track->chainRow, track->phraseRow);
+  if (position != track->blendNextPosition)
+    for (auto& blend : track->blend) blend.active = 0;
+  uint32_t next = position + 1;
+  if (track->phraseRow == 15 && track->songRow < PROJECT_MAX_LENGTH) {
+    const int bar = track->chainRow + 1;
+    if (bar >= playbackResolveLengthAt(state->p, track->songRow, trackIdx) ||
+        playbackResolvePhraseAt(state->p, track->songRow, trackIdx, bar) == EMPTY_VALUE_16)
+      next = uint32_t(track->songRow + 1) << 8;
+  }
+  track->blendNextPosition = next;
   PhraseRow resolved = *row;
   for (int i = 0; i < 3; ++i)
-    resolved.fx[i] = playbackRepeatFX(&track->repeat[i], row->fx[i], advance);
+    resolved.fx[i] = resolveBlendFX(state, trackIdx, track->repeat[i], track->blend[i], row->fx[i],
+      blendPhraseKey(trackIdx, i, track->songRow, track->chainRow, track->phraseRow));
   return resolved;
 }
 
@@ -196,10 +275,13 @@ static void resetNoteFX(PlaybackState* state, int trackIdx) {
 }
 
 static void resetSequencerFX(PlaybackTrackState* track) {
+  memset(track->blend, 0, sizeof(track->blend));
+  track->blendNextPosition = UINT32_MAX;
   memset(track->repeat, 0, sizeof(track->repeat));
   for (auto& repeat : track->repeat) repeat.last.command = FX_ID_EMPTY;
   track->euclidean = {};
   for (auto* table : {&track->note.instrumentTable, &track->note.auxTable}) {
+    memset(table->blend, 0, sizeof(table->blend));
     memset(table->repeat, 0, sizeof(table->repeat));
     for (auto& repeat : table->repeat) repeat.last.command = FX_ID_EMPTY;
   }
@@ -305,6 +387,8 @@ int playbackSequenceBypasses(const PlaybackTrackState* track, SequenceSource sou
 }
 
 void tableInit(PlaybackState* state, int trackIdx, struct PlaybackTableState* table, int tableIdx, int row, int speed) {
+  memset(table->blend, 0, sizeof(table->blend));
+  memset(table->blendNextRow, 0xff, sizeof(table->blendNextRow));
   table->tableIdx = tableIdx;
   table->baseSpeed = speed;
   memset(table->heldFX, 0, sizeof(table->heldFX));
@@ -329,6 +413,7 @@ void tableInit(PlaybackState* state, int trackIdx, struct PlaybackTableState* ta
 }
 
 void hopToTableRow(PlaybackState* state, int trackIdx, PlaybackTableState* table, int tableRow) {
+  for (auto& blend : table->blend) blend.active = 0;
   for (int c = 0; c < 4; c++) {
     table->counters[c] = 0;
     table->rows[c] = tableRow;
@@ -343,7 +428,7 @@ void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* 
 
   int tableRow = table->rows[fxIdx];
   FXCell cell = resolved ? *resolved :
-    playbackRepeatFX(&table->repeat[fxIdx], p->tables[tableIdx].rows[tableRow].fx[fxIdx]);
+    resolveTableFX(state, trackIdx, table, fxIdx);
   table->currentFX[fxIdx] = cell;
   FXId fxType = cell.command;
   table->heldFX[fxIdx].isOn = 0;
@@ -460,7 +545,7 @@ static void tableProgress(PlaybackState* state, int trackIdx, struct PlaybackTab
       }
 
       // Check HOP on new row
-      FXCell cell = playbackRepeatFX(&table->repeat[i], p->tables[table->tableIdx].rows[row].fx[i]);
+      FXCell cell = resolveTableFX(state, trackIdx, table, i);
       fxType = cell.command;
       fxValue = cell.value;
 
@@ -531,7 +616,8 @@ void handleNoteOff(PlaybackState* state, int trackIdx) {
 
   // Common note off for all instruments - send note off to all modulations
   for (int i = 0; i < 4; i++) {
-    if (track->note.modulation[i].modulation->destination == 1 && track->note.modulation[i].modulation->type == ModulationType::ADSR) {
+    if (track->note.modulation[i].modulation &&
+        track->note.modulation[i].modulation->destination == 1 && track->note.modulation[i].modulation->type == ModulationType::ADSR) {
       hasVolumeADSR = 1;
     }
     playbackModNoteOff(&track->note.modulation[i]);
@@ -586,15 +672,17 @@ static void restartStructuralLFOs(PlaybackState* state, int trackIdx, int entere
   PlaybackTrackState* track = &state->tracks[trackIdx];
   for (int i = 0; i < 4; ++i) {
     PlaybackModState* mod = &track->note.modulation[i];
-    if (!mod->modulation) continue;
-    if (mod->modulation->type == ModulationType::Sequence) {
-      if (mod->modulation->p1 != static_cast<uint8_t>(SequenceSource::tranceGate)) continue;
-      SequenceGateTrigger trigger = sequenceGateTrigger(mod->modulation);
+    const Modulation* definition = mod->modulation ? mod->modulation : mod->stoppedModulation;
+    if (!definition) continue;
+    if (definition->type == ModulationType::Sequence) {
+      if (definition->p1 != static_cast<uint8_t>(SequenceSource::tranceGate)) continue;
+      SequenceGateTrigger trigger = sequenceGateTrigger(definition);
       if ((enteredPhrase && trigger == SequenceGateTrigger::phrase) ||
           (enteredChain && trigger == SequenceGateTrigger::chain)) playbackModRestart(mod);
       continue;
     }
-    uint8_t trigger = (uint8_t)clampInt16((int16_t)mod->modulation->p2 + mod->p2Offset, 0, 255);
+    if (!modulationIsTickLFO(definition->type)) continue;
+    uint8_t trigger = (uint8_t)clampInt16((int16_t)definition->p2 + mod->p2Offset, 0, 255);
     if ((enteredPhrase && trigger == static_cast<uint8_t>(LFOTrigger::phrase)) ||
         (enteredChain && trigger == static_cast<uint8_t>(LFOTrigger::chain))) {
       playbackModRestart(mod);
@@ -701,7 +789,7 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
   Project* p = state->p;
   PhraseRow effective;
   if (!resolved) {
-    effective = skipDelCheck ? track->currentPhraseRow : resolvePhraseFX(track, phraseRow, 1);
+    effective = skipDelCheck ? track->currentPhraseRow : resolvePhraseFX(state, trackIdx, phraseRow);
     phraseRow = &effective;
   }
   if (!skipDelCheck) {
@@ -777,6 +865,13 @@ void readPhraseRowDirect(PlaybackState* state, int trackIdx, PhraseRow* phraseRo
 
   if (hasInstrumentTableFX && instrumentTableRow == EMPTY_VALUE_8) instrumentTableRow = 0;
   if (hasAuxTableFX && auxTableRow == EMPTY_VALUE_8) auxTableRow = 0;
+
+  if (instrument != EMPTY_VALUE_8 || (note != EMPTY_VALUE_8 && note != NOTE_OFF)) {
+    const uint8_t slots = (track->modulationEvents | (track->modulationEvents >> 4)) & 15;
+    track->modulationPreTriggerEvents &= ~(slots | (slots << 4));
+    track->modulationPreTriggerEvents |= track->modulationEvents;
+    track->modulationEvents = 0;
+  }
 
   // Instrument
   if (instrument != EMPTY_VALUE_8) {
@@ -996,7 +1091,7 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
   // If using phrase row mode, use cached phrase row
   if (track->mode == PlaybackMode::phraseRow) {
     PhraseRow effective = skipDelCheck ? track->currentPhraseRow :
-      resolvePhraseFX(track, &track->currentPhraseRow, 1);
+      resolvePhraseFX(state, trackIdx, &track->currentPhraseRow);
     if (!skipDelCheck && !phraseRowConditionsPass(track, &effective, track->phraseRow)) {
       progressEuclidean(state, trackIdx);
       return;
@@ -1020,7 +1115,7 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
       Phrase* phrase = &p->phrases[phraseIdx];
       PhraseRow* currentRow = &phrase->rows[phraseRow];
 
-      PhraseRow effective = skipDelCheck ? track->currentPhraseRow : resolvePhraseFX(track, currentRow, 1);
+      PhraseRow effective = skipDelCheck ? track->currentPhraseRow : resolvePhraseFX(state, trackIdx, currentRow);
       currentRow = &effective;
       if (!skipDelCheck && !phraseRowConditionsPass(track, currentRow, phraseRow)) {
         progressEuclidean(state, trackIdx);
@@ -1055,6 +1150,7 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
                   }
 
                   // Valid target, perform jump and read from new position
+                  for (auto& blend : track->blend) blend.active = 0;
                   track->songRow = newSongRow;
                   track->chainRow = 0;
                   track->phraseRow = 0;
@@ -1087,6 +1183,7 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
 
           if (loopCount == 0) {
             // Unconditional jump to next phrase
+            for (auto& blend : track->blend) blend.active = 0;
             track->phraseRow = 15;
             if (moveToNextPhraseRow(state, trackIdx)) {
               return;
@@ -1114,7 +1211,8 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
                 }
               }
               track->phraseRow = targetRow;
-              effective = resolvePhraseFX(track, &phrase->rows[targetRow], 1);
+              for (auto& blend : track->blend) blend.active = 0;
+              effective = resolvePhraseFX(state, trackIdx, &phrase->rows[targetRow]);
               currentRow = &effective;
             }
           }
@@ -1367,6 +1465,70 @@ static void handleInstrument(PlaybackState* state, int trackIdx) {
   }
 }
 
+static uint32_t phraseStepThreshold(const Project* p, const PlaybackTrackState* track) {
+  const uint32_t groove = p->grooves[track->grooveIdx].speed[track->grooveRow];
+  if (p->signedTrackSpeed) {
+    const int speed = int8_t(track->speedRatio);
+    return groove * (speed < 0 ? 1 - speed : 1);
+  }
+  const int ratio = track->speedRatio <= 0x10 ? track->speedRatio : 9;
+  return groove * speedDenominator[ratio];
+}
+
+static bool updateBlend(PlaybackState* state, int trackIdx, PlaybackRepeatState& repeat,
+                        PlaybackBlendState& blend, uint32_t phase, uint32_t period) {
+  if (!blend.active) return false;
+  const auto* segment = state->blends ? state->blends->find(blend.begin) : nullptr;
+  if (!segment || segment->end != blend.end || segment->rows != blend.rows ||
+      !blendAllowed(state, trackIdx, repeat.last.command)) {
+    blend.active = 0;
+    blendError(state, BlendError::endpoint);
+    return false;
+  }
+  const int progress = int(std::min<int64_t>(65536,
+    (int64_t(blend.elapsed) * 65536 + int64_t(phase) * 65536 / std::max(period, 1u)) /
+    blend.rows));
+  if (blend.target != segment->target) {
+    blend.start = blend.current;
+    blend.rebase = progress;
+    blend.target = segment->target;
+  }
+  const int local = blend.rebase >= 65536 ? 65536 :
+    int(int64_t(std::max(progress - int(blend.rebase), 0)) * 65536 / (65536 - blend.rebase));
+  const int shaped = blendCurve(local, blend.curve);
+  const int32_t target = blendValue(repeat.last.command, blend.target) * 65536;
+  blend.current = blend.start + int32_t(int64_t(target - blend.start) * shaped / 65536);
+  const int value = blend.current >= 0 ? (blend.current + 32768) / 65536 :
+    -int((-int64_t(blend.current) + 32768) / 65536);
+  repeat.last.value = uint8_t(value);
+  return true;
+}
+
+static void applyBlends(PlaybackState* state, int trackIdx) {
+  auto* track = &state->tracks[trackIdx];
+  for (auto* table : {&track->note.instrumentTable, &track->note.auxTable}) {
+    if (table->tableIdx == EMPTY_VALUE_8) continue;
+    for (int lane = 0; lane < 4; ++lane)
+      if (updateBlend(state, trackIdx, table->repeat[lane], table->blend[lane],
+                      table->counters[lane], table->speed[lane])) {
+        const FXCell cell = table->repeat[lane].last;
+        const FXId command = cell.command == fxSTA ? fxSST : cell.command;
+        bool phraseOverride = false;
+        if (track->frameCounter == 0 && track->note.fx[command].tableSource == 0)
+          for (const auto& fx : track->currentPhraseRow.fx)
+            phraseOverride |= (fx.command == fxSTA ? fxSST : fx.command) == command;
+        if (!phraseOverride) tableReadFX(state, trackIdx, table, lane, &cell);
+      }
+  }
+  for (int lane = 0; lane < 3; ++lane)
+    if (track->blend[lane].active &&
+        updateBlend(state, trackIdx, track->repeat[lane], track->blend[lane],
+                    track->speedPhase, phraseStepThreshold(state->p, track))) {
+      const FXCell cell = track->repeat[lane].last;
+      initFX(state, trackIdx, &cell, nullptr, -1);
+    }
+}
+
 static void nextFrame(PlaybackState* state, int trackIdx, int chipIdx, bool advanceClock = true) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
   Project* p = state->p;
@@ -1378,6 +1540,7 @@ static void nextFrame(PlaybackState* state, int trackIdx, int chipIdx, bool adva
   }
 
   resetOffsets(state, trackIdx);
+  if (advanceClock) applyBlends(state, trackIdx);
   if (advanceClock) handleFX(state, trackIdx, chipIdx);
   if (advanceClock && track->achchidGateTicks) {
     if (track->achchidGateCounter >= track->achchidGateTicks) {
@@ -1429,6 +1592,13 @@ static void nextFrame(PlaybackState* state, int trackIdx, int chipIdx, bool adva
   }
 }
 
+static void applyModulationEvents(PlaybackTrackState& track, uint8_t events) {
+  for (int mod = 0; mod < 4; ++mod) {
+    if (events & (1u << (mod + 4))) playbackModKill(&track.note.modulation[mod]);
+    else if (events & (1u << mod)) playbackModRetrigger(&track.note.modulation[mod]);
+  }
+}
+
 static void syncLayerTracks(PlaybackState* state, int trackIdx, bool advanceClock = true) {
   PlaybackTrackState& parent = state->tracks[trackIdx];
   const Instrument* layer = parent.note.instrument < PROJECT_MAX_INSTRUMENTS
@@ -1436,6 +1606,7 @@ static void syncLayerTracks(PlaybackState* state, int trackIdx, bool advanceCloc
   const bool isLayer = layer && layer->type == InstrumentType::Layer;
   const uint8_t trackBit = (uint8_t)(1u << trackIdx);
   if (!isLayer && !(state->layerTrackMask & trackBit)) {
+    parent.modulationEvents = parent.modulationPreTriggerEvents = 0;
     for (int lane = 0; lane < INSTRUMENT_LAYER_COUNT; ++lane) {
       parent.liveControls[liveSource1 + lane * 2] = 128;
       parent.liveControls[liveSource2 + lane * 2] = 0;
@@ -1527,8 +1698,10 @@ static void syncLayerTracks(PlaybackState* state, int trackIdx, bool advanceCloc
     child.note.fineOffset += cents;
     child.note.volume1 = (uint8_t)((volume * layerVolume + 127) / 255);
     child.note.layerGainActive = 1;
+    applyModulationEvents(child, parent.modulationPreTriggerEvents);
     if (oldInstrument != slot || child.note.noteTriggered)
       initModulations(&child, state->p, oldInstrument, slot);
+    applyModulationEvents(child, parent.modulationEvents);
     if (child.note.noteReleased || child.note.noteKilled)
       for (auto& modulation : child.note.modulation) playbackModNoteOff(&modulation);
 
@@ -1558,10 +1731,12 @@ static void syncLayerTracks(PlaybackState* state, int trackIdx, bool advanceCloc
     child = state->tracks[trackIdx];
     state->tracks[trackIdx] = parentTrack;
   }
+  parent.modulationEvents = parent.modulationPreTriggerEvents = 0;
 }
 
 static int applyLiveQueue(PlaybackState* state, int trackIdx) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
+  for (auto& blend : track->blend) blend.active = 0;
   LiveQueueAction action = track->queue.liveAction;
   if (action == LiveQueueAction::stopNormal || action == LiveQueueAction::stopUrgent) {
     resetTrack(state, trackIdx);
@@ -1849,6 +2024,9 @@ static int skipZeroGrooveRows(PlaybackState* state, int trackIdx) {
 
 void playbackInit(PlaybackState* state, Project* project) {
   state->p = project;
+  state->blends = nullptr;
+  state->blendError = BlendError::none;
+  state->blendErrorCount = 0;
   state->layerTrackMask = 0;
   state->phraseBoundaryMask = state->chainBoundaryMask = 0;
   memset(state->liveStickAxes, 0, sizeof(state->liveStickAxes));
@@ -2245,20 +2423,17 @@ int playbackNextFrame(ChipNomadState* chipNomadState) {
           resetTrack(state, trackIdx);
         } else {
           uint8_t ratio = track->speedRatio;
-          uint32_t threshold;
+          uint32_t threshold = phraseStepThreshold(p, track);
           if (p->signedTrackSpeed) {
             int speed = (int8_t)ratio;
             if (speed >= 0) {
               track->speedPhase += speed + 1; // 00=x1, 01=x2, ...
-              threshold = grooveValue;
             } else {
               track->speedPhase += 1;
-              threshold = (uint32_t)grooveValue * (1 - speed); // FF=/2, FE=/3, ...
             }
           } else {
             ratio = ratio <= 0x10 ? ratio : 9;
             track->speedPhase += speedNumerator[ratio];
-            threshold = (uint32_t)grooveValue * speedDenominator[ratio];
           }
 
           if (track->speedPhase >= threshold) {

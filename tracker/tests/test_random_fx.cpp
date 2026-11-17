@@ -444,7 +444,7 @@ TEST_CASE("RNS/RNN keep their FX IDs") {
   CHECK((int)fxREP == 270);
   CHECK((int)fxRTO == 271);
   CHECK((int)fxBWF == 272);
-  CHECK((int)fxTotalCount == 279);
+  CHECK((int)fxB80RS == 278);
 }
 
 TEST_CASE("RNS/RNN resolve through name-based serialization") {
