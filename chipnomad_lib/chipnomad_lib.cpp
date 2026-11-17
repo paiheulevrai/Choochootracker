@@ -2381,6 +2381,7 @@ static void updateInsertValues(ChipNomadState* state) {
         int range = insertParameterMaximum(c.module, p);
         // Keep existing songs' modulation depth when extending the pattern catalogue.
         if (c.module == insertTranceGate && p == 0) range = tranceGateUserFirst - 1;
+        if (c.module == insertTranceGate && (p == 2 || p == 4)) range = 15;
         if (d.parameters[p].mapping != InsertMapping::discrete) value = slewEngineFX(&track, (FX)(fxF11 + slot * 8 + p), value);
         int mode = track.inserts.valid[slot] & 1 ? track.inserts.values[slot][0] : c.values[0];
         if (insertParameterModulatable(c.module, p, mode) && track.note.instrument != EMPTY_VALUE_8) {

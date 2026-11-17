@@ -604,6 +604,27 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Sequence sources bypass sequencer output and
     }
   }
   sequenceGateSetRate(&sequence, 9);
+  sequenceGateSetPattern(&sequence, 64);
+  sequenceGateSetLength(&sequence, 32);
+  sequenceGateSetAccents(&sequence, 0);
+  memset(waves[0], 0, sizeof(waves[0]));
+  waves[0][16] = 1;
+  waves[0][31] = 15;
+  CHECK(sequenceGateLength(&sequence) == 32);
+  CHECK(playbackSequenceGateOutput(&sequence, 15 * 6, waves) == 0);
+  CHECK(playbackSequenceGateOutput(&sequence, 16 * 6, waves) == 16192);
+  CHECK(playbackSequenceGateOutput(&sequence, 31 * 6, waves) == 16192);
+  CHECK(playbackSequenceGateOutput(&sequence, 32 * 6, waves) == 0);
+  sequenceGateSetAccents(&sequence, 16);
+  CHECK(playbackSequenceGateOutput(&sequence, 31 * 6, waves) == 32385);
+  sequenceGateSetAccents(&sequence, 0);
+  sequenceGateSetLength(&sequence, 17);
+  CHECK(playbackSequenceGateOutput(&sequence, 16 * 6, waves) == 16192);
+  CHECK(playbackSequenceGateOutput(&sequence, 17 * 6, waves) == 0);
+  sequenceGateSetPattern(&sequence, 2);
+  CHECK(sequenceGateLength(&sequence) == 16);
+  sequenceGateSetLength(&sequence, 4);
+  sequenceGateSetAccents(&sequence, 8);
   sequenceGateSetPattern(&sequence, 255);
   CHECK(sequenceGatePattern(&sequence) == 71);
   sequenceGateSetPattern(&sequence, 2);

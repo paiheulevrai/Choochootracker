@@ -58,7 +58,10 @@ void insertEdit(InsertConfig*, int parameter, int value);
 void insertDescribe(char*, size_t, int module, int parameter, int value);
 constexpr uint8_t tranceGateUserFirst = 64;
 constexpr uint8_t tranceGateUserCount = 8;
-uint16_t tranceGatePatternMask(uint8_t pattern, const uint8_t (*wavetables)[32]);
+constexpr uint8_t tranceGatePatternLengthLimit(uint8_t pattern) {
+  return pattern >= tranceGateUserFirst && pattern < tranceGateUserFirst + tranceGateUserCount ? 32 : 16;
+}
+uint32_t tranceGatePatternMask(uint8_t pattern, const uint8_t (*wavetables)[32], uint8_t length = 32);
 bool tranceGatePatternOpen(uint8_t pattern, uint8_t length, uint32_t step,
                            const uint8_t (*wavetables)[32] = nullptr);
 float tranceGateTicksPerStep(uint8_t rate);

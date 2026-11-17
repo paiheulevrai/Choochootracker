@@ -829,7 +829,7 @@ static int onEdit(int col, int row, enum CellEditAction action) {
           uint8_t value;
           if (paramIdx == 0) { value = sequenceGatePattern(mod); handled = edit8noLast(action, &value, 1, 0, tranceGateUserFirst + tranceGateUserCount - 1); if (handled) sequenceGateSetPattern(mod, value); }
           else if (paramIdx == 1) { value = sequenceGateRate(mod); handled = edit8noLast(action, &value, 1, 0, 14); if (handled) sequenceGateSetRate(mod, value); }
-          else if (paramIdx == 2) { value = sequenceGateLength(mod); handled = edit8noLast(action, &value, 1, 1, 16); if (handled) sequenceGateSetLength(mod, value); }
+          else if (paramIdx == 2) { value = sequenceGateLength(mod); handled = edit8noLast(action, &value, 1, 1, tranceGatePatternLengthLimit(sequenceGatePattern(mod))); if (handled) sequenceGateSetLength(mod, value); }
           else if (paramIdx == 3) { value = static_cast<uint8_t>(sequenceGateTrigger(mod)); handled = edit8noLast(action, &value, 1, 0, static_cast<uint8_t>(SequenceGateTrigger::totalCount) - 1); if (handled) sequenceGateSetTrigger(mod, static_cast<SequenceGateTrigger>(value)); }
           else if (paramIdx == 4) { value = sequenceGateAccents(mod); handled = edit8noLast(action, &value, 1, 0, 16); if (handled) sequenceGateSetAccents(mod, value); }
         } else if (paramIdx == 0) {

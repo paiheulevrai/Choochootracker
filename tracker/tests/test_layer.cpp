@@ -347,6 +347,48 @@ TEST_CASE("Layer child MIDI notes are released once before the owner is retired"
   CHECK(e.state->voiceOwnerCount == 1);
 }
 
+TEST_CASE("Layer children play the second half of a 32-step AY gate") {
+  LayerPlayback e(8);
+  auto& p = e.state->project;
+  for (auto& entry : p.instruments[0].chip.layer.entries) entry = {1, 0x80, 255};
+  for (auto& mod : p.instruments[1].modulation) {
+    mod = {};
+    mod.type = ModulationType::Sequence;
+    mod.destination = 1;
+    mod.amount = 127;
+    mod.p1 = static_cast<uint8_t>(SequenceSource::tranceGate);
+    sequenceGateDefaults(&mod);
+    sequenceGateSetPattern(&mod, 64);
+    sequenceGateSetLength(&mod, 32);
+    sequenceGateSetRate(&mod, 12);
+  }
+  std::memset(p.ayWavetables[0], 0, 32);
+  p.ayWavetables[0][31] = 15;
+  phraseClear(&p.phrases[0]);
+  p.phrases[0].rows[0].note = 48;
+  p.phrases[0].rows[0].instrument = 0;
+  p.chains[0].rows[0].phrase = 0;
+  for (int t = 0; t < 8; ++t) p.song[0][t] = 0;
+  e.init();
+  REQUIRE(chipnomadQueuePlaybackStartSong(e.state.get(), 0, 0, 1));
+  for (int tick = 0; tick < 94; ++tick) e.render();
+  for (int t = 0; t < 8; ++t)
+    for (int lane = 0; lane < INSTRUMENT_LAYER_COUNT; ++lane)
+      for (const auto& mod : e.state->playbackState.layerTracks[t][lane].note.modulation)
+        CHECK(mod.outValue == 16192);
+  auto measure = [&](int length) {
+    for (auto& mod : p.instruments[1].modulation) sequenceGateSetLength(&mod, length);
+    REQUIRE(chipnomadQueueProjectRefresh(e.state.get()));
+    e.render();
+    const auto start = std::chrono::steady_clock::now();
+    for (int tick = 0; tick < 32; ++tick) e.render();
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+  };
+  double shortMs = measure(16), longMs = measure(32);
+  std::printf("AY gate 8 tracks x 3 Layer children x 4 mods: 16 steps %.2f ms, 32 steps %.2f ms / 30720 frames\n",
+              shortMs, longMs);
+}
+
 TEST_CASE("Layer MME children respect free and retrigger LFO modes") {
   LayerPlayback e(2);
   auto& p = e.state->project;

@@ -467,7 +467,7 @@ TEST_SUITE("track inserts") {
       waves[slot][slot] = 1;
       waves[slot][15] = 15;
       waves[slot][16] = 15;
-      CHECK(tranceGatePatternMask(64 + slot, waves) == (uint16_t)((0x8000u >> slot) | 1));
+      CHECK(tranceGatePatternMask(64 + slot, waves) == ((0x80000000u >> slot) | 0x18000u));
     }
     CHECK(tranceGatePatternMask(72, waves) == 0);
     CHECK(tranceGatePatternMask(64, nullptr) == 0);
@@ -512,6 +512,68 @@ TEST_SUITE("track inserts") {
       for (int i = 0; i < 16; ++i) waves[0][i] = i % 2 ? 0 : 7;
     }
   }
+  TEST_CASE("user trance gate plays all 32 AY steps and supports rotation and direction") {
+    uint8_t waves[8][32]{};
+    for (int i = 0; i < 32; ++i) waves[0][i] = (i == 0 || i == 16 || i == 31 || i % 7 == 0) ? 15 : 0;
+    for (int length : {17, 32}) for (int mode : {0, 1, 2}) for (int phase : {0, 5, 31}) {
+      CAPTURE(length);
+      CAPTURE(mode);
+      CAPTURE(phase);
+      InsertConfig config[2]{};
+      insertSelect(&config[0], insertTranceGate);
+      insertEdit(&config[0], 0, 64);
+      insertEdit(&config[0], 1, 9);
+      insertEdit(&config[0], 2, length - 1);
+      insertEdit(&config[0], 3, 255);
+      insertEdit(&config[0], 4, phase);
+      insertEdit(&config[0], 5, mode);
+      insertEdit(&config[0], 6, 0);
+      InsertAutomation automation{};
+      InsertChain chain(48000);
+      chain.setTempo(2400);
+      chain.sync(config, &automation);
+      uint8_t effective[2][8]; values(config, effective);
+      std::vector<float> warm(240 * 2, .25f);
+      chain.process(warm.data(), 240, effective, nullptr, waves);
+      chain.trigger();
+      const int span = mode == 2 ? 2 * length - 2 : length;
+      for (int step = 0; step < span + 1; ++step) {
+        std::vector<float> audio(120 * 2, .25f);
+        chain.process(audio.data(), 120, effective, nullptr, waves);
+        int position = step % span;
+        if (mode == 1) position = length - 1 - position;
+        if (mode == 2 && position >= length) position = span - position;
+        bool open = waves[0][(position - phase + 32) & 31] != 0;
+        CAPTURE(step);
+        CAPTURE(position);
+        if (open) CHECK(audio.back() > .2f);
+        else CHECK(audio.back() < .05f);
+      }
+    }
+    InsertConfig config{};
+    insertSelect(&config, insertTranceGate);
+    insertEdit(&config, 0, 64);
+    insertEdit(&config, 2, 31);
+    insertEdit(&config, 4, 31);
+    insertEdit(&config, 0, 1);
+    CHECK(config.values[2] == 15);
+    CHECK(config.values[4] == 15);
+    InsertConfig chaos[2]{};
+    insertSelect(&chaos[0], insertTranceGate);
+    insertEdit(&chaos[0], 0, 64);
+    insertEdit(&chaos[0], 2, 31);
+    insertEdit(&chaos[0], 5, 3);
+    InsertAutomation a{}, b{};
+    InsertChain whole(48000), split(48000);
+    whole.setTempo(2400); split.setTempo(2400);
+    whole.sync(chaos, &a); split.sync(chaos, &b);
+    uint8_t effective[2][8]; values(chaos, effective);
+    std::vector<float> x(4096 * 2, .25f), y = x;
+    whole.process(x.data(), 4096, effective, nullptr, waves);
+    for (int frame = 0; frame < 4096; frame += 64)
+      split.process(y.data() + frame * 2, 64, effective, nullptr, waves);
+    CHECK(x == y);
+  }
   TEST_CASE("user trance gates survive project and AY wave export roundtrips") {
     auto project = std::make_unique<Project>();
     auto loaded = std::make_unique<Project>();
@@ -527,8 +589,11 @@ TEST_SUITE("track inserts") {
     mod.p1 = static_cast<uint8_t>(SequenceSource::tranceGate);
     sequenceGateDefaults(&mod);
     sequenceGateSetPattern(&mod, 71);
+    sequenceGateSetLength(&mod, 32);
     insertSelect(&project->trackInserts[0][0], insertTranceGate);
     insertEdit(&project->trackInserts[0][0], 0, 64);
+    insertEdit(&project->trackInserts[0][0], 2, 31);
+    insertEdit(&project->trackInserts[0][0], 4, 31);
     insertSelect(&project->masterInserts[0], insertTranceGate);
     insertEdit(&project->masterInserts[0], 0, 71);
     for (int w = 0; w < 8; ++w)
@@ -536,9 +601,16 @@ TEST_SUITE("track inserts") {
     REQUIRE(projectSave(project.get(), "build/tests/trance-user.cct") == 0);
     REQUIRE(projectLoad(loaded.get(), "build/tests/trance-user.cct") == 0);
     CHECK(loaded->trackInserts[0][0].values[0] == 64);
+    CHECK(loaded->trackInserts[0][0].values[2] == 31);
+    CHECK(loaded->trackInserts[0][0].values[4] == 31);
     CHECK(loaded->masterInserts[0].values[0] == 71);
     CHECK(sequenceGatePattern(&loaded->instruments[0].modulation[0]) == 71);
+    CHECK(sequenceGateLength(&loaded->instruments[0].modulation[0]) == 32);
     CHECK(memcmp(project->ayWavetables, loaded->ayWavetables, 8 * 32) == 0);
+    REQUIRE(instrumentSave(project.get(), "build/tests/trance-user.cni", 0) == 0);
+    REQUIRE(instrumentLoad(loaded.get(), "build/tests/trance-user.cni", 0) == 0);
+    CHECK(sequenceGatePattern(&loaded->instruments[0].modulation[0]) == 71);
+    CHECK(sequenceGateLength(&loaded->instruments[0].modulation[0]) == 32);
     REQUIRE(ayWavetableSave("build/tests/trance-user.aywave", project->ayWavetables, 0, 8) == 1);
     for (int w = 0; w < 8; ++w) memset(loaded->ayWavetables[w], 0, sizeof(loaded->ayWavetables[w]));
     REQUIRE(ayWavetableLoad("build/tests/trance-user.aywave", loaded->ayWavetables, 0) == 8);
@@ -546,6 +618,7 @@ TEST_SUITE("track inserts") {
     projectFree(project.get());
     projectFree(loaded.get());
     std::remove("build/tests/trance-user.cct");
+    std::remove("build/tests/trance-user.cni");
     std::remove("build/tests/trance-user.aywave");
   }
   TEST_CASE("track and master user gates read the audio project snapshot") {
@@ -1586,6 +1659,31 @@ TEST_CASE("Insert chains across live, voice and track contexts") {
     chipnomadSetLiveStickEnabled(0);
     chipnomadSetLiveStickAxes(0, 0, 0, 0);
   }
+}
+
+TEST_CASE("insert gate editor allows 32 steps only for AY patterns") {
+  auto* previous = chipnomadState;
+  auto* previousScreen = currentScreen;
+  chipnomadState = chipnomadCreate();
+  screensInitAll();
+  *pSongTrack = 0;
+  auto& project = chipnomadState->project;
+  auto& gate = project.trackInserts[0][0];
+  insertSelect(&gate, insertTranceGate);
+  screenInsertFXOpenTrack();
+  screenInsertFX.setup(-1);
+  screenInsertFX.fullRedraw();
+  auto* data = mockScreenData;
+  REQUIRE(data);
+  data->onEdit(0, 3, CellEditAction::increase);
+  CHECK(gate.values[2] <= 15);
+  insertEdit(&gate, 0, 64);
+  insertEdit(&gate, 2, 15);
+  for (int i = 0; i < 16; ++i) data->onEdit(0, 3, CellEditAction::increase);
+  CHECK(gate.values[2] == 31);
+  chipnomadDestroy(chipnomadState);
+  chipnomadState = previous;
+  currentScreen = previousScreen;
 }
 
 TEST_CASE("insert tips return after real key release and categorized chooser selects modules") {

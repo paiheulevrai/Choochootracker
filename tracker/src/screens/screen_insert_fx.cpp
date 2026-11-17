@@ -100,9 +100,11 @@ static int edit(int col, int row, CellEditAction action) {
     const auto& a = insertDescriptor(c.module).parameters[p];
     // Shape/Freeze is a packed byte, discrete for DSP slew rather than an enum.
     const bool packedShapeFreeze = c.module == insertBeads && p == 6;
+    const int maximum = c.module == insertTranceGate && (p == 2 || p == 4)
+      ? tranceGatePatternLengthLimit(c.values[0]) - 1 : insertParameterMaximum(c.module, p);
     handled = edit8noLast(action, &v,
                           a.mapping == InsertMapping::discrete && !packedShapeFreeze ? 1 : 16, 0,
-                          insertParameterMaximum(c.module, p));
+                          maximum);
     if (handled) insertEdit(&c, p, v);
   }
   if (handled) {

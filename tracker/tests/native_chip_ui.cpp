@@ -1502,6 +1502,12 @@ int main(int argc,char** argv){
     require(project.ayWavetables[7][0] == 1, "modulation selects AY wave 07");
     key(1, keyShift | keyUp); key(0, 0);
     require(currentScreen == &screenModulation, "AY editor returns to modulation");
+    for (int i = 0; i < 2; ++i) { key(1, keyDown); key(0, 0); }
+    for (int i = 0; i < 16; ++i) { key(1, keyEdit | keyRight); key(0, 0); }
+    require(sequenceGateLength(&mod) == 32, "modulation AY length reaches 32 steps");
+    sequenceGateSetPattern(&mod, 0);
+    key(1, keyEdit | keyRight); key(0, 0);
+    require(sequenceGateLength(&mod) <= 16, "preset gate length remains limited to 16 steps");
     for (bool master : {false, true}) {
       auto& config = master ? project.masterInserts[0] : project.trackInserts[0][0];
       insertSelect(&config, insertTranceGate);

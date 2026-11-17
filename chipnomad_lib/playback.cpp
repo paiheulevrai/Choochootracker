@@ -1225,11 +1225,11 @@ int16_t playbackSequenceGateOutput(const Modulation* definition, uint32_t ticks,
   if (definition->p1 != static_cast<uint8_t>(SequenceSource::tranceGate)) return 0;
   uint32_t step = (uint32_t)(ticks / tranceGateTicksPerStep(sequenceGateRate(definition)));
   uint8_t length = sequenceGateLength(definition);
-  uint16_t pattern = tranceGatePatternMask(sequenceGatePattern(definition), wavetables);
-  if (!(pattern & (0x8000u >> (step % length)))) return 0;
+  uint32_t pattern = tranceGatePatternMask(sequenceGatePattern(definition), wavetables, length);
+  if (!(pattern & (0x80000000u >> (step % length)))) return 0;
   int activeCount = 0, activeIndex = 0;
   for (int i = 0; i < length; ++i) {
-    if (!(pattern & (0x8000u >> i))) continue;
+    if (!(pattern & (0x80000000u >> i))) continue;
     if ((uint32_t)i == step % length) activeIndex = activeCount;
     ++activeCount;
   }
