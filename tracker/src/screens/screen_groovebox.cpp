@@ -42,7 +42,7 @@ struct GrooveboxReferences {
       for (const auto& b : pattern.bars)
         if (b.phrase < PROJECT_MAX_PHRASES) ++phrases[b.phrase];
     for (int c = 0; c < PROJECT_MAX_CHAINS; ++c) {
-      freeChains[c] = !chains[c] && p->chainToPatternMap[c] == EMPTY_VALUE_16 && chainIsEmpty(p, c);
+      freeChains[c] = !chains[c] && p->chainToPatternMap[c] == EMPTY_VALUE_16 && chainSlotIsPristine(p, c);
       chainFree += freeChains[c];
     }
     for (int f = 0; f < PROJECT_MAX_PHRASES; ++f) {
@@ -87,21 +87,10 @@ static void changed() {
   chipnomadQueueProjectRefresh(chipnomadState);
 }
 
-static int allocateSlot(bool* free, int size, int start, int bankSize) {
-  for (int i = start; i < std::min(start + bankSize, size); ++i)
-    if (free[i]) { free[i] = false; return i; }
-  if (bankSize == 16)
-    for (int i = (start + 128) % 256; i < std::min((start + 128) % 256 + 16, size); ++i)
-      if (free[i]) { free[i] = false; return i; }
-  for (int i = 0; i < size; ++i)
-    if (free[i]) { free[i] = false; return i; }
-  return -1;
-}
-
 int grooveboxFindFreeChain(Project* p, int col) {
   if (!p || col < 0 || col >= p->tracksCount) return EMPTY_VALUE_16;
   GrooveboxReferences refs(p);
-  int slot = allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (col + 1) * 16, 16);
+  int slot = allocateTrackSlot(refs.freeChains, PROJECT_MAX_CHAINS, col);
   return slot < 0 || !editHistoryCapture(p, EditObject::chain, slot) ? EMPTY_VALUE_16 : slot;
 }
 
@@ -139,7 +128,7 @@ bool grooveboxMergePatternsUp(int firstRow, int lastRow, int firstCol, int lastC
       ++count;
     }
     if (count < 2) continue;
-    slots[col] = allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (col + 1) * 16, 16);
+    slots[col] = allocateTrackSlot(refs.freeChains, PROJECT_MAX_CHAINS, col);
     if (slots[col] < 0) { screenMessage(MESSAGE_TIME_ERROR, "No free chain: merge cancelled"); return false; }
   }
   bool merged = false;
@@ -177,13 +166,13 @@ bool grooveboxPrepareScene(int row) {
   int chains[PROJECT_MAX_TRACKS], phrases[PROJECT_MAX_TRACKS][16];
   for (int t = 0; t < p.tracksCount; ++t) {
     chains[t] = p.song[row][t] == EMPTY_VALUE_16 ?
-      allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (t + 1) * 16, 16) : p.song[row][t];
+      allocateTrackSlot(refs.freeChains, PROJECT_MAX_CHAINS, t) : p.song[row][t];
     if (chains[t] < 0) {
       screenMessage(MESSAGE_TIME_ERROR, "No free chains: scene not prepared");
       return false;
     }
     for (int b = 0; b < length; ++b) {
-      phrases[t][b] = allocateSlot(refs.freePhrases, PROJECT_MAX_PHRASES, t * 128, 128);
+      phrases[t][b] = allocateTrackSlot(refs.freePhrases, PROJECT_MAX_PHRASES, t);
       if (phrases[t][b] < 0) {
         screenMessage(MESSAGE_TIME_ERROR, "No free phrases: scene not prepared");
         return false;
@@ -356,7 +345,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
   bool linkedDuplicate = canonicalSimplifiedActive && !clone &&
     (action == GrooveboxAction::doubleLength || action == GrooveboxAction::duplicateBar);
   int target = c;
-  if (c < 0 || clone) target = allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (col + 1) * 16, 16);
+  if (c < 0 || clone) target = allocateTrackSlot(refs.freeChains, PROJECT_MAX_CHAINS, col);
   if (target < 0) { screenMessage(MESSAGE_TIME_ERROR, "No free chain"); return false; }
   int first = clone ? 0 : length;
   int count = clone ? 16 : action == GrooveboxAction::doubleLength ? length :
@@ -387,7 +376,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
       }
     }
     if (linkedDuplicate) continue;
-    slots[i] = allocateSlot(refs.freePhrases, PROJECT_MAX_PHRASES, col * 128, 128);
+    slots[i] = allocateTrackSlot(refs.freePhrases, PROJECT_MAX_PHRASES, col);
     if (slots[i] < 0) { screenMessage(MESSAGE_TIME_ERROR, "No free phrase: action cancelled"); return false; }
   }
   undo = std::make_unique<GrooveboxUndo>(row);
@@ -460,9 +449,9 @@ static PhraseRow* writableStep(bool recordUndo = true) {
       screenMessage(MESSAGE_TIME_ERROR, "Invalid chain: use Classic");
       return NULL;
     }
-    chain = allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (track + 1) * 16, 16);
+    chain = allocateTrackSlot(refs.freeChains, PROJECT_MAX_CHAINS, track);
   }
-  phrase = allocateSlot(refs.freePhrases, PROJECT_MAX_PHRASES, track * 128, 128);
+  phrase = allocateTrackSlot(refs.freePhrases, PROJECT_MAX_PHRASES, track);
   if (chain < 0 || phrase < 0) {
     screenMessage(MESSAGE_TIME_ERROR, "No free chain or phrase");
     return NULL;

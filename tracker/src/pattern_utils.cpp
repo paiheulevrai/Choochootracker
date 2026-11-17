@@ -56,7 +56,7 @@ int patternFindClosestEmptyPhrase(Project* p, int targetIdx) {
   return EMPTY_VALUE_16;
 }
 
-int chainEnsureBarExclusive(Project* p, int chainIdx, int barIdx) {
+int chainEnsureBarExclusive(Project* p, int chainIdx, int barIdx, int track) {
   if (!p || p->viewMode != ViewMode::classic || chainIdx < 0 ||
       chainIdx >= PROJECT_MAX_CHAINS || barIdx < 0 || barIdx >= 16)
     return EMPTY_VALUE_16;
@@ -81,6 +81,14 @@ int chainEnsureBarExclusive(Project* p, int chainIdx, int barIdx) {
     }
   }
   if (!shared) return phrase;
+  if (track >= 0) {
+    int fresh = findEmptyPhraseForTrack(p, track);
+    if (fresh == EMPTY_VALUE_16 || !editHistoryCapture(p, EditObject::chain, chainIdx))
+      return EMPTY_VALUE_16;
+    p->phrases[fresh] = p->phrases[phrase];
+    bar.phrase = (uint16_t)fresh;
+    return fresh;
+  }
   for (int fresh = 0; fresh < PROJECT_MAX_PHRASES; ++fresh) {
     if (used[fresh] || !phraseIsEmpty(p, fresh)) continue;
     if (!editHistoryCapture(p, EditObject::chain, chainIdx) ||
@@ -196,7 +204,7 @@ int findClosestEmptyChain(Project* p, int startIdx) {
 
 // ── Pattern length editing ──────────────────────────────────────────────────
 
-int patternMultiplyLengthByTwo(Project* p, int patternIdx) {
+int patternMultiplyLengthByTwo(Project* p, int patternIdx, int track) {
   if (!editHistoryCapture(p, EditObject::pattern, patternIdx)) return 0;
   if (patternIdx < 0 || patternIdx >= PROJECT_MAX_PATTERNS) return 0;
   Pattern* pat = &p->patterns[patternIdx];
@@ -205,6 +213,29 @@ int patternMultiplyLengthByTwo(Project* p, int patternIdx) {
   if (curLen > PROJECT_MAX_PATTERN_LENGTH) curLen = PROJECT_MAX_PATTERN_LENGTH;
   int newLen = curLen * 2;
   if (newLen > PROJECT_MAX_PATTERN_LENGTH) return 0;  // would exceed 16
+  if (track >= 0) {
+    bool freeSlots[PROJECT_MAX_PHRASES];
+    collectFreePhraseSlots(p, freeSlots);
+    int slots[PROJECT_MAX_PATTERN_LENGTH];
+    for (int b = 0; b < curLen; ++b) {
+      slots[b] = -1;
+      if (pat->bars[b].phrase == EMPTY_VALUE_16) continue;
+      if (pat->bars[b].phrase >= PROJECT_MAX_PHRASES) return 0;
+      slots[b] = allocateTrackSlot(freeSlots, PROJECT_MAX_PHRASES, track);
+      if (slots[b] < 0) return 0;
+    }
+    for (int b = 0; b < curLen; ++b)
+      if (slots[b] >= 0 && !editHistoryCapture(p, EditObject::phrase, slots[b])) return 0;
+    for (int b = 0; b < curLen; ++b) {
+      pat->bars[b + curLen] = pat->bars[b];
+      if (slots[b] >= 0) {
+        p->phrases[slots[b]] = p->phrases[pat->bars[b].phrase];
+        pat->bars[b + curLen].phrase = (uint16_t)slots[b];
+      }
+    }
+    pat->length = (uint8_t)newLen;
+    return 1;
+  }
 
   // Duplicate existing bars (decision #4), but each new bar gets its OWN
   // freshly-allocated phrase — editing a copy must never touch the original
@@ -254,7 +285,7 @@ int patternHalveLengthByTwo(Project* p, int patternIdx) {
   return 1;
 }
 
-int patternAddEmptyBar(Project* p, int patternIdx) {
+int patternAddEmptyBar(Project* p, int patternIdx, int track) {
   if (!editHistoryCapture(p, EditObject::pattern, patternIdx)) return 0;
   if (patternIdx < 0 || patternIdx >= PROJECT_MAX_PATTERNS) return 0;
   Pattern* pat = &p->patterns[patternIdx];
@@ -264,7 +295,8 @@ int patternAddEmptyBar(Project* p, int patternIdx) {
   // Allocate a fresh empty phrase for the new bar (decision: new bars get
   // closest unallocated phrase numbers, mirroring decision #8's policy for
   // new patterns).
-  int emptyPhrase = patternFindClosestEmptyPhrase(p, patternIdx);
+  int emptyPhrase = track >= 0 ? findEmptyPhraseForTrack(p, track) :
+    patternFindClosestEmptyPhrase(p, patternIdx);
   if (emptyPhrase == EMPTY_VALUE_16) return 0;  // phrases full
 
   pat->bars[curLen].phrase = (uint16_t)emptyPhrase;
@@ -606,7 +638,7 @@ int patternAppendPattern(Project* p, int targetIdx, int srcIdx) {
 // (possibly new) phrase index, or EMPTY_VALUE_16 when the pool is exhausted.
 // The clone claims the slot in `st` when provided.
 int patternEnsureBarExclusive(Project* p, ConversionPhraseState* st,
-  int patternIdx, int barIdx) {
+  int patternIdx, int barIdx, int track) {
   Pattern* pat = &p->patterns[patternIdx];
   uint16_t phrase = pat->bars[barIdx].phrase;
   if (phrase == EMPTY_VALUE_16 || phrase >= PROJECT_MAX_PHRASES) return phrase;
@@ -630,8 +662,8 @@ int patternEnsureBarExclusive(Project* p, ConversionPhraseState* st,
   }
   if (!otherRefs) return phrase;  // already exclusive
 
-  int fresh = st ? conversionAllocatePhraseSlot(p, st, 0, 0)
-                 : patternFindClosestEmptyPhrase(p, patternIdx);
+  int fresh = st ? conversionAllocatePhraseSlot(p, st, 0, 0) :
+    track >= 0 ? findEmptyPhraseForTrack(p, track) : patternFindClosestEmptyPhrase(p, patternIdx);
   if (fresh == EMPTY_VALUE_16) return EMPTY_VALUE_16;  // pool exhausted
   if (!editHistoryCapture(p, EditObject::pattern, patternIdx) ||
       !editHistoryCapture(p, EditObject::phrase, fresh)) return EMPTY_VALUE_16;

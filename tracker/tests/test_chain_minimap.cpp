@@ -109,6 +109,22 @@ TEST_CASE_FIXTURE(MinimapFixture, "toggle preserves selection and chain navigati
   CHECK(appSettings.chainMinimap == 1);
 }
 
+TEST_CASE_FIXTURE(MinimapFixture, "automatic phrase selection and cloning use the current track bank") {
+  songTrack = 1;
+  auto& p = state->project;
+  p.chains[1].rows[0].phrase = 3;
+  p.phrases[3].rows[0].note = 48;
+  screenChain.setup(0);
+  screenChain.fullRedraw();
+  REQUIRE(mockScreenData != nullptr);
+  REQUIRE(mockScreenData->onEdit(0, 0, CellEditAction::doubleTap));
+  CHECK(p.chains[1].rows[0].phrase == 0x20);
+  p.phrases[0x20].rows[0].note = 60;
+  REQUIRE(mockScreenData->onEdit(0, 0, CellEditAction::shallowClone));
+  CHECK(p.chains[1].rows[0].phrase == 0x21);
+  CHECK(p.phrases[0x21].rows[0].note == 60);
+}
+
 TEST_CASE_FIXTURE(SettingsFileFixture, "preference persists both states and defaults safely") {
   for (int enabled : {0, 1}) {
     appSettings.chainMinimap = enabled;

@@ -365,7 +365,7 @@ static int editCell(int col, int row, CellEditAction action) {
     }
     if (lastPatternSelected && lastChainValue < PROJECT_MAX_PATTERNS &&
         viewModeIsUsedElsewhere(&project, lastChainValue, -1, -1)) {
-      PatternCopyResult result = patternCopyIndependent(&project, lastChainValue, slot);
+      PatternCopyResult result = patternCopyIndependent(&project, lastChainValue, slot, col);
       if (result != PatternCopyResult::success) {
         if (result == PatternCopyResult::noFreePhrase) screenMessage(MESSAGE_TIME_ERROR, "No free phrases");
         else if (result == PatternCopyResult::invalidPhrase) screenMessage(MESSAGE_TIME_ERROR, "Invalid pattern phrase");
@@ -403,10 +403,9 @@ static int editCell(int col, int row, CellEditAction action) {
         lastChainValue = project.song[row][col];
         return 1;
       }
-      int nextEmpty = groovebox ? grooveboxFindFreeChain(&chipnomadState->project, col) :
-        chipnomadState->project.viewMode == ViewMode::simplified
+      int nextEmpty = chipnomadState->project.viewMode == ViewMode::simplified
           ? findEmptyPatternForTrack(&chipnomadState->project, col)
-          : viewModeFindEmpty(&chipnomadState->project, current + 1);
+          : findEmptyChainForTrack(&chipnomadState->project, col);
       if (nextEmpty != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = nextEmpty;
         lastChainValue = nextEmpty;
@@ -435,13 +434,14 @@ static int editCell(int col, int row, CellEditAction action) {
   } else if (action == CellEditAction::shallowClone) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
-      int cloned = viewModeCloneToNext(&chipnomadState->project, current);
+      int cloned = viewModeCloneToNext(&chipnomadState->project, current, col);
       if (cloned != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = cloned;
         lastChainValue = cloned;
         if (project.viewMode == ViewMode::simplified) lastPatternSelected = true;
         return 1;
       }
+      screenMessage(MESSAGE_TIME_ERROR, "No free chain or pattern");
     }
     return 0;
   } else if (action == CellEditAction::deepClone) {
@@ -450,9 +450,10 @@ static int editCell(int col, int row, CellEditAction action) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
       // Deep clone the phrases in the existing cell (don't create a new one)
-      if (viewModeDeepClone(&chipnomadState->project, current)) {
+      if (viewModeDeepClone(&chipnomadState->project, current, col)) {
         return 1;
       }
+      screenMessage(MESSAGE_TIME_ERROR, "Cannot clone phrases");
     }
     return 0;
   }

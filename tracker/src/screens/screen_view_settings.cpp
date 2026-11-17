@@ -234,13 +234,11 @@ static int viewEdit(int, int row, CellEditAction action) {
   if (row == 0) {
     // Historical Pattern-format projects use the import converter once.
     if (action == CellEditAction::increase || action == CellEditAction::decrease) {
-      int current = grooveboxEditorActive ? 1 : canonicalSimplifiedActive ? 2 : 0;
-      int next = (current + (action == CellEditAction::increase ? 1 : 2)) % 3;
       if (p->viewMode == ViewMode::simplified) {
         screenViewConvertSetup(&screenViewSettings, ViewMode::classic);
       } else {
-        grooveboxEditorActive = next == 1;
-        canonicalSimplifiedActive = next == 2;
+        canonicalSimplifiedActive = !canonicalSimplifiedActive && !grooveboxEditorActive;
+        grooveboxEditorActive = false;
         screenFullRedraw(&viewData);
       }
       return 1;

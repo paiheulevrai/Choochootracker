@@ -225,6 +225,62 @@ static int instrumentIsUsedInPhrases(Project* project, int instrumentIdx) {
   return 0;
 }
 
+int allocateTrackSlot(bool* freeSlots, int size, int track) {
+  if (!freeSlots || track < 0 || track >= PROJECT_MAX_TRACKS) return -1;
+  const int start = (track + 1) * 16;
+  const int fallback = (start + 128) % 256;
+  for (int pass = 0; pass < 3; ++pass) {
+    int first = pass == 0 ? start : pass == 1 ? fallback : 0;
+    int end = pass == 2 ? size : first + 16;
+    if (end > size) end = size;
+    for (int i = first; i < end; ++i) {
+      if (freeSlots[i]) {
+        freeSlots[i] = false;
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+bool chainSlotIsPristine(Project* p, int chain) {
+  for (const auto& row : p->chains[chain].rows)
+    if (row.phrase != EMPTY_VALUE_16 || row.transpose != 0) return false;
+  return true;
+}
+
+int findEmptyChainForTrack(Project* p, int track) {
+  if (!p) return EMPTY_VALUE_16;
+  bool freeSlots[PROJECT_MAX_CHAINS];
+  for (int i = 0; i < PROJECT_MAX_CHAINS; ++i)
+    freeSlots[i] = chainSlotIsPristine(p, i) && p->chainToPatternMap[i] == EMPTY_VALUE_16;
+  for (const auto& row : p->song)
+    for (auto c : row)
+      if (c < PROJECT_MAX_CHAINS) freeSlots[c] = false;
+  for (auto c : p->patternToChainMap)
+    if (c < PROJECT_MAX_CHAINS) freeSlots[c] = false;
+  int slot = allocateTrackSlot(freeSlots, PROJECT_MAX_CHAINS, track);
+  return slot >= 0 && editHistoryCapture(p, EditObject::chain, slot) ? slot : EMPTY_VALUE_16;
+}
+
+void collectFreePhraseSlots(Project* p, bool* freeSlots) {
+  for (int i = 0; i < PROJECT_MAX_PHRASES; ++i) freeSlots[i] = phraseIsEmpty(p, i);
+  for (const auto& chain : p->chains)
+    for (const auto& row : chain.rows)
+      if (row.phrase < PROJECT_MAX_PHRASES) freeSlots[row.phrase] = false;
+  for (const auto& pattern : p->patterns)
+    for (const auto& bar : pattern.bars)
+      if (bar.phrase < PROJECT_MAX_PHRASES) freeSlots[bar.phrase] = false;
+}
+
+int findEmptyPhraseForTrack(Project* p, int track) {
+  if (!p) return EMPTY_VALUE_16;
+  bool freeSlots[PROJECT_MAX_PHRASES];
+  collectFreePhraseSlots(p, freeSlots);
+  int slot = allocateTrackSlot(freeSlots, PROJECT_MAX_PHRASES, track);
+  return slot >= 0 && editHistoryCapture(p, EditObject::phrase, slot) ? slot : EMPTY_VALUE_16;
+}
+
 // Find empty chain slot (empty and not used in project)
 int findEmptyChain(Project* project, int start) {
   for (int i = start; i < PROJECT_MAX_CHAINS; i++) {

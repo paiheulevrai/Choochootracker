@@ -2160,7 +2160,9 @@ int main(int argc,char** argv){
     screenSong.init();
     screenSetup(&screenSong, 0);
     tapEdit();
-    require(p.song[0][0] < PROJECT_MAX_CHAINS, "Song tap creates a pattern");
+    require(p.song[0][0] == 0x10, "Song tap creates a pattern in track one bank");
+    require(p.chains[0x10].rows[0].phrase == 0x10 &&
+      p.chains[0x10].rows[1].phrase == 0x11, "Simplified bars use track one phrase bank");
     require(grooveboxTrackLength(&p, 0, 0) == 2, "new Simplified pattern has two real bars");
     const int first = p.song[0][0];
     screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
@@ -2169,6 +2171,15 @@ int main(int argc,char** argv){
     appChord(keyShift, keyRight);
     require(currentScreen == &screenPhrase && grooveboxTrackLength(&p, 0, 0) == 2,
       "Phrase opens the configured two-bar pattern");
+    canonicalSimplifiedActive = false;
+    p.song[0][1] = 3;
+    screenSetup(&screenSong, 0);
+    *pSongRow = 0; *pSongTrack = 1;
+    editHistoryClear();
+    screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+    require(p.song[0][1] == 0x20, "Classic automatic chain uses track two bank");
+    appChord(0, keyUndo);
+    require(p.song[0][1] == 3, "undo restores the original Classic chain ID");
     chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit();
     printf("Simplified Song creation uses the configured pattern length\n");
     return 0;
@@ -2263,12 +2274,12 @@ int main(int argc,char** argv){
       screenSetup(&screenViewSettings, 0); appDraw(); appChord(keyEdit, keyRight);
       require(!canonicalSimplifiedActive && !grooveboxEditorActive && p.viewMode == ViewMode::classic,
         "Simple C returns to Classic directly");
-      appChord(keyEdit, keyLeft); appChord(keyEdit, keyLeft);
-      require(grooveboxEditorActive && !canonicalSimplifiedActive, "Simple C switches directly to Groovebox");
+      appChord(keyEdit, keyLeft);
+      require(canonicalSimplifiedActive && !grooveboxEditorActive, "Classic switches directly to Simple C");
       appChord(keyEdit, keyLeft);
       require(currentScreen == &screenViewSettings && !grooveboxEditorActive &&
         !canonicalSimplifiedActive && p.viewMode == ViewMode::classic,
-        "three-editor cycle returns to Classic without a conversion choice");
+        "two-editor cycle returns to Classic without a conversion choice");
       require(!memcmp(original.get(), &p, sizeof(Project)), "canonical mode roundtrip preserves entire project");
       if (grooveboxCellShared(&p, 0, 0, 0)) {
         canonicalSimplifiedActive = true;
@@ -2778,7 +2789,8 @@ int main(int argc,char** argv){
       key(1, keyEdit | keyLeft); key(0, 0);
       require(canonicalSimplifiedActive, "View selects canonical Simplified without conversion");
       key(1, keyEdit | keyLeft); key(0, 0);
-      require(grooveboxEditorActive, "View selects Groovebox without conversion");
+      require(!canonicalSimplifiedActive && !grooveboxEditorActive, "View returns to Classic");
+      grooveboxEditorActive = true;
       screenSetup(&screenSong, -1); appDraw();
       require(currentScreen == &screenSong && grooveboxEditorActive, "Canonical Scenes retains Song editing");
       capture((std::string(name) + "-clips").c_str());
@@ -3034,14 +3046,16 @@ int main(int argc,char** argv){
     require(project.song[3][1] == 0x21, "CLIPS creates next track-two chain in the 20 bank");
     key(1, keyShift | keyRight); key(0, 0);
     tapEdit();
-    require(project.chains[0x21].rows[0].phrase == 0x81, "grid retains phrase bank for track two");
+    require(project.chains[0x21].rows[0].phrase == 0x21, "grid retains phrase bank for track two");
     appChord(keyShift, keyUp); appChord(0, keyRight); appChord(0, keyEdit);
     for (int i = 0; i < 11; ++i) appChord(0, keyDown);
     appChord(0, keyEdit);
     require(currentScreen == &screenViewSettings && grooveboxEditorActive, "Tools opens explicit View choice");
     key(1, keyEdit | keyRight); key(0, 0);
-    require(canonicalSimplifiedActive && !grooveboxEditorActive && project.viewMode == ViewMode::classic,
-      "View switches from Groovebox to canonical Simplified without conversion");
+    require(!canonicalSimplifiedActive && !grooveboxEditorActive && project.viewMode == ViewMode::classic,
+      "View switches from Groovebox to Classic without conversion");
+    key(1, keyEdit | keyRight); key(0, 0);
+    require(canonicalSimplifiedActive && project.viewMode == ViewMode::classic, "View switches to Simplified");
     key(1, keyEdit | keyRight); key(0, 0);
     require(!canonicalSimplifiedActive && project.viewMode == ViewMode::classic, "View switches back to Classic");
     screenSetup(&screenSong, -1); appDraw();

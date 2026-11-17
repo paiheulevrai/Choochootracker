@@ -156,6 +156,28 @@ TEST_CASE_FIXTURE(HistoryFixture, "Undo restores clone-on-write phrase reference
   CHECK(p.phrases[fresh].rows[0].note == 72);
 }
 
+TEST_CASE_FIXTURE(HistoryFixture, "banked deep clone preserves shared phrases and is undoable") {
+  auto& p = project();
+  p.chains[3].rows[0].phrase = 5;
+  p.chains[3].rows[1].phrase = 6;
+  p.chains[3].rows[2].phrase = 5;
+  p.phrases[5].rows[0].note = 60;
+  {
+    EditHistoryScope edit("Clone");
+    REQUIRE(deepCloneChain(3, 1));
+  }
+  CHECK(p.chains[3].rows[0].phrase == 0x20);
+  CHECK(p.chains[3].rows[1].phrase == 0x21);
+  CHECK(p.chains[3].rows[2].phrase == 0x20);
+  REQUIRE(editHistoryUndo());
+  CHECK(p.chains[3].rows[0].phrase == 5);
+  CHECK(p.chains[3].rows[1].phrase == 6);
+  CHECK(p.phrases[0x20].rows[0].note == EMPTY_VALUE_8);
+  REQUIRE(editHistoryRedo());
+  CHECK(p.chains[3].rows[0].phrase == 0x20);
+  CHECK(p.phrases[0x20].rows[0].note == 60);
+}
+
 TEST_CASE_FIXTURE(HistoryFixture, "Undo bounds actions and rolls back an oversized transaction") {
   for (int i = 0; i < 80; ++i) note(uint8_t(i));
   int undone = 0;

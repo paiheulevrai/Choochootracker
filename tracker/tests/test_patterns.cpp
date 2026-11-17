@@ -81,12 +81,66 @@ TEST_CASE_FIXTURE(PatternFixture, "pattern allocation skips referenced and retai
   project->patternToChainMap[0x13] = 4;
   CHECK(findEmptyPatternForTrack(project.get(), 0) == 0x14);
   project->patterns[0x0f].bars[0].phrase = 1;
-  int clone = viewModeCloneToNext(project.get(), 0x0f);
-  CHECK(clone == 0x0e);
+  int clone = viewModeCloneToNext(project.get(), 0x0f, 0);
+  CHECK(clone == 0x14);
   CHECK(project->song[0][0] == 0x10);
   CHECK(project->patterns[0x10].bars[0].phrase == EMPTY_VALUE_16);
   for (int i = 0; i < PROJECT_MAX_PATTERNS; ++i) project->song[i][0] = i;
   CHECK(findEmptyPatternForTrack(project.get(), 0) == EMPTY_VALUE_16);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "track banks skip retained chain and phrase references and fall back") {
+  project->song[0][0] = 0x10;
+  project->chainToPatternMap[0x11] = 0;
+  project->patternToChainMap[0] = 0x12;
+  project->chains[0x13].rows[5].transpose = 1;
+  CHECK(findEmptyChainForTrack(project.get(), 0) == 0x14);
+  project->chains[0].rows[15].phrase = 0x10;
+  project->patterns[0].bars[15].phrase = 0x11;
+  project->phrases[0x12].rows[0].note = 48;
+  CHECK(findEmptyPhraseForTrack(project.get(), 0) == 0x13);
+  CHECK(findEmptyPhraseForTrack(project.get(), 1) == 0x20);
+  for (int i = 0x10; i < 0x20; ++i) {
+    project->chainToPatternMap[i] = 0;
+    project->phrases[i].rows[0].note = 48;
+  }
+  CHECK(findEmptyChainForTrack(project.get(), 0) == 0x90);
+  CHECK(findEmptyPhraseForTrack(project.get(), 0) == 0x90);
+  for (auto& phrase : project->phrases) phrase.rows[0].note = 48;
+  CHECK(findEmptyPhraseForTrack(project.get(), 0) == EMPTY_VALUE_16);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "banked pattern operations reserve distinct phrases") {
+  auto& source = project->patterns[3];
+  source.length = 2;
+  source.bars[0].phrase = 7;
+  source.bars[1].phrase = 8;
+  REQUIRE(patternCopyIndependent(project.get(), 3, 0x20, 1) == PatternCopyResult::success);
+  CHECK(project->patterns[0x20].bars[0].phrase == 0x20);
+  CHECK(project->patterns[0x20].bars[1].phrase == 0x21);
+  REQUIRE(patternMultiplyLengthByTwo(project.get(), 0x20, 1));
+  CHECK(project->patterns[0x20].bars[2].phrase == 0x22);
+  CHECK(project->patterns[0x20].bars[3].phrase == 0x23);
+  for (auto& phrase : project->phrases) phrase.rows[0].note = 48;
+  const Pattern before = project->patterns[0x20];
+  CHECK_FALSE(patternMultiplyLengthByTwo(project.get(), 0x20, 1));
+  CHECK(std::memcmp(&before, &project->patterns[0x20], sizeof(before)) == 0);
+}
+
+TEST_CASE_FIXTURE(PatternFixture, "banked deep pattern clone preserves sharing") {
+  project->viewMode = ViewMode::simplified;
+  auto& pattern = project->patterns[3];
+  pattern.length = 3;
+  pattern.bars[0].phrase = 5;
+  pattern.bars[1].phrase = 6;
+  pattern.bars[2].phrase = 5;
+  project->phrases[5].rows[0].note = 60;
+  REQUIRE(viewModeDeepClone(project.get(), 3, 1));
+  CHECK(pattern.bars[0].phrase == 0x20);
+  CHECK(pattern.bars[1].phrase == 0x21);
+  CHECK(pattern.bars[2].phrase == 0x20);
+  CHECK(project->phrases[0x20].rows[0].note == 60);
+  CHECK(project->phrases[5].rows[0].note == 60);
 }
 
 TEST_CASE_FIXTURE(PatternFixture, "independent pattern copies preserve bars without sharing phrases") {

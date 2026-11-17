@@ -44,20 +44,27 @@ the history with a message. Other editors keep their existing local undo;
 using Groovebox's local Tools undo also clears this shared history. A new
 recorded edit after undo discards redo; clearing history never changes the music.
 
-## Three-view text prototype
+## Editing modes
 
-Project -> Editing mode -> Editing style -> Mode cycles through Classic, Groovebox and Simplified with
+Project -> Editing mode -> Editing style -> Mode switches between Classic and Simplified with
 EDIT + LEFT/RIGHT. There is one Simplified behaviour: bars isolate automatically
 when edited, directly in the canonical Song/Chains/Phrases arrangement.
 Changing editor does not convert the project.
-The Groovebox choice is session-only; Default mode remains Classic/Simplified.
+Default mode selects Classic or Simplified for new projects.
 
 ### Simplified: on-the-fly bar editing
 
 Simplified reuses Reip's Phrase editor navigation and header, but each
 pattern is an existing chain and each bar is a chain row. The project remains
-Classic internally. Classic, Simplified and Groovebox switch directly without
+Classic internally. Classic and Simplified switch directly without
 rewriting Song, changing phrase IDs, baking transposes, or allocating on browse.
+
+Automatic chain, pattern and phrase allocations prefer hexadecimal banks by
+track: `10–1F` (`010–01F` for phrases) on track 1, `20–2F` (`020–02F`)
+on track 2, and so on. When a bank is full, another free slot is used.
+Existing IDs and manual ID editing are unchanged.
+In Classic, a single tap on an empty cell still recalls the last selected ID;
+double-tap and clone actions select free IDs automatically.
 Historical Pattern-format projects are reconciled to chains once when loaded,
 using the existing importer. A failed import leaves the current project and
 source file unchanged. The combined writer still retains historical arrays/maps.
@@ -108,7 +115,9 @@ saved projects retain Classic backing and the combined prototype's writer.
 The header remains Pattern / Length / TR / Loop, without a permanent
 copy/status control. Slot exhaustion cancels the edit with an error message.
 
-In Groovebox mode, **SCENES** replaces Song in the navigation, using the same
+### Groovebox prototype (not available in the main build)
+
+In the experimental Groovebox editor, **SCENES** replaces Song in the navigation, using the same
 canonical arrangement and all its selection, copy/paste, clone and row-editing
 functions. There is no separate scene overview inside the step editor.
 SHIFT + LEFT/RIGHT follows the usual screen navigation:
@@ -257,8 +266,8 @@ track 1 `10-1F`, track 2 `20-2F`, ... track 8 `80-8F`.
 Occupied/referenced slots are skipped. Overflow prefers `90-9F` for track 1,
 `A0-AF` for track 2, ... `F0-FE` for track 7, `00-0F` for track 8,
 then any free slot. `FF` is not a valid chain.
-Phrases retain 128-slot banks: track 1 `000-07F`, track 2 `080-0FF`,
-... track 5 `200-27F`, with free-slot fallback. These are independent ID
+Phrases use 16-slot banks: track 1 `010-01F`, track 2 `020-02F`,
+... track 8 `080-08F`, with free-slot fallback. These are independent ID
 pools, not a decimal numbering scheme. Existing IDs are never renumbered.
 The free chain/phrase meters exclude referenced empty bars and retained
 material. Multi-slot actions reserve everything before committing; pool
@@ -2109,35 +2118,18 @@ Use **Save** before changing instrument types or loading another project.
 The **View** row opens the view window, which controls how the Song screen is
 interpreted:
 
-- **Mode** is the active project view: **Classic** (LSDJ-style
-  Song → Chain → Phrase) or **Simplified** (Song rows are patterns of 1–16
-  bars). Switching the mode opens a warning screen — a conversion rewrites
-  the whole song structure and might damage it. Choose **Save and proceed**
-  (saves the project first, asking for a filename if it has none yet),
-  **Proceed without saving**, or **Cancel**. While the conversion runs the
-  status line shows `Converting...`, afterwards `Converted!`.
-
-  Conversion preserves the music: in classic → simplified each chain becomes
-  a pattern with the same number (or the closest free one), containing the
-  chain's phrases as bars in order, with chain transposes baked into the
-  notes. In simplified → classic each pattern becomes a chain whose phrase
-  numbers follow the pattern number (skipping occupied numbers), and bars
-  with identical content share one phrase. The conversion scans for changes:
-  chains and patterns that are unchanged since the last conversion keep
-  their converted state exactly, while ones edited (or added) since are
-  rebuilt from the current content — so edits made in either mode carry
-  across, and untouched parts are never disturbed.
+- **Mode** is the active editor: **Classic** (Song → Chain → Phrase) or
+  **Simplified** (Song rows show patterns of 1–16 bars). Switching between
+  these editors does not convert or renumber a canonical project. Older projects
+  stored in the legacy Simplified format are converted to Classic backing.
 - **Default mode** is the view new projects start in (a global setting,
   remembered in `settings.txt`).
 - **Default length** (visible in Simplified mode) is the length of newly
-  created patterns. It applies when you type a pattern number onto an
-  empty Song row (the pattern starts that long) and when clearing the
-  Length field on the Phrase screen header.
-- Tap an empty Song cell to copy the last selected pattern independently,
-  including its phrases; if none is selected, a new empty pattern uses the
-  default length. Pattern IDs use the selected track's `10`, `20`, `30`…
-  bank. If that bank is full, other IDs are searched. A double-tap on an
-  occupied cell selects a new empty pattern.
+  created patterns and the length restored when clearing the Length field
+  on the Phrase screen header.
+- In Simplified, tap an empty Song cell or double-tap an occupied cell to
+  create a new pattern at the default length. IDs use the selected track's
+  `10`, `20`, `30`… bank; if that bank is full, other IDs are searched.
 - **Playhead** (visible in Simplified mode) chooses between looping the bar
   the cursor views and playing the whole pattern. In **PAT**, playback starts
   at the viewed bar, then continues through and loops the full pattern.

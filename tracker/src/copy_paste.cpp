@@ -506,14 +506,16 @@ int cloneInstrument(int srcIdx, int dstIdx) {
 }
 
 // Deep clone phrases within an existing chain
-int deepCloneChain(int chainIdx) {
-  if (chainIdx >= PROJECT_MAX_CHAINS) return 0;
+int deepCloneChain(int chainIdx, int track) {
+  if (chainIdx < 0 || chainIdx >= PROJECT_MAX_CHAINS) return 0;
   if (!editHistoryCapture(EditObject::chain, chainIdx)) return 0;
 
-  // Find all distinct phrases used in the chain
   uint16_t usedPhrases[16];
   uint16_t phraseMapping[16];
+  uint16_t destinations[16];
   int distinctCount = 0;
+  bool freeSlots[PROJECT_MAX_PHRASES];
+  collectFreePhraseSlots(&chipnomadState->project, freeSlots);
 
   for (int row = 0; row < 16; row++) {
     uint16_t phraseIdx = chipnomadState->project.chains[chainIdx].rows[row].phrase;
@@ -521,6 +523,7 @@ int deepCloneChain(int chainIdx) {
       phraseMapping[row] = EMPTY_VALUE_16;
       continue;
     }
+    if (phraseIdx >= PROJECT_MAX_PHRASES) return 0;
 
     // Check if phrase already processed
     int found = -1;
@@ -533,12 +536,12 @@ int deepCloneChain(int chainIdx) {
 
     if (found == -1) {
       // New phrase, find empty slot
-      int newPhraseIdx = findEmptyPhrase(&chipnomadState->project, 0);
-      if (newPhraseIdx == EMPTY_VALUE_16) return 0;
-
-      // Clone the phrase
-      clonePhrase(phraseIdx, newPhraseIdx);
-
+      int newPhraseIdx = -1;
+      if (track >= 0) newPhraseIdx = allocateTrackSlot(freeSlots, PROJECT_MAX_PHRASES, track);
+      else for (int i = 0; i < PROJECT_MAX_PHRASES; ++i)
+        if (freeSlots[i]) { freeSlots[i] = false; newPhraseIdx = i; break; }
+      if (newPhraseIdx < 0) return 0;
+      destinations[distinctCount] = newPhraseIdx;
       usedPhrases[distinctCount] = phraseIdx;
       phraseMapping[row] = newPhraseIdx;
       distinctCount++;
@@ -553,7 +556,10 @@ int deepCloneChain(int chainIdx) {
     }
   }
 
-  // Update chain with new phrase references
+  for (int i = 0; i < distinctCount; ++i)
+    if (!editHistoryCapture(EditObject::phrase, destinations[i])) return 0;
+  for (int i = 0; i < distinctCount; ++i)
+    chipnomadState->project.phrases[destinations[i]] = chipnomadState->project.phrases[usedPhrases[i]];
   for (int row = 0; row < 16; row++) {
     chipnomadState->project.chains[chainIdx].rows[row].phrase = phraseMapping[row];
   }

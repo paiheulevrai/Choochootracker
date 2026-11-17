@@ -21,15 +21,14 @@ extern "C" {
 // COMMON_SOURCES; beads_lifetime / measure / factory / chip_bench / chip_auditions
 // exclude copy_paste.cpp AND pattern_clone_utils.cpp together.
 
-// Clone the song cell (chain or pattern) at srcIdx to the next empty slot.
+// Clone the song cell (chain or pattern) into a free slot in the track bank.
 // Returns the new index, or EMPTY_VALUE_16 if no empty slot is available.
-int viewModeCloneToNext(Project* p, int srcIdx);
+int viewModeCloneToNext(Project* p, int srcIdx, int track);
 
-PatternCopyResult patternCopyIndependent(Project* p, int srcIdx, int dstIdx);
+PatternCopyResult patternCopyIndependent(Project* p, int srcIdx, int dstIdx, int track = -1);
 
-// Deep-clone the song cell (chain or pattern) at srcIdx: clone the cell AND
-// each phrase it references. Returns 1 on success, 0 on failure.
-int viewModeDeepClone(Project* p, int srcIdx);
+// Replace the cell's phrases with independent clones. Returns 1 on success.
+int viewModeDeepClone(Project* p, int srcIdx, int track);
 
 #ifdef __cplusplus
 }

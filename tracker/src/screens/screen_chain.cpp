@@ -231,7 +231,7 @@ static int editCell(int col, int row, enum CellEditAction action) {
     if (action == CellEditAction::doubleTap) {
       uint16_t current = chipnomadState->project.chains[chain].rows[row].phrase;
       if (current != EMPTY_VALUE_16) {
-        int nextEmpty = findEmptyPhrase(&chipnomadState->project, current + 1);
+        int nextEmpty = findEmptyPhraseForTrack(&chipnomadState->project, *pSongTrack);
         if (nextEmpty != EMPTY_VALUE_16) {
           chipnomadState->project.chains[chain].rows[row].phrase = nextEmpty;
           lastPhraseValue = nextEmpty;
@@ -243,12 +243,14 @@ static int editCell(int col, int row, enum CellEditAction action) {
     } else if (action == CellEditAction::shallowClone || action == CellEditAction::deepClone) {
       uint16_t current = chipnomadState->project.chains[chain].rows[row].phrase;
       if (current != EMPTY_VALUE_16) {
-        int cloned = clonePhraseToNext(current);
+        int cloned = findEmptyPhraseForTrack(&chipnomadState->project, *pSongTrack);
+        if (cloned != EMPTY_VALUE_16 && !clonePhrase(current, cloned)) cloned = EMPTY_VALUE_16;
         if (cloned != EMPTY_VALUE_16) {
           chipnomadState->project.chains[chain].rows[row].phrase = cloned;
           lastPhraseValue = cloned;
           return 1;
         }
+        screenMessage(MESSAGE_TIME_ERROR, "Cannot clone phrase");
       }
       return 0;
     }

@@ -168,7 +168,7 @@ static void setup(int input) {
       // may have no phrase yet. Allocate one on the fly so notes entered
       // here stick (and survive scrolling away and back).
       if (phraseIdx == EMPTY_VALUE_16 && input != -2) {
-        int fresh = patternFindClosestEmptyPhrase(p, currentPatternIdx);
+        int fresh = findEmptyPhraseForTrack(p, *pSongTrack);
         if (fresh != EMPTY_VALUE_16) {
           if (!editHistoryCapture(p, EditObject::pattern, currentPatternIdx) ||
               !editHistoryCapture(p, EditObject::phrase, fresh)) return;
@@ -177,6 +177,8 @@ static void setup(int input) {
           phraseIdx = fresh;
           projectModified = 1;
           chipnomadQueueProjectRefresh(chipnomadState);
+        } else {
+          screenMessage(MESSAGE_TIME_ERROR, "No free phrases");
         }
       }
       // Clone-on-write: a bar sharing its phrase with another bar (multiplied
@@ -185,8 +187,11 @@ static void setup(int input) {
       // classic view's phrases.
       if (phraseIdx != EMPTY_VALUE_16 && input != -2) {
         int exclusive = patternEnsureBarExclusive(p, NULL, currentPatternIdx,
-          bar);
-        if (exclusive != EMPTY_VALUE_16 && exclusive != phraseIdx) {
+          bar, *pSongTrack);
+        if (exclusive == EMPTY_VALUE_16) {
+          phraseIdx = EMPTY_VALUE_16;
+          screenMessage(MESSAGE_TIME_ERROR, "Cannot isolate phrase");
+        } else if (exclusive != phraseIdx) {
           phraseIdx = exclusive;
           projectModified = 1;
           chipnomadQueueProjectRefresh(chipnomadState);
@@ -1194,7 +1199,7 @@ static bool canonicalWritable(bool phraseEdit = true) {
     refreshCanonicalPhrase();
   }
   if (hasPhrase && phraseEdit && !canonicalBarExclusive) {
-    int exclusive = chainEnsureBarExclusive(&chipnomadState->project, currentPatternIdx, *pChainRow);
+    int exclusive = chainEnsureBarExclusive(&chipnomadState->project, currentPatternIdx, *pChainRow, *pSongTrack);
     if (exclusive == EMPTY_VALUE_16) {
       screenMessage(MESSAGE_TIME_ERROR, "No free phrase: edit cancelled");
       return false;
@@ -1394,19 +1399,22 @@ static int onEdit(int col, int row, CellEditAction action) {
           if (!patternRemoveLastBar(p, currentPatternIdx)) break;
         }
         while (pat->length < target) {
-          if (!patternAddEmptyBar(p, currentPatternIdx)) break;
+          if (!patternAddEmptyBar(p, currentPatternIdx, *pSongTrack)) {
+            screenMessage(MESSAGE_TIME_ERROR, "No free phrase");
+            break;
+          }
         }
         handled = 1;
       } else if (action == CellEditAction::increaseBig) {
         // ×2: duplicate the existing bars (decision #4).
-        handled = patternMultiplyLengthByTwo(p, currentPatternIdx);
+        handled = patternMultiplyLengthByTwo(p, currentPatternIdx, *pSongTrack);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't double");
       } else if (action == CellEditAction::decreaseBig) {
         handled = patternHalveLengthByTwo(p, currentPatternIdx);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't halve");
       } else if (action == CellEditAction::increase) {
-        handled = patternAddEmptyBar(p, currentPatternIdx);
-        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at max length");
+        handled = patternAddEmptyBar(p, currentPatternIdx, *pSongTrack);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern full or no free phrase");
       } else if (action == CellEditAction::decrease) {
         handled = patternRemoveLastBar(p, currentPatternIdx);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at min length");
@@ -1485,19 +1493,22 @@ static int onEdit(int col, int row, CellEditAction action) {
           if (!patternRemoveLastBar(p, currentPatternIdx)) break;
         }
         while (pat->length < target) {
-          if (!patternAddEmptyBar(p, currentPatternIdx)) break;
+          if (!patternAddEmptyBar(p, currentPatternIdx, *pSongTrack)) {
+            screenMessage(MESSAGE_TIME_ERROR, "No free phrase");
+            break;
+          }
         }
         handled = 1;
       } else if (action == CellEditAction::increaseBig) {
         // ×2: duplicate the existing bars (decision #4).
-        handled = patternMultiplyLengthByTwo(p, currentPatternIdx);
+        handled = patternMultiplyLengthByTwo(p, currentPatternIdx, *pSongTrack);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't double");
       } else if (action == CellEditAction::decreaseBig) {
         handled = patternHalveLengthByTwo(p, currentPatternIdx);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't halve");
       } else if (action == CellEditAction::increase) {
-        handled = patternAddEmptyBar(p, currentPatternIdx);
-        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at max length");
+        handled = patternAddEmptyBar(p, currentPatternIdx, *pSongTrack);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern full or no free phrase");
       } else if (action == CellEditAction::decrease) {
         handled = patternRemoveLastBar(p, currentPatternIdx);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at min length");
