@@ -198,7 +198,8 @@ struct PlaybackTrackState {
 };
 
 int playbackSequenceBypasses(const PlaybackTrackState* track, SequenceSource source);
-int16_t playbackSequenceGateOutput(const Modulation* modulation, uint32_t ticks);
+int16_t playbackSequenceGateOutput(const Modulation* modulation, uint32_t ticks,
+                                   const uint8_t (*wavetables)[32] = nullptr);
 
 struct MidiCCRuntime {
   uint8_t active;

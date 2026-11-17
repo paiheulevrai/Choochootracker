@@ -1015,7 +1015,7 @@ static ScreenPlaybackLevel playbackLevel() {
 const AppScreen screenGroovebox = {init, setup, fullRedraw, draw, input, playbackLevel};
 
 static void afterConversion(int) {
-  grooveboxEditorActive = chipnomadState->project.viewMode == ViewMode::classic;
+  grooveboxEditorActive = false;
   screenViewSettings.setup(0);
 }
 static void conversionViewRedraw() { screenViewSettings.fullRedraw(); }

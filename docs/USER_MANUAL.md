@@ -1468,6 +1468,10 @@ or destination changes, including in Layer children.
 
 PITCH and VOL Sequence sources have a **Mode**. **Normal** keeps the tracker value audible while also using it as modulation. **Bypass** makes it a source only: PITCH retriggers at the last pitch (or C-4 for the first note), and VOL keeps the last audible level. Trance Gate is already source-only. If any active Sequence slot bypasses PITCH or VOL, bypass wins. To prevent feedback, PITCH and VOL cannot target Pitch or Volume.
 
+The Trance Gate insert and Sequence source both offer preset patterns `00`–`3F` and eight user patterns `40`–`47`, mapped to AY wavetables `00`–`07`. Their first 16 steps are the gate: `0` closes it and any other value opens it. Length limits the steps used; the remaining 16 wavetable steps do not affect the gate. On a user Pattern/Motif, double-tap **EDIT** to open its AY wavetable; **SHIFT + UP** returns to the insert or modulation screen.
+
+These are the project's shared AY wavetables, not copies: editing or importing one also changes any AY instruments or wavetable LFOs using it, and vice versa. Existing waves are never replaced automatically. They are saved with the project and can be exported/imported with the AY editor's **Save/Load** buttons (`.aywave`); export the waves separately when sharing an instrument that uses a user gate.
+
 Envelope/LFO duration parameters are measured in ticks, except the Audio follower's Attack and Release, which are independent of song tempo.
 
 ### Audio envelope follower

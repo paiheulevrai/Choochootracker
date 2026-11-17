@@ -53,7 +53,9 @@ int modulationIsAdditive(ModulationType type) {
          type == ModulationType::Sequence || type == ModulationType::Audio || modulationIsLiveStick(type);
 }
 
-uint8_t sequenceGatePattern(const Modulation* modulation) { return modulation->p3 & 63; }
+uint8_t sequenceGatePattern(const Modulation* modulation) {
+  return modulation->p3 < tranceGateUserFirst + tranceGateUserCount ? modulation->p3 : modulation->p3 & 63;
+}
 uint8_t sequenceGateRate(const Modulation* modulation) { return modulation->p4 & 15; }
 uint8_t sequenceGateLength(const Modulation* modulation) { return (modulation->p4 >> 4) + 1; }
 SequenceGateTrigger sequenceGateTrigger(const Modulation* modulation) {
@@ -67,7 +69,7 @@ void sequenceGateDefaults(Modulation* modulation) {
   modulation->p4 = (15 << 4) | 9; // 16 steps, 1/16.
   modulation->p5 = 0;
 }
-void sequenceGateSetPattern(Modulation* modulation, uint8_t value) { modulation->p3 = value & 63; }
+void sequenceGateSetPattern(Modulation* modulation, uint8_t value) { modulation->p3 = std::min<uint8_t>(tranceGateUserFirst + tranceGateUserCount - 1, value); }
 void sequenceGateSetRate(Modulation* modulation, uint8_t value) { modulation->p4 = (modulation->p4 & 0xf0) | std::min<uint8_t>(14, value); }
 void sequenceGateSetLength(Modulation* modulation, uint8_t value) { modulation->p4 = (modulation->p4 & 15) | ((std::min<uint8_t>(16, std::max<uint8_t>(1, value)) - 1) << 4); }
 void sequenceGateSetTrigger(Modulation* modulation, SequenceGateTrigger value) { modulation->p5 = (modulation->p5 & 0xf8) | static_cast<uint8_t>(value); }

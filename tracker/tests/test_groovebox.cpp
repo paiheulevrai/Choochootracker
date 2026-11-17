@@ -426,7 +426,7 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Editing mode switches between Classic and
   CHECK_FALSE(grooveboxEditorActive);
   chipnomadState->project.viewMode = ViewMode::classic;
   screenGrooveboxAfterConversion.setup(0);
-  CHECK(grooveboxEditorActive);
+  CHECK_FALSE(grooveboxEditorActive);
   row = 11; track = 2; bar = 8;
   screenGrooveboxAfterConversion.getPlaybackLevel();
   CHECK(row == 11);

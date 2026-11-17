@@ -40,6 +40,7 @@
 // Row 1: Wavetable editor - 32 columns (starts at x=2, directly after the 2-char index)
 
 static int wavetableIdx = 0;
+static const AppScreen* returnScreen = NULL;
 static uint16_t wavetableSaveCount = 1;  // Number of wavetables to save (1-256), default 1
 static Bitmap* previewBitmap = NULL;  // Bitmap for current wavetable preview
 static Bitmap* previewBitmapPrev1 = NULL;  // Preview for wavetable -1
@@ -454,8 +455,9 @@ static int inputScreenNavigation(int keys, int tapCount) {
     fullRedraw();
     return 1;
   } else if (keys == (keyUp | keyShift)) {
-    // Go back to Table screen
-    screenSetup(&screenTable, 0);
+    const AppScreen* target = returnScreen ? returnScreen : &screenTable;
+    returnScreen = NULL;
+    screenSetup(target, target == &screenTable ? 0 : -1);
     return 1;
   } else if (keys == (keyShift | keyOpt)) {
     // Copy wavetable (only when editing wavetable data, not on button row)
@@ -536,3 +538,8 @@ const AppScreen screenAYWavetable = {
   .onInput = onInput,
   .getPlaybackLevel = getPlaybackLevel,
 };
+
+void screenAYWavetableOpen(int index, const AppScreen* origin) {
+  returnScreen = origin;
+  screenSetup(&screenAYWavetable, index);
+}

@@ -75,6 +75,7 @@ const AppScreen screenProjectTuning = {nullptr, nullptr, noOp, noOp, ignoreInput
 const AppScreen screenLinkOptions = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenSyncOut = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenAYWavetable = {nullptr, nullptr, noOp, noOp, ignoreInput};
+void screenAYWavetableOpen(int index, const AppScreen*) { screenSetup(&screenAYWavetable, index); }
 const AppScreen* currentScreen = &screenSong;
 ScreenData* mockScreenData;
 const char* mockBrowserTitle;

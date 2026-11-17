@@ -56,7 +56,11 @@ float insertMap(int module, int parameter, int value);
 void insertSelect(InsertConfig*, int module);
 void insertEdit(InsertConfig*, int parameter, int value);
 void insertDescribe(char*, size_t, int module, int parameter, int value);
-bool tranceGatePatternOpen(uint8_t pattern, uint8_t length, uint32_t step);
+constexpr uint8_t tranceGateUserFirst = 64;
+constexpr uint8_t tranceGateUserCount = 8;
+uint16_t tranceGatePatternMask(uint8_t pattern, const uint8_t (*wavetables)[32]);
+bool tranceGatePatternOpen(uint8_t pattern, uint8_t length, uint32_t step,
+                           const uint8_t (*wavetables)[32] = nullptr);
 float tranceGateTicksPerStep(uint8_t rate);
 class InsertChain {
  public:
@@ -75,7 +79,7 @@ class InsertChain {
   uint16_t sync(const InsertConfig config[2], InsertAutomation*, bool rendered = true);
   bool active() const;
   void process(float* interleaved, int frames, const uint8_t effective[2][8],
-               const float* sidechain[2] = nullptr);
+               const float* sidechain[2] = nullptr, const uint8_t (*wavetables)[32] = nullptr);
 
  private:
   struct Impl;

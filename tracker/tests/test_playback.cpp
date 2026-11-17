@@ -582,6 +582,20 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Sequence sources bypass sequencer output and
   sequenceGateSetAccents(&sequence, 8);
   CHECK(playbackSequenceGateOutput(&sequence, 0) == 32385);
   CHECK(playbackSequenceGateOutput(&sequence, 12) == 16192);
+  uint8_t waves[8][32]{};
+  for (int slot = 0; slot < 8; ++slot) {
+    sequenceGateSetPattern(&sequence, 64 + slot);
+    waves[slot][0] = 1;
+    waves[slot][2] = 15;
+    waves[slot][16] = 15;
+    CHECK(sequenceGatePattern(&sequence) == 64 + slot);
+    CHECK(playbackSequenceGateOutput(&sequence, 0, waves) == 32385);
+    CHECK(playbackSequenceGateOutput(&sequence, 6, waves) == 0);
+    CHECK(playbackSequenceGateOutput(&sequence, 12, waves) == 16192);
+  }
+  sequenceGateSetPattern(&sequence, 255);
+  CHECK(sequenceGatePattern(&sequence) == 71);
+  sequenceGateSetPattern(&sequence, 2);
   for (SequenceGateTrigger trigger : {SequenceGateTrigger::free, SequenceGateTrigger::retrig,
                                       SequenceGateTrigger::phrase, SequenceGateTrigger::chain}) {
     sequenceGateSetTrigger(&sequence, trigger);

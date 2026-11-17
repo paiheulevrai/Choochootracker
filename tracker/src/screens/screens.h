@@ -126,6 +126,7 @@ void screenInsertFXOpenTrack(void);
 int screenInsertFXIsMaster(void);
 extern const AppScreen screenTable;
 extern const AppScreen screenAYWavetable;
+void screenAYWavetableOpen(int index, const AppScreen* returnScreen);
 extern const AppScreen screenExport;
 extern const AppScreen screenBounce;
 extern const AppScreen screenManage;

@@ -473,7 +473,10 @@ static void hint(const Modulation* mod, int modRow) {
     case 3: {
       char motif[32];
       insertDescribe(motif, sizeof(motif), insertTranceGate, 0, sequenceGatePattern(mod));
-      screenMessage(0, "Motif: %s", motif);
+      if (sequenceGatePattern(mod) >= tranceGateUserFirst)
+        screenMessage(0, "%s  EDIT x2: AY wave", motif);
+      else
+        screenMessage(0, "Motif: %s", motif);
       break;
     }
     case 4: screenMessage(0, "Rate %s", rateNames[rate > 14 ? 14 : rate]); break;
@@ -824,7 +827,7 @@ static int onEdit(int col, int row, enum CellEditAction action) {
       } else if (mod->type == ModulationType::Sequence) {
         if (mod->p1 == static_cast<uint8_t>(SequenceSource::tranceGate)) {
           uint8_t value;
-          if (paramIdx == 0) { value = sequenceGatePattern(mod); handled = edit8noLast(action, &value, 1, 0, 63); if (handled) sequenceGateSetPattern(mod, value); }
+          if (paramIdx == 0) { value = sequenceGatePattern(mod); handled = edit8noLast(action, &value, 1, 0, tranceGateUserFirst + tranceGateUserCount - 1); if (handled) sequenceGateSetPattern(mod, value); }
           else if (paramIdx == 1) { value = sequenceGateRate(mod); handled = edit8noLast(action, &value, 1, 0, 14); if (handled) sequenceGateSetRate(mod, value); }
           else if (paramIdx == 2) { value = sequenceGateLength(mod); handled = edit8noLast(action, &value, 1, 1, 16); if (handled) sequenceGateSetLength(mod, value); }
           else if (paramIdx == 3) { value = static_cast<uint8_t>(sequenceGateTrigger(mod)); handled = edit8noLast(action, &value, 1, 0, static_cast<uint8_t>(SequenceGateTrigger::totalCount) - 1); if (handled) sequenceGateSetTrigger(mod, static_cast<SequenceGateTrigger>(value)); }
@@ -848,6 +851,17 @@ static void fullRedraw(void) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  if (isKeyDown && keys == keyEdit && tapCount == 2 && getModRow(screenData.cursorRow) == 3) {
+    const Modulation& mod = chipnomadState->project.instruments[cInstrument].modulation[
+        getModIndex(screenData.cursorCol, screenData.cursorRow)];
+    uint8_t pattern = sequenceGatePattern(&mod);
+    if (mod.type == ModulationType::Sequence &&
+        mod.p1 == static_cast<uint8_t>(SequenceSource::tranceGate) &&
+        pattern >= tranceGateUserFirst && pattern < tranceGateUserFirst + tranceGateUserCount) {
+      screenAYWavetableOpen(pattern - tranceGateUserFirst, &screenModulation);
+      return 1;
+    }
+  }
   if (getModRow(screenData.cursorRow) == 1) {
     Instrument* instrument = &chipnomadState->project.instruments[cInstrument];
     Modulation* mod = &instrument->modulation[getModIndex(screenData.cursorCol, screenData.cursorRow)];

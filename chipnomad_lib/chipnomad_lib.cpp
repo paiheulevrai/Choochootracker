@@ -2379,6 +2379,8 @@ static void updateInsertValues(ChipNomadState* state) {
       for (int p = 0; p < d.count; ++p) {
         int value = track.inserts.valid[slot] & (1 << p) ? track.inserts.values[slot][p] : c.values[p];
         int range = insertParameterMaximum(c.module, p);
+        // Keep existing songs' modulation depth when extending the pattern catalogue.
+        if (c.module == insertTranceGate && p == 0) range = tranceGateUserFirst - 1;
         if (d.parameters[p].mapping != InsertMapping::discrete) value = slewEngineFX(&track, (FX)(fxF11 + slot * 8 + p), value);
         int mode = track.inserts.valid[slot] & 1 ? track.inserts.values[slot][0] : c.values[0];
         if (insertParameterModulatable(c.module, p, mode) && track.note.instrument != EMPTY_VALUE_8) {
@@ -2404,7 +2406,7 @@ static void processTrackMix(ChipNomadState* state, float* output, int frames) {
         sidechainFor(state, state->insertValues[t][0][5]),
         sidechainFor(state, state->insertValues[t][1][5])
       };
-      state->insertChains[t]->process(samples, frames, state->insertValues[t], sidechain);
+      state->insertChains[t]->process(samples, frames, state->insertValues[t], sidechain, state->audioProject.ayWavetables);
     }
     if ((state->audioInputRoutedTrackMask | state->audioModTrackMask) & (1u << t))
       memcpy(state->audioInputTrackCurrent + (size_t)t * state->mixBufferSize,
@@ -2441,7 +2443,7 @@ static void processMasterMix(ChipNomadState* state, float* output, int frames,
     const float* sidechain[2] = {
       sidechainFor(state, values[0][5]), sidechainFor(state, values[1][5])
     };
-    state->masterInsertChain->process(output, frames, values, sidechain);
+    state->masterInsertChain->process(output, frames, values, sidechain, state->audioProject.ayWavetables);
   }
   for (int t = 0; t < state->audioProject.tracksCount; ++t)
     if ((state->masterSidechainExcludeMask & (1u << t)) &&

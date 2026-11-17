@@ -1477,6 +1477,55 @@ int main(int argc,char** argv){
     printf("Modulation transfer: direct and popup changes, both headers, CNI and live playback passed\n");
     chipnomadDestroy(chipnomadState);gfxCleanup();SDL_Quit();return 0;
   }
+  if(argc==3 && !strcmp(argv[2],"--trance-user-only")) {
+    projectFree(&chipnomadState->project);
+    projectInitAY(&chipnomadState->project);
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit(); backgroundInit();
+    auto& project = chipnomadState->project;
+    *pSongTrack = 0;
+    getInstrumentFunctions(InstrumentType::AY1).init(&project.instruments[0]);
+    auto& mod = project.instruments[0].modulation[0];
+    mod.type = ModulationType::Sequence;
+    mod.p1 = static_cast<uint8_t>(SequenceSource::tranceGate);
+    sequenceGateDefaults(&mod);
+    sequenceGateSetPattern(&mod, 71);
+    project.ayWavetables[7][0] = 0;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    chipnomadReserveRenderBuffers(chipnomadState, 512);
+    screenSetup(&screenModulation, 0); appDraw();
+    for (int i = 0; i < 3; ++i) { key(1, keyDown); key(0, 0); }
+    appResetInputState();
+    appButton(keyEdit, true); appButton(keyEdit, false);
+    appButton(keyEdit, true); appButton(keyEdit, false);
+    require(currentScreen == &screenAYWavetable, "modulation motif opens AY editor");
+    key(1, keyEdit | keyRight); key(0, 0);
+    require(project.ayWavetables[7][0] == 1, "modulation selects AY wave 07");
+    key(1, keyShift | keyUp); key(0, 0);
+    require(currentScreen == &screenModulation, "AY editor returns to modulation");
+    for (bool master : {false, true}) {
+      auto& config = master ? project.masterInserts[0] : project.trackInserts[0][0];
+      insertSelect(&config, insertTranceGate);
+      insertEdit(&config, 0, 64);
+      project.ayWavetables[0][0] = 0;
+      if (master) screenInsertFXOpenMaster(); else screenInsertFXOpenTrack();
+      appDraw();
+      if (!master) { key(1, keyDown); key(0, 0); }
+      appResetInputState();
+      appButton(keyEdit, true); appButton(keyEdit, false);
+      appButton(keyEdit, true); appButton(keyEdit, false);
+      require(currentScreen == &screenAYWavetable, "insert pattern opens AY editor");
+      key(1, keyEdit | keyRight); key(0, 0);
+      require(project.ayWavetables[0][0] == 1, "insert selects AY wave 00");
+      key(1, keyShift | keyUp); key(0, 0);
+      require(currentScreen == &screenInsertFX && screenInsertFXIsMaster() == master,
+              "AY editor returns to the same insert page");
+    }
+    screenAYWavetableOpen(0, nullptr); appDraw();
+    key(1, keyShift | keyUp); key(0, 0);
+    require(currentScreen == &screenTable, "normal AY editor returns to Table");
+    printf("User Trance Gate AY navigation passed\n");
+    chipnomadDestroy(chipnomadState); SDL_Quit(); return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--modulation-gate-only")) {
     projectFree(&chipnomadState->project);
     projectInitAY(&chipnomadState->project);

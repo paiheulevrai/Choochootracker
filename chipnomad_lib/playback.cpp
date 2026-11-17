@@ -1219,15 +1219,17 @@ int16_t playbackLiveStickOutput(const PlaybackState* state, uint8_t instrument,
   return (int16_t)clampInt(value, -32385, 32385);
 }
 
-int16_t playbackSequenceGateOutput(const Modulation* definition, uint32_t ticks) {
+int16_t playbackSequenceGateOutput(const Modulation* definition, uint32_t ticks,
+                                   const uint8_t (*wavetables)[32]) {
   if (!definition) return 0;
   if (definition->p1 != static_cast<uint8_t>(SequenceSource::tranceGate)) return 0;
   uint32_t step = (uint32_t)(ticks / tranceGateTicksPerStep(sequenceGateRate(definition)));
   uint8_t length = sequenceGateLength(definition);
-  if (!tranceGatePatternOpen(sequenceGatePattern(definition), length, step)) return 0;
+  uint16_t pattern = tranceGatePatternMask(sequenceGatePattern(definition), wavetables);
+  if (!(pattern & (0x8000u >> (step % length)))) return 0;
   int activeCount = 0, activeIndex = 0;
   for (int i = 0; i < length; ++i) {
-    if (!tranceGatePatternOpen(sequenceGatePattern(definition), length, i)) continue;
+    if (!(pattern & (0x8000u >> i))) continue;
     if ((uint32_t)i == step % length) activeIndex = activeCount;
     ++activeCount;
   }
@@ -1255,7 +1257,7 @@ static int16_t sequenceSourceOutput(const PlaybackState* state, PlaybackTrackSta
       break;
     }
     case SequenceSource::tranceGate: {
-      raw = playbackSequenceGateOutput(definition, mod->counter);
+      raw = playbackSequenceGateOutput(definition, mod->counter, state->p->ayWavetables);
       ++mod->counter;
       break;
     }
