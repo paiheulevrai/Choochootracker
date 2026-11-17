@@ -2116,7 +2116,7 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
     state->masterInsertChain->reset();
   for (int t = 0; t < state->audioProject.tracksCount; ++t)
     if (state->playbackState.tracks[t].note.noteTriggered && state->insertChains[t])
-      state->insertChains[t]->trigger(transportWasPlaying);
+      state->insertChains[t]->trigger();
   const int isPlaying = playbackIsPlaying(&state->playbackState);
   // Auditioning a note/row is not a transport start for external gear.
   const int transportPlaying = playbackTransportIsPlaying(&state->playbackState);
@@ -2489,7 +2489,7 @@ int chipnomadRender(ChipNomadState* state, float* buffer, int samples, const flo
         track.liveInstrument = EMPTY_VALUE_8;
         if (state->insertChains[t]) {
           if (track.insertReset != state->insertResetSeen[t]) state->insertChains[t]->reset();
-          if (track.note.noteTriggered) state->insertChains[t]->trigger(playbackTransportIsPlaying(&state->playbackState));
+          if (track.note.noteTriggered) state->insertChains[t]->trigger();
         }
         state->insertResetSeen[t] = track.insertReset;
       }

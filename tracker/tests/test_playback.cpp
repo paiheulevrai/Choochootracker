@@ -593,6 +593,17 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Sequence sources bypass sequencer output and
     CHECK(playbackSequenceGateOutput(&sequence, 6, waves) == 0);
     CHECK(playbackSequenceGateOutput(&sequence, 12, waves) == 16192);
   }
+  for (int i = 0; i < 16; ++i) waves[0][i] = i % 2 ? 0 : 7;
+  for (int rate = 0; rate < 15; ++rate) {
+    sequenceGateSetRate(&sequence, rate);
+    for (uint32_t tick = 0; tick < 800; ++tick) {
+      sequenceGateSetPattern(&sequence, 2);
+      int16_t preset = playbackSequenceGateOutput(&sequence, tick, waves);
+      sequenceGateSetPattern(&sequence, 64);
+      CHECK(playbackSequenceGateOutput(&sequence, tick, waves) == preset);
+    }
+  }
+  sequenceGateSetRate(&sequence, 9);
   sequenceGateSetPattern(&sequence, 255);
   CHECK(sequenceGatePattern(&sequence) == 71);
   sequenceGateSetPattern(&sequence, 2);

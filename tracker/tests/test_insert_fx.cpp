@@ -576,7 +576,7 @@ TEST_SUITE("track inserts") {
       CHECK(renderLevel() > 0.1f);
     }
   }
-  TEST_CASE("user trance gate follows sixteen sequencer steps with notes on every row") {
+  TEST_CASE("user trance gate follows sixteen sequencer steps with a sustained note") {
     Engine engine;
     auto& p = engine.s->project;
     p.song[0][0] = 0;
@@ -584,11 +584,11 @@ TEST_SUITE("track inserts") {
     phraseClear(&p.phrases[0]);
     const uint16_t pattern = 0xd634;
     for (int step = 0; step < 16; ++step) {
-      p.phrases[0].rows[step].note = 45;
-      p.phrases[0].rows[step].instrument = 0;
-      p.phrases[0].rows[step].volume = 100;
       p.ayWavetables[0][step] = pattern & (0x8000u >> step) ? 15 : 0;
     }
+    p.phrases[0].rows[0].note = 45;
+    p.phrases[0].rows[0].instrument = 0;
+    p.phrases[0].rows[0].volume = 100;
     auto& gate = p.trackInserts[0][0];
     insertSelect(&gate, insertTranceGate);
     insertEdit(&gate, 0, 64);
@@ -621,33 +621,63 @@ TEST_SUITE("track inserts") {
       else CHECK(level < 0.001f);
     }
   }
-  TEST_CASE("transport note triggers preserve only user gate phase") {
+  TEST_CASE("user and preset gates have identical rates and retriggers") {
     uint8_t waves[8][32]{};
-    waves[0][0] = 15;
-    for (int pattern : {1, 64}) {
-      InsertConfig config[2]{};
-      InsertAutomation automation{};
-      insertSelect(&config[0], insertTranceGate);
-      config[0].values[0] = pattern;
-      config[0].values[1] = 12;
-      config[0].values[3] = 255;
-      config[0].values[6] = 0;
-      InsertChain chain(48000);
-      chain.setTempo(120);
-      chain.sync(config, &automation);
-      uint8_t effective[2][8]; values(config, effective);
-      std::vector<float> warm(1500 * 2, .25f);
-      chain.process(warm.data(), 1500, effective, nullptr, waves);
-      chain.trigger(true);
-      std::vector<float> after(200 * 2, .25f);
-      chain.process(after.data(), 200, effective, nullptr, waves);
-      if (pattern == 64) CHECK(after.back() < .001f);
-      else CHECK(after.back() > .2f);
-      chain.trigger();
-      std::fill(after.begin(), after.end(), .25f);
-      chain.process(after.data(), 200, effective, nullptr, waves);
-      CHECK(after.back() > .2f);
+    for (int i = 0; i < 16; ++i) waves[0][i] = i % 4 == 0 ? 15 : 0;
+    for (int rate : {6, 9, 12}) {
+      InsertConfig preset[2]{}, user[2]{};
+      insertSelect(&preset[0], insertTranceGate);
+      preset[0].values[0] = 1;
+      preset[0].values[1] = rate;
+      preset[0].values[3] = 255;
+      preset[0].values[6] = 0;
+      user[0] = preset[0];
+      user[0].values[0] = 64;
+      InsertAutomation a{}, b{};
+      InsertChain reference(48000), custom(48000);
+      reference.setTempo(2400); custom.setTempo(2400);
+      reference.sync(preset, &a); custom.sync(user, &b);
+      uint8_t pv[2][8], uv[2][8]; values(preset, pv); values(user, uv);
+      for (int pass = 0; pass < 3; ++pass) {
+        std::vector<float> x(1024 * 2, .25f), y = x;
+        reference.process(x.data(), 1024, pv);
+        custom.process(y.data(), 1024, uv, nullptr, waves);
+        for (size_t i = 0; i < x.size(); ++i) CHECK(x[i] == doctest::Approx(y[i]).epsilon(1e-6));
+        if (pass == 1) { reference.trigger(); custom.trigger(); }
+      }
     }
+  }
+  TEST_CASE("sequencer notes retrigger user gates like presets") {
+    Engine engine;
+    auto& p = engine.s->project;
+    p.song[0][0] = 0;
+    p.chains[0].rows[0].phrase = 0;
+    phraseClear(&p.phrases[0]);
+    for (int row = 0; row < 2; ++row) {
+      p.phrases[0].rows[row].note = 45;
+      p.phrases[0].rows[row].instrument = 0;
+      p.phrases[0].rows[row].volume = 100;
+    }
+    std::fill_n(p.ayWavetables[0], 16, 0);
+    p.ayWavetables[0][0] = 15;
+    auto& gate = p.trackInserts[0][0];
+    insertSelect(&gate, insertTranceGate);
+    insertEdit(&gate, 0, 64);
+    insertEdit(&gate, 1, 9);
+    insertEdit(&gate, 3, 255);
+    insertEdit(&gate, 6, 0);
+    chipnomadInitChips(engine.s, 48000, nullptr);
+    chipnomadQueuePlaybackStartSong(engine.s, 0, 0, 1);
+    float out[480];
+    for (int block = 0; block < 24; ++block)
+      REQUIRE(chipnomadRender(engine.s, out, 240) == 240);
+    float level = 0;
+    for (int block = 0; block < 4; ++block) {
+      REQUIRE(chipnomadRender(engine.s, out, 240) == 240);
+      if (block == 3) for (float sample : out) level += fabsf(sample);
+    }
+    CHECK(engine.s->playbackState.tracks[0].phraseRow == 1);
+    CHECK(level > 0.1f);
   }
   TEST_CASE("all DSP modules handle both slots, silence, stereo and variable blocks") {
     for (float rate : {32000.f, 44100.f, 48000.f, 96000.f})
