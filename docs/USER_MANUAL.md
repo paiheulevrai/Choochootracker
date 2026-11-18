@@ -1820,13 +1820,16 @@ Inspired by Swedish "trig conditions", the tracker supports trigger probabilitie
 
 `MOD34` triggers on the 3rd pass of every 4-pass cycle. `MOD1F` triggers on the 1st pass of every 16-pass cycle.
 
-`NTH` values are 1-indexed Nth-loop intervals. `0` leaves that side
-unconditional; `2` triggers on loops 2, 4, 6, and so on. The first pass always
-executes, so a one-shot Phrase/Table still plays normally. For example, `NTH20`
-after an FX leaves the note and earlier FX conditional every second loop, while
-`NTH02` conditions only later FX. In a Table, `NTH02` conditions every column
-to its left on even loops. The first 16-row passage is not counted as a
-completed repeat.
+`NTH` Phrase digits follow this map: `0` is off; `1` is the first pass only;
+`2-F` select these cycle rules: `2-8` every Nth pass, `9` passes 1&3,
+`A` passes 1&4, `B` passes 5–8, `C` from pass 7 onward. ChooChooTracker extends
+the final values: `D` is pass 2 only, `E` is odd passes, and `F` is even
+passes. For example, `NTH20` gates the note and earlier FX on every second
+loop, while `NTH02` gates only later FX.
+
+In a Table, the full `XX` byte is an interval: `00` resets the column counter,
+while `01-FF` gate columns to the left on every `XX+1` pass. Counters are local
+to the running Table.
 
 #### Playback speed
 

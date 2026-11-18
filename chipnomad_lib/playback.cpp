@@ -120,7 +120,17 @@ static int phraseRowConditionsPass(PlaybackTrackState* track, PhraseRow* row, in
 }
 
 static bool nthLoopPasses(uint32_t loopCount, uint8_t value) {
-  return value == 0 || loopCount <= 1 || loopCount % value == 0;
+  if (value == 0) return false;
+  if (value == 1) return loopCount == 1;
+  if (value <= 8) return loopCount % value == 0;
+  if (value == 0x0d) return loopCount == 2;
+  if (value == 0x0e) return loopCount & 1;
+  if (value == 0x0f) return !(loopCount & 1);
+  const uint8_t phase = (loopCount - 1) % (value == 0x0b ? 8 : 4);
+  if (value == 9) return phase == 0 || phase == 2;
+  if (value == 0x0a) return phase == 0 || phase == 3;
+  if (value == 0x0b) return phase >= 4;
+  return loopCount >= 7;
 }
 
 static void applyPhraseNthConditions(PlaybackTrackState* track, PhraseRow* row, int rowIdx) {
@@ -251,8 +261,8 @@ static FXCell resolveTableFX(PlaybackState* state, int trackIdx, PlaybackTableSt
   for (int right = column + 1; right < 4; ++right) {
     const FXCell condition =
       state->p->tables[table->tableIdx].rows[row].fx[right];
-    if (condition.command == fxNTH &&
-        !nthLoopPasses(table->loopCount[column] + 1, condition.value))
+    if (condition.command == fxNTH && condition.value != 0 &&
+        (table->loopCount[column] + 1) % (uint32_t(condition.value) + 1) != 0)
       return {FX_ID_EMPTY, 0};
   }
   return cell;
@@ -460,6 +470,7 @@ void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* 
     resolveTableFX(state, trackIdx, table, fxIdx);
   table->currentFX[fxIdx] = cell;
   FXId fxType = cell.command;
+  if (fxType == fxNTH && cell.value == 0) table->loopCount[fxIdx] = 0;
   table->heldFX[fxIdx].isOn = 0;
   if (fxType == fxTBL) {
     tableInit(state, trackIdx, &state->tracks[trackIdx].note.instrumentTable, cell.value, 0, 1);

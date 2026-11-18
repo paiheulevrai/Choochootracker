@@ -1202,30 +1202,38 @@ TEST_CASE_FIXTURE(PlaybackFixture, "NTH phrases gate cells left and right indepe
   PhraseRow* row = &p.phrases[0].rows[0];
   row->note = 48;
   row->instrument = 0;
-  row->fx[0] = {fxNTH, 0x03};
+  row->fx[0] = {fxNTH, 0x93};
   row->fx[1] = {fxPIT, 1};
-  p.chains[0].rows[0].phrase = 0;
-  p.chains[0].rows[1].phrase = 0;
-  p.chains[0].rows[2].phrase = 0;
-  p.song[0][0] = 0;
-  playbackStartSong(&state->playbackState, 0, 0, 0);
-  advanceFrames(1);
-  CHECK(state->playbackState.tracks[0].note.pitchFinal == 49);
-  advanceFrames(96);
-  CHECK(state->playbackState.tracks[0].note.pitchFinal == 48);
-  advanceFrames(96);
-  CHECK(state->playbackState.tracks[0].note.pitchFinal == 49);
+  PlaybackTrackState* track = &state->playbackState.tracks[0];
+  track->mode = PlaybackMode::phraseRow;
+  track->songRow = 0;
+  memset(track->conditionVisits, 0, sizeof(track->conditionVisits));
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
+  CHECK(track->note.fx[fxPIT].acc == 0);
+  track->note.pitchBase = EMPTY_VALUE_8;
+  track->note.pitchOffset = 0;
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
+  CHECK(track->note.fx[fxPIT].acc == 1);
 
-  playbackStop(&state->playbackState);
+  memset(track->conditionVisits, 0, sizeof(track->conditionVisits));
   row->fx[0] = {fxNTH, 0x30};
   row->fx[1] = {FX_ID_EMPTY, 0};
-  playbackStartSong(&state->playbackState, 0, 0, 0);
-  advanceFrames(1);
-  CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
-  state->playbackState.tracks[0].note.pitchBase = EMPTY_VALUE_8;
-  advanceFrames(96);
+  track->note.pitchBase = EMPTY_VALUE_8;
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
   CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
-  advanceFrames(96);
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
   CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
 }
 
@@ -1233,7 +1241,7 @@ TEST_CASE_FIXTURE(PlaybackFixture, "NTH tables gate earlier columns by loop coun
   setInstrument(0, 0, 0, 15, 0);
   auto& p = state->project;
   p.tables[0].rows[0].fx[0] = {fxPIT, 1};
-  p.tables[0].rows[0].fx[1] = {fxNTH, 3};
+  p.tables[0].rows[0].fx[1] = {fxNTH, 1};
   PlaybackTrackState* track = &state->playbackState.tracks[0];
   track->mode = PlaybackMode::phraseRow;
   PhraseRow row;
@@ -1241,12 +1249,12 @@ TEST_CASE_FIXTURE(PlaybackFixture, "NTH tables gate earlier columns by loop coun
   row.note = 48;
   row.instrument = 0;
   readPhraseRowDirect(&state->playbackState, 0, &row, 0);
-  CHECK(track->note.instrumentTable.currentFX[0].command == fxPIT);
+  CHECK(track->note.instrumentTable.currentFX[0].command == FX_ID_EMPTY);
 
   for (int i = 0; i < 16; ++i) playbackNextFrame(state);
-  CHECK(track->note.instrumentTable.currentFX[0].command == FX_ID_EMPTY);
-  for (int i = 0; i < 16; ++i) playbackNextFrame(state);
   CHECK(track->note.instrumentTable.currentFX[0].command == fxPIT);
+  for (int i = 0; i < 16; ++i) playbackNextFrame(state);
+  CHECK(track->note.instrumentTable.currentFX[0].command == FX_ID_EMPTY);
 }
 
 TEST_CASE_FIXTURE(PlaybackFixture, "SPD 01 doubles one track clock and persists") {

@@ -1146,11 +1146,12 @@ Inspired by Swedish "trig conditions", the tracker supports trigger probabilitie
 
 `MOD34` triggers on the 3rd pass of every 4-pass cycle. `MOD1F` triggers on the 1st pass of every 16-pass cycle.
 
-For `NTH`, `0` leaves a side unconditional and a non-zero digit selects
-1-indexed Nth loops: `2` triggers on loops 2, 4, 6, and so on. The first pass
-always executes. In a Phrase, `X` controls the note and earlier FX on the left
-and `Y` controls later FX on the right. In a Table, the complete two-digit
-value gates columns to the left of the command.
+For `NTH` in a Phrase, `0` is off, `1` triggers only the first pass, `2-8`
+trigger every Nth pass, `9` triggers passes 1&3, `A` 1&4, `B` passes 5-8, and
+`C` from pass 7 onward. ChooChooTracker adds `D` for the second pass only,
+`E` for odd passes and `F` for even passes. `X` controls the note and earlier
+FX on the left; `Y` controls later FX on the right. In a Table, `00` resets
+the counter and `01-FF` gates columns to the left every `XX+1` passes.
 
 #### Playback speed
 
