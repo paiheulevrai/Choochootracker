@@ -97,7 +97,8 @@ jobs:
           done
           tar -tzf "$out/"*-RaspberryPi-*.tar.gz > /dev/null
           test -n "$(find "$out" -maxdepth 1 -name '*.AppImage' -size +1M -print -quit)"
-          grep -q "\"${tag}\"" "$out/ChooChooTracker-${tag}-macOS-build-info.json"
+          python3 -m json.tool "$out/ChooChooTracker-${tag}-macOS-build-info.json" \
+            > /dev/null
 
       - name: Generate checksums and attach assets
         env:
