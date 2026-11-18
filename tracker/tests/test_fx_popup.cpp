@@ -115,7 +115,7 @@ TEST_CASE("Extended sequencer IDs and DigiSophie have their own FX help") {
       fx == fxEUC ? "Euclidean" : fx == fxNTH ? "Nth" : "Repeat") != std::string::npos);
     editFXValue(CellEditAction::increase, &cell, &last, 0, 0);
     CHECK(std::string(screenGetActiveMessage()).find(
-      fx == fxEUC ? "EUC" : fx == fxNTH ? "Nth" : "Repeat") != std::string::npos);
+      fx == fxEUC ? "EUC" : fx == fxNTH ? "NTH" : "Repeat") != std::string::npos);
   }
   for (FXId fx : {FXId(fxDMD), FXId(fxDTO), FXId(fxDNO), FXId(fxDFM), FXId(fxDDR)}) {
     CHECK(std::string(helpFXDescription((FX)fx, 0)).find("DigiSophie") == 0);
