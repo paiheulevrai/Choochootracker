@@ -1,6 +1,34 @@
 # ChooChooTracker changelog
 
-## v1.0.24-alpha (draft)
+## v1.0.25-alpha (draft)
+
+Changes since v1.0.24-alpha.
+
+- Add Launchpad Mini MK3 song-grid navigation, scene launch, playback, recording
+  and urgent controls, with input tracking and an optional hardware test Pak.
+- Add experimental stereo Link Audio streaming and receive, with adjustable
+  compensation and improved handheld audio continuity. Fix gaps in internal
+  Audio In routing and stabilize MIDI input and launch boundaries.
+- Add bounded undo/redo for Phrase, Chain, Song and Table editing. Record mapped
+  MIDI CC changes as phrase FX and retry recording when an FX row is full.
+- Allocate and copy Simplified patterns independently per track, while keeping
+  per-track instruments and track IDs stable when switching editing modes.
+- Extend AY Trance Gate presets to 32 steps, keep user gates running across
+  notes and align playback with edited preset patterns.
+- Add curved parameter transitions and modulation trigger/retrigger behavior.
+  Reduce synth retrigger/cut clicks, soften ADSR defaults, stabilize Layer
+  modulation and Audio In retriggers, and correct Beads semitone tuning.
+- Fix Layer TLT glitches at extreme values by removing the nonlinear low-value
+  drive stage while retaining the lightweight per-track Tilt filter.
+- Use the theme cursor color for focused values across screens, and consume
+  Project/Settings edit input locally so A does not fall back to Song.
+- Improve PortMaster and NextUI metadata, source licensing, duplicate gamepad
+  input handling, cover art and launcher packaging. Add four retro/readable
+  fonts and update Web showcases and distribution assets.
+- Align application, NextUI Pak and Android version names at 1.0.25-alpha;
+  increment Android version code to 25 and prepare the matching F-Droid build.
+
+## v1.0.24-alpha (November 10, 2026)
 
 Changes since v1.0.23-alpha.
 
