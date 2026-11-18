@@ -158,13 +158,13 @@ static void drawRowHeader(int row, CellState state) {
   if (row && (row < screen.topRow || row >= screen.topRow + screenVisibleRows())) return;
   if (row == 0) return;
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor : cs.textInfo);
   gfxPrintf(1, 2 + row - tableTopRow(), "%X", row - 1);
 }
 
 static void drawColHeader(int col, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor : cs.textInfo);
   switch (col) {
     case 0:
     case 1:

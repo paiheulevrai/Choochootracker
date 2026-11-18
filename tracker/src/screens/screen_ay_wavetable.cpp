@@ -290,7 +290,7 @@ static void drawField(int col, int row, CellState state) {
 
   if (row == 0) {
     // Buttons row - need to redraw to clear cursor
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     if (col == 0) {
       gfxClearRect(0, 2, 4, 1);  // Clear area for "Load" button
       gfxPrint(0, 2, "Load");
@@ -307,7 +307,7 @@ static void drawField(int col, int row, CellState state) {
     uint8_t* wavetable = chipnomadState->project.ayWavetables[wavetableIdx];
     uint8_t value = wavetable[col];
 
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
 
     // Each wavetable value is 4-bit (0-15), display as single hex digit
     char hex[2];

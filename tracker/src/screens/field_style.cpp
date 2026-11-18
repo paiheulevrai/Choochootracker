@@ -32,7 +32,7 @@ void fill(Bitmap* b, int x0, int x1, int top, int bottom, uint8_t alpha) {
 }  // namespace
 
 void fieldDrawLabel(int x, int y, const char* label, CellState state) {
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textLabel);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textLabel);
   gfxPrint(x, y, label);
 }
 
@@ -48,11 +48,11 @@ void fieldDrawText(int x, int y, const char* text, int width, CellState state) {
 }
 
 int fieldValueColor(CellState state) {
-  return state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault;
+  return state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault;
 }
 
 int fieldNameColor(CellState state) {
-  return state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textNames;
+  return state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textNames;
 }
 
 void fieldDrawNumber(int x, int y, uint8_t value, CellState state, float position, bool bipolar,

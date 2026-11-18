@@ -578,7 +578,7 @@ static void drawField(int col, int row, CellState state) {
 
   // The selected field's label lights up with its value. ModN is a title.
   if (modRow == 0) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textTitles);
     gfxPrintf(labelX, y, "Mod%d", modIdx + 1);
   } else if (modRow <= 2) {
     fieldDrawLabel(labelX, y, modRow == 1 ? "Dest" : "Amt", state);

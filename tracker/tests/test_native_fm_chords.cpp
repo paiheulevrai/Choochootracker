@@ -117,7 +117,7 @@ float maxDifference(const std::vector<float>& a, const std::vector<float>& b) {
 TEST_CASE("Track tilt on mono, stereo and Layer chords is independent of render blocks") {
   for (auto type : {InstrumentType::VRC7, InstrumentType::OPL2, InstrumentType::AudioIn, InstrumentType::Layer})
     for (int rate : {32000, 48000})
-      for (uint8_t tilt : {0, 128, 255}) {
+      for (uint8_t tilt : {0, 0x60, 128, 0xa0, 255}) {
         const int tickRate = rate == 48000 ? 8 : 50;
         CAPTURE(type);
         CAPTURE(rate);
@@ -142,11 +142,23 @@ TEST_CASE("Sintered filtered chords and Layer retriggers are independent of rend
   }
 }
 
-TEST_CASE("Track tilt filters the summed signal once including Layer children and overdrive") {
+TEST_CASE("Layer track tilt has no gain discontinuity around 40") {
+  const auto peak = [](const std::vector<float>& samples) {
+    float result = 0.0f;
+    for (float sample : samples) result = std::max(result, std::fabs(sample));
+    return result;
+  };
+  const float below = peak(renderTiltChord(InstrumentType::Layer, 0x3f, 512));
+  const float at = peak(renderTiltChord(InstrumentType::Layer, 0x40, 512));
+  CHECK(below > at);
+  CHECK(below / at < 1.02f);
+}
+
+TEST_CASE("Track tilt filters the summed signal once including Layer children") {
   for (auto type : {InstrumentType::VRC7, InstrumentType::OPL2, InstrumentType::AudioIn, InstrumentType::Layer})
     for (bool chord : {false, true}) {
       const auto dry = renderTiltChord(type, 128, 512, 48000, 8, chord);
-      for (uint8_t value : {0, 255}) {
+      for (uint8_t value : {0, 0x60, 0xa0, 255}) {
         CAPTURE(type);
         CAPTURE(chord);
         CAPTURE(value);

@@ -6,6 +6,7 @@
 #include <cstring>
 #include "selection_popup.h"
 #include "copy_paste.h"
+#include "field_style.h"
 
 struct GrooveboxUIFixture {
   ChipNomadState* savedState = chipnomadState;
@@ -56,12 +57,14 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox semantic text colours follow th
     cs.textValue = palette + 5; cs.textEmpty = palette + 6;
     cs.textInfo = palette + 7; cs.warning = palette + 8;
     cs.cursor = palette + 9; cs.playMarkers = palette + 10;
+    CHECK(fieldValueColor(CellState::focus) == cs.cursor);
+    CHECK(fieldNameColor(CellState::focus) == cs.cursor);
     screenGroovebox.init(); screenGroovebox.setup(-1);
     CHECK(mockGfxColors[0][0] == cs.textTitles);
     CHECK(mockGfxColors[0][13] == cs.textLabel);
     CHECK(mockGfxColors[0][17] == cs.textDefault);
-    CHECK(mockGfxColors[13][3] == cs.textValue);
-    CHECK(mockGfxColors[13][8] == cs.textValue);
+    CHECK(mockGfxColors[13][3] == cs.cursor);
+    CHECK(mockGfxColors[13][8] == cs.cursor);
     CHECK(mockGfxColors[14][3] == cs.textLabel);
     CHECK(mockGfxColors[14][8] == cs.textDefault);
     CHECK(mockGfxColors[13][18] == cs.textNames);
@@ -72,11 +75,11 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox semantic text colours follow th
     CHECK(mockGfxColors[17][0] == cs.textInfo);
     screenGroovebox.onInput(1, keyRight, 1);
     CHECK(mockGfxColors[13][8] == cs.textNames);
-    CHECK(mockGfxColors[13][13] == cs.textValue);
-    CHECK(mockGfxColors[13][18] == cs.textValue);
+    CHECK(mockGfxColors[13][13] == cs.cursor);
+    CHECK(mockGfxColors[13][18] == cs.cursor);
     screenGroovebox.onInput(1, keyShift | keyUp, 1);
-    CHECK(mockGfxColors[0][20] == cs.textValue);
-    CHECK(mockGfxColors[0][27] == cs.textValue);
+    CHECK(mockGfxColors[0][20] == cs.cursor);
+    CHECK(mockGfxColors[0][27] == cs.cursor);
     CHECK(mockGfxColors[13][18] == cs.textNames);
     p.song[1][0] = 0;
     screenGroovebox.fullRedraw();

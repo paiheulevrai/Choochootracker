@@ -1337,7 +1337,7 @@ Use-o para equilibrar as 8 faixas, moldar cada uma com Tilt EQ e enviar áudio p
 | REV | Envio para o reverb compartilhado, `000-100` |
 | DLY | Envio para o delay ping-pong compartilhado, `000-100` |
 | PAN | Move o áudio para esquerda ou direita |
-| TLT | Tilt EQ por faixa, `00-FF`; `80` é neutro, valores baixos favorecem graves e altos valores favorecem agudos. Valores baixos introduzem uma suave saturação. |
+| TLT | Tilt EQ por faixa, `00-FF`; `80` é neutro, valores baixos favorecem graves e altos valores favorecem agudos. |
 | M | `*` silencia esta faixa |
 | S | `*` solo nesta faixa |
 

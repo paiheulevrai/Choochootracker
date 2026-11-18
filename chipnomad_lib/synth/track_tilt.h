@@ -23,8 +23,8 @@ class TrackTilt {
 
   float sampleRate_;
   float lowpass_[2];
-  float lowGain_, highGain_, drive_;
-  float targetLowGain_, targetHighGain_, targetDrive_;
+  float lowGain_, highGain_;
+  float targetLowGain_, targetHighGain_;
   float filterCoefficient_, smoothingCoefficient_;
   uint8_t value_;
   uint16_t pivotHz_;

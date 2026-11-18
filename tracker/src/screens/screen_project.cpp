@@ -399,7 +399,7 @@ void projectCommonDrawCursor(int col, int row) {
 }
 
 void projectCommonDrawField(int col, int row, CellState state) {
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
 
   if (row == 0) {
     if (col == 0) {
@@ -471,6 +471,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
       } else {
         doLoadProject();
       }
+      handled = 1;
     } else if (col == 1) {
       // Save project - check filename first
       if (strlen(appSettings.projectFilename) == 0) {
@@ -480,6 +481,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
         fileBrowserSetupFolderMode("SAVE PROJECT", appSettings.projectPath, appSettings.projectFilename, ".cct", onProjectSaved, onProjectCancelled);
         screenSetup(&screenFileBrowser, 0);
       }
+      handled = 1;
     } else if (col == 2) {
       // New project — opens the mode chooser (Classic/Simplified) which
       // builds the new project on confirm.
@@ -493,11 +495,11 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
     } else if (col == 3) {
       // Export - go to export screen
       screenSetup(&screenExport, 0);
-      handled = 0;
+      handled = 1;
     } else if (col == 4) {
       // Manage - go to manage screen
       screenSetup(&screenManage, 0);
-      handled = 0;
+      handled = 1;
     }
   } else if (row == 1) {
     // File name
@@ -506,6 +508,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
       isCharEdit = 1;
       editingString = appSettings.projectFilename;
       editingStringLength = FILENAME_LENGTH;
+      handled = 1;
     } else if (res > 1) {
       handled = 1;
     }
@@ -516,6 +519,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
       isCharEdit = 1;
       editingString = chipnomadState->project.title;
       editingStringLength = PROJECT_TITLE_LENGTH;
+      handled = 1;
     } else if (res > 1) {
       handled = 1;
     }
@@ -526,6 +530,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
       isCharEdit = 1;
       editingString = chipnomadState->project.author;
       editingStringLength = PROJECT_TITLE_LENGTH;
+      handled = 1;
     } else if (res > 1) {
       handled = 1;
     }
@@ -639,9 +644,16 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
       handled = 1;
     }
   } else if (action == CellEditAction::tap || action == CellEditAction::doubleTap) {
-    if (row == 7) screenSetup(&screenLinkOptions, 0);
-    else if (row == 8) screenSetup(&screenSyncOut, 0);
-    else if (row == 9) screenSetup(&screenProjectTuning, 0);
+    if (row == 7) {
+      screenSetup(&screenLinkOptions, 0);
+      handled = 1;
+    } else if (row == 8) {
+      screenSetup(&screenSyncOut, 0);
+      handled = 1;
+    } else if (row == 9) {
+      screenSetup(&screenProjectTuning, 0);
+      handled = 1;
+    }
   }
   if (handled && row >= 5 && settingsSave())
     screenMessage(MESSAGE_TIME_ERROR, "Could not save sync settings");

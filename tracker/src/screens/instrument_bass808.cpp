@@ -172,7 +172,7 @@ static void drawField(int col, int row, CellState state) {
   if (row == 3) {
     // OSC waveform picker: shows the two-digit index + a 3-letter label,
     // matching DrumSynth's Model row.
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textTitles);
     gfxPrint(0, 6, "OSC");
     gfxClearRect(x, 6, 34 - x, 1);
     gfxPrintf(x, 6, "%02d", (int)b->waveform);
@@ -184,7 +184,7 @@ static void drawField(int col, int row, CellState state) {
   if (row == 8) {
     // EnvMode: TRIG (one-shot pluck) / VCA (ADSR drives the gain).
     fieldDrawLabel(0, 12, "EnvMode", state);
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textInfo);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textInfo);
     gfxClearRect(x, 12, 6, 1);
     gfxPrint(x, 12, b->envelopeMode == 0 ? "TRIG" : "VCA");
     return;

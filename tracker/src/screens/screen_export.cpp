@@ -264,7 +264,7 @@ void exportCommonDrawCursor(int col, int row) {
 }
 
 void exportCommonDrawField(int col, int row, CellState state) {
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
 
   if (row == 0) {
     gfxClearRect(13, 2, 2, 1);
@@ -789,7 +789,7 @@ static void bounceDrawCursor(int col, int row) {
 }
 
 static void bounceDrawField(int col, int row, CellState state) {
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
 
   if (row == 0) {
     gfxClearRect(BOUNCE_NAME_FIELD_X, 2, BOUNCE_NAME_FIELD_W, 1);

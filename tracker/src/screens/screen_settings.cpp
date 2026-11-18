@@ -50,12 +50,12 @@ static void noHeader(int, CellState) {}
 static void drawField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   gfxSetFgColor(cs.textDefault);
-  if (row < 6) { static const char* labels[] = {"Controls", "Audio", "MIDI", "Synths", "Mixer", "Graphics"}; gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, 2 + row, labels[row]); }
-  else if (row == 6) { gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, 10, "Support report"); }
-  else if (row == SETTINGS_HISTORY_ROW) { gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, 14, "Edit history"); }
+  if (row < 6) { static const char* labels[] = {"Controls", "Audio", "MIDI", "Synths", "Mixer", "Graphics"}; gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, 2 + row, labels[row]); }
+  else if (row == 6) { gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, 10, "Support report"); }
+  else if (row == SETTINGS_HISTORY_ROW) { gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, 14, "Edit history"); }
 #ifdef ANDROID_BUILD
   else if (row == SETTINGS_WORKING_FOLDER_ROW) {
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrint(0, 12, "Working folder");
     gfxPrint(23, 12, strncmp(workingFolderStatus, "Folder:", 7) == 0 ? "FOLDER " :
       strncmp(workingFolderStatus, "Shared", 6) == 0 ? "SHARED " :
@@ -63,7 +63,7 @@ static void drawField(int, int row, CellState state) {
       strcmp(workingFolderStatus, "Unavailable") == 0 ? "N/A    " : "PRIVATE");
   }
 #endif
-  else if (row == SETTINGS_QUIT_ROW) { gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, 18, "Quit ChooChooTracker"); }
+  else if (row == SETTINGS_QUIT_ROW) { gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, 18, "Quit ChooChooTracker"); }
 }
 static int onEdit(int, int row, CellEditAction action) {
 #ifdef ANDROID_BUILD
@@ -92,12 +92,12 @@ static int onEdit(int, int row, CellEditAction action) {
   else if (row == SETTINGS_WORKING_FOLDER_ROW) {
     if (strcmp(workingFolderStatus, "Unavailable") == 0) screenMessage(MESSAGE_TIME, "Not available in this build");
     else filePickWorkingFolder();
-    return 0;
+    return 1;
   }
 #endif
   else if (row == SETTINGS_HISTORY_ROW) { editHistoryOpenMenu(); return 1; }
   else if (row == SETTINGS_QUIT_ROW) { mainLoopTriggerQuit(); return 1; }
-  return 0;
+  return row <= 5;
 }
 static ScreenData data = {
   .rows = SETTINGS_TOTAL_ROWS, .cursorRow = 0, .cursorCol = 0, .topRow = 0, .selectMode = -1,

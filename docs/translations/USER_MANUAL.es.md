@@ -1328,7 +1328,7 @@ El Mixer es la pantalla principal más a la izquierda. Muestra la carga de CPU y
 | REV | Envío a la reverberación compartida, `000-100` |
 | DLY | Envío al delay ping-pong compartido, `000-100` |
 | PAN | Desplaza el audio a la izquierda o derecha |
-| TLT | Tilt EQ por pista, `00-FF`; `80` es neutro, valores bajos favorecen graves y valores altos agudos. Valores bajos generan un suave overdrive. |
+| TLT | Tilt EQ por pista, `00-FF`; `80` es neutro, valores bajos favorecen graves y valores altos agudos. |
 | M | `*` silencia esta pista |
 | S | `*` solo activa esta pista |
 

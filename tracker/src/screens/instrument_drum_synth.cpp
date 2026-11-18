@@ -87,7 +87,7 @@ static void drawField(int col, int row, CellState state) {
   // The selected field's label lights up with its value; Model is a title.
   const bool used = row > 3 && drumSynthMacroUsed(d->engine, row - 4);
   if (row == 3) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textTitles);
     gfxPrint(0, 6, "Model");
   } else {
     fieldDrawLabel(0, row + 4, used ? macroName(d->engine, row - 4) : "---", state);

@@ -1411,7 +1411,7 @@ Utilisez-le pour équilibrer les 8 pistes, façonner chaque piste avec l’EQ Ti
 | REV | Envoi vers la réverbération partagée, `000-100` |
 | DLY | Envoi vers le delay ping-pong partagé, `000-100` |
 | PAN | Positionne l'audio à gauche ou à droite |
-| TLT | EQ Tilt par piste, `00-FF`; `80` est neutre, les valeurs basses favorisent les graves, les valeurs hautes favorisent les aiguës. Les valeurs basses introduisent une saturation douce. |
+| TLT | EQ Tilt par piste, `00-FF`; `80` est neutre, les valeurs basses favorisent les graves, les valeurs hautes favorisent les aiguës. |
 | M | `*` met la piste en sourdine |
 | S | `*` solo de la piste |
 

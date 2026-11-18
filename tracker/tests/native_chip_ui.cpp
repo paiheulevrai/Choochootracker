@@ -736,7 +736,16 @@ int main(int argc,char** argv){
             "session starts with local audio On and send Off");
     auto touch = [&](int x, int y) { require(screenTouchTap(x,y), "project option touch target"); appDraw(); };
     auto back = [&]() { key(1,keyOpt); key(0,0); };
+    screenSetup(&screenSettings, 0);
+    key(1,keyEdit); key(0,0);
+    require(currentScreen == &screenControlsSettings, "Settings A opens the selected submenu");
+    back();
     screenSetup(&screenProject, 0); appDraw();
+    screenProjectExtra.cursorRow = 7;
+    key(1,keyEdit); key(0,0);
+    require(currentScreen == &screenLinkOptions, "Project A opens the selected submenu");
+    back();
+    screenSetup(&screenProject, 0);
     require(screenProjectExtra.rows == 12, "same compact Project layout on all platforms");
     capture("project-menu");
     gfxSetCursorBrackets(0);

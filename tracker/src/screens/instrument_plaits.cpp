@@ -128,7 +128,7 @@ static void drawField(int col, int row, CellState state) {
   // The selected field's label lights up with its value; Model is a title.
   static const char* const labels[] = {"Harmon.", "Timbre", "Morph", "Aux mix", "EnvMode"};
   if (row == 3) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textTitles);
     gfxPrint(0, 6, "Model");
   } else if (!col && row <= 8) {
     fieldDrawLabel(0, row + 4, labels[row - 4], state);

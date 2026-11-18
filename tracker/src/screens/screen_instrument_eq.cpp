@@ -231,7 +231,7 @@ void drawStatic() {
 void drawField(int col, int row, CellState state) {
   const ColorScheme& cs = appSettings.colorScheme;
   if (row == rowEQ) {
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textTitles);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textTitles);
     gfxPrintf(3, 0, "%02X", bank);
     return;
   }
@@ -243,7 +243,7 @@ void drawField(int col, int row, CellState state) {
     (b.shape == EQShape::off || (row == rowGain && !hasGain(b.shape)));
   gfxClearRect(kValueX[col], rowY(row), kValueWidth, 1);
   gfxSetFgColor(row == rowBand ? bandColor(col) : unused ? cs.textInfo :
-                state == CellState::focus ? cs.textValue : cs.textDefault);
+                state == CellState::focus ? cs.cursor : cs.textDefault);
   gfxPrint(kValueX[col], rowY(row), text);
 }
 

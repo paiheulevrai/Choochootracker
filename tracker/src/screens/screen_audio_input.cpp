@@ -106,7 +106,7 @@ static void drawColHeader(int col, CellState state) {
 static void drawField(int col, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   if (row == 0) {
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     if (col == 0) gfxPrint(0, 2, "[List]");
     else if (col == 1) gfxPrint(10, 2, "[Refresh]");
     return;
@@ -127,7 +127,7 @@ static void drawField(int col, int row, CellState state) {
     if (slot >= 0) monitorDisplayDrawHorizontalMeter(slot, METER_FIELD_X, y, METER_FIELD_WIDTH);
   } else if (col == 2) {
     int slot = armedSlotForDevice(deviceIndex);
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxClearRect(ARM_FIELD_X, y, ARM_FIELD_WIDTH, 1);
     gfxPrint(ARM_FIELD_X, y, slot >= 0 ? "[x]" : "[ ]");
   }

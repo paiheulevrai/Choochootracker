@@ -44,7 +44,7 @@ static void drawCursor(int col, int row) {
 
 static void drawField(int col, int row, CellState state) {
   Project* p = &chipnomadState->project;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
   if (row == 0) {
     gfxPrint(8, 2, p->scaleMode ? "Note Lock" : "Quantizer");
   } else if (row == 1) {

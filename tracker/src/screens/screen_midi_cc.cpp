@@ -163,7 +163,7 @@ static void drawCursor(int col, int row) {
 static void drawField(int col, int row, CellState state) {
   const MidiCCMapping& m = chipnomadState->project.midiCCMappings[row];
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+  gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
   int x = xForColumn(col), y = 2 + row - data.topRow; gfxClearRect(x, y, widthForColumn(col), 1);
   if (col == 0) gfxPrint(x, y, m.enabled ? "ON" : "--");
   else if (col == 1) gfxPrintf(x, y, "%02d", m.channel + 1);

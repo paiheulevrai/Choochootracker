@@ -32,7 +32,7 @@ static void drawField(int col, int row, CellState state) {
   gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrintf(0, y, "CH %02d", row + 1);
 
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
   gfxClearRect(23, y, 24, 1);
   int8_t instrument = appSettings.midiChannelInstrument[row];
   if (appSettings.midiAutoChannel == row + 1) {

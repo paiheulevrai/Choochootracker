@@ -71,7 +71,7 @@ static void drawField(int col, int row, CellState state) {
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostField(col, row, state, m); return; }
   // The selected field's label lights up with its value; Model is a title.
   if (row == 3) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textTitles);
     gfxPrint(0, 6, "Model");
   } else {
     fieldDrawLabel(0, row + 4, macroName(m->model, row - 4), state);

@@ -489,7 +489,7 @@ If an Android import or export fails, a message appears with the storage checks 
 
 ### Navigation
 
-- Use **[UP/DOWN/LEFT/RIGHT]** to move the cursor. It underlines the current field; with **Settings → Graphics → Cursor** set to **Brackets** it frames the field with four corner brackets instead, which briefly dim when the cursor lands somewhere new so it is easy to find after moving or switching screens.
+- Use **[UP/DOWN/LEFT/RIGHT]** to move the cursor. It uses the theme's cursor colour on the current field text and underlines it; with **Settings → Graphics → Cursor** set to **Brackets** it frames the field with four corner brackets instead, which briefly dim when the cursor lands somewhere new so it is easy to find after moving or switching screens.
 - Hold **SELECT + [DIRECTION]** to move between screens.
 - SELECT + [LEFT/RIGHT] also exits branch pages to the neighbouring MSCPIT
   screen, like Instrument Pool: Project/Settings (including Settings submenus)
@@ -2015,7 +2015,7 @@ Use it to balance the 8 tracks, shape each track with Tilt EQ, and send audio to
 | LVL | Post-engine track level, `000-100` |
 | REV | Send to the shared Clouds reverb, `000-100` |
 | DLY | Send to the shared ping-pong delay, `000-100` |
-| TLT | Per-track Tilt EQ, `00-FF`; `80` is neutral, low values favour bass and high values favour treble. Low values will introduce a soft overdrive. |
+| TLT | Per-track Tilt EQ, `00-FF`; `80` is neutral, low values favour bass and high values favour treble. |
 | M | `*` mutes this track |
 | S | `*` solos this track |
 

@@ -86,7 +86,7 @@ void homeField(int col, int row, CellState state) {
     else gfxPrint(x, y, byteToHex(col == 1 ? current().tableSpeed : col == 2 ? current().volume : current().pan));
   } else if (row == 2) gfxPrint(x, y, m.factory == monkBankAll ? "ALL" : m.factory == monkBankFactory ? "FACTORY" : "USER");
   else if (row == 3) {
-    if (col) gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textInfo);
+    if (col) gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textInfo);
     gfxPrintf(x, y, col ? "EDIT" : "%.19s", current().name);
   }
   else {
@@ -164,7 +164,7 @@ void drawStatic() {
 }
 void cursor(int col, int row) { gfxCursor(row ? (col ? 31 : 11) : 8 + col, rowY[row], row ? 2 : 1); }
 void field(int col, int row, CellState state) {
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
   if (!row) {
     char text[2] = {col < int(std::strlen(current().name)) ? current().name[col] : ' ', 0};
     gfxPrint(8 + col, rowY[0], text);

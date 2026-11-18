@@ -363,14 +363,14 @@ static void drawRowHeader(int row, CellState state) {
   // Classic codebase striping in BOTH views: rows 0/4/8/C use the titles
   // color, the rest the info color (the pattern-view bar shading was
   // removed — the classic look applies everywhere).
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor
                 : ((row & 3) == 0 ? cs.textTitles : cs.textInfo));
   gfxPrintf(1, 3 + row - screen.topRow, "%X", row);
 }
 
 static void drawColHeader(int col, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor : cs.textInfo);
 
   switch (col) {
     case 0:

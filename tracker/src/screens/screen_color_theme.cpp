@@ -200,7 +200,7 @@ void colorThemeDrawColHeader(int col, CellState state) {
 }
 
 void colorThemeDrawField(int col, int row, CellState state) {
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
 
   if (row < kColorRows) {
     int* colorPtr = getColorPtr(row);

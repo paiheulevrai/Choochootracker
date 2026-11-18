@@ -286,7 +286,7 @@ static void drawField(int col, int row, CellState state) {
   int y = rowToY(row);
 
   if (row == 3) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     if (col == 0) {
       // Load button
       gfxPrint(COL_LEFT_VAL, y, "Load");

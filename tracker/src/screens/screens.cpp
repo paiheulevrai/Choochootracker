@@ -1059,7 +1059,7 @@ void setCellColor(CellState state, int isEmpty, int hasContent) {
       gfxSetFgColor(cs.selection);
     }
   } else if (state == CellState::focus) {
-    gfxSetFgColor(cs.textDefault);
+    gfxSetFgColor(cs.cursor);
   } else if (isEmpty) {
     gfxSetFgColor(cs.textEmpty);
   } else if (hasContent) {

@@ -76,7 +76,7 @@ void manageDrawCursor(int col, int row) {
 }
 
 void manageDrawField(int col, int row, CellState state) {
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
 
   if (row == 1) {
     gfxPrint(2, 3, "Phrases and Chains");

@@ -185,14 +185,14 @@ static void viewField(int, int row, CellState state) {
     // Clear the value area first - "Simplified" is 10 chars, "Classic" is 7,
     // so without clearing, an earlier "Simplified" leaves stale "ied".
     gfxClearRect(23, 2, 10, 1);
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrint(23, 2, p && p->viewMode == ViewMode::simplified ? "Simplified" :
       grooveboxEditorActive ? "Groovebox" : canonicalSimplifiedActive ? "Simplified" : "Classic");
   } else if (row == 1) {
     gfxSetFgColor(cs.textDefault);
     gfxPrint(0, 3, "Default mode");
     gfxClearRect(23, 3, 10, 1);
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrint(23, 3, modeNames[appSettings.defaultViewMode ? 1 : 0]);
   } else if (row == 2) {
     if (!simplifiedActive()) {
@@ -203,7 +203,7 @@ static void viewField(int, int row, CellState state) {
     }
     gfxSetFgColor(cs.textDefault);
     gfxPrint(0, 4, "Default length");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrintf(23, 4, "%02d", appSettings.defaultPatternLength);
   } else if (row == 3) {
     if (!simplifiedActive()) {
@@ -215,7 +215,7 @@ static void viewField(int, int row, CellState state) {
     // Value scrolls when it does not fit the 8-char window.
     const char* text = playheadNames[p ? (int)p->playheadMode : 1];
     const size_t length = strlen(text);
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxClearRect(kMarqueeValueX, 5, kMarqueeWidth, 1);
     if (length > kMarqueeWidth) {
       const size_t remaining = length - marqueeOffset;

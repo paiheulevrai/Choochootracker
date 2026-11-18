@@ -3,12 +3,12 @@
 
 #include <cmath>
 
-static float tiltRms(uint8_t value, float frequency) {
+static float tiltRms(uint8_t value, float frequency, float amplitude = 0.1f) {
   TrackTilt tilt;
   tilt.init(48000.0f);
   float sum = 0.0f;
   for (int i = 0; i < 96000; ++i) {
-    float input = sinf(6.283185307179586f * frequency * i / 48000.0f) * 0.1f;
+    float input = sinf(6.283185307179586f * frequency * i / 48000.0f) * amplitude;
     float output = tilt.process(input, 0, value, 1000);
     if (i >= 48000) sum += output * output;
   }
@@ -36,10 +36,16 @@ TEST_CASE("Track tilt changes low and high frequencies in opposite directions") 
   CHECK(tiltRms(0xff, 8000.0f) > tiltRms(0xff, 100.0f));
 }
 
-TEST_CASE("Track tilt overdrive remains bounded") {
-  TrackTilt tilt;
-  tilt.init(48000.0f);
-  float output = 0.0f;
-  for (int i = 0; i < 48000; ++i) output = tilt.process(2.0f, 0, 0x00, 1000);
-  CHECK(std::fabs(output) <= 1.0f);
+TEST_CASE("Track tilt has no level-dependent distortion below 40") {
+  const uint8_t values[] = {0, 0x20, 0x3f, 0x40};
+  for (uint8_t value : values)
+    CHECK(tiltRms(value, 100.0f, 0.01f) / tiltRms(value, 100.0f, 0.1f) ==
+          doctest::Approx(0.1f).epsilon(0.001f));
+}
+
+TEST_CASE("Track tilt adjacent values around 40 remain continuous") {
+  const float below = tiltRms(0x3f, 100.0f);
+  const float at = tiltRms(0x40, 100.0f);
+  CHECK(below > at);
+  CHECK(below / at < 1.01f);
 }

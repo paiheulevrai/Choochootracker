@@ -334,7 +334,7 @@ static void drawField(int col, int row, CellState state) {
     if (slot) {
       int isEmpty = (slot->deviceType == InputDeviceType::none);
       if (state == CellState::focus) {
-        gfxSetFgColor(appSettings.colorScheme.textValue);
+        gfxSetFgColor(appSettings.colorScheme.cursor);
       } else if (isEmpty) {
         gfxSetFgColor(appSettings.colorScheme.textEmpty);
       } else {
@@ -347,7 +347,7 @@ static void drawField(int col, int row, CellState state) {
       gfxPrint(11 + col * 8, row + 2, trimmed);
     }
   } else {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     gfxPrint(0, row + 2, row == doneRow ? "Done" : "Calibrate controls");
   }
 }

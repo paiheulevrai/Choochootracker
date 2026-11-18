@@ -25,17 +25,17 @@ static void drawCursor(int col, int row) {
 }
 static void drawRowHeader(int row, CellState state) {
   if (row >= allRow) return;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textDefault : appSettings.colorScheme.textInfo);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textInfo);
   gfxPrintf(0, 3 + row, "%d", row + 1);
 }
 static void drawColHeader(int col, CellState state) {
   if (col != 0) return;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textDefault : appSettings.colorScheme.textTitles);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textTitles);
   gfxPrint(displayX, 2, "DISPLAY");
 }
 static void drawField(int col, int row, CellState state) {
   const auto cs = appSettings.colorScheme;
-  gfxSetFgColor(state == CellState::focus ? cs.textDefault : cs.textValue);
+  gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textValue);
   if (row < allRow) {
     gfxPrint(displayX, 3 + row, appSettings.trackVisuals[row].mode == TrackVisualMode::audio ?
       "Audio waveform" : "Detailed      ");

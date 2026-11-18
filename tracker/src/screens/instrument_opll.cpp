@@ -61,10 +61,10 @@ static void drawField(int col, int row, CellState state) {
   if (row >= 6) { instrumentFMAmpDrawField(col, row - 6, state); return; }
   if (row < 3) { instrumentCommonDrawField(col, row, state); return; }
   if (row == 4 && col == 1) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textInfo);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textInfo);
     gfxClearRect(16, 9, 4, 1); gfxPrint(16, 9, "EDIT"); return;
   }
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
   gfxClearRect(9, row == 3 ? 7 : 9, row == 3 ? 30 : 6, 1);
   if (row == 3) gfxPrintf(9, 7, "%02d %.27s", current()->chip.opll.program, current()->chip.opll.program ? opllPresetName(current()->type, current()->chip.opll.program) : "Custom");
   else gfxPrintf(9, 9, "%+04d", current()->chip.opll.fineTune);
