@@ -119,6 +119,28 @@ static int phraseRowConditionsPass(PlaybackTrackState* track, PhraseRow* row, in
   return 1;
 }
 
+static bool nthLoopPasses(uint32_t loopCount, uint8_t value) {
+  return value == 0 || loopCount <= 1 || loopCount % value == 0;
+}
+
+static void applyPhraseNthConditions(PlaybackTrackState* track, PhraseRow* row, int rowIdx) {
+  const uint32_t loopCount = track->conditionVisits[rowIdx & 15];
+  for (int column = 0; column < 3; ++column) {
+    if (row->fx[column].command != fxNTH) continue;
+    const uint8_t value = row->fx[column].value;
+    if (!nthLoopPasses(loopCount, value >> 4)) {
+      row->note = row->instrument = EMPTY_VALUE_8;
+      row->volume = EMPTY_VALUE_16;
+      for (int left = 0; left < column; ++left) row->fx[left] = {FX_ID_EMPTY, 0};
+    }
+    if (!nthLoopPasses(loopCount, value & 0x0f)) {
+      for (int right = column + 1; right < 3; ++right)
+        row->fx[right] = {FX_ID_EMPTY, 0};
+    }
+    row->fx[column] = {FX_ID_EMPTY, 0};
+  }
+}
+
 static void resetTrackFXAuxState(PlaybackState* state, int trackIdx) {
   PlaybackTrackState* track = &state->tracks[trackIdx];
   memset(track->fxAuxState, 0, sizeof(track->fxAuxState));
@@ -223,9 +245,17 @@ static FXCell resolveTableFX(PlaybackState* state, int trackIdx, PlaybackTableSt
   const int row = table->rows[column];
   if (row != table->blendNextRow[column]) table->blend[column].active = 0;
   table->blendNextRow[column] = row + 1;
-  return resolveBlendFX(state, trackIdx, table->repeat[column], table->blend[column],
+  FXCell cell = resolveBlendFX(state, trackIdx, table->repeat[column], table->blend[column],
     state->p->tables[table->tableIdx].rows[row].fx[column],
     blendTableKey(table->tableIdx, column, row));
+  for (int right = column + 1; right < 4; ++right) {
+    const FXCell condition =
+      state->p->tables[table->tableIdx].rows[row].fx[right];
+    if (condition.command == fxNTH &&
+        !nthLoopPasses(table->loopCount[column] + 1, condition.value))
+      return {FX_ID_EMPTY, 0};
+  }
+  return cell;
 }
 
 static PhraseRow resolvePhraseFX(PlaybackState* state, int trackIdx, const PhraseRow* row) {
@@ -400,6 +430,7 @@ void tableInit(PlaybackState* state, int trackIdx, struct PlaybackTableState* ta
 
   for (int i = 0; i < 4; i++) {
     table->counters[i] = 0;
+    table->loopCount[i] = 0;
     table->rows[i] = row;
     table->speed[i] = speed;
 
@@ -424,9 +455,7 @@ void hopToTableRow(PlaybackState* state, int trackIdx, PlaybackTableState* table
 void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* table, int fxIdx, const FXCell* resolved) {
   uint8_t tableIdx = table->tableIdx;
   if (tableIdx == EMPTY_VALUE_8) return;
-  Project* p = state->p;
 
-  int tableRow = table->rows[fxIdx];
   FXCell cell = resolved ? *resolved :
     resolveTableFX(state, trackIdx, table, fxIdx);
   table->currentFX[fxIdx] = cell;
@@ -440,7 +469,8 @@ void tableReadFX(PlaybackState* state, int trackIdx, struct PlaybackTableState* 
     initFX(state, trackIdx, &cell, table, fxIdx);
     if (fxType == fxSTA) fxType = fxSST;
     if (fxType >= fxTotalCount || fxType == fxRET || fxType == fxDEL ||
-        fxType == fxOFF || fxType == fxKIL || (fxType >= fxMC1 && fxType <= fxMC4)) return;
+        fxType == fxOFF || fxType == fxKIL || fxType == fxNTH ||
+        (fxType >= fxMC1 && fxType <= fxMC4)) return;
     table->heldCommand[fxIdx] = fxType;
     auto& held = table->heldFX[fxIdx];
     if (fxType >= fxOAR && fxType <= fxLEN) {
@@ -520,6 +550,7 @@ static void tableProgress(PlaybackState* state, int trackIdx, struct PlaybackTab
       table->rows[i] = (row + 1) & 15;
 
       if (table->rows[i] == 0) {
+        table->loopCount[i]++;
         // Reset all loop counters for this column
         for (int c = 0; c < 16; c++) {
           table->fxAuxState[c][i] = 0;
@@ -1096,6 +1127,7 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
       progressEuclidean(state, trackIdx);
       return;
     }
+    if (!skipDelCheck) applyPhraseNthConditions(track, &effective, track->phraseRow);
     readPhraseRowDirect(state, trackIdx, &effective, skipDelCheck, 1);
     return;
   }
@@ -1121,6 +1153,7 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
         progressEuclidean(state, trackIdx);
         return;
       }
+      if (!skipDelCheck) applyPhraseNthConditions(track, currentRow, phraseRow);
 
       // Check for SNG command in Song mode
       if (track->mode == PlaybackMode::song) {
@@ -1213,6 +1246,11 @@ void readPhraseRow(PlaybackState* state, int trackIdx, int skipDelCheck) {
               track->phraseRow = targetRow;
               for (auto& blend : track->blend) blend.active = 0;
               effective = resolvePhraseFX(state, trackIdx, &phrase->rows[targetRow]);
+              if (!phraseRowConditionsPass(track, &effective, targetRow)) {
+                progressEuclidean(state, trackIdx);
+                return;
+              }
+              applyPhraseNthConditions(track, &effective, targetRow);
               currentRow = &effective;
             }
           }

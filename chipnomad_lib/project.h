@@ -264,6 +264,7 @@ enum FX : FXId {
 
   fxBEG, fxEND, // Per-column parameter transition and target
   fxMRT, fxMKL,
+  fxNTH, // Nth phrase/table loop condition
 
   // Total count - must be last
   fxTotalCount

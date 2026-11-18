@@ -1196,6 +1196,59 @@ TEST_CASE_FIXTURE(PlaybackFixture, "MOD 22 triggers on the second visit") {
   CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
 }
 
+TEST_CASE_FIXTURE(PlaybackFixture, "NTH phrases gate cells left and right independently") {
+  setInstrument(0, 0, 0, 15, 0);
+  auto& p = state->project;
+  PhraseRow* row = &p.phrases[0].rows[0];
+  row->note = 48;
+  row->instrument = 0;
+  row->fx[0] = {fxNTH, 0x03};
+  row->fx[1] = {fxPIT, 1};
+  p.chains[0].rows[0].phrase = 0;
+  p.chains[0].rows[1].phrase = 0;
+  p.chains[0].rows[2].phrase = 0;
+  p.song[0][0] = 0;
+  playbackStartSong(&state->playbackState, 0, 0, 0);
+  advanceFrames(1);
+  CHECK(state->playbackState.tracks[0].note.pitchFinal == 49);
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].note.pitchFinal == 48);
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].note.pitchFinal == 49);
+
+  playbackStop(&state->playbackState);
+  row->fx[0] = {fxNTH, 0x30};
+  row->fx[1] = {FX_ID_EMPTY, 0};
+  playbackStartSong(&state->playbackState, 0, 0, 0);
+  advanceFrames(1);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
+  state->playbackState.tracks[0].note.pitchBase = EMPTY_VALUE_8;
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
+  advanceFrames(96);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "NTH tables gate earlier columns by loop count") {
+  setInstrument(0, 0, 0, 15, 0);
+  auto& p = state->project;
+  p.tables[0].rows[0].fx[0] = {fxPIT, 1};
+  p.tables[0].rows[0].fx[1] = {fxNTH, 3};
+  PlaybackTrackState* track = &state->playbackState.tracks[0];
+  track->mode = PlaybackMode::phraseRow;
+  PhraseRow row;
+  memset(&row, EMPTY_VALUE_8, sizeof(row));
+  row.note = 48;
+  row.instrument = 0;
+  readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+  CHECK(track->note.instrumentTable.currentFX[0].command == fxPIT);
+
+  for (int i = 0; i < 16; ++i) playbackNextFrame(state);
+  CHECK(track->note.instrumentTable.currentFX[0].command == FX_ID_EMPTY);
+  for (int i = 0; i < 16; ++i) playbackNextFrame(state);
+  CHECK(track->note.instrumentTable.currentFX[0].command == fxPIT);
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "SPD 01 doubles one track clock and persists") {
   state->project.phrases[0].rows[0].fx[0][0] = fxSPD;
   state->project.phrases[0].rows[0].fx[0][1] = 0x01;

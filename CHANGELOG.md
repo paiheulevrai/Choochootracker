@@ -18,6 +18,8 @@ Changes since v1.0.24-alpha.
 - Add curved parameter transitions and modulation trigger/retrigger behavior.
   Reduce synth retrigger/cut clicks, soften ADSR defaults, stabilize Layer
   modulation and Audio In retriggers, and correct Beads semitone tuning.
+- Add M8-style `NTH` loop conditions: Phrase nibbles gate cells left/right of
+  the command, while Table values gate columns to its left.
 - Fix Layer TLT glitches at extreme values by removing the nonlinear low-value
   drive stage while retaining the lightweight per-track Tilt filter.
 - Use the theme cursor color for focused values across screens, and consume

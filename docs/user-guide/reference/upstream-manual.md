@@ -1140,10 +1140,17 @@ Inspired by Swedish "trig conditions", the tracker supports trigger probabilitie
 |---|---|---|
 | `PRO` | `00-64` | Absolute trigger probability from `0%` to `100%` |
 | `MOD` | `AB` | Trigger on iteration `A` of `B`; for example `12`, `22`, `14`, `34` |
+| `NTH` | `XY` | Gate cells left/right of the command in a Phrase, or columns left of it in a Table, using loop interval digits. |
 
 `MOD` counters are local to the track and phrase. Invalid combinations, such as `A` greater than `B`, do not trigger.
 
 `MOD34` triggers on the 3rd pass of every 4-pass cycle. `MOD1F` triggers on the 1st pass of every 16-pass cycle.
+
+For `NTH`, `0` leaves a side unconditional and a non-zero digit selects
+1-indexed Nth loops: `2` triggers on loops 2, 4, 6, and so on. The first pass
+always executes. In a Phrase, `X` controls the note and earlier FX on the left
+and `Y` controls later FX on the right. In a Table, the complete two-digit
+value gates columns to the left of the command.
 
 #### Playback speed
 

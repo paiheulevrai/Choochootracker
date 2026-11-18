@@ -105,15 +105,17 @@ TEST_CASE("Lane FX group spacing stays compact when switching help types") {
 TEST_CASE("Extended sequencer IDs and DigiSophie have their own FX help") {
   PopupSession session;
   getInstrumentFunctions(InstrumentType::DigiSophie).init(&chipnomadState->project.instruments[0]);
-  for (FXId fx : {FXId(fxEUC), FXId(fxREP), FXId(fxRTO)}) {
+  for (FXId fx : {FXId(fxEUC), FXId(fxREP), FXId(fxRTO), FXId(fxNTH)}) {
     REQUIRE(fx > 255);
     FXCell cell{fx, 0x4f}, last{};
     CHECK(std::string(helpFXHint(cell, 0, 0)).find("Kill") == std::string::npos);
     CHECK(std::string(helpFXHint(cell, 0, 0)).find("table") == std::string::npos);
     fxEditFullDraw(fx, 0, 0);
-    CHECK(std::string(mockGfxCells[1], 35).find(fx == fxEUC ? "Euclidean" : "Repeat") != std::string::npos);
+    CHECK(std::string(mockGfxCells[1], 35).find(
+      fx == fxEUC ? "Euclidean" : fx == fxNTH ? "Nth" : "Repeat") != std::string::npos);
     editFXValue(CellEditAction::increase, &cell, &last, 0, 0);
-    CHECK(std::string(screenGetActiveMessage()).find(fx == fxEUC ? "EUC" : "Repeat") != std::string::npos);
+    CHECK(std::string(screenGetActiveMessage()).find(
+      fx == fxEUC ? "EUC" : fx == fxNTH ? "Nth" : "Repeat") != std::string::npos);
   }
   for (FXId fx : {FXId(fxDMD), FXId(fxDTO), FXId(fxDNO), FXId(fxDFM), FXId(fxDDR)}) {
     CHECK(std::string(helpFXDescription((FX)fx, 0)).find("DigiSophie") == 0);

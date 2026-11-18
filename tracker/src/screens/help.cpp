@@ -158,6 +158,10 @@ const char* helpFXHint(const FXCell& fx, int isTable, uint8_t instrumentIdx) {
     case fxRTO:
       snprintf(buffer, bufferSize, "Repeat stops at %02X", fx.value);
       break;
+    case fxNTH:
+      snprintf(buffer, bufferSize, "Nth loop: left %X / right %X",
+        fx.value >> 4, fx.value & 15);
+      break;
     case fxBEG:
       snprintf(buffer, bufferSize, "BEG %02X: %s to END (same col)", fx.value,
         fx.value < 0x80 ? "ease-out" : fx.value == 0x80 ? "linear" : "ease-in");
@@ -506,6 +510,7 @@ static void initFxHelpText() {
   fxHelpText[fxEUC] = "Euclidean Retrigger\nX hits over Y+1 rows, looping\nSame note and instrument\nNew note, OFF, KIL or EUC stops";
   fxHelpText[fxREP] = "Repeat Previous FX\nSigned increment per row\nPersists through new notes\nREP00 or new FX stops; RTO limits";
   fxHelpText[fxRTO] = "Repeat To\nSets REP's min/max boundary\nFinal value applied once\nThen repetition stops";
+  fxHelpText[fxNTH] = "Nth Trigger\nPhrase: X gates left, Y right\nTable: XX gates columns left\n02 runs on loops 2, 4, 6...";
   fxHelpText[fxTIC] = "Table Speed\nSets table playback speed";
   fxHelpText[fxTBL] = "Set Table\nSwitches to specified\ninstrument table";
   fxHelpText[fxTBX] = "Aux Table\nSets auxiliary table\nfor this note";

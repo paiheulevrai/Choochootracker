@@ -51,6 +51,7 @@ struct PlaybackTableState {
   uint8_t rows[4];
   uint8_t counters[4];
   uint8_t speed[4];
+  uint32_t loopCount[4];
   uint8_t fxAuxState[16][4]; // Used for stateful effects like HOP
   FXId heldCommand[4];
   PlaybackFXState heldFX[4];
