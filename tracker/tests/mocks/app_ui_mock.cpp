@@ -134,6 +134,8 @@ int screenTouchTap(int, int) { return 0; }
 TouchAdjustResult screenTouchAdjust(int, int) { return touchAdjustNone; }
 void screenQuickHelpOpen(const AppScreen*) {}
 void fileBrowserSetup(const char* title, const char* extension, const char*,
+  void (*)(const char*), void (*)(void)) {}
+void fileBrowserSetupSelected(const char* title, const char* extension, const char*, const char*,
                       void (*)(const char*), void (*)(void)) {
   mockBrowserTitle = title;
   mockBrowserExtension = extension;

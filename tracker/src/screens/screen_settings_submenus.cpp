@@ -434,7 +434,8 @@ static int graphicsEdit(int, int row, CellEditAction action) {
   }
   if (row == 6 || action != CellEditAction::tap) return 0;
   if (row == 0) screenSetup(&screenColorTheme, 0);
-  else if (row == 1) { fileBrowserSetup("LOAD FONT", ".cnfont", appSettings.fontFolderPath, fontLoaded, fontCancelled); screenSetup(&screenFileBrowser, 0); }
+  else if (row == 1) { fileBrowserSetupSelected("LOAD FONT", ".cnfont", appSettings.fontFolderPath,
+    appSettings.fontPath, fontLoaded, fontCancelled); screenSetup(&screenFileBrowser, 0); }
   else if (row == 2) screenSetup(&screenBackgroundSettings, 0);
   else if (row == 4) screenSetup(&screenTrackVisuals, 0);
   return 0;

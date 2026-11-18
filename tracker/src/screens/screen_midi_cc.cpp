@@ -14,6 +14,7 @@ static int learnRow = -1;
 static uint32_t learnSerial;
 static int destinationButtonDown;
 static int popupRow;
+static int lastDestinationValue = -1;
 static int columnCount(int);
 static void drawStatic(void);
 static void drawRowHeader(int, CellState);
@@ -115,6 +116,7 @@ static void buildDestinations() {
 }
 static void destinationCancelled() { screenSetup(&screenMidiCC, -1); }
 static void destinationSelected(int value) {
+  lastDestinationValue = value;
   setDestination(popupRow, value);
   destinationCancelled();
 }
@@ -123,8 +125,12 @@ static void openDestinationPopup(int row) {
   learnRow = -1;
   buildDestinations();
   screenMessage(0, "");
+  int selected = destinationValue(chipnomadState->project.midiCCMappings[row]);
+  if (selected == midiCCDestinationNone && lastDestinationValue >= 0)
+    for (const auto& choice : destinationChoices)
+      if (choice.value == lastDestinationValue) { selected = lastDestinationValue; break; }
   selectionPopupSetup("MIDI CC DESTINATION", destinationCategories.data(), (int)destinationCategories.size(),
-                      destinationValue(chipnomadState->project.midiCCMappings[row]),
+                      selected,
                       destinationSelected, destinationCancelled);
   screenSetup(&screenSelectionPopup, 0);
 }
@@ -135,7 +141,8 @@ static int cycleDestination(int row, int direction) {
   int next = 0;
   for (int i = 0; i < count; ++i)
     if (destinationChoices[i].value == value) { next = (i + direction + count) % count; break; }
-  setDestination(row, destinationChoices[next].value);
+  lastDestinationValue = destinationChoices[next].value;
+  setDestination(row, lastDestinationValue);
   return 1;
 }
 

@@ -951,13 +951,15 @@ static void appInput(int isKeyDown, int keys, int tapCount) {
       !sampleLazyPlaybackActive) {
     chipnomadQueuePlaybackStop(chipnomadState);
   }
-  // Let screen handle input first, then try global playback if not handled
-  if (!(isKeyDown && inputBranchNavigation(keys)) &&
-      !currentScreen->onInput(isKeyDown, keys, tapCount)) {
-    if (isKeyDown) {
-      inputPlayback(keys, tapCount);
-    }
-  }
+  // Let screen handle input first, then try global playback if not handled.
+  // A local action may intentionally navigate; never let that same press fall
+  // through to a global action on the destination screen.
+  const AppScreen* inputScreen = currentScreen;
+  const bool branchHandled = isKeyDown && inputBranchNavigation(keys);
+  const bool screenHandled = !branchHandled &&
+    currentScreen->onInput(isKeyDown, keys, tapCount);
+  if (!branchHandled && !screenHandled && currentScreen == inputScreen && isKeyDown)
+    inputPlayback(keys, tapCount);
   // The UI owns Project. Coalesce edits into one snapshot for the next audio tick.
   // Popup choices (including native presets) commit on release. Publish those
   // edits too, even if no further button is pressed while the song plays.

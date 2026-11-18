@@ -191,6 +191,17 @@ void fileBrowserSetup(const char* title, const char* extension, const char* star
     cancelCallback, NULL);
 }
 
+void fileBrowserSetupSelected(const char* title, const char* extension, const char* startPath,
+    const char* selectedPath, void (*fileCallback)(const char*), void (*cancelCallback)(void)) {
+  fileBrowserSetupWithPreview(title, extension, startPath, fileCallback,
+    cancelCallback, NULL);
+  if (!selectedPath || !selectedPath[0]) return;
+  const char* separator = strrchr(selectedPath, PATH_SEPARATOR);
+  const char* name = separator ? separator + 1 : selectedPath;
+  fileBrowserRefreshWithSelection(name);
+  resetScrollStateOnSelectionChange();
+}
+
 int fileBrowserGetAdjacentPath(const char* currentPath, const char* extension,
   int direction, char* outputPath, int outputPathSize) {
   const char* separator = strrchr(currentPath, PATH_SEPARATOR);

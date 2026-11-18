@@ -44,10 +44,13 @@ static ScreenData screenColorThemeData = {
   .isCellValid = NULL,
   .getLoopRange = NULL,
 };
+static char lastThemeSelection[PATH_LENGTH + 1];
 
 static int isCharEdit = 0;
 
 static void onThemeLoaded(const char* path) {
+  strncpy(lastThemeSelection, path, sizeof(lastThemeSelection) - 1);
+  lastThemeSelection[sizeof(lastThemeSelection) - 1] = 0;
   int result = loadTheme(path);
   if (result == 0) {
     // On Android this also clears the physical bands behind the virtual pad.
@@ -77,6 +80,8 @@ static void onThemeSaved(const char* folderPath) {
   snprintf(fullPath, sizeof(fullPath), "%s%s%s.cth", folderPath, PATH_SEPARATOR_STR, appSettings.themeName);
 
   if (saveTheme(fullPath) == 0) {
+    strncpy(lastThemeSelection, fullPath, sizeof(lastThemeSelection) - 1);
+    lastThemeSelection[sizeof(lastThemeSelection) - 1] = 0;
     screenMessage(MESSAGE_TIME, "Theme saved");
     // Store the directory path
     strncpy(appSettings.themePath, folderPath, PATH_LENGTH);
@@ -288,7 +293,8 @@ int colorThemeOnEdit(int col, int row, CellEditAction action) {
       return 1;
     } else if (col == 1) {
       // Load
-      fileBrowserSetup("LOAD THEME", ".cth", appSettings.themePath, onThemeLoaded, onThemeCancelled);
+      fileBrowserSetupSelected("LOAD THEME", ".cth", appSettings.themePath,
+        lastThemeSelection, onThemeLoaded, onThemeCancelled);
       screenSetup(&screenFileBrowser, 0);
       return 1;
     } else if (col == 2) {

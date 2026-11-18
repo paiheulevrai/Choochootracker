@@ -90,6 +90,10 @@ TEST_CASE_FIXTURE(PatternFixture, "pattern allocation skips referenced and retai
 }
 
 TEST_CASE_FIXTURE(PatternFixture, "track banks skip retained chain and phrase references and fall back") {
+  CHECK(findEmptyChainForTrack(project.get(), 0) == 0x10);
+  CHECK(findEmptyChainForTrack(project.get(), 1) == 0x20);
+  CHECK(findEmptyPhraseForTrack(project.get(), 0) == 0x10);
+  CHECK(findEmptyPhraseForTrack(project.get(), 1) == 0x20);
   project->song[0][0] = 0x10;
   project->chainToPatternMap[0x11] = 0;
   project->patternToChainMap[0] = 0x12;

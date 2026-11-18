@@ -380,6 +380,19 @@ static int editCell(int col, int row, CellEditAction action) {
     chipnomadQueueProjectRefresh(chipnomadState);
     return 1;
   }
+  if (project.viewMode == ViewMode::classic && !groovebox &&
+      action == CellEditAction::tap &&
+      project.song[row][col] == EMPTY_VALUE_16) {
+    int slot = findEmptyChainForTrack(&project, col);
+    if (slot == EMPTY_VALUE_16) {
+      screenMessage(MESSAGE_TIME_ERROR, "No free chains");
+      return 0;
+    }
+    project.song[row][col] = (uint16_t)slot;
+    lastChainValue = (uint16_t)slot;
+    chipnomadQueueProjectRefresh(chipnomadState);
+    return 1;
+  }
   if (groovebox && action == CellEditAction::tap &&
       chipnomadState->project.song[row][col] == EMPTY_VALUE_16) {
     if (canonicalSimplifiedActive) {

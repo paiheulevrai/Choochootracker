@@ -24,6 +24,8 @@ Changes since v1.0.24-alpha.
   drive stage while retaining the lightweight per-track Tilt filter.
 - Use the theme cursor color for focused values across screens, and consume
   Project/Settings edit input locally so A does not fall back to Song.
+- Allocate new Classic chains and phrases in one-based track banks. Remember
+  the last MIDI CC destination, theme and font while the app stays open.
 - Improve PortMaster and NextUI metadata, source licensing, duplicate gamepad
   input handling, cover art and launcher packaging. Add four retro/readable
   fonts and update Web showcases and distribution assets.

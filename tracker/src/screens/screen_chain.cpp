@@ -228,6 +228,17 @@ static void drawMinimap(void) {
 
 static int editCell(int col, int row, enum CellEditAction action) {
   if (col == 0) {
+    if (action == CellEditAction::tap &&
+        chipnomadState->project.chains[chain].rows[row].phrase == EMPTY_VALUE_16) {
+      int nextEmpty = findEmptyPhraseForTrack(&chipnomadState->project, *pSongTrack);
+      if (nextEmpty == EMPTY_VALUE_16) {
+        screenMessage(MESSAGE_TIME_ERROR, "No empty phrases");
+        return 0;
+      }
+      chipnomadState->project.chains[chain].rows[row].phrase = nextEmpty;
+      lastPhraseValue = nextEmpty;
+      return 1;
+    }
     if (action == CellEditAction::doubleTap) {
       uint16_t current = chipnomadState->project.chains[chain].rows[row].phrase;
       if (current != EMPTY_VALUE_16) {
