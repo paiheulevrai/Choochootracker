@@ -125,6 +125,16 @@ TEST_CASE("Extended sequencer IDs and DigiSophie have their own FX help") {
   CHECK(std::string(helpFXDescription(fxDTO, 0)).find("Bogie Tone") == 0);
 }
 
+TEST_CASE("NTH footer hints describe musician-facing loop rules") {
+  PopupSession session;
+  CHECK(std::string(helpFXHint(FXCell{fxNTH, 0x02}, 0, 0)) == "NTH L off / R every 2");
+  CHECK(std::string(helpFXHint(FXCell{fxNTH, 0x94}, 0, 0)) == "NTH L 1&3 / R every 4");
+  CHECK(std::string(helpFXHint(FXCell{fxNTH, 0xbc}, 0, 0)) == "NTH L 5-8 / R 7+");
+  CHECK(std::string(helpFXHint(FXCell{fxNTH, 0x00}, 1, 0)) == "NTH table: reset counter");
+  CHECK(std::string(helpFXHint(FXCell{fxNTH, 0x03}, 1, 0)) ==
+        "NTH table: left every 4 loops");
+}
+
 TEST_CASE("Transition and modulation footer hints explain curves targets and selected slots") {
   PopupSession session;
   for (int table : {0, 1}) {

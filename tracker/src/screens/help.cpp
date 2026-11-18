@@ -159,8 +159,28 @@ const char* helpFXHint(const FXCell& fx, int isTable, uint8_t instrumentIdx) {
       snprintf(buffer, bufferSize, "Repeat stops at %02X", fx.value);
       break;
     case fxNTH:
-      snprintf(buffer, bufferSize, "Nth trigger: left %X / right %X",
-        fx.value >> 4, fx.value & 15);
+      if (isTable) {
+        if (fx.value == 0) snprintf(buffer, bufferSize, "NTH table: reset counter");
+        else snprintf(buffer, bufferSize, "NTH table: left every %u loops",
+          (unsigned)fx.value + 1);
+      } else {
+        const auto phraseLabel = [](uint8_t value, char* output) {
+          if (value == 0) strcpy(output, "off");
+          else if (value == 1) strcpy(output, "1st");
+          else if (value <= 8) snprintf(output, 12, "every %u", value);
+          else if (value == 9) strcpy(output, "1&3");
+          else if (value == 0xa) strcpy(output, "1&4");
+          else if (value == 0xb) strcpy(output, "5-8");
+          else if (value == 0xc) strcpy(output, "7+");
+          else if (value == 0xd) strcpy(output, "2nd");
+          else if (value == 0xe) strcpy(output, "odd");
+          else strcpy(output, "even");
+        };
+        char left[12], right[12];
+        phraseLabel(fx.value >> 4, left);
+        phraseLabel(fx.value & 15, right);
+        snprintf(buffer, bufferSize, "NTH L %s / R %s", left, right);
+      }
       break;
     case fxBEG:
       snprintf(buffer, bufferSize, "BEG %02X: %s to END (same col)", fx.value,
