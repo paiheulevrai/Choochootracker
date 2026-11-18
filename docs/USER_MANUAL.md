@@ -584,6 +584,8 @@ with rhythm patterns:
 ## 3. Song structure and screen map
 
 Hold **SELECT + [DIRECTION]** to move between screens.
+To return to Song, use **SELECT + DOWN** from Project or **SELECT + UP**
+from Settings. **OPT** (**B** on PortMaster) alone does not leave either screen.
 
 The main navigation row is:
 

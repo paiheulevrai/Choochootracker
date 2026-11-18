@@ -108,6 +108,6 @@ static ScreenData data = {
   .onEdit = onEdit, .onInput = NULL, .onRawInput = NULL, .isCellValid = NULL, .getLoopRange = NULL,
 };
 static void fullRedraw(void) { screenFullRedraw(&data); }
-static int onInput(int isKeyDown, int keys, int taps) { if (keys == keyOpt || keys == (keyUp | keyShift)) { screenSetup(&screenSong, 0); return 1; } return screenInput(&data, isKeyDown, keys, taps); }
+static int onInput(int isKeyDown, int keys, int taps) { if (keys == (keyUp | keyShift)) { screenSetup(&screenSong, 0); return 1; } return screenInput(&data, isKeyDown, keys, taps); }
 static ScreenPlaybackLevel playbackLevel(void) { return ScreenPlaybackLevel::song; }
 const AppScreen screenSettings = {NULL, setup, fullRedraw, draw, onInput, playbackLevel};

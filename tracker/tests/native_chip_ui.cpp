@@ -471,6 +471,51 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+  if(argc==3 && !strcmp(argv[2],"--song-branches-only")) {
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+    // PortMaster's gptokeyb profile sends Z for B, regardless of desktop layout.
+    const InputCode buttonB = {InputDeviceType::keyboard, SDLK_z};
+    appSettings.keyMapping.keyOpt[0] = buttonB;
+    auto send = [](InputCode input, MainLoopEvent type) {
+      MainLoopEventData event{};
+      event.type = type;
+      event.data.input = input;
+      appOnEvent(event);
+      screenApplyPending();
+    };
+    auto shift = [&](int direction) {
+      appResetInputState();
+      send({InputDeviceType::logical, keyShift}, MainLoopEvent::keyDown);
+      send({InputDeviceType::logical, direction}, MainLoopEvent::keyDown);
+      send({InputDeviceType::logical, direction}, MainLoopEvent::keyUp);
+      send({InputDeviceType::logical, keyShift}, MainLoopEvent::keyUp);
+    };
+    struct Branch { const AppScreen* screen; int enter, leave; const char* name; };
+    bool stayed = true;
+    for (const Branch& branch : {Branch{&screenProject, keyUp, keyDown, "Project"},
+                                 Branch{&screenSettings, keyDown, keyUp, "Settings"}}) {
+      screenSetup(&screenSong, 0);
+      screenApplyPending();
+      shift(branch.enter);
+      require(currentScreen == branch.screen, "Shift enters the Song branch");
+      for (auto eventType : {MainLoopEvent::keyDown, MainLoopEvent::keyUp}) {
+        send(buttonB, eventType);
+        if (currentScreen != branch.screen) {
+          fprintf(stderr, "FAIL: B %s leaves %s\n", eventType == MainLoopEvent::keyDown ? "press" : "release", branch.name);
+          stayed = false;
+          break;
+        }
+      }
+      if (currentScreen != branch.screen) continue;
+      shift(branch.leave);
+      require(currentScreen == &screenSong, "Shift returns from the Song branch");
+    }
+    require(stayed, "B does not leave Project or Settings");
+    chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
+    gfxCleanup(); SDL_Quit();
+    puts("PASS: B stays in Project and Settings; Shift navigation still works.");
+    return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--pattern-copy-only")) {
     screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
     require(audioManager.start(48000, 256) == 0, "pattern copy audio fixture");
