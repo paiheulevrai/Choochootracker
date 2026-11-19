@@ -84,11 +84,13 @@ Use a keyboard or gamepad on desktop, or the on-screen controls on mobile device
 
 ### 🕹️ Handheld consoles — PortMaster
 
-ChooChooTracker supports PortMaster-compatible Linux handhelds.
+Open the **PortMaster** app on your handheld, search for
+[ChooChooTracker](https://portmaster.games/port/?name=choochootracker), and
+select **Install**. Then launch ChooChooTracker from your console's Ports menu.
 
-1. Download the latest PortMaster package.
-2. Extract the package into your device's `ports` directory.
-3. Launch ChooChooTracker from your console's Ports menu.
+For manual installation, download the PortMaster ZIP from
+[GitHub Releases](https://github.com/paiheulevrai/Choochootracker/releases)
+and extract it into your device's `ports` directory.
 
 Tested on ArkOS, DarkOs, Knulli, amberElec, Anbernic and TrimUI devices, among others.
 
