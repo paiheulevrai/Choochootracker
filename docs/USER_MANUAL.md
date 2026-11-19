@@ -474,7 +474,10 @@ on the next launch. Sleep or exit also discards an unfinished test.
 Desktop layout defaults use QWERTZ only for QWERTZ regions; Polish keyboards
 keep the standard QWERTY defaults.
 
-Windows, web, and Android users can also use a game controller. On Android,
+Windows, web, and Android users can also use a game controller. On Windows,
+Linux, macOS and Android, up to four controllers can be used at the same time
+with the same key mapping, for example an Android handheld's built-in controls
+and a docked controller. PortMaster and Miyoo builds use one controller. On Android,
 touch controls appear automatically when no gamepad is connected: in portrait
 they sit below the tracker, with a square D-pad, A/EDIT, B/OPT, START/PLAY and
 SELECT/SHIFT controls, then a separate Live/Motion section with two modulation
