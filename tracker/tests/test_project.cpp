@@ -5,6 +5,7 @@
 #include "project_utils.h"
 #include "import/import_vt2.h"
 #include "synth/multimode_filter.h"
+#include "screen_project.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -15,6 +16,23 @@
 #include <memory>
 
 TEST_SUITE("project") {
+
+TEST_CASE("Tap tempo averages recent beats and restarts after invalid gaps") {
+  ProjectTapTempo tap;
+  CHECK(tap.tap(0) == 0);
+  CHECK(tap.tap(500) == 120);
+  CHECK(tap.tap(1000) == 120);
+  CHECK(tap.tap(1600) == 113);
+  CHECK(tap.tap(2200) == 109);
+  CHECK(tap.tap(2800) == 104);
+  CHECK(tap.tap(7000) == 0);
+  CHECK(tap.tap(7120) == 500);
+  CHECK(tap.tap(7200) == 0);
+  CHECK(tap.tap(11200) == 15);
+  CHECK(tap.tap(11100) == 0);
+  tap.reset();
+  CHECK(tap.tap(12000) == 0);
+}
 
 TEST_CASE("MIDI CC maps continuous engine destinations to native values") {
   Project p;

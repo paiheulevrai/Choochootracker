@@ -55,7 +55,7 @@ static int onEdit(int col, int row, enum CellEditAction action) {
   return 0;
 }
 
-static int isButtonCell(int, int row) { return row >= 7; }
+static int isButtonCell(int col, int row) { return row >= 7 || (row == 4 && col == 1); }
 
 ScreenData screenProjectExtra = {
   .rows = SCR_PROJECT_ROWS + 2,

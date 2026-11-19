@@ -544,6 +544,21 @@ If MSYS2 reports exit code 127 after `Built: build/tests/run_tests.exe`, run
 `build/tests/run_tests.exe` directly; the executable is the authoritative test
 result in that environment.
 
+The PortMaster SDL capture fallback has a separate Linux host check using SDL2
+development files and the GNU linker (from `tracker`):
+
+```sh
+g++ -std=c++17 -Wall -Wextra -DPORTMASTER_BUILD -Isrc/corelib \
+  $(pkg-config --cflags sdl2) tests/audio_input_sdl_check.cpp \
+  platforms/sdl2/corelib_audio.cpp \
+  -Wl,--wrap=SDL_GetAudioDeviceName,--wrap=SDL_GetCurrentAudioDriver,--wrap=SDL_OpenAudioDevice,--wrap=SDL_PauseAudioDevice,--wrap=SDL_CloseAudioDevice,--wrap=setenv,--wrap=unsetenv \
+  $(pkg-config --libs sdl2) -o build/tests/audio_input_sdl_check
+build/tests/audio_input_sdl_check
+```
+
+Create `build/tests` first if the main suite has not been built. This mocked
+check does not replace capture and playback validation on the handheld.
+
 ## Native chip instruments
 
 The normal builds include the native instruments and shipped preset catalog.

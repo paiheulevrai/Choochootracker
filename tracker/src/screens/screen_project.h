@@ -12,6 +12,31 @@ inline int projectRowY(int row) {
   return positions[row];
 }
 
+struct ProjectTapTempo {
+  uint64_t last = 0;
+  unsigned int intervals[4] = {};
+  unsigned int count = 0, next = 0, sum = 0;
+  bool started = false;
+
+  void reset() { *this = {}; }
+  int tap(uint64_t now) {
+    if (!started || now <= last || now - last < 120 || now - last > 4000) {
+      reset();
+      last = now;
+      started = true;
+      return 0;
+    }
+    const unsigned int interval = (unsigned int)(now - last);
+    last = now;
+    if (count == 4) sum -= intervals[next];
+    else ++count;
+    intervals[next] = interval;
+    sum += interval;
+    next = (next + 1) % 4;
+    return (60000 * count + sum / 2) / sum;
+  }
+};
+
 int projectLoadFromPath(const char* path);
 void projectOpenFromScreen(const AppScreen* returnScreen);
 void projectOpenFromScreenAtPath(const AppScreen* returnScreen, const char* path);

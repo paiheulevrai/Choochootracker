@@ -730,6 +730,7 @@ int main(int argc,char** argv){
     chipnomadInitChips(chipnomadState, 48000, nullptr);
     struct Probe {
       int sends = 0, frames = 0, rate = 0, transport = -1;
+      double tempo = 0;
       bool enabled = false, audio = false, receive = false;
       bool missingPackets = false;
       LinkAudioLocalDelay localDelay;
@@ -746,7 +747,7 @@ int main(int argc,char** argv){
     backend.captureAudioSessionState = [](void*, void*, double*, double*, uint64_t*, uint64_t*, int*) { return 0; };
     backend.onAudioFrame = [](void*, void*, uint64_t, uint64_t) {};
     backend.resetHostTimeFilter = [](void*, void*) {};
-    backend.setTempo = [](void*, void*, double) { return 1; };
+    backend.setTempo = [](void* data, void*, double bpm) { static_cast<Probe*>(data)->tempo = bpm; return 1; };
     backend.setTransportSync = [](void* data, void*, int enabled) { static_cast<Probe*>(data)->transport = enabled; };
     backend.setAudioEnabled = [](void* data, void*, int enabled) { static_cast<Probe*>(data)->audio = enabled; return 1; };
     backend.sendAudio = [](void* data, void*, const int16_t* samples, int frames, int rate) {
@@ -790,8 +791,32 @@ int main(int argc,char** argv){
     key(1,keyEdit); key(0,0);
     require(currentScreen == &screenLinkOptions, "Project A opens the selected submenu");
     back();
-    screenSetup(&screenProject, 0);
+    screenSetup(&screenProject, 0); appDraw();
     require(screenProjectExtra.rows == 12, "same compact Project layout on all platforms");
+    const float initialTempo = chipnomadState->project.tickRate;
+    touch(23,9);
+    require(chipnomadState->project.tickRate == initialTempo, "first tap does not change tempo");
+    SDL_Delay(500);
+    touch(23,9);
+    require(chipnomadState->project.tickRate > 40 && chipnomadState->project.tickRate < 52,
+            "touch tap tempo updates the local project");
+    screenSetup(&screenProject, 0); appDraw();
+    screenProjectExtra.cursorRow = 4; screenProjectExtra.cursorCol = 1;
+    appResetInputState();
+    appButton(keyEdit, true); appButton(keyEdit, false);
+    SDL_Delay(200);
+    appButton(keyEdit, true); appButton(keyEdit, false);
+    const float twoTapTempo = chipnomadState->project.tickRate;
+    SDL_Delay(400);
+    appButton(keyEdit, true); appButton(keyEdit, false);
+    require(chipnomadState->project.tickRate < twoTapTempo * 0.9f,
+            "third rapid Edit tap contributes to tempo");
+    require(projectCommonOnEdit(0,5,CellEditAction::increase), "select MIDI clock");
+    const float midiTempo = chipnomadState->project.tickRate;
+    touch(23,9); SDL_Delay(150); touch(23,9);
+    require(chipnomadState->project.tickRate == midiTempo, "tap tempo does not override MIDI clock");
+    require(projectCommonOnEdit(0,5,CellEditAction::clear), "restore local clock");
+    screenSetup(&screenProject, 0);
     capture("project-menu");
     gfxSetCursorBrackets(0);
     screenProjectExtra.cursorRow = 6;
@@ -843,6 +868,8 @@ int main(int argc,char** argv){
     require(projectCommonOnEdit(0,5,CellEditAction::increase), "select MIDI sync");
     require(projectCommonOnEdit(0,5,CellEditAction::increase), "select Link sync");
     require(projectCommonOnEdit(0,6,CellEditAction::tap) && probe.enabled, "Link connection stays on Project");
+    touch(23,9); SDL_Delay(500); touch(23,9);
+    require(probe.tempo > 100 && probe.tempo < 130, "tap tempo updates Link");
     appDraw(); capture("project-menu-link");
     touch(2,12);
     touch(20,5); tapEdit(); require(probe.audio, "Send toggle enables backend");
@@ -2192,6 +2219,46 @@ int main(int argc,char** argv){
     chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
   }
   chipnomadInitChips(chipnomadState,48000,nullptr);chipnomadReserveRenderBuffers(chipnomadState,1024);screensInitAll();waveformDisplayInit();monitorDisplayInit();
+  if(argc==3 && !strcmp(argv[2],"--sidebar-only")) {
+    prepareHomepageInstrument(InstrumentType::Braids, "Sidebar");
+    chipnomadState->uiPlaybackStatus.tracks[0].note.instrument = 0;
+    chipnomadState->voiceMonitors[0].active = 1;
+    chipnomadState->voiceMonitors[0].envelope = 1;
+    std::fill_n(chipnomadState->voiceMonitors[0].samples, VOICE_MONITOR_SAMPLES, 0.25f);
+    appSettings.persistentWaveform = 1;
+    screenSetup(&screenSong, 0); capture("sidebar-song");
+    const auto frame = framePixels();
+    auto checkCenter = [](const std::vector<uint32_t>& pixels, int mapRow) {
+      const uint32_t background = pixels[11 * 24 * 640 + 34 * 16];
+      int top = mapRow * 24, bottom = 11 * 24 - 1;
+      int left = 40 * 16, right = 35 * 16 - 1;
+      for (int y = 11 * 24; y < mapRow * 24; ++y)
+        for (int x = 35 * 16; x < 40 * 16; ++x)
+          if (pixels[y * 640 + x] != background) {
+            top = std::min(top, y); bottom = std::max(bottom, y);
+            left = std::min(left, x); right = std::max(right, x);
+          }
+      require(top <= bottom && abs((top - 11 * 24) - (mapRow * 24 - 1 - bottom)) <= 1,
+              "keyboard is vertically centered between track list and navigation map");
+      require(left <= right && abs((left - 35 * 16) - (40 * 16 - 1 - right)) <= 1,
+              "keyboard is horizontally centered under track names");
+    };
+    checkCenter(frame, 15);
+    bool different = false;
+    for (int y = 0; y < 24; ++y)
+      for (int x = 31 * 16; x < 34 * 16; ++x)
+        different |= frame[(3 * 24 + y) * 640 + x] != frame[(4 * 24 + y) * 640 + x];
+    require(different, "wide waveform updates separately for each track");
+    screenSetup(&screenChain, 0); capture("sidebar-chain"); checkCenter(framePixels(), 16);
+    screenSetup(&screenPhrase, 0); capture("sidebar-phrase"); checkCenter(framePixels(), 15);
+    screenSetup(&screenInstrument, 0); capture("sidebar-instrument"); checkCenter(framePixels(), 14);
+    screenSetup(&screenProject, 0); capture("sidebar-project");
+    screenSetup(&screenMixer, 0);
+    chipnomadState->audioOverload = 1;
+    capture("sidebar-mixer-clip");
+    printf("Sidebar captures: Song, Chain, Phrase, Project and Mixer clip\n");
+    chipnomadDestroy(chipnomadState); SDL_Quit(); return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--canonical-song-audio-only")) {
     const char* fixture = std::getenv("CCT_COMPARE_FIXTURE");
     const char* mode = std::getenv("CCT_COMPARE_MODE");

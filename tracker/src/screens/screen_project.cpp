@@ -26,6 +26,7 @@
 #include <strings.h>
 
 #include <initializer_list>
+#include <chrono>
 
 #ifdef WEB_BUILD
 #include <emscripten/emscripten.h>
@@ -49,6 +50,7 @@ static int editingStringLength = 0;
 // with a fractional tempo (e.g. 59 Hz = 147.5 BPM) display rounded and snap
 // to a whole BPM on the first tempo edit; untouched projects save unchanged.
 static uint16_t bpmValue = 125;
+static ProjectTapTempo tapTempo;
 // Mirror of appSettings.clockSource for the Clock source row.
 // 0 = Internal, 1 = Midi Clock, 2 = Ableton Link.
 static uint8_t clockSourceMirror = 0;
@@ -296,6 +298,7 @@ static ScreenData* projectScreen(void) {
 }
 
 static void setup(int input) {
+  tapTempo.reset();
   isCharEdit = 0;
   editingString = NULL;
   editingStringLength = 0;
@@ -330,9 +333,11 @@ static void draw(void) {
   if (!clockSourceMirror) return;
   ScreenData* screen = projectScreen();
   for (int row : {4, 6}) {
-    const bool focused = screen->cursorRow == row;
-    projectCommonDrawField(0, row, focused ? CellState::focus : CellState::normal);
-    if (focused) screen->drawCursor(screen->cursorCol, row);
+    for (int col = 0; col < projectCommonColumnCount(row); ++col) {
+      const bool focused = screen->cursorRow == row && screen->cursorCol == col;
+      projectCommonDrawField(col, row, focused ? CellState::focus : CellState::normal);
+      if (focused) screen->drawCursor(col, row);
+    }
   }
 }
 
@@ -350,6 +355,7 @@ int projectCommonColumnCount(int row) {
   } else if (row >= 1 && row <= 3) {
     return 24; // File, title, author
   }
+  if (row == 4) return 2;
   return 1; // Default value
 }
 
@@ -393,8 +399,8 @@ void projectCommonDrawCursor(int col, int row) {
     // Text fields: file name, title, author
     gfxCursor(7 + col, 4 + row, 1);
   } else if (row >= 4 && row < SCR_PROJECT_ROWS) {
-    const int width = row == 4 ? 3 : row == 6 ? (linkClientIsEnabled(chipnomadState->linkClient) ? 12 : 9) : row == 5 ? 4 : row == 7 ? 12 : row == 8 ? 8 : 6;
-    gfxCursor(row >= 7 ? 0 : 13, projectRowY(row), width);
+    const int width = row == 4 ? (col == 1 ? 5 : 3) : row == 6 ? (linkClientIsEnabled(chipnomadState->linkClient) ? 12 : 9) : row == 5 ? 4 : row == 7 ? 12 : row == 8 ? 8 : 6;
+    gfxCursor(row >= 7 ? 0 : row == 4 && col == 1 ? 21 : 13, projectRowY(row), width);
   }
 }
 
@@ -425,11 +431,20 @@ void projectCommonDrawField(int col, int row, CellState state) {
     fieldDrawText(7, 7, chipnomadState->project.author, PROJECT_TITLE_LENGTH, state);
   } else if (row >= 4 && row < SCR_PROJECT_ROWS) {
     const int line = projectRowY(row);
+    if (row == 4 && col == 1) {
+      gfxClearRect(21, line, 5, 1);
+      if (clockSourceMirror == 1) gfxSetFgColor(appSettings.colorScheme.textInfo);
+      gfxPrint(21, line, "[Tap]");
+      return;
+    }
     if (row >= 7) {
       gfxClearRect(0, line, 12, 1);
       gfxPrint(0, line, row == 7 ? "Link options" : row == 8 ? "Sync out" : "Tuning");
     }
-    gfxClearRect(13, line, 21, 1);
+    if (row == 4) {
+      gfxClearRect(13, line, 7, 1);
+      gfxClearRect(26, line, 8, 1);
+    } else gfxClearRect(13, line, 21, 1);
     if (row == 4) {
       uint32_t serial = 0;
       const float shared = clockSourceMirror == 2 ? linkClientGetSessionTempo(chipnomadState->linkClient, &serial) : 0;
@@ -437,8 +452,8 @@ void projectCommonDrawField(int col, int row, CellState state) {
       if (clockSourceMirror == 1) gfxSetFgColor(appSettings.colorScheme.textInfo);
       gfxPrintf(13, line, "%3d BPM", bpm);
       gfxSetFgColor(appSettings.colorScheme.textInfo);
-      if (clockSourceMirror == 1) gfxPrint(25, line, "received");
-      else if (clockSourceMirror == 2 && linkClientIsEnabled(chipnomadState->linkClient)) gfxPrint(25, line, "shared");
+      if (clockSourceMirror == 1) gfxPrint(26, line, "received");
+      else if (clockSourceMirror == 2 && linkClientIsEnabled(chipnomadState->linkClient)) gfxPrint(26, line, "shared");
     } else if (row == 5) {
       gfxPrint(13, line, clockSourceMirror == 2 ? "Link" : clockSourceMirror == 1 ? "MIDI" : "Off");
     } else if (row == 6 && clockSourceMirror != 2) {
@@ -561,6 +576,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
         break;
     }
     if (handled) {
+      tapTempo.reset();
       appSettings.clockSource = (ClockSource)clockSourceMirror;
       midiRouterSetClockMode(chipnomadState->midiRouter,
         appSettings.clockSource == ClockSource::midiClock ? MidiClockMode::slave : MidiClockMode::off);
@@ -584,6 +600,19 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
       // Slaved to MIDI clock: the tempo is driven by the incoming clock,
       // so edits are swallowed (the field shows the live followed tempo).
       handled = 1;
+    } else if (col == 1) {
+      if (action == CellEditAction::tap || action == CellEditAction::doubleTap) {
+        const auto now = std::chrono::steady_clock::now().time_since_epoch();
+        const int bpm = tapTempo.tap(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+        if (bpm) {
+          bpmValue = (uint16_t)bpm;
+          chipnomadState->project.tickRate = (float)bpm * 0.4f;
+          if (clockSourceMirror == 2) linkClientSetTempo(chipnomadState->linkClient, bpm);
+          projectModified = 1;
+          projectCommonDrawField(0, 4, CellState::normal);
+        }
+        handled = 1;
+      }
     } else {
       // Tempo in whole BPM. Fine steps are 1 BPM, coarse 5 BPM; clear
       // restores the old default 50 Hz = 125 BPM.
@@ -622,6 +651,7 @@ int projectCommonOnEdit(int col, int row, enum CellEditAction action) {
           break;
       }
       if (handled) {
+        tapTempo.reset();
         // Backwards compatible writeback: the project file keeps storing
         // Hz ("- Frame rate"), BPM * 0.4 in Hz.
         chipnomadState->project.tickRate = (float)bpmValue * 0.4f;
@@ -687,6 +717,13 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
     }
 
     ScreenData* screen = projectScreen();
+    if (isKeyDown && keys == keyEdit && tapCount >= 3 &&
+        screen->cursorRow == 4 && screen->cursorCol == 1) {
+      projectCommonOnEdit(1, 4, CellEditAction::tap);
+      projectCommonDrawField(1, 4, CellState::focus);
+      screen->drawCursor(1, 4);
+      return 1;
+    }
     if (screenInput(screen, isKeyDown, keys, tapCount)) return 1;
   }
   return 0;

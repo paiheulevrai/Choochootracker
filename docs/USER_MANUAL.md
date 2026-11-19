@@ -1407,6 +1407,8 @@ To turn an input off, select its **[x]** box in that list and press **EDIT**. To
 
 Select an input's **ARM** box to make it available to the Sampler recorder; its small meter shows the incoming level. Arm one interface at a time: this version opens only the first armed interface, even if several boxes are checked. Your selection is remembered by device name, so an unavailable interface stays unarmed rather than being replaced by another input. Press **OPT** to return to Audio settings.
 
+On TrimUI Smart Pro with NextUI, the internal `audiocodec` input also needs its microphone route enabled outside the tracker, for example with ChooChooHacker. If arming fails, try the default 48 kHz sample rate; capture support at other rates depends on the device.
+
 ##### Recording audio input
 
 On the Sample instrument screen, **REC** (or **EDIT/REC** when a sample is loaded) opens the sample editor, which hosts recording and editing in one screen. Arm inputs on the **Settings → Audio → Input devices** screen first (see [Audio input](#audio-input)). The editor's top rows control recording:
@@ -2182,6 +2184,7 @@ Both modes share the same root, scale, **Custom** note editing and track checkbo
 - **Sync** selects **Off** (local tempo), **MIDI** (incoming MIDI clock and transport) or **Link** (shared network tempo). With MIDI selected, Tempo is read-only and shows the measured incoming tempo. With Link selected, Tempo remains editable: edits are shared with the other participants, and their edits update this field too. This setting applies to all projects.
 - **Sync out** groups **MIDI clock** and **MIDI transport**. Clock follows the current tempo, including a shared Link tempo; transport sends start/stop. These are the same preferences as Settings > MIDI. Select the MIDI output device there. Output is suppressed while Sync is MIDI; the saved output preferences are retained.
 - **Tempo** sets the project tempo in whole BPM (`3-500`). Internally the tracker still stores its tick rate in Hz (`tick rate = BPM x 0.4`), so existing projects load and save unchanged; a project with a fractional tempo displays it rounded and snaps to a whole BPM on the first tempo edit. Coarse adjustment steps by 5 BPM, fine adjustment by 1 BPM; clearing resets to the default 125 BPM.
+- **[Tap]** beside Tempo sets the tempo from repeated **EDIT** presses or touchscreen taps. The first tap starts a measurement; subsequent taps average up to four intervals. Gaps outside 120 ms to 4 seconds start a new measurement (15–500 BPM). Tap is disabled while following MIDI clock and updates the shared tempo when using Link.
 - ChooChooTracker saves projects as `.cct`. This format is not compatible with ChipNomad.
 
 Use **Save** before changing instrument types or loading another project.

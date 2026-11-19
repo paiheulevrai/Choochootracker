@@ -470,6 +470,8 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
     } else if (field <= 3) {
       column = col - 7;
       if (column < 0 || column >= touchScreenData->getColumnCount(field)) return 0;
+    } else if (field == 4 && col >= 21 && col < 26) {
+      column = 1;
     } else if (field >= 6) {
       if (col < 0 || col >= 34) return 0;
     } else {

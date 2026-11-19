@@ -1307,13 +1307,21 @@ void appDraw(void) {
   if (!chipnomadState) return;
 
   const bool groovebox = currentScreen == &screenGroovebox;
+  const bool mixerClip = currentScreen == &screenMixer && screenMixerGetPage() == 0 &&
+    chipnomadState->audioOverload;
   if (!groovebox) {
     scopeDisplayDraw();
-    pianoDisplayDraw();
+    if (!mixerClip) pianoDisplayDraw();
   }
   waveformDisplayRefresh();
 
   ScreenOverlayCoordinates sidebar;
+  if (mixerClip) {
+    gfxSetBgColor(cs.background);
+    gfxClearRect(34, 11, 6, 4);
+    gfxSetFgColor(cs.warning);
+    gfxPrint(34, 12, "CLIP!");
+  }
   const PlaybackStatus* playback = chipnomadGetPlaybackStatus(chipnomadState);
   if (!groovebox) {
     batteryDisplayDraw();
@@ -1342,10 +1350,12 @@ void appDraw(void) {
 
     // Draw waveform between track number and note
     gfxSetFgColor(cs.textInfo);
-    Bitmap* waveformBitmap = waveformDisplayGetBitmap(c);
-    gfxClearRect(36, 3 + c, 1, 1);
+    const bool song = currentScreen == &screenSong;
+    Bitmap* waveformBitmap = song ? waveformDisplayGetSongBitmap(c) : waveformDisplayGetBitmap(c);
+    const int waveformCol = song ? 31 : 36;
+    gfxClearRect(waveformCol, 3 + c, song ? 3 : 1, 1);
     if (waveformBitmap) {
-      gfxDrawBitmap(waveformBitmap, 36, 3 + c);
+      gfxDrawBitmap(waveformBitmap, waveformCol, 3 + c);
     }
 
     uint8_t note = playback->tracks[c].note.pitchFinal;

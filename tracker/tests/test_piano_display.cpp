@@ -16,7 +16,7 @@ TEST_CASE("Pixel piano retains the reference key silhouettes and whole pixel blo
   CHECK(monitorPianoPitchAt(0, 2, 32, 9) == -1);
   CHECK(monitorPianoPitchAt(31, 2, 32, 9) == -1);
   CHECK(monitorPianoPitchAt(10, 8, 32, 9) == -1);
-  // The handheld draws exactly 2x, centered vertically in its 64x24 area.
+  // The pitch lookup maps whole 2x blocks within a centered 64x24 area.
   for (int y = 0; y < 9; ++y) for (int x = 0; x < 32; ++x)
     for (int sy = 0; sy < 2; ++sy) for (int sx = 0; sx < 2; ++sx)
       CHECK(monitorPianoPitchAt(x * 2 + sx, 3 + y * 2 + sy, 64, 24) ==

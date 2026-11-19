@@ -7,6 +7,7 @@
 #include <cstdlib>
 #endif
 #ifdef PORTMASTER_BUILD
+#include <cerrno>
 #include <cstdlib>
 #include <string>
 #endif
@@ -386,24 +387,35 @@ int audioInputSetup(AudioCaptureCallback* callback, int sampleRate,
     fprintf(stderr, "Failed to open audio input '%s': %s\n",
       deviceName ? deviceName : "default", SDL_GetError());
 #ifdef PORTMASTER_BUILD
-    // The built-in codec's raw PCM may reject our stereo capture format.
-    // SDL's ALSA backend opens AUDIODEV when no device name is supplied;
-    // plughw converts to the codec's supported format.
+    // SDL's ALSA backend opens AUDIODEV when no device name is supplied.
     if (deviceName && SDL_GetCurrentAudioDriver() &&
         SDL_strcmp(SDL_GetCurrentAudioDriver(), "alsa") == 0 &&
-        SDL_strstr(deviceName, "audiocodec")) {
+        SDL_strcmp(deviceName, "audiocodec, ") == 0) {
       const char* previous = getenv("AUDIODEV");
       const bool hadAudioDev = previous != nullptr;
       const std::string savedAudioDev = hadAudioDev ? previous : "";
-      if (setenv("AUDIODEV", "plughw:CARD=audiocodec,DEV=0", 1) == 0) {
+      const char* devices[] = {"hw:CARD=audiocodec,DEV=0", "plughw:CARD=audiocodec,DEV=0"};
+      for (const char* device : devices) {
+        if (setenv("AUDIODEV", device, 1) != 0) {
+          fprintf(stderr, "Failed to set AUDIODEV for %s: %s\n", device, strerror(errno));
+          break;
+        }
         captureDevice = SDL_OpenAudioDevice(NULL, SDL_TRUE, &spec, NULL, 0);
-        if (hadAudioDev) setenv("AUDIODEV", savedAudioDev.c_str(), 1);
-        else unsetenv("AUDIODEV");
+        if (captureDevice == 0)
+          fprintf(stderr, "Failed to open built-in microphone via %s: %s\n", device, SDL_GetError());
+        const int restored = hadAudioDev ? setenv("AUDIODEV", savedAudioDev.c_str(), 1)
+                                         : unsetenv("AUDIODEV");
+        if (restored != 0) {
+          fprintf(stderr, "Failed to restore AUDIODEV: %s\n", strerror(errno));
+          if (captureDevice) SDL_CloseAudioDevice(captureDevice);
+          captureDevice = 0;
+          break;
+        }
+        if (captureDevice) {
+          fprintf(stderr, "Opened built-in microphone via %s\n", device);
+          break;
+        }
       }
-      if (captureDevice == 0)
-        fprintf(stderr, "Failed to open built-in microphone via plughw:audiocodec,0: %s\n", SDL_GetError());
-      else
-        fprintf(stderr, "Opened built-in microphone via plughw:audiocodec,0\n");
     }
 #endif
   }
