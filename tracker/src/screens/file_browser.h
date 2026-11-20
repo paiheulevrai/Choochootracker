@@ -23,6 +23,7 @@ int fileBrowserGetAdjacentPath(const char* currentPath, const char* extension,
 }
 struct MidiPreviewIntent;
 bool fileBrowserHasMidiPreview(void);
+void fileBrowserStopHeldPreview(void);
 void fileBrowserMidiInput(const MidiPreviewIntent& intent);
 #endif
 

@@ -1042,9 +1042,24 @@ int main(int argc,char** argv){
       require(energy(render(4)) < energy(low) * .75, "WAV audition responds to MIDI velocity");
       send(0x80, 48, 0); render(48);
       key(1, keyPlay);
+      require(energy(render(1)) > 1, "holding PLAY auditions the highlighted WAV");
+      key(1, keyPlay | keyDown);
+      require(energy(render(1)) > 1, "PLAY+Down auditions the next WAV");
+      key(1, keyPlay | keyDown);
+      render(16); // Let the output DC filter settle.
+      require(energy(render(1)) < .1, "PLAY+Down wrapping to a folder stops the WAV");
+      key(1, keyPlay | keyUp);
+      require(energy(render(1)) > 1, "PLAY+Up from a folder auditions a WAV");
+      key(0, keyUp);
+      render(16);
+      require(energy(render(1)) < .1, "releasing PLAY while Up is held stops the WAV");
+      key(0, 0);
+      key(1, keyPlay);
       send(0x90, 48, 100);
-      require(energy(render(4)) > 1, "MIDI reloads candidate after legacy PLAY preview");
+      require(energy(render(4)) > 1, "MIDI reloads candidate after PLAY preview");
+      key(0, 0);
       send(0x80, 48, 0); render(48);
+      key(1, keyUp);
       key(1, keyDown); send(0x90, 48, 100);
       require(energy(render(4)) > 1, "moving to next WAV prepares new candidate");
       key(1, keyOpt); key(0, 0);

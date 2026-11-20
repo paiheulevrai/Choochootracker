@@ -975,6 +975,7 @@ static int autosaveCounter = 0;
 //
 
 void appResetInputState(void) {
+  if (currentScreen == &screenFileBrowser) fileBrowserStopHeldPreview();
   pressedButtons = 0;
   tapTimerCount = 0;
   tapButton = 0;

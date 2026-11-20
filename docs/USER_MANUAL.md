@@ -1264,7 +1264,7 @@ Fatty now uses its own type ID without replacing DigiSophie.
 
 This clean Sample engine plays mono or stereo PCM samples loaded into RAM.
 
-- Tap **Sample** to load an uncompressed `8-bit`, `16-bit` or `24-bit` PCM WAV. Press **PLAY** in the browser to audition the highlighted file.
+- Tap **Sample** to load an uncompressed `8-bit`, `16-bit` or `24-bit` PCM WAV. In the file browser, hold **PLAY** to audition the highlighted file, use **Up/Down** while holding it to audition other files, and release **PLAY** to stop. Folders are silent.
 - When a sample is loaded, **EDIT** appears next to its name. Tap it to open the Sample Edit screen. **OPT** or **SELECT + [LEFT]** returns to the instrument.
 - The Sample Edit screen shows the filename (with a `*` marker when the sample in RAM differs from the file on disk), a format readout (sample rate, channels), a tall waveform, and the **Region**, **Select**, **Loop**, **Slice**, **Process** and **File** fields.
 - Processing edits start in RAM. Project saves and autosaves embed the current sample audio in the `.cct`; **Save**/**Save As** in Sample Edit writes the separate WAV. The `*` marker means the sample in RAM differs from that WAV. Loading another sample replaces the current audio in RAM and resets the Region to the full sample (Start `00`, End `FF`).
