@@ -1411,7 +1411,7 @@ On TrimUI Smart Pro with NextUI, the internal `audiocodec` input also needs its 
 
 To sample audio from a compatible phone or computer on TrimUI Smart Pro with NextUI:
 
-1. Enable **USB audio IN** in ChooChooHacker and connect the source with a USB data cable. The source must support USB audio output.
+1. Connect the source to the console's USB-C device port with a data cable. In [ChooChooHacker](https://github.com/paiheulevrai/ChooChooHacker#try-usb-audio-in-experimental), select **Test USB audio IN** and confirm. This mode is experimental and the source must support USB audio output.
 2. Launch the Tracker Pak (save your work and relaunch if it was already open). Leave **Audio Output** on `Default` to keep listening through the console.
 3. Enable **Audio Input**, arm `UAC1_Gadget` in **Input devices**, then play audio on the source and record it in the Sampler.
 
