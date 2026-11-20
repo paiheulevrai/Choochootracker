@@ -1409,7 +1409,11 @@ Select an input's **ARM** box to make it available to the Sampler recorder; its 
 
 On TrimUI Smart Pro with NextUI, the internal `audiocodec` input also needs its microphone route enabled outside the tracker, for example with ChooChooHacker. If arming fails, try the default 48 kHz sample rate; capture support at other rates depends on the device.
 
-When launching the NextUI Pak with ChooChooHacker's USB audio IN active, keep **Audio Output** on `Default` to play through the console while capturing from `UAC1_Gadget`. If you enabled USB audio IN after opening the tracker, save your work and relaunch it.
+To sample audio from a compatible phone or computer on TrimUI Smart Pro with NextUI:
+
+1. Enable **USB audio IN** in ChooChooHacker and connect the source with a USB data cable. The source must support USB audio output.
+2. Launch the Tracker Pak (save your work and relaunch if it was already open). Leave **Audio Output** on `Default` to keep listening through the console.
+3. Enable **Audio Input**, arm `UAC1_Gadget` in **Input devices**, then play audio on the source and record it in the Sampler.
 
 ##### Recording audio input
 
