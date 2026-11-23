@@ -39,7 +39,9 @@ source file unchanged. The combined writer still retains historical arrays/maps.
 - Length: EDIT + LEFT/RIGHT removes/adds a bar, EDIT + UP/DOWN doubles/halves,
   B + A resets the default. Limits are 1..16. Added bars reference independent
   no-event phrases; no-event does not force silence. New empty patterns are
-  materialized at the configured default length on the first edit, not browse.
+  materialized at the configured default length as soon as they are created
+  in Song (tap, double-tap or typed hex), so the Length header shows the
+  default (e.g. `01`) immediately, not on the first edit.
   Doubling copies bar references; each bar isolates automatically on editing.
   Length edits affect every Song occurrence of the same pattern.
 - Loop BAR uses the existing phrase loop; PAT uses the existing chain loop.
@@ -217,11 +219,12 @@ reserves all slots before mutation and can be undone as one Tools action.
 No-event bars do not force silence: held notes and effect tails may continue.
 Editing a missing bar may
 append only the next bar; gaps and more complex extensions must be handled
-in Classic. New chains prefer one-based hexadecimal track banks:
-track 1 `10-1F`, track 2 `20-2F`, ... track 8 `80-8F`.
-Occupied/referenced slots are skipped. Overflow prefers `90-9F` for track 1,
-`A0-AF` for track 2, ... `F0-FE` for track 7, `00-0F` for track 8,
-then any free slot. `FF` is not a valid chain.
+in Classic. Song cells in this mode use Classic's chain editing semantics:
+tapping an empty cell inserts the last used chain value, and double-tapping
+creates the closest free chain. Chains created this way that are still empty
+and unreferenced are materialized at the configured default length
+immediately, so the Phrase editor's Length header shows the default
+(e.g. `01`) rather than `00`.
 Phrases retain 128-slot banks: track 1 `000-07F`, track 2 `080-0FF`,
 ... track 5 `200-27F`, with free-slot fallback. These are independent ID
 pools, not a decimal numbering scheme. Existing IDs are never renumbered.

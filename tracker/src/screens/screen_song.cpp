@@ -339,24 +339,26 @@ static int inputScreenNavigation(int keys, int tapCount) {
   return 0;
 }
 
+// Canonical simplified mode: a freshly-assigned chain slot that is still
+// empty and unreferenced gets its default bar count wired immediately, so
+// the phrase screen's length field shows the configured default (e.g. "01")
+// instead of 00. Mirrors patternMaterializeIfPristine's pristine guard for
+// the classic-view data model.
+static void canonicalMaterializeIfPristine(int chain, int row, int col) {
+  Project* p = &chipnomadState->project;
+  if (!canonicalSimplifiedActive || p->viewMode != ViewMode::classic) return;
+  if (chain < 0 || chain >= PROJECT_MAX_CHAINS) return;
+  if (!chainIsEmpty(p, chain)) return;
+  if (p->chainToPatternMap[chain] != EMPTY_VALUE_16) return;
+  if (isChainUsedElsewhere(p, chain, col, row)) return;
+  grooveboxAction(GrooveboxAction::resetLength, row, col);
+}
+
 static int editCell(int col, int row, CellEditAction action) {
-  bool groovebox = (grooveboxEditorActive || canonicalSimplifiedActive) &&
-    chipnomadState->project.viewMode == ViewMode::classic;
-  if (groovebox && action == CellEditAction::tap &&
-      chipnomadState->project.song[row][col] == EMPTY_VALUE_16) {
-    int slot = grooveboxFindFreeChain(&chipnomadState->project, col);
-    if (slot == EMPTY_VALUE_16) screenMessage(MESSAGE_TIME_ERROR, "No free chains");
-    else {
-      chipnomadState->project.song[row][col] = slot;
-      lastChainValue = slot;
-    }
-    return 1;
-  }
   if (action == CellEditAction::doubleTap) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
-      int nextEmpty = groovebox ? grooveboxFindFreeChain(&chipnomadState->project, col) :
-        viewModeFindEmpty(&chipnomadState->project, current + 1);
+      int nextEmpty = viewModeFindEmpty(&chipnomadState->project, current + 1);
       if (nextEmpty != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = nextEmpty;
         lastChainValue = nextEmpty;
@@ -365,6 +367,7 @@ static int editCell(int col, int row, CellEditAction action) {
           projectModified = 1;
           chipnomadQueueProjectRefresh(chipnomadState);
         }
+        canonicalMaterializeIfPristine(nextEmpty, row, col);
       } else {
         screenMessage(MESSAGE_TIME, "No free chains");
       }
@@ -404,7 +407,17 @@ static int editCell(int col, int row, CellEditAction action) {
     }
     return 0;
   }
-  return edit16withLimit(action, &chipnomadState->project.song[row][col], &lastChainValue, 16, PROJECT_MAX_CHAINS - 1);
+  // Classic insert semantics (last used value on tap, +/- to step). If a
+  // blank cell just received a value in canonical simplified mode, give a
+  // pristine chain its default bar count right away.
+  uint16_t before = chipnomadState->project.song[row][col];
+  int handled = edit16withLimit(action, &chipnomadState->project.song[row][col],
+    &lastChainValue, 16, PROJECT_MAX_CHAINS - 1);
+  if (handled && before == EMPTY_VALUE_16 &&
+      chipnomadState->project.song[row][col] != EMPTY_VALUE_16) {
+    canonicalMaterializeIfPristine(chipnomadState->project.song[row][col], row, col);
+  }
+  return handled;
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
@@ -1009,10 +1022,12 @@ int songKeyJazzHandleRawKey(InputCode input, int isDown) {
     keyJazzEditCol = col;
     // Simplified view: typing a pattern number onto a previously-empty row
     // materializes it at the app's default length (View window setting).
-    if (current == EMPTY_VALUE_16 &&
-        patternMaterializeIfPristine(&chipnomadState->project, value, row, col)) {
-      projectModified = 1;
-      chipnomadQueueProjectRefresh(chipnomadState);
+    if (current == EMPTY_VALUE_16) {
+      if (patternMaterializeIfPristine(&chipnomadState->project, value, row, col)) {
+        projectModified = 1;
+        chipnomadQueueProjectRefresh(chipnomadState);
+      }
+      canonicalMaterializeIfPristine(value, row, col);
     }
     drawField(col, row, CellState::normal);
   }
