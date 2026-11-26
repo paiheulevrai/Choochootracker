@@ -59,12 +59,13 @@ pattern is an existing chain and each bar is a chain row. The project remains
 Classic internally. Classic and Simplified switch directly without
 rewriting Song, changing phrase IDs, baking transposes, or allocating on browse.
 
-Automatic chain, pattern and phrase allocations prefer hexadecimal banks by
-track: `10–1F` (`010–01F` for phrases) on track 1, `20–2F` (`020–02F`)
-on track 2, and so on. When a bank is full, another free slot is used.
-Existing IDs and manual ID editing are unchanged.
-In Classic, a single tap on an empty cell still recalls the last selected ID;
-double-tap and clone actions select free IDs automatically.
+In both Classic and Simplified, a tap on an empty Song cell recalls the last
+used ID. Reusing an existing ID links the same content, so edits affect every
+occurrence. A double-tap on a filled Song cell selects the first available ID
+after its current value, without wrapping or preferring a track bank.
+If none remains, the cell is unchanged. Existing IDs and manual ID editing
+are unchanged. Other automatic allocations, including phrases and clones,
+retain their hexadecimal track banks.
 Historical Pattern-format projects are reconciled to chains once when loaded,
 using the existing importer. A failed import leaves the current project and
 source file unchanged. The combined writer still retains historical arrays/maps.
@@ -80,8 +81,10 @@ source file unchanged. The combined writer still retains historical arrays/maps.
   UP/DOWN returns to notes; a second SHIFT + UP opens Groove.
 - Length: EDIT + LEFT/RIGHT removes/adds a bar, EDIT + UP/DOWN doubles/halves,
   B + A resets the default. Limits are 1..16. Added bars reference independent
-  no-event phrases; no-event does not force silence. New patterns created in
-  Song use the configured default length immediately, without allocating on browse.
+  no-event phrases; no-event does not force silence. New empty patterns are
+  materialized at the configured default length as soon as they are created
+  in Song (tap, double-tap or typed hex), so the Length header shows the
+  default (e.g. `01`) immediately, not on the first edit.
   Doubling copies bar references; each bar isolates automatically on editing.
   Length edits affect every Song occurrence of the same pattern.
 - Loop BAR uses the existing phrase loop; PAT uses the existing chain loop.
@@ -261,11 +264,12 @@ reserves all slots before mutation and can be undone as one Tools action.
 No-event bars do not force silence: held notes and effect tails may continue.
 Editing a missing bar may
 append only the next bar; gaps and more complex extensions must be handled
-in Classic. New chains prefer one-based hexadecimal track banks:
-track 1 `10-1F`, track 2 `20-2F`, ... track 8 `80-8F`.
-Occupied/referenced slots are skipped. Overflow prefers `90-9F` for track 1,
-`A0-AF` for track 2, ... `F0-FE` for track 7, `00-0F` for track 8,
-then any free slot. `FF` is not a valid chain.
+in Classic. Song cells in this mode use Classic's chain editing semantics:
+tapping an empty cell inserts the last used chain value, and double-tapping
+selects the first available chain after the current value. Chains created
+this way that are still empty and unreferenced are materialized at the configured default length
+immediately, so the Phrase editor's Length header shows the default
+(e.g. `01`) rather than `00`.
 Phrases use 16-slot banks: track 1 `010-01F`, track 2 `020-02F`,
 ... track 8 `080-08F`, with free-slot fallback. These are independent ID
 pools, not a decimal numbering scheme. Existing IDs are never renumbered.
@@ -291,6 +295,20 @@ It follows the classic LSDj workflow and navigation system, with several sound d
 - Sintered, a native six-model experimental digital drum synthesiser
 
 ## 1. Installation and files
+
+### SNDStation (experimental)
+
+The SNDStation build presents portrait-oriented displays in landscape.
+It uses the existing per-user ChooChooTracker workspace for projects and
+settings. On the TrimUI Smart Pro's built-in audio, the hardware volume buttons
+adjust the DAC up to its level at launch (never above 0 dB). The previous
+level is restored on normal exit; this local control does not change
+SNDStation's shared software volume. A forced termination or power loss can
+prevent restoration. If a change in the codec's output route is detected,
+restoration is refused rather than altering a different application's audio.
+The package also provides **ChooChooTracker (software test)** in the launcher.
+It selects the experimental software renderer; the normal entry keeps the
+default renderer selection.
 
 ### ArkOS / PortMaster
 
@@ -1266,7 +1284,7 @@ Fatty now uses its own type ID without replacing DigiSophie.
 
 This clean Sample engine plays mono or stereo PCM samples loaded into RAM.
 
-- Tap **Sample** to load an uncompressed `8-bit`, `16-bit` or `24-bit` PCM WAV. Press **PLAY** in the browser to audition the highlighted file.
+- Tap **Sample** to load an uncompressed `8-bit`, `16-bit` or `24-bit` PCM WAV. In the file browser, hold **PLAY** to audition the highlighted file, use **Up/Down** while holding it to audition other files, and release **PLAY** to stop. Folders are silent.
 - When a sample is loaded, **EDIT** appears next to its name. Tap it to open the Sample Edit screen. **OPT** or **SELECT + [LEFT]** returns to the instrument.
 - The Sample Edit screen shows the filename (with a `*` marker when the sample in RAM differs from the file on disk), a format readout (sample rate, channels), a tall waveform, and the **Region**, **Select**, **Loop**, **Slice**, **Process** and **File** fields.
 - Processing edits start in RAM. Project saves and autosaves embed the current sample audio in the `.cct`; **Save**/**Save As** in Sample Edit writes the separate WAV. The `*` marker means the sample in RAM differs from that WAV. Loading another sample replaces the current audio in RAM and resets the Region to the full sample (Start `00`, End `FF`).
@@ -1410,6 +1428,12 @@ To turn an input off, select its **[x]** box in that list and press **EDIT**. To
 Select an input's **ARM** box to make it available to the Sampler recorder; its small meter shows the incoming level. Arm one interface at a time: this version opens only the first armed interface, even if several boxes are checked. Your selection is remembered by device name, so an unavailable interface stays unarmed rather than being replaced by another input. Press **OPT** to return to Audio settings.
 
 On TrimUI Smart Pro with NextUI, the internal `audiocodec` input also needs its microphone route enabled outside the tracker, for example with ChooChooHacker. If arming fails, try the default 48 kHz sample rate; capture support at other rates depends on the device.
+
+To sample audio from a compatible phone or computer on TrimUI Smart Pro with NextUI:
+
+1. Connect the source to the console's USB-C device port with a data cable. In [ChooChooHacker](https://github.com/paiheulevrai/ChooChooHacker#try-usb-audio-in-experimental), select **Test USB audio IN** and confirm. This mode is experimental and the source must support USB audio output.
+2. Launch the Tracker Pak (save your work and relaunch if it was already open). Leave **Audio Output** on `Default` to keep listening through the console.
+3. Enable **Audio Input**, arm `UAC1_Gadget` in **Input devices**, then play audio on the source and record it in the Sampler.
 
 ##### Recording audio input
 
@@ -2205,9 +2229,11 @@ interpreted:
 - **Default length** (visible in Simplified mode) is the length of newly
   created patterns and the length restored when clearing the Length field
   on the Phrase screen header.
-- In Simplified, tap an empty Song cell or double-tap an occupied cell to
-  create a new pattern at the default length. IDs use the selected track's
-  `10`, `20`, `30`… bank; if that bank is full, other IDs are searched.
+- In both modes, tapping an empty Song cell recalls the last used ID;
+  double-tapping an occupied cell selects the first free ID after it,
+  without track banks or wrapping. In Simplified, a newly assigned pristine
+  pattern gets the default length immediately. Existing or shared patterns
+  retain their contents and length.
 - **Playhead** (visible in Simplified mode) chooses between looping the bar
   the cursor views and playing the whole pattern. In **PAT**, playback starts
   at the viewed bar, then continues through and loops the full pattern.
@@ -2389,6 +2415,15 @@ the current screen.
 | Destruction | Crush, Rate, Fold, Distort, Saturate, Tone, Mix, Input |
 | Beads | Time, Size, Density, Pitch, Scatter, Feedback, Shape / Freeze, Mix |
 | FORMANT | Mode, Vowel, First formant, Second formant, Resonance, Mix |
+| Clouds Reverb | Time, Damping, LP, HP, Mix, Duck Src |
+| Beads Reverb | Time, Tone, HP, Mix, Duck Src |
+| Ping-Pong Delay | Ticks, Feedback, LP, Mix, Duck Src |
+| Tape Echo | Time, Heads, Feedback, Tone, Flutter, Spring, Mix, Duck Src |
+| Diffusing Echoverb | Ticks, Feedback, Diffuse, Age, HP, LP, Mix, Duck Src |
+
+The insert names deliberately include “Reverb”: **Clouds Reverb** and
+**Beads Reverb** are reverb-only effects, distinct from the granular Clouds and
+Beads effects.
 
 Continuous controls use 00–FF, except FORMANT VOW (00–7F). Bipolar
 controls have an exact neutral at 80. Distortion modes are 00 Density, 01 Drive,
@@ -2437,6 +2472,20 @@ without conversion. Its old parameters are reinterpreted, so an old project
 can sound different or dry until Mix and the stages are edited.
 Saturation and distortion include output level or mix controls for balancing them
 against the unprocessed signal.
+
+The five spatial inserts are separate effects from the existing global reverb
+and delay sends; they can be used together or repeated in either serial slot.
+Each track and slot has its own effect instance and history.
+Ping-Pong and Diffusing Echoverb use tracker ticks for delay time. Tape Echo's
+Time selects 6, 8, 12, 18, 24, 36 or 48 ticks, and Heads selects one, two or all
+three repeats. Each Mix blends its wet result with the original signal.
+**Duck Src** defaults to **OFF**; choose track 1–8 to make that track's
+pre-insert signal duck only the insert's wet output. The shared curve has a
+5 ms attack and 100 ms release; stereo detection uses the louder channel.
+A silent or unavailable source releases the ducking;
+the dry signal and delay feedback remain unchanged. The same modules and
+controls are available in the two master insert slots. Existing global sends,
+returns and their routing are unchanged.
 
 Track level and tilt EQ precede the inserts, so both affect the signal entering
 compression and distortion. All voices/chord notes on the track feed one insert

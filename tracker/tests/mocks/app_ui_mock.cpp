@@ -95,6 +95,7 @@ void screenDraw(void) {}
 void screenApplyPending(void) {}
 bool fileBrowserHasMidiPreview(void) { return false; }
 void fileBrowserMidiInput(const MidiPreviewIntent&) {}
+void fileBrowserStopHeldPreview(void) {}
 static char activeMessage[42]{};
 int mockMessageFrames = 0;
 void screenMessage(int frames, const char* format, ...) {

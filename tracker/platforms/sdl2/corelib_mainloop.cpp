@@ -8,6 +8,10 @@
 #include "corelib_input.h"
 #include "../../src/corelib/corelib_assets.h"
 #include "../../src/common.h"
+#ifdef SNDSTATION_BUILD
+#include "sndstation_display.h"
+#include "sndstation_volume.h"
+#endif
 #ifdef PORTMASTER_BUILD
 #include "nextui_power.h"
 #include <errno.h>
@@ -298,12 +302,12 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
   NextUIPowerButton nextuiPower;
 #endif
 
-#ifdef MOBILE_LIFECYCLE
+#if defined(MOBILE_LIFECYCLE) || defined(SNDSTATION_BUILD)
   int wakeRedrawFrames = 0;
 #endif
 
   // Initialize bundled assets
-#ifndef MACOS_BUILD
+#if !defined(MACOS_BUILD) && !defined(SNDSTATION_BUILD)
   assetsInit();
 #endif
 
@@ -364,6 +368,9 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     *x = (int)(finger.x * width);
     *y = (int)(finger.y * height);
 #endif
+#ifdef SNDSTATION_BUILD
+    gfxMapSNDStationInput(x, y);
+#endif
   };
   auto sendTouch = [&](MainLoopEvent type, int col, int row, int direction) {
     eventData.type = type;
@@ -404,7 +411,28 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
   initGamepad();
 #endif
 
+#ifdef SNDSTATION_BUILD
+  sndstationVolumeStart();
+  const bool profile = getenv("CCT_SNDSTATION_PROFILE") != nullptr;
+  uint32_t profileStart = SDL_GetTicks();
+  uint64_t profileDraw = 0, profilePresent = 0, profileMax = 0;
+  unsigned profileFrames = 0;
+#endif
   while (1) {
+#ifdef SNDSTATION_BUILD
+    sndstationVolumePoll();
+    if (sndstationVolumeExitRequested()) {
+      eventData.type = MainLoopEvent::exit;
+      eventData.data.value = 0;
+      onEvent(eventData);
+#ifdef GAMEPAD_SUPPORT
+      closeGameControllers();
+      closeFallbackJoystick();
+#endif
+      sndstationVolumeStop();
+      return;
+    }
+#endif
 #if defined(TOUCH_INPUT) && defined(GAMEPAD_SUPPORT)
     {
       // The virtual pad hides only if the user asked for it (Settings >
@@ -420,6 +448,12 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 
     while (SDL_PollEvent(&event)) {
       interactionUntil = SDL_GetTicks() + 250;
+#ifdef SNDSTATION_BUILD
+      if (sndstationVolumeHandlesButtons() &&
+          (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
+          (event.key.keysym.scancode == SDL_SCANCODE_VOLUMEUP ||
+           event.key.keysym.scancode == SDL_SCANCODE_VOLUMEDOWN)) continue;
+#endif
 #ifdef PORTMASTER_BUILD
       if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
         releaseConsoleSource(onEvent, InputDeviceType::keyboard);
@@ -454,9 +488,12 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
         closeGameControllers();
         closeFallbackJoystick();
 #endif
+#ifdef SNDSTATION_BUILD
+        sndstationVolumeStop();
+#endif
         return;
       }
-#ifdef MOBILE_LIFECYCLE
+#if defined(MOBILE_LIFECYCLE) || defined(SNDSTATION_BUILD)
       else if (event.type == SDL_APP_TERMINATING) {
 #ifdef GAMEPAD_SUPPORT
         closeGameControllers();
@@ -694,6 +731,10 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           int dy = y - gesture.startY;
           int width, height;
           gfxGetPhysicalSize(&width, &height);
+#ifdef SNDSTATION_BUILD
+          width = 640;
+          height = 360;
+#endif
           int threshold = (width < height ? width : height) / 24;
           if (!gesture.moved && (abs(x - gesture.startX) >= threshold || abs(y - gesture.startY) >= threshold)) {
             int direction = abs(dx) >= abs(dy) ? (dx < 0 ? keyLeft : keyRight) :
@@ -706,6 +747,10 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           // user may cross labels or leave the original cell while adjusting.
           int width, height;
           gfxGetPhysicalSize(&width, &height);
+#ifdef SNDSTATION_BUILD
+          width = 640;
+          height = 360;
+#endif
           int stepPixels = (width < height ? width : height) / 20;
           if (stepPixels < 24) stepPixels = 24;
           int delta = x - gesture.lastAdjustX;
@@ -720,6 +765,10 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
           } else {
             int width, height;
             gfxGetPhysicalSize(&width, &height);
+#ifdef SNDSTATION_BUILD
+            width = 640;
+            height = 360;
+#endif
             int threshold = (width < height ? width : height) / 24;
             if (abs(x - gesture.startX) >= threshold || abs(y - gesture.startY) >= threshold)
               gesture.moved = 1;
@@ -767,7 +816,19 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
       // with fingers, or a two-finger shortcut can lose one held button.
 #ifndef ANDROID_BUILD
       else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
-        int buttonIndex = getTouchButton(event.button.x, event.button.y);
+        int x = event.button.x, y = event.button.y;
+#ifdef SNDSTATION_BUILD
+        int windowW = 0, windowH = 0, outputW = 0, outputH = 0;
+        SDL_Window* eventWindow = SDL_GetWindowFromID(event.button.windowID);
+        if (eventWindow) SDL_GetWindowSize(eventWindow, &windowW, &windowH);
+        gfxGetPhysicalSize(&outputW, &outputH);
+        if (windowW > 0 && windowH > 0) {
+          x = x * outputW / windowW;
+          y = y * outputH / windowH;
+        }
+        gfxMapSNDStationInput(&x, &y);
+#endif
+        int buttonIndex = getTouchButton(x, y);
         if (buttonIndex >= 0 && mouseTouchButton < 0) {
           mouseTouchButton = buttonIndex;
           if (buttonTouches[buttonIndex]++ == 0) {
@@ -848,7 +909,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     onEvent(eventData);
 #endif
 
-#ifdef MOBILE_LIFECYCLE
+#if defined(MOBILE_LIFECYCLE) || defined(SNDSTATION_BUILD)
     if (wakeRedrawFrames > 0) {
       eventData.type = MainLoopEvent::fullRedraw;
       eventData.data.value = 0;
@@ -861,8 +922,35 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     eventData.data.value = 0;
     onEvent(eventData);
 
+#ifdef SNDSTATION_BUILD
+    const uint64_t drawStart = profile ? SDL_GetPerformanceCounter() : 0;
+#endif
     draw();
+#ifdef SNDSTATION_BUILD
+    const uint64_t presentStart = profile ? SDL_GetPerformanceCounter() : 0;
+#endif
     gfxUpdateScreen();
+#ifdef SNDSTATION_BUILD
+    if (profile) {
+      const uint64_t end = SDL_GetPerformanceCounter();
+      profileDraw += presentStart - drawStart;
+      profilePresent += end - presentStart;
+      const uint64_t frame = end - drawStart;
+      if (frame > profileMax) profileMax = frame;
+      ++profileFrames;
+      const uint32_t elapsed = SDL_GetTicks() - profileStart;
+      if (elapsed >= 5000) {
+        const double msPerTick = 1000.0 / SDL_GetPerformanceFrequency();
+        fprintf(stderr, "SNDStation render: %s %.1f fps draw %.2f ms present %.2f ms max %.2f ms\n",
+          gfxGetRendererType(), profileFrames * 1000.0 / elapsed,
+          profileDraw * msPerTick / profileFrames, profilePresent * msPerTick / profileFrames,
+          profileMax * msPerTick);
+        profileStart = SDL_GetTicks();
+        profileDraw = profilePresent = profileMax = 0;
+        profileFrames = 0;
+      }
+    }
+#endif
 
     busytime = SDL_GetTicks() - start;
     frameTimeUs = (int)(busytime * 1000);

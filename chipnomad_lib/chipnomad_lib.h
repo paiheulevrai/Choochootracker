@@ -154,7 +154,7 @@ struct ChipNomadState {
   float audioInputRouteDelay[PROJECT_MAX_TRACKS][AUDIO_INPUT_ROUTE_DELAY_FRAMES * 2];
   int audioInputRoutePosition;
   float* sidechainBuffer;
-  uint8_t sidechainSourceMask, masterSidechainExcludeMask;
+  uint8_t sidechainSourceMask, spatialSidechainSourceMask, masterSidechainExcludeMask;
   float* mixBuffer;
   float* reverbBuffer;
   float* delayBuffer;

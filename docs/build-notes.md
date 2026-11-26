@@ -2,6 +2,50 @@
 
 Run all commands from the repository root unless stated otherwise.
 
+## SNDStation (development only)
+
+From `tracker` on a Linux host with the PortMaster ARM64 cross-toolchain:
+
+```sh
+make -j4 SNDStation
+make -j4 SNDStation-package-dev
+```
+
+This isolated development build is written to
+`tracker/build/sndstation/choochootracker.aarch64`. It expects its executable
+under `usr/bin` and bundled `packaging/common` assets under
+`usr/share/choochootracker/common` relative to the same installation root.
+On launch it seeds missing assets into `$XDG_DATA_HOME/ChooChooTracker`, or
+`~/.local/share/ChooChooTracker` when `XDG_DATA_HOME` is unset, without
+overwriting existing files. Workspace or asset errors stop startup.
+
+The second command builds an experimental `arm64` `.deb` in the same directory.
+The build rotates portrait displays into landscape and provides local volume
+buttons for the Smart Pro's built-in codec. Mixer and animated-background
+performance still needs investigation on the console.
+
+For SNDStation rendering diagnostics, set `CCT_SNDSTATION_PROFILE=1` and
+capture stderr. Every five seconds it reports renderer type, frame rate,
+average draw and presentation time, and the maximum combined time.
+Set `SDL_RENDER_DRIVER=software` to compare the software renderer; it is an
+opt-in diagnostic and can be slower than the default GPU renderer. The package
+also provides a separate **ChooChooTracker (software test)** launcher. On the
+Smart Pro's 720x1280 display, its portrait rotation uses a CPU-optimized path.
+An existing user launcher manifest with the same ID overrides the package
+manifest and is not changed by the package.
+
+To prepare a signed local development APT repository, supply a GPG signing
+key explicitly and choose a destination that does not already exist:
+
+```sh
+REPO_KEY=<key-id> bash packaging/sndstation/repo-dev.sh \
+  build/sndstation/choochootracker-sndstation_<version>_arm64.deb \
+  build/sndstation/vendor-dev
+```
+
+This only writes local repository files. A public HTTPS URL, the public key,
+and SNDStation's vendor vetting are still required before distribution.
+
 ## Windows
 
 Use the Windows wrapper; it keeps MSYS2's home and temporary files inside

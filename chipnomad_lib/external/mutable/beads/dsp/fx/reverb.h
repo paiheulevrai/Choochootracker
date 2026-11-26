@@ -36,10 +36,11 @@
 
 namespace beads {
 
-class Reverb {
+template<bool lazy_clear = false>
+class ReverbImpl {
  public:
-  Reverb() { }
-  ~Reverb() { }
+  ReverbImpl() { }
+  ~ReverbImpl() { }
   
   void Init(uint16_t* buffer, float sample_rate) {
     engine_.Init(buffer);
@@ -63,27 +64,27 @@ class Reverb {
     // (4 AP diffusers on the input, then a loop of 2x 2AP+1Delay).
     // Modulation is applied in the loop of the first diffuser AP for additional
     // smearing; and to the two long delays for a slow shimmer/chorus effect.
-    typedef E::Reserve<150,
-      E::Reserve<214,
-      E::Reserve<319,
-      E::Reserve<527,
-      E::Reserve<2182,
-      E::Reserve<2690,
-      E::Reserve<4501,
-      E::Reserve<2525,
-      E::Reserve<2197,
-      E::Reserve<6312> > > > > > > > > > Memory;
-    E::DelayLine<Memory, 0> ap1;
-    E::DelayLine<Memory, 1> ap2;
-    E::DelayLine<Memory, 2> ap3;
-    E::DelayLine<Memory, 3> ap4;
-    E::DelayLine<Memory, 4> dap1a;
-    E::DelayLine<Memory, 5> dap1b;
-    E::DelayLine<Memory, 6> del1;
-    E::DelayLine<Memory, 7> dap2a;
-    E::DelayLine<Memory, 8> dap2b;
-    E::DelayLine<Memory, 9> del2;
-    E::Context c;
+    typedef typename E::template Reserve<150,
+      typename E::template Reserve<214,
+      typename E::template Reserve<319,
+      typename E::template Reserve<527,
+      typename E::template Reserve<2182,
+      typename E::template Reserve<2690,
+      typename E::template Reserve<4501,
+      typename E::template Reserve<2525,
+      typename E::template Reserve<2197,
+      typename E::template Reserve<6312> > > > > > > > > > Memory;
+    typename E::template DelayLine<Memory, 0> ap1;
+    typename E::template DelayLine<Memory, 1> ap2;
+    typename E::template DelayLine<Memory, 2> ap3;
+    typename E::template DelayLine<Memory, 3> ap4;
+    typename E::template DelayLine<Memory, 4> dap1a;
+    typename E::template DelayLine<Memory, 5> dap1b;
+    typename E::template DelayLine<Memory, 6> del1;
+    typename E::template DelayLine<Memory, 7> dap2a;
+    typename E::template DelayLine<Memory, 8> dap2b;
+    typename E::template DelayLine<Memory, 9> del2;
+    typename E::Context c;
 
     const float kap = 0.625f;
     const float klp = lp_;
@@ -178,7 +179,7 @@ class Reverb {
   }
   
  private:
-  typedef FxEngine<32768, FORMAT_16_BIT> E;
+  typedef FxEngine<32768, FORMAT_16_BIT, lazy_clear> E;
   E engine_;
   
   float mix_;
@@ -191,8 +192,11 @@ class Reverb {
   float lp_1_;
   float lp_2_;
   
-  DISALLOW_COPY_AND_ASSIGN(Reverb);
+  DISALLOW_COPY_AND_ASSIGN(ReverbImpl);
 };
+
+using Reverb = ReverbImpl<>;
+using ResettableReverb = ReverbImpl<true>;
 
 }  // namespace beads
 

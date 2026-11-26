@@ -103,8 +103,8 @@ static int edit(int col, int row, CellEditAction action) {
     const int maximum = c.module == insertTranceGate && (p == 2 || p == 4)
       ? tranceGatePatternLengthLimit(c.values[0]) - 1 : insertParameterMaximum(c.module, p);
     handled = edit8noLast(action, &v,
-                          a.mapping == InsertMapping::discrete && !packedShapeFreeze ? 1 : 16, 0,
-                          maximum);
+                          a.mapping == InsertMapping::discrete && !packedShapeFreeze ? 1 : 16,
+                          a.mapping == InsertMapping::discrete ? (int)a.minimum : 0, maximum);
     if (handled) insertEdit(&c, p, v);
   }
   if (handled) {
@@ -172,6 +172,11 @@ static const SelectionItem spatial[] = {
   {"Rotary", insertRotary, nullptr, 0, nullptr},
   {"Doubler", insertDoubler, nullptr, 0, nullptr},
   {"Stereo Width", insertStereoWidth, nullptr, 0, nullptr},
+  {"Clouds Reverb", insertCloudsReverb, nullptr, 0, nullptr},
+  {"Beads Reverb", insertBeadsReverb, nullptr, 0, nullptr},
+  {"Ping-Pong Delay", insertPingPongDelay, nullptr, 0, nullptr},
+  {"Tape Echo", insertTapeEcho, nullptr, 0, nullptr},
+  {"Diffusing Echoverb", insertDiffusingEchoverb, nullptr, 0, nullptr},
 };
 static const SelectionItem texture[] = {
   {"Beads", insertBeads, nullptr, 0, nullptr},

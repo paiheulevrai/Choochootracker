@@ -327,7 +327,8 @@ TEST_SUITE("track inserts") {
     CHECK(fxF11 > fxATY);
     CHECK(fxF28 < 255);
     CHECK(genericModFirstInsert == 29);
-    const int counts[] = {0, 8, 4, 2, 6, 6, 5, 4, 5, 4, 4, 4, 8, 6, 8, 8, 6, 8};
+    const int counts[] = {0, 8, 4, 2, 6, 6, 5, 4, 5, 4, 4, 4, 8, 6, 8, 8, 6, 8,
+                         6, 5, 5, 8, 8};
     static_assert(sizeof(counts) / sizeof(counts[0]) == insertModuleCount, "Test covers every module");
     for (int m = 0; m < insertModuleCount; ++m) {
       CHECK(insertDescriptor(m).count == counts[m]);
@@ -335,7 +336,7 @@ TEST_SUITE("track inserts") {
       insertSelect(&c, m);
       for (int p = 0; p < counts[m]; ++p) {
         const auto& d = insertDescriptor(m).parameters[p];
-        CHECK(insertClamp(m, p, 0) == 0);
+        CHECK(insertClamp(m, p, 0) == (d.mapping == InsertMapping::discrete ? (int)d.minimum : 0));
         CHECK(insertMap(m, p, 0) == doctest::Approx(d.minimum));
         CHECK(insertMap(m, p, 255) == doctest::Approx(d.maximum));
         if (d.mapping == InsertMapping::bipolar) CHECK(insertMap(m, p, 128) == 0);
@@ -345,6 +346,227 @@ TEST_SUITE("track inserts") {
     }
     CHECK(insertDescriptor(999).count == 0);
   }
+
+  TEST_CASE("spatial inserts render independently and retain an exact dry Mix") {
+    const int modules[] = {insertCloudsReverb, insertBeadsReverb, insertPingPongDelay,
+                           insertTapeEcho, insertDiffusingEchoverb};
+    const int mixParameters[] = {4, 3, 3, 6, 6};
+    for (int i = 0; i < 5; ++i) {
+      SpatialInsertPool pool;
+      InsertChain first(48000), second(48000);
+      InsertConfig a[2]{}, b[2]{};
+      InsertAutomation aa{}, ab{};
+      insertSelect(&a[0], modules[i]);
+      insertSelect(&b[0], modules[i]);
+      insertEdit(&a[0], mixParameters[i], 0);
+      insertEdit(&b[0], mixParameters[i], 0);
+      auto firstHandle = pool.prepare(0, modules[i], 48000);
+      auto secondHandle = pool.prepare(1, modules[i], 48000);
+      REQUIRE(firstHandle);
+      REQUIRE(secondHandle);
+      CHECK(firstHandle.get() != secondHandle.get());
+      first.attachSpatial(0, firstHandle);
+      second.attachSpatial(0, secondHandle);
+      first.sync(a, &aa);
+      second.sync(b, &ab);
+      uint8_t av[2][8], bv[2][8];
+      values(a, av);
+      values(b, bv);
+      auto dry = signal(2048);
+      auto exactDry = dry;
+      first.process(dry.data(), 2048, av);
+      CHECK(dry == exactDry);
+
+      insertEdit(&a[0], mixParameters[i], 255);
+      insertEdit(&b[0], mixParameters[i], 255);
+      first.sync(a, &aa);
+      second.sync(b, &ab);
+      values(a, av);
+      values(b, bv);
+      auto output = signal(16384);
+      auto identical = output;
+      const auto input = output;
+      first.process(output.data(), 16384, av);
+      second.process(identical.data(), 16384, bv);
+      CHECK(std::all_of(output.begin(), output.end(), [](float x) { return std::isfinite(x); }));
+      CHECK(std::all_of(identical.begin(), identical.end(), [](float x) { return std::isfinite(x); }));
+      CHECK(output != input);
+      CHECK(identical != input);
+      std::vector<float> tail(8192 * 2, 0.0f);
+      first.process(tail.data(), 8192, av);
+      CHECK(std::any_of(tail.begin(), tail.end(), [](float x) { return std::abs(x) > 1.0e-7f; }));
+      a[0].bypass = 1;
+      first.sync(a, &aa);
+      auto bypassed = signal(512);
+      const auto bypassDry = bypassed;
+      first.process(bypassed.data(), 512, av);
+      CHECK(std::equal(bypassed.end() - 128 * 2, bypassed.end(), bypassDry.end() - 128 * 2,
+        [](float a, float b) { return std::abs(a - b) < 1.0e-6f; }));
+    }
+  }
+
+  TEST_CASE("spatial ducking affects only wet, follows its source and releases smoothly") {
+    SpatialInsertPool pool;
+    InsertChain plain(48000), ducked(48000), silent(48000), dry(48000);
+    InsertConfig configs[4][2]{};
+    InsertAutomation automation[4]{};
+    SpatialInsertPool::Handle handles[4];
+    InsertChain* chains[] = {&plain, &ducked, &silent, &dry};
+    for (int i = 0; i < 4; ++i) {
+      insertSelect(&configs[i][0], insertPingPongDelay);
+      insertEdit(&configs[i][0], 0, 1);
+      insertEdit(&configs[i][0], 1, 0);
+      insertEdit(&configs[i][0], 3, i == 3 ? 0 : 255);
+      insertEdit(&configs[i][0], 4, i == 0 ? 0 : 1);
+      handles[i] = pool.prepare(i, insertPingPongDelay, 48000);
+      REQUIRE(handles[i]);
+      chains[i]->attachSpatial(0, handles[i]);
+      chains[i]->sync(configs[i], &automation[i]);
+    }
+
+    constexpr int frames = 12000;
+    std::vector<float> input(frames * 2, 0.5f);
+    std::vector<float> detector(frames, 0.0f);
+    std::vector<float> silentDetector(frames, 0.0f);
+    std::fill(detector.begin(), detector.begin() + 6000, 0.8f);
+    auto plainOutput = input;
+    auto duckOutput = input;
+    auto silentOutput = input;
+    auto dryOutput = input;
+    uint8_t effective[4][2][8];
+    for (int i = 0; i < 4; ++i) values(configs[i], effective[i]);
+    const float* activeSource[2] = {detector.data(), nullptr};
+    const float* silentSource[2] = {silentDetector.data(), nullptr};
+    plain.process(plainOutput.data(), frames, effective[0]);
+    ducked.process(duckOutput.data(), frames, effective[1], activeSource);
+    silent.process(silentOutput.data(), frames, effective[2], silentSource);
+    dry.process(dryOutput.data(), frames, effective[3], activeSource);
+    CHECK(std::abs(duckOutput[2000 * 2]) < std::abs(plainOutput[2000 * 2]) * 0.5f);
+    CHECK(std::abs(duckOutput[11000 * 2]) > std::abs(duckOutput[2000 * 2]) * 1.5f);
+    CHECK(silentOutput == plainOutput);
+    CHECK(dryOutput == input);
+  }
+
+  TEST_CASE("spatial histories are isolated across track and slot instances") {
+    const int modules[] = {insertCloudsReverb, insertBeadsReverb, insertPingPongDelay,
+                           insertTapeEcho, insertDiffusingEchoverb};
+    for (int module : modules) {
+      INFO("module ", module);
+      SpatialInsertPool pool;
+      InsertChain first(48000), second(48000);
+      InsertConfig config[2]{};
+      InsertAutomation a{}, b{};
+      insertSelect(&config[0], module);
+      insertEdit(&config[0], insertDescriptor(module).count - 2, 255);
+      if (module == insertPingPongDelay || module == insertDiffusingEchoverb)
+        insertEdit(&config[0], 0, 1);
+      auto firstHandle = pool.prepare(0, module, 48000);
+      auto secondHandle = pool.prepare(2, module, 48000);
+      auto otherSlot = pool.prepare(1, module, 48000);
+      REQUIRE(firstHandle);
+      REQUIRE(secondHandle);
+      REQUIRE(otherSlot);
+      CHECK(firstHandle.get() != otherSlot.get());
+      first.attachSpatial(0, firstHandle);
+      second.attachSpatial(0, secondHandle);
+      first.sync(config, &a);
+      second.sync(config, &b);
+      uint8_t effective[2][8];
+      values(config, effective);
+      std::vector<float> input(4096 * 2, 0.5f), silent(4096 * 2, 0.0f);
+      first.process(input.data(), 4096, effective);
+      second.process(silent.data(), 4096, effective);
+      input.assign(24000 * 2, 0.0f);
+      silent.assign(24000 * 2, 0.0f);
+      first.process(input.data(), 24000, effective);
+      second.process(silent.data(), 24000, effective);
+      CHECK(std::any_of(input.begin(), input.end(), [](float x) { return std::abs(x) > 1e-7f; }));
+      CHECK(std::all_of(silent.begin(), silent.end(), [](float x) { return x == 0.0f; }));
+    }
+  }
+
+  TEST_CASE("spatial pools allocate only selected instances and reclaim released slots") {
+    SpatialInsertPool pool;
+    CHECK(pool.allocated() == 0);
+    {
+      auto first = pool.prepare(0, insertCloudsReverb, 48000);
+      auto snapshot = pool.prepare(0, insertCloudsReverb, 48000);
+      auto second = pool.prepare(1, insertCloudsReverb, 48000);
+      REQUIRE(first);
+      REQUIRE(snapshot);
+      REQUIRE(second);
+      CHECK(first.get() == snapshot.get());
+      CHECK(first.get() != second.get());
+      CHECK(pool.allocated() == 2);
+      pool.collect();
+      CHECK(pool.allocated() == 2);
+    }
+    pool.collect();
+    CHECK(pool.allocated() == 0);
+  }
+
+  TEST_CASE("rapid spatial changes use the latest prepared effect") {
+    SpatialInsertPool pool;
+    InsertChain chain(48000);
+    InsertConfig config[2]{};
+    InsertAutomation automation{};
+    uint8_t effective[2][8];
+    auto apply = [&](int module) {
+      insertSelect(&config[0], module);
+      insertEdit(&config[0], insertDescriptor(module).count - 2, 255);
+      auto handle = pool.prepare(0, module, 48000);
+      REQUIRE(handle);
+      chain.attachSpatial(0, handle);
+      chain.sync(config, &automation);
+      values(config, effective);
+    };
+    apply(insertPingPongDelay);
+    auto samples = signal(2048);
+    chain.process(samples.data(), 2048, effective);
+    apply(insertCloudsReverb);
+    apply(insertBeadsReverb);
+    samples = signal(24000);
+    const auto dry = samples;
+    chain.process(samples.data(), 24000, effective);
+    CHECK(samples != dry);
+    CHECK(std::all_of(samples.begin(), samples.end(), [](float x) { return std::isfinite(x); }));
+    chain.reset();
+    samples.assign(24000 * 2, 0.0f);
+    chain.process(samples.data(), 24000, effective);
+    CHECK(std::all_of(samples.begin(), samples.end(), [](float x) { return x == 0.0f; }));
+  }
+
+  TEST_CASE("spatial insert remains attached after transport reset") {
+    const int modules[] = {insertCloudsReverb, insertBeadsReverb, insertPingPongDelay,
+                           insertTapeEcho, insertDiffusingEchoverb};
+    for (int module : modules) {
+      INFO("module ", module);
+      SpatialInsertPool pool;
+      InsertChain chain(48000);
+      InsertConfig config[2]{};
+      InsertAutomation automation{};
+      insertSelect(&config[0], module);
+      insertEdit(&config[0], insertDescriptor(module).count - 2, 255);
+      if (module == insertPingPongDelay || module == insertDiffusingEchoverb)
+        insertEdit(&config[0], 0, 1);
+      auto handle = pool.prepare(0, module, 48000);
+      REQUIRE(handle);
+      chain.attachSpatial(0, handle);
+      chain.sync(config, &automation);
+      uint8_t effective[2][8];
+      values(config, effective);
+      std::vector<float> input(24000 * 2, 0.5f);
+      chain.process(input.data(), 24000, effective);
+      chain.reset();
+      input.assign(24000 * 2, 0.0f);
+      chain.process(input.data(), 24000, effective);
+      CHECK(std::all_of(input.begin(), input.end(), [](float x) { return x == 0.0f; }));
+      input.assign(24000 * 2, 0.5f);
+      chain.process(input.data(), 24000, effective);
+      CHECK(input.back() != doctest::Approx(0.5f));
+    }
+  }
+
   TEST_CASE("Stereo Width has exact endpoints, widens stereo and creates mono-compatible Side") {
     CHECK(insertMap(insertStereoWidth, 0, 0) == doctest::Approx(0.0f));
     CHECK(insertMap(insertStereoWidth, 0, 128) == doctest::Approx(1.0f));
@@ -1150,8 +1372,18 @@ TEST_SUITE("track inserts") {
       c.bypass = slot;
       insertEdit(&c, 0, 255);
     }
-    insertSelect(&p->trackInserts[0][0], insertCompressor);
-    insertEdit(&p->trackInserts[0][0], 5, 10);
+    const int spatialModules[] = {insertCloudsReverb, insertBeadsReverb, insertPingPongDelay,
+                                  insertTapeEcho, insertDiffusingEchoverb};
+    for (int i = 0; i < 5; ++i) {
+      auto& c = p->trackInserts[i][0];
+      insertSelect(&c, spatialModules[i]);
+      insertEdit(&c, insertDuckSourceParameter(c.module), i + 1);
+      insertEdit(&c, insertDescriptor(c.module).count - 2, 73 + i);
+    }
+    insertSelect(&p->masterInserts[1], insertTapeEcho);
+    insertEdit(&p->masterInserts[1], insertDuckSourceParameter(insertTapeEcho), 8);
+    insertSelect(&p->trackInserts[7][1], insertCompressor);
+    insertEdit(&p->trackInserts[7][1], 5, 10);
     insertEdit(&p->masterInserts[0], 5, 3);
     const char* path = "build/tests/inserts.cct";
     REQUIRE(projectSave(p.get(), path) == 0);
@@ -1176,6 +1408,13 @@ TEST_SUITE("track inserts") {
       CHECK(a.bypass == b.bypass);
       CHECK(memcmp(a.values, b.values, 8) == 0);
     }
+    for (int i = 0; i < 5; ++i) {
+      const auto& c = loaded->trackInserts[i][0];
+      CHECK(c.module == spatialModules[i]);
+      CHECK(c.values[insertDuckSourceParameter(c.module)] == i + 1);
+    }
+    CHECK(loaded->masterInserts[1].module == insertTapeEcho);
+    CHECK(loaded->masterInserts[1].values[insertDuckSourceParameter(insertTapeEcho)] == 8);
     auto start = original.find("- Track inserts:");
     auto end = original.find("- Track volumes:");
     REQUIRE(start != std::string::npos);
@@ -1290,6 +1529,87 @@ TEST_SUITE("track inserts") {
     CHECK_FALSE(duck.s->playbackState.trackEnabled[0]);
     for (int i = 0; i < 256; ++i)
       CHECK(duck.s->sidechainBuffer[i] == 0);
+  }
+  TEST_CASE("spatial ducking captures another track without excluding it from the master") {
+    for (bool master : {false, true}) {
+      INFO("master ", master);
+      Engine plain, duck;
+      for (auto* s : {plain.s, duck.s}) {
+        s->project.chipsCount = s->project.tracksCount = 2;
+        InsertConfig& insert = master ? s->project.masterInserts[0] : s->project.trackInserts[1][0];
+        insertSelect(&insert, insertPingPongDelay);
+        insertEdit(&insert, 0, 1);
+        insertEdit(&insert, 3, 255);
+      }
+      InsertConfig& detector = master ? duck.s->project.masterInserts[0] : duck.s->project.trackInserts[1][0];
+      insertEdit(&detector, 4, 1);
+      plain.start();
+      duck.start();
+      REQUIRE(chipnomadQueuePlaybackPreviewNote(plain.s, 1, 52, 0));
+      REQUIRE(chipnomadQueuePlaybackPreviewNote(duck.s, 1, 52, 0));
+      double plainEnergy = 0.0, duckEnergy = 0.0;
+      for (int block = 0; block < 20; ++block) {
+        float a[512], b[512];
+        REQUIRE(chipnomadRender(plain.s, a, 256) == 256);
+        REQUIRE(chipnomadRender(duck.s, b, 256) == 256);
+        if (block < 5) continue;
+        const float* original = master ? a : plain.s->insertBuffer + plain.s->mixBufferSize;
+        const float* reduced = master ? b : duck.s->insertBuffer + duck.s->mixBufferSize;
+        for (int i = 0; i < 512; ++i) {
+          plainEnergy += original[i] * original[i];
+          duckEnergy += reduced[i] * reduced[i];
+        }
+      }
+      CHECK(duck.s->sidechainSourceMask == 1);
+      CHECK(duck.s->masterSidechainExcludeMask == 0);
+      CHECK(plainEnergy > 0.001);
+      CHECK(duckEnergy < plainEnergy * 0.95);
+    }
+  }
+  TEST_CASE("spatial ducking detects an antiphase stereo input track") {
+    Engine plain, duck;
+    for (auto* s : {plain.s, duck.s}) {
+      s->project.tracksCount = 2;
+      getInstrumentFunctions(InstrumentType::AudioIn).init(&s->project.instruments[1]);
+      s->project.instruments[1].chip.audioIn.filterEnabled = 0;
+      s->project.instruments[1].chip.audioIn.attack = 0;
+      auto& insert = s->project.trackInserts[1][0];
+      insertSelect(&insert, insertPingPongDelay);
+      insertEdit(&insert, 0, 1);
+      insertEdit(&insert, 3, 255);
+      chipnomadInitChips(s, 48000, nullptr);
+      REQUIRE(chipnomadQueuePlaybackPreviewNote(s, 0, 45, 1));
+      REQUIRE(chipnomadQueuePlaybackPreviewNote(s, 1, 52, 0));
+    }
+    insertEdit(&duck.s->project.trackInserts[1][0], 4, 1);
+    REQUIRE(chipnomadQueueProjectRefresh(duck.s));
+    float input[512];
+    for (int i = 0; i < 256; ++i) {
+      input[i * 2] = 0.75f;
+      input[i * 2 + 1] = -0.75f;
+    }
+    double plainEnergy = 0.0, duckEnergy = 0.0;
+    float detectorPeak = 0.0f;
+    for (int block = 0; block < 20; ++block) {
+      float a[512], b[512];
+      REQUIRE(chipnomadRender(plain.s, a, 256, input) == 256);
+      REQUIRE(chipnomadRender(duck.s, b, 256, input) == 256);
+      if (block < 5) continue;
+      const float* original = plain.s->insertBuffer + plain.s->mixBufferSize;
+      const float* reduced = duck.s->insertBuffer + duck.s->mixBufferSize;
+      const float* detector = duck.s->sidechainBuffer +
+        (size_t)PROJECT_MAX_TRACKS * (duck.s->mixBufferSize / 2);
+      for (int i = 0; i < 256; ++i) {
+        detectorPeak = std::max(detectorPeak, detector[i]);
+        for (int channel = 0; channel < 2; ++channel) {
+          plainEnergy += original[i * 2 + channel] * original[i * 2 + channel];
+          duckEnergy += reduced[i * 2 + channel] * reduced[i * 2 + channel];
+        }
+      }
+    }
+    CHECK(detectorPeak > 0.01f);
+    CHECK(plainEnergy > 0.001);
+    CHECK(duckEnergy < plainEnergy * 0.95);
   }
   TEST_CASE("master inserts process the completed mix") {
     Engine dry, wet;
@@ -1722,7 +2042,9 @@ TEST_CASE("insert tips return after real key release and categorized chooser sel
       insertOff, insertOTT, insertCompressor, insertParametricEQ,
       insertDistortion, insertSaturation, insertBitcrusher, insertDestruction, insertTape,
       insertChorus, insertPhaser, insertFlanger, insertTranceGate,
-      insertRotary, insertDoubler, insertStereoWidth, insertBeads, insertFormant,
+      insertRotary, insertDoubler, insertStereoWidth, insertCloudsReverb,
+      insertBeadsReverb, insertPingPongDelay, insertTapeEcho, insertDiffusingEchoverb,
+      insertBeads, insertFormant,
   };
   for (int i = 1; i < (int)(sizeof(popupOrder) / sizeof(popupOrder[0])); ++i) {
     screenInsertFX.onInput(1, keyEdit | keyRight, 0);

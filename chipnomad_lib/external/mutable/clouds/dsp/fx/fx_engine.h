@@ -97,9 +97,11 @@ struct DataType<FORMAT_32_BIT> {
 
 template<
     size_t size,
-    Format format = FORMAT_12_BIT>
+    Format format = FORMAT_12_BIT,
+    bool lazy_clear = false>
 class FxEngine {
  public:
+  static_assert(!lazy_clear || size % 32 == 0, "lazy clearing requires whole chunks");
   typedef typename DataType<format>::T T;
   FxEngine() { }
   ~FxEngine() { }
@@ -110,7 +112,12 @@ class FxEngine {
   }
   
   void Clear() {
-    std::fill(&buffer_[0], &buffer_[size], 0);
+    if constexpr (lazy_clear) {
+      // Old chunks read as zero and are cleared on their first write.
+      ++generation_;
+    } else {
+      std::fill(&buffer_[0], &buffer_[size], 0);
+    }
     write_ptr_ = 0;
   }
 
@@ -172,9 +179,9 @@ class FxEngine {
       STATIC_ASSERT(D::base + D::length <= size, delay_memory_full);
       T w = DataType<format>::Compress(accumulator_);
       if (offset == -1) {
-        buffer_[(write_ptr_ + D::base + D::length - 1) & MASK] = w;
+        WriteSample((write_ptr_ + D::base + D::length - 1) & MASK, w);
       } else {
-        buffer_[(write_ptr_ + D::base + offset) & MASK] = w;
+        WriteSample((write_ptr_ + D::base + offset) & MASK, w);
       }
       accumulator_ *= scale;
     }
@@ -200,9 +207,9 @@ class FxEngine {
       STATIC_ASSERT(D::base + D::length <= size, delay_memory_full);
       T r;
       if (offset == -1) {
-        r = buffer_[(write_ptr_ + D::base + D::length - 1) & MASK];
+        r = ReadSample((write_ptr_ + D::base + D::length - 1) & MASK);
       } else {
-        r = buffer_[(write_ptr_ + D::base + offset) & MASK];
+        r = ReadSample((write_ptr_ + D::base + offset) & MASK);
       }
       float r_f = DataType<format>::Decompress(r);
       previous_read_ = r_f;
@@ -229,9 +236,9 @@ class FxEngine {
       STATIC_ASSERT(D::base + D::length <= size, delay_memory_full);
       MAKE_INTEGRAL_FRACTIONAL(offset);
       float a = DataType<format>::Decompress(
-          buffer_[(write_ptr_ + offset_integral + D::base) & MASK]);
+          ReadSample((write_ptr_ + offset_integral + D::base) & MASK));
       float b = DataType<format>::Decompress(
-          buffer_[(write_ptr_ + offset_integral + D::base + 1) & MASK]);
+          ReadSample((write_ptr_ + offset_integral + D::base + 1) & MASK));
       float x = a + (b - a) * offset_fractional;
       previous_read_ = x;
       accumulator_ += x * scale;
@@ -244,19 +251,37 @@ class FxEngine {
       offset += amplitude * lfo_value_[index];
       MAKE_INTEGRAL_FRACTIONAL(offset);
       float a = DataType<format>::Decompress(
-          buffer_[(write_ptr_ + offset_integral + D::base) & MASK]);
+          ReadSample((write_ptr_ + offset_integral + D::base) & MASK));
       float b = DataType<format>::Decompress(
-          buffer_[(write_ptr_ + offset_integral + D::base + 1) & MASK]);
+          ReadSample((write_ptr_ + offset_integral + D::base + 1) & MASK));
       float x = a + (b - a) * offset_fractional;
       previous_read_ = x;
       accumulator_ += x * scale;
     }
     
    private:
+    inline T ReadSample(int32_t index) const {
+      if constexpr (lazy_clear) {
+        if (generations_[index / 32] != generation_) return 0;
+      }
+      return buffer_[index];
+    }
+    inline void WriteSample(int32_t index, T value) {
+      if constexpr (lazy_clear) {
+        uint64_t& current = generations_[index / 32];
+        if (current != generation_) {
+          std::fill_n(buffer_ + (index & ~31), 32, 0);
+          current = generation_;
+        }
+      }
+      buffer_[index] = value;
+    }
     float accumulator_;
     float previous_read_;
     float lfo_value_[2];
     T* buffer_;
+    uint64_t* generations_;
+    uint64_t generation_;
     int32_t write_ptr_;
 
     DISALLOW_COPY_AND_ASSIGN(Context);
@@ -275,6 +300,10 @@ class FxEngine {
     c->accumulator_ = 0.0f;
     c->previous_read_ = 0.0f;
     c->buffer_ = buffer_;
+    if constexpr (lazy_clear) {
+      c->generations_ = generations_;
+      c->generation_ = generation_;
+    }
     c->write_ptr_ = write_ptr_;
     if ((write_ptr_ & 31) == 0) {
       c->lfo_value_[0] = lfo_[0].Next();
@@ -292,6 +321,8 @@ class FxEngine {
   
   int32_t write_ptr_;
   T* buffer_;
+  uint64_t generations_[lazy_clear ? size / 32 : 1]{};
+  uint64_t generation_ = 0;
   stmlib::CosineOscillator lfo_[2];
   
   DISALLOW_COPY_AND_ASSIGN(FxEngine);

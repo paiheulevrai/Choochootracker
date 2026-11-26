@@ -4,6 +4,7 @@
 #include <stdint.h>
 extern "C++" {
 #include "beads_pool.h"
+#include "spatial_insert_pool.h"
 enum InsertModule : uint8_t {
   insertOff,
   insertCompressor,
@@ -23,6 +24,11 @@ enum InsertModule : uint8_t {
   insertBeads,
   insertFormant,
   insertStereoWidth,
+  insertCloudsReverb,
+  insertBeadsReverb,
+  insertPingPongDelay,
+  insertTapeEcho,
+  insertDiffusingEchoverb,
   insertModuleCount
 };
 enum class InsertMapping : uint8_t { linear, exponential, bipolar, discrete };
@@ -51,6 +57,8 @@ const InsertDescriptor& insertDescriptor(int module);
 int insertParameterMaximum(int module, int parameter);
 bool insertParameterActive(int module, int parameter, int mode);
 bool insertParameterModulatable(int module, int parameter, int mode);
+int insertDuckSourceParameter(int module);
+bool insertSpatialModule(int module);
 uint8_t insertClamp(int module, int parameter, int value);
 float insertMap(int module, int parameter, int value);
 void insertSelect(InsertConfig*, int module);
@@ -74,12 +82,14 @@ class InsertChain {
   bool ready() const;
   // Audio-thread attachment of a producer-prepared lease, before sync().
   void attachBeads(int slot, const BeadsPool::Handle&);
-  void reset();
+  void attachSpatial(int slot, const SpatialInsertPool::Handle&);
+  void reset(bool preserveSpatialTails = false);
   // The tracker clock is 24 ticks per quarter note.
   void setTempo(float tickRate);
   void trigger();
   uint16_t sync(const InsertConfig config[2], InsertAutomation*, bool rendered = true);
   bool active() const;
+  bool tailActive() const;
   void process(float* interleaved, int frames, const uint8_t effective[2][8],
                const float* sidechain[2] = nullptr, const uint8_t (*wavetables)[32] = nullptr);
 

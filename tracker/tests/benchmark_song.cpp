@@ -69,7 +69,9 @@ class LegacyOutputLimiter {
 };
 
 bool configureVariant(Project* project, const char* variant) {
-  if (!std::strcmp(variant, "layer")) {
+  const bool spatial = !std::strcmp(variant, "layer-spatial");
+  const bool pair = spatial || !std::strcmp(variant, "layer-pair");
+  if (!std::strcmp(variant, "layer") || pair) {
     int slot = PROJECT_MAX_INSTRUMENTS - 1;
     while (slot > 0 && project->instruments[slot].type != InstrumentType::none) --slot;
     if (slot == 0 || project->instruments[0].type == InstrumentType::none ||
@@ -81,6 +83,7 @@ bool configureVariant(Project* project, const char* variant) {
     getInstrumentFunctions(InstrumentType::Layer).init(&layer);
     layer.volume = 255;
     layer.chip.layer.entries[0] = {0, 0x80, 255};
+    if (pair) layer.chip.layer.entries[1] = {0, 0x80, 255};
     for (auto& phrase : project->phrases)
       for (auto& row : phrase.rows)
         if (row.instrument == 0) row.instrument = (uint8_t)slot;
@@ -114,6 +117,13 @@ bool configureVariant(Project* project, const char* variant) {
     for (auto& inserts : project->trackInserts)
       for (auto& insert : inserts) insert.module = insertOff;
     for (auto& insert : project->masterInserts) insert.module = insertOff;
+  }
+  if (spatial) {
+    const int modules[] = {insertCloudsReverb, insertBeadsReverb, insertPingPongDelay,
+                           insertTapeEcho, insertDiffusingEchoverb};
+    for (int track = 0; track < project->tracksCount; ++track)
+      for (int slot = 0; slot < 2; ++slot)
+        insertSelect(&project->trackInserts[track][slot], modules[(track * 2 + slot) % 5]);
   }
   return true;
 }
@@ -208,7 +218,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "Cannot load %s: %s\n", path, projectFileError);
     return 1;
   }
-  const char* variants[] = {"full", "layer", "no-effects", "no-tilt", "no-drive", "no-inserts", "no-pan", "no-monitor"};
+  const char* variants[] = {"full", "layer", "layer-pair", "layer-spatial", "no-effects", "no-tilt", "no-drive", "no-inserts", "no-pan", "no-monitor"};
   bool knownVariant = false;
   for (const char* candidate : variants) knownVariant |= !std::strcmp(candidate, variant);
   if (!knownVariant) {

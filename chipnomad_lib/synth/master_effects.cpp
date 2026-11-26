@@ -1,4 +1,5 @@
 #include "master_effects.h"
+#include "effect_filters.h"
 
 #include <algorithm>
 #include <math.h>
@@ -87,26 +88,19 @@ bool MasterEffects::delayTailActive() const {
 }
 
 float MasterEffects::lowpassCoefficient(float cutoff) const {
-  if (cutoff < 20.0f) cutoff = 20.0f;
-  if (cutoff > sampleRate_ * 0.45f) cutoff = sampleRate_ * 0.45f;
-  return 1.0f - expf(-6.283185307179586f * cutoff / sampleRate_);
+  return effect_filters::lowpassCoefficient(cutoff, sampleRate_);
 }
 
 float MasterEffects::lowpass(float input, float coefficient, float& state) {
-  state += coefficient * (input - state);
-  return state;
+  return effect_filters::lowpass(input, coefficient, state);
 }
 
 float MasterEffects::highpassCoefficient(float cutoff) const {
-  if (cutoff < 20.0f) cutoff = 20.0f;
-  if (cutoff > sampleRate_ * 0.45f) cutoff = sampleRate_ * 0.45f;
-  return expf(-6.283185307179586f * cutoff / sampleRate_);
+  return effect_filters::highpassCoefficient(cutoff, sampleRate_);
 }
 
 float MasterEffects::highpass(float input, float coefficient, float& inputState, float& outputState) {
-  float output = coefficient * (outputState + input - inputState);
-  inputState = input;
-  return outputState = output;
+  return effect_filters::highpass(input, coefficient, inputState, outputState);
 }
 
 float MasterEffects::delayRead(float delaySamples, int channel) const {

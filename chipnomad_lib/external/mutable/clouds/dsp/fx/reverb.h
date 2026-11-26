@@ -35,10 +35,11 @@
 
 namespace clouds {
 
-class Reverb {
+template<bool lazy_clear = false>
+class ReverbImpl {
  public:
-  Reverb() { }
-  ~Reverb() { }
+  ReverbImpl() { }
+  ~ReverbImpl() { }
   
   void Init(uint16_t* buffer, float sample_rate = 48000.0f) {
     engine_.Init(buffer);
@@ -47,6 +48,7 @@ class Reverb {
     engine_.SetLFOFrequency(LFO_2, 0.3f / sample_rate);
     lp_ = 0.7f;
     diffusion_ = 0.625f;
+    lp_decay_1_ = lp_decay_2_ = 0.0f;
   }
   
   void Process(FloatFrame* in_out, size_t size) {
@@ -56,27 +58,27 @@ class Reverb {
     // smearing; and to the two long delays for a slow shimmer/chorus effect.
     // Clouds' original lengths target 32 kHz; these are scaled 1.5x for the
     // fixed 48 kHz master rate.
-    typedef E::Reserve<170,
-      E::Reserve<243,
-      E::Reserve<362,
-      E::Reserve<599,
-      E::Reserve<2480,
-      E::Reserve<3057,
-      E::Reserve<5117,
-      E::Reserve<2870,
-      E::Reserve<2495,
-      E::Reserve<7173> > > > > > > > > > Memory;
-    E::DelayLine<Memory, 0> ap1;
-    E::DelayLine<Memory, 1> ap2;
-    E::DelayLine<Memory, 2> ap3;
-    E::DelayLine<Memory, 3> ap4;
-    E::DelayLine<Memory, 4> dap1a;
-    E::DelayLine<Memory, 5> dap1b;
-    E::DelayLine<Memory, 6> del1;
-    E::DelayLine<Memory, 7> dap2a;
-    E::DelayLine<Memory, 8> dap2b;
-    E::DelayLine<Memory, 9> del2;
-    E::Context c;
+    typedef typename E::template Reserve<170,
+      typename E::template Reserve<243,
+      typename E::template Reserve<362,
+      typename E::template Reserve<599,
+      typename E::template Reserve<2480,
+      typename E::template Reserve<3057,
+      typename E::template Reserve<5117,
+      typename E::template Reserve<2870,
+      typename E::template Reserve<2495,
+      typename E::template Reserve<7173> > > > > > > > > > Memory;
+    typename E::template DelayLine<Memory, 0> ap1;
+    typename E::template DelayLine<Memory, 1> ap2;
+    typename E::template DelayLine<Memory, 2> ap3;
+    typename E::template DelayLine<Memory, 3> ap4;
+    typename E::template DelayLine<Memory, 4> dap1a;
+    typename E::template DelayLine<Memory, 5> dap1b;
+    typename E::template DelayLine<Memory, 6> del1;
+    typename E::template DelayLine<Memory, 7> dap2a;
+    typename E::template DelayLine<Memory, 8> dap2b;
+    typename E::template DelayLine<Memory, 9> del2;
+    typename E::Context c;
 
     const float kap = diffusion_;
     const float klp = lp_;
@@ -163,7 +165,7 @@ class Reverb {
   }
   
  private:
-  typedef FxEngine<65536, FORMAT_12_BIT> E;
+  typedef FxEngine<65536, FORMAT_12_BIT, lazy_clear> E;
   E engine_;
   
   float amount_;
@@ -175,8 +177,11 @@ class Reverb {
   float lp_decay_1_;
   float lp_decay_2_;
   
-  DISALLOW_COPY_AND_ASSIGN(Reverb);
+  DISALLOW_COPY_AND_ASSIGN(ReverbImpl);
 };
+
+using Reverb = ReverbImpl<>;
+using ResettableReverb = ReverbImpl<true>;
 
 }  // namespace clouds
 
