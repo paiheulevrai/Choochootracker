@@ -128,7 +128,7 @@ void drawField(int col, int row, CellState state) {
     instrumentCommonDrawField(col, row, state);
     return;
   }
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor
                                           : appSettings.colorScheme.textDefault);
   if (row == 3) {
     gfxClearRect(0,6,32,1);
@@ -253,20 +253,20 @@ void rowHeader(int row, CellState) {
 }
 void field(int, int row, CellState state) {
   if (row==11) {
-    gfxSetFgColor(state==CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state==CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     gfxClearRect(20,row+3,12,1);
     int step=current().chip.soundfont.controls.bendStepCents;
     if (step) gfxPrintf(20,row+3,"%d ct",step); else gfxPrint(20,row+3,"Stock");
     return;
   }
   if (row>=9) {
-    gfxSetFgColor(state==CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state==CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     gfxClearRect(20,row+3,12,1);
     gfxPrintf(20,row+3,"%02X",row==9 ? current().volume : current().pan); return;
   }
   const auto& f = fields[row];
   const int v = current().chip.soundfont.controls.*(f.member);
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
   gfxClearRect(20, row + 3, 12, 1);
   if (row && v < 0) gfxPrint(20, row + 3, "Bank");
   else if (row == 2) gfxPrintf(20, row + 3, "%d.%d dB", v / 10, v % 10);

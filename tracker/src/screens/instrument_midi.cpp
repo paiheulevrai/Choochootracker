@@ -45,7 +45,7 @@ static void drawCursor(int col, int row) {
 static void drawField(int col, int row, CellState state) {
   if (row < 3) { instrumentCommonDrawField(col, row, state); return; }
   InstrumentMidi* m = &chipnomadState->project.instruments[cInstrument].chip.midi;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
   int y = fieldLine(row);
   gfxClearRect(17, y, 3, 1);
   if (row == 3) gfxPrintf(17, y, "%02d", m->channel + 1);

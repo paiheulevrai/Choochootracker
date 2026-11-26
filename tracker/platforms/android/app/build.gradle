@@ -66,8 +66,8 @@ android {
         applicationId "com.paiheulevrai.choochootracker"
         minSdk 26
         targetSdk 36
-        versionCode 24
-        versionName "1.0.24-alpha"
+        versionCode 25
+        versionName "1.0.25-alpha"
     }
 
     // Two storage variants of the same app:

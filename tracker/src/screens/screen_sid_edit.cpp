@@ -134,7 +134,7 @@ void drawStatic() {
 }
 void drawRowHeader(int row, CellState state) {
   if (!visible(row) || !field(0, row)) return;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textDefault : appSettings.colorScheme.textInfo);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textInfo);
   gfxClearRect(0, rowY(row), 8, 1);
   gfxPrint(0, rowY(row), rows[row].label);
 }
@@ -145,7 +145,7 @@ void drawField(int col, int row, CellState state) {
   gfxSetFgColor(appSettings.colorScheme.textInfo);
   gfxPrint(cellX(col), rowY(row), f->tag);
   if (overrideReason(f->parameter)) gfxPrint(cellX(col) + 3, rowY(row), "*");
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
   const int v = value(*f), x = cellX(col) + 4, y = rowY(row);
   if (f->names) gfxPrint(x, y, f->names[std::clamp(v, f->min, f->max)]);
   else if (v < 0) gfxPrint(x, y, "off");

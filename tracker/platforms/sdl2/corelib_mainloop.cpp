@@ -30,6 +30,14 @@ extern void androidPerformTouchHaptic(void);
 
 static int requestedFps = FPS;
 static int frameTimeUs;
+#ifdef PORTMASTER_BUILD
+static void releaseConsoleSource(void (*onEvent)(MainLoopEventData), InputDeviceType source) {
+  MainLoopEventData event{};
+  event.type = MainLoopEvent::inputSourceReleased;
+  event.data.value = static_cast<int>(source);
+  onEvent(event);
+}
+#endif
 
 void mainLoopSetTargetFps(int fps) {
 #if defined(PORTMASTER_BUILD) || defined(MIYOOPORTS_BUILD)
@@ -80,8 +88,47 @@ static void nextuiSuspend(void (*onEvent)(MainLoopEventData)) {
 
 #ifdef GAMEPAD_SUPPORT
 // Gamepad support
-static SDL_GameController* gameController = NULL;
+// All mapped controllers share the CCT key mapping. Consoles keep one: their
+// built-in pad and keyboard bridge would otherwise duplicate inputs.
+#if defined(PORTMASTER_BUILD) || defined(MIYOOPORTS_BUILD)
+static const int maxGameControllers = 1;
+#else
+static const int maxGameControllers = 4;
+#endif
+static SDL_GameController* gameControllers[maxGameControllers] = {};
 static int gamepadTriggerDown[2] = {};
+
+static int hasGameController(void) {
+  for (int i = 0; i < maxGameControllers; ++i)
+    if (gameControllers[i]) return 1;
+  return 0;
+}
+
+static int gameControllerSlot(SDL_JoystickID id) {
+  for (int i = 0; i < maxGameControllers; ++i)
+    if (gameControllers[i] && SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gameControllers[i])) == id) return i;
+  return -1;
+}
+
+static void closeGameController(int slot) {
+  SDL_GameControllerClose(gameControllers[slot]);
+  gameControllers[slot] = NULL;
+}
+
+static void closeGameControllers(void) {
+  for (int i = 0; i < maxGameControllers; ++i)
+    if (gameControllers[i]) closeGameController(i);
+}
+
+static void openGameControllers(void) {
+  for (int i = 0; i < SDL_NumJoysticks(); i++) {
+    if (!SDL_IsGameController(i) || gameControllerSlot(SDL_JoystickGetDeviceInstanceID(i)) >= 0) continue;
+    int slot = 0;
+    while (slot < maxGameControllers && gameControllers[slot]) ++slot;
+    if (slot == maxGameControllers) return;
+    gameControllers[slot] = SDL_GameControllerOpen(i);
+  }
+}
 
 // Fallback for pads SDL has no controller mapping for (cheap generic USB
 // SNES-style pads): use the raw joystick, mapped onto controller buttons so
@@ -114,11 +161,16 @@ static void closeFallbackJoystick(void) {
   if (!fallbackJoystick) return;
   SDL_JoystickClose(fallbackJoystick);
   fallbackJoystick = NULL;
-  for (int i = 0; i < 4; ++i) fallbackAxisDir[i] = fallbackHatDir[i] = 0;
+  for (int i = 0; i < 4; ++i) {
+    fallbackAxisDir[i] = fallbackHatDir[i] = 0;
+#ifdef PORTMASTER_BUILD
+    fallbackSentDir[i] = 0;
+#endif
+  }
 }
 
 static void openFallbackJoystick(void) {
-  if (fallbackJoystick || gameController) return;
+  if (fallbackJoystick || hasGameController()) return;
   for (int i = 0; i < SDL_NumJoysticks(); i++) {
     if (SDL_IsGameController(i)) continue;
     SDL_Joystick* candidate = SDL_JoystickOpen(i);
@@ -156,12 +208,7 @@ static void fallbackSendDpad(void (*onEvent)(MainLoopEventData)) {
 }
 
 static void initGamepad(void) {
-  for (int i = 0; i < SDL_NumJoysticks(); i++) {
-    if (SDL_IsGameController(i)) {
-      gameController = SDL_GameControllerOpen(i);
-      if (gameController) break;
-    }
-  }
+  openGameControllers();
   openFallbackJoystick();
 }
 #endif
@@ -362,7 +409,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     {
       // The virtual pad hides only if the user asked for it (Settings >
       // Controls) and a gamepad is connected.
-      int wanted = !(appSettings.hideTouchPadWithGamepad && (gameController || fallbackJoystick));
+      int wanted = !(appSettings.hideTouchPadWithGamepad && (hasGameController() || fallbackJoystick));
       if (wanted != vpadEnabled) {
         if (!wanted) releaseFingers();
         vpadEnabled = wanted;
@@ -374,6 +421,11 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     while (SDL_PollEvent(&event)) {
       interactionUntil = SDL_GetTicks() + 250;
 #ifdef PORTMASTER_BUILD
+      if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+        releaseConsoleSource(onEvent, InputDeviceType::keyboard);
+        releaseConsoleSource(onEvent, InputDeviceType::gamepad);
+        menu = 0;
+      }
       if (nextuiPowerEnabled && (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
           event.key.keysym.scancode == SDL_SCANCODE_POWER) {
         if (nextuiPower.update(event.type == SDL_KEYDOWN, SDL_GetTicks(), event.key.repeat != 0)) {
@@ -399,10 +451,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
         eventData.data.value = 0;
         onEvent(eventData);
 #ifdef GAMEPAD_SUPPORT
-        if (gameController) {
-          SDL_GameControllerClose(gameController);
-          gameController = NULL;
-        }
+        closeGameControllers();
         closeFallbackJoystick();
 #endif
         return;
@@ -410,10 +459,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
 #ifdef MOBILE_LIFECYCLE
       else if (event.type == SDL_APP_TERMINATING) {
 #ifdef GAMEPAD_SUPPORT
-        if (gameController) {
-          SDL_GameControllerClose(gameController);
-          gameController = NULL;
-        }
+        closeGameControllers();
         closeFallbackJoystick();
 #endif
       }
@@ -436,13 +482,9 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
         onEvent(eventData);
         wakeRedrawFrames = FPS;
 #ifdef GAMEPAD_SUPPORT
-        if (gameController && !SDL_GameControllerGetAttached(gameController)) {
-          SDL_GameControllerClose(gameController);
-          gameController = NULL;
-        }
-        if (!gameController) {
-          initGamepad();
-        }
+        for (int i = 0; i < maxGameControllers; ++i)
+          if (gameControllers[i] && !SDL_GameControllerGetAttached(gameControllers[i])) closeGameController(i);
+        initGamepad();
 #endif
       }
       else if (event.type == SDL_RENDER_TARGETS_RESET || event.type == SDL_RENDER_DEVICE_RESET) {
@@ -513,28 +555,33 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
       }
 #ifdef GAMEPAD_SUPPORT
       if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
+#ifdef PORTMASTER_BUILD
+        if (gameControllerSlot(event.cbutton.which) < 0) continue;
+#endif
         eventData.type = event.type == SDL_CONTROLLERBUTTONDOWN ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
         eventData.data.input = (InputCode){InputDeviceType::gamepad, event.cbutton.button};
         onEvent(eventData);
       }
       else if (event.type == SDL_CONTROLLERDEVICEADDED) {
-        if (!gameController) {
-          for (int i = 0; i < SDL_NumJoysticks(); i++) {
-            if (SDL_IsGameController(i)) {
-              gameController = SDL_GameControllerOpen(i);
-              if (gameController) break;
-            }
-          }
+        openGameControllers();
+#ifdef PORTMASTER_BUILD
+        if (fallbackJoystick && hasGameController()) {
+          releaseConsoleSource(onEvent, InputDeviceType::gamepad);
+          closeFallbackJoystick();
         }
+#endif
       }
       else if (event.type == SDL_JOYDEVICEADDED) {
         // Controllers get SDL_CONTROLLERDEVICEADDED instead; this catches the rest.
-        if (!gameController && !fallbackJoystick) {
+        if (!hasGameController() && !fallbackJoystick) {
           openFallbackJoystick();
         }
       }
       else if (event.type == SDL_JOYDEVICEREMOVED) {
         if (fallbackJoystick && event.jdevice.which == SDL_JoystickInstanceID(fallbackJoystick)) {
+#ifdef PORTMASTER_BUILD
+          releaseConsoleSource(onEvent, InputDeviceType::gamepad);
+#endif
           closeFallbackJoystick();
           fallbackSendDpad(onEvent);
         }
@@ -577,9 +624,13 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
         fallbackSendDpad(onEvent);
       }
       else if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
-        if (gameController && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gameController))) {
-          SDL_GameControllerClose(gameController);
-          gameController = NULL;
+        int slot = gameControllerSlot(event.cdevice.which);
+        if (slot >= 0) {
+#ifdef PORTMASTER_BUILD
+          releaseConsoleSource(onEvent, InputDeviceType::gamepad);
+          gamepadTriggerDown[0] = gamepadTriggerDown[1] = 0;
+#endif
+          closeGameController(slot);
           // A raw pad may have remained connected while the mapped controller
           // was active, so no new device-added event will arrive for it.
           openFallbackJoystick();
@@ -747,13 +798,27 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
     }
 
 #ifdef GAMEPAD_SUPPORT
-    eventData.type = MainLoopEvent::gamepadAxes;
-    for (int axis = 0; axis < 4; ++axis) eventData.data.axes[axis] = 0.0f;
-    if (gameController && SDL_GameControllerGetAttached(gameController)) {
-      int triggers[] = {
-        SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16384,
-        SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16384,
+    int triggers[2] = {};
+    float axes[4] = {};
+    int attached = 0;
+    for (int i = 0; i < maxGameControllers; ++i) {
+      SDL_GameController* controller = gameControllers[i];
+      if (!controller || !SDL_GameControllerGetAttached(controller)) continue;
+      attached = 1;
+      triggers[0] |= SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16384;
+      triggers[1] |= SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16384;
+      float pad[4] = {
+        -SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_LEFTY) / 32767.0f,
+        SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_LEFTX) / 32767.0f,
+        -SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_RIGHTY) / 32767.0f,
+        SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_RIGHTX) / 32767.0f,
       };
+      // Keep the most deflected stick, so an idle pad cannot cancel another.
+      for (int axis = 0; axis < 4; ++axis)
+        if ((pad[axis] < 0 ? -pad[axis] : pad[axis]) > (axes[axis] < 0 ? -axes[axis] : axes[axis]))
+          axes[axis] = pad[axis];
+    }
+    if (attached) {
       for (int trigger = 0; trigger < 2; ++trigger) {
         if (triggers[trigger] != gamepadTriggerDown[trigger]) {
           eventData.type = triggers[trigger] ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
@@ -763,10 +828,7 @@ void mainLoopRun(void (*draw)(void), void (*onEvent)(MainLoopEventData eventData
         }
       }
       eventData.type = MainLoopEvent::gamepadAxes;
-      eventData.data.axes[0] = -SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_LEFTY) / 32767.0f;
-      eventData.data.axes[1] = SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_LEFTX) / 32767.0f;
-      eventData.data.axes[2] = -SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_RIGHTY) / 32767.0f;
-      eventData.data.axes[3] = SDL_GameControllerGetAxis(gameController, SDL_CONTROLLER_AXIS_RIGHTX) / 32767.0f;
+      for (int axis = 0; axis < 4; ++axis) eventData.data.axes[axis] = axes[axis];
     }
     else {
       for (int trigger = 0; trigger < 2; ++trigger) {

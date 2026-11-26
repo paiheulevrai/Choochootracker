@@ -47,7 +47,7 @@ static void drawField(int col, int row, CellState state) {
     gfxClearRect(0, 4, 24, 1);  // Text field on line below prompt, full 24 chars
     gfxPrint(0, 4, enteredName);
   } else if (row == 1) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     if (col == 0) {
       gfxPrint(0, 6, "OK");  // Buttons moved down one line
     } else {

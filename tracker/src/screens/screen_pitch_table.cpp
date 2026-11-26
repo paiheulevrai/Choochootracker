@@ -66,7 +66,7 @@ static void drawCursor(int col, int row) {
 }
 
 static void drawField(int col, int row, CellState state) {
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
 
   if (row == 0) {
     gfxClearRect(7, 2, PROJECT_PITCH_TABLE_TITLE_LENGTH, 1);

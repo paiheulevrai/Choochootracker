@@ -28,6 +28,8 @@ enum Key {
   keyMotionRecord = 0x200,
   keyMotionErase = 0x400,
   keyUnmapped = 0x800,
+  keyUndo = 0x10000,
+  keyRedo = 0x20000,
 };
 
 enum GamepadInputCode {
@@ -42,9 +44,14 @@ enum GamepadInputCode {
 // Initialize default key mappings based on platform/keyboard layout
 void inputInitDefaultKeyMapping(void);
 
-#ifdef PORTMASTER_BUILD
-// Enable native controller defaults for NextUI, including existing installs.
-void inputInitNativeGamepadMapping(void);
+#if defined(PORTMASTER_BUILD) || defined(TEST_PORTMASTER_INPUT)
+struct ConsoleInputAlias {
+  int keyboard;
+  int gamepad;
+  const char* name;
+};
+constexpr int consoleInputButtonCount = 14;
+extern "C" const ConsoleInputAlias* inputConsoleAliases(int* count);
 #endif
 
 // Convert input code to human-readable name
@@ -84,6 +91,8 @@ int inputIsCopyKey(InputCode input);
 int inputIsCutKey(InputCode input);
 int inputIsPasteKey(InputCode input);
 int inputIsSaveKey(InputCode input);
+int inputIsUndoKey(InputCode input);
+int inputIsHistoryModifierHeld(void);
 int inputIsDeleteKey(InputCode input);
 int inputIsBackspaceKey(InputCode input);
 int inputIsInsertKey(InputCode input);

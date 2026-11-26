@@ -39,7 +39,9 @@ to resume editing; Markdown changes do not update a production preview.
 - [Engine descriptions](src/content/featured-engines.md): all engine cards, their
   descriptions and optional screenshots. This is the homepage engine content.
 - [Sampling](src/content/03-sampling.md) and [effects](src/content/04-effects.md):
-  section headings and text. Workflow steps are in the home introduction.
+  section headings and text, including the four-slot instrument modulation
+  matrix (envelopes, LFOs and performance sources), followed by track-to-track
+  audio modulation and its vocoder screenshot. Workflow steps are in the home introduction.
 - `01-workflow.md` and `02-engines.md` are older drafts, not rendered on the site.
 - [Project story](src/content/about.md), [downloads](src/content/downloads.md),
   [learning introduction](src/content/learn.md).
@@ -49,6 +51,16 @@ below it is Markdown. Screenshot names refer to the
 [field guide assets](../docs/user-guide/assets). Use descriptive imageAlt text
 and keep screenshots at their original 640 × 480 resolution. All field guide assets are copied automatically by
 [the asset copy script](scripts/copy-assets.mjs).
+
+Homepage cards use their own images in
+[`src/assets/homepage-screenshots/`](src/assets/homepage-screenshots/).
+The native UI harness's `--capture-homepage` mode produces the captures,
+including Fatty, DigiSophie and the track-to-track vocoder. See the
+[build notes](../docs/build-notes.md) for the Windows harness.
+Convert only the required BMPs to lossless 640 × 480 PNGs; retain the other
+source images. Fatty uses `IDEColorThemes/GruvLight.cth`, DigiSophie uses
+`IDEColorThemes/MatchaDark.cth`, and the vocoder uses
+`IDEColorThemes/TokyoNightDark.cth`, distinct from the existing homepage themes.
 
 The `unifont` dependency is held at 0.7.4 because 0.7.5 pulls in Undici 8,
 which requires Node 22.19. The website does not use Astro's experimental
@@ -76,6 +88,16 @@ Create a Pages project from the GitHub repository and set:
 Cloudflare Pages then deploys each push to `main`. The Node version is pinned by
 [`website/.node-version`](.node-version). Rebuild after updating the checked-in
 `web/dist/` app bundle or guide assets.
+
+The homepage title is defined in [the homepage template](src/pages/index.astro).
+Its description and portable-platform introduction are in
+[home.md](src/content/home.md). The shared layout emits the `ChooChooTracker`
+Open Graph site name and homepage `WebSite` structured data; this identifies
+the project rather than its Cloudflare host. Google can choose a different
+displayed site name and may retain an older label until recrawling.
+To validate production metadata locally without rebuilding WebAssembly, run
+`CF_PAGES=1 npm run build` followed by `CF_PAGES=1 npm run check`
+(PowerShell: set `$env:CF_PAGES='1'` before both commands).
 
 Downloads currently link to the releases list, which includes prereleases.
 GitHub's `/releases/latest` shortcut excludes prereleases, so it is unsuitable

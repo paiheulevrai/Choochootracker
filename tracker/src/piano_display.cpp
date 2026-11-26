@@ -62,30 +62,38 @@ uint16_t monitorPianoNotes(void) {
 }
 
 static void drawPiano() {
-  // Beneath track 8; the extra padding shifts the 2x icon right by 8 pixels.
-  constexpr int col = 35, row = 11, columns = 5, rows = 2;
+  constexpr int col = 35, columns = 5;
+  const int availableRows = currentScreen == &screenInstrument || currentScreen == &screenInstrumentPool ||
+    currentScreen == &screenModulation ? 3 :
+    currentScreen == &screenChain || currentScreen == &screenTable ? 5 : 4;
+  const int rows = availableRows % 2 ? 3 : 2;
+  const int row = 11 + (availableRows - rows) / 2;
   if (!sized(piano, columns, rows)) return;
   const auto cs = appSettings.colorScheme;
   const int w = piano->widthPixels;
-  const int scale = std::min(w / pianoWidth, gfxGetCharHeight() / pianoHeight);
-  const int left = (w - pianoWidth * scale) / 2;
-  const int top = (gfxGetCharHeight() - pianoHeight * scale) / 2 + 3 * scale;
+  const int scale = 2 * gfxGetCharHeight() / (pianoHeight + 5);
+  if (scale < 1) return;
+  const int drawnWidth = std::min(w, pianoWidth * scale);
+  const int left = (w - drawnWidth) / 2;
+  const int stroke = std::max(1, scale / 2);
+  const int top = stroke + (piano->heightPixels - (pianoHeight + 2) * scale - stroke) / 2;
   const uint16_t playing = monitorPianoNotes();
   gfxSetBgColor(cs.background);
   gfxClearRect(col, row, columns, rows);
   // Keep the chunky outer frame; internal strokes are half as thick.
   // Draw at whole screen pixels so the thin dividers remain crisp.
-  const int stroke = std::max(1, scale / 2);
+  const int strokeX = std::max(1, drawnWidth / (pianoWidth * 2));
   // Match ordinary Song values for the outline and waveforms for lit notes.
   const int colors[] = {cs.textValue, cs.textValue, cs.background, cs.textInfo, cs.textInfo};
   for (int layer = 0; layer < 5; ++layer) {
     gfxBitmapClear(piano);
     for (int py = -stroke; py < (pianoHeight + 2) * scale; ++py)
-      for (int px = 0; px < pianoWidth * scale; ++px) {
+      for (int px = 0; px < drawnWidth; ++px) {
+        const int x = px * pianoWidth / drawnWidth;
         // Raise a cap above each accidental, restoring its two-pixel border
         // without covering the raised key interior or thickening dividers.
         if (py < 0) {
-          int pitch = pianoPitchAtNative(px / scale, 1);
+          int pitch = pianoPitchAtNative(x, 1);
           bool accidental = pitch == 1 || pitch == 3 || pitch == 6 || pitch == 8 || pitch == 10;
           if (layer == 0 && accidental) piano->data[(top + py) * w + left + px] = 255;
           continue;
@@ -94,7 +102,7 @@ static void drawPiano() {
         int sourceY = py;
         if (sourceY >= 7 * scale) sourceY = std::max(7 * scale - 1, sourceY - scale);
         if (sourceY >= 3 * scale) sourceY = std::max(3 * scale - 1, sourceY - scale);
-        int x = px / scale, y = sourceY / scale;
+        int y = sourceY / scale;
         bool frame = x == 0 || x == pianoWidth - 1 || y == 0 || y == pianoHeight - 1;
         int pitch = pianoPitchAtNative(x, y);
         const int upperPitch = pianoPitchAtNative(x, 1);
@@ -108,11 +116,11 @@ static void drawPiano() {
           frame = false;
         }
         // Reclaim the right side of each formerly thick natural-key divider.
-        if (!frame && pitch < 0 && px % scale >= stroke)
+        if (!frame && pitch < 0 && (px * pianoWidth) % drawnWidth >= strokeX * pianoWidth)
           pitch = pianoPitchAtNative(x + 1, y);
         bool outline = frame || pitch < 0 || (black &&
-          (pianoPitchAtNative((px - stroke) / scale, 1) != pitch ||
-           pianoPitchAtNative((px + stroke) / scale, 1) != pitch ||
+          (pianoPitchAtNative((px - strokeX) * pianoWidth / drawnWidth, 1) != pitch ||
+           pianoPitchAtNative((px + strokeX) * pianoWidth / drawnWidth, 1) != pitch ||
            py >= accidentalBottom - stroke));
         int alpha = 255;
         if (layer == 0) {
@@ -139,5 +147,8 @@ void pianoDisplayDraw(void) {
       currentScreen == &screenInstrument || currentScreen == &screenInstrumentPool ||
       currentScreen == &screenModulation || currentScreen == &screenMixer ||
       currentScreen == &screenGroove || currentScreen == &screenSettings ||
-      currentScreen == &screenProject) drawPiano();
+      currentScreen == &screenProject) {
+    ScreenOverlayCoordinates overlay;
+    drawPiano();
+  }
 }

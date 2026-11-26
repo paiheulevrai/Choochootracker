@@ -254,6 +254,53 @@ TEST_CASE("playback stop sends MIDI Note Off instead of leaving the note stuck")
   CHECK(sawNoteOff);
 }
 
+TEST_CASE("Live stop releases only the stopped track's MIDI notes") {
+  midiRouterSetBackend(&kFakeMidiBackend);
+  struct RestoreBackend { ~RestoreBackend() { midiRouterSetBackend(nullptr); } } restore;
+  g_sentMidiEvents.clear();
+  PlaybackFixture fixture;
+  auto* state = fixture.state;
+  auto& project = state->project;
+  project.tracksCount = 2;
+  for (auto& speed : project.grooves[0].speed) speed = 1;
+  for (int track = 0; track < 2; ++track) {
+    getInstrumentFunctions(InstrumentType::Midi).init(&project.instruments[track]);
+    project.instruments[track].chip.midi.channel = track;
+    project.song[0][track] = track;
+    project.chains[track].rows[0].phrase = track;
+    project.phrases[track].rows[0].note = 48;
+    project.phrases[track].rows[0].instrument = track;
+  }
+  REQUIRE(chipnomadQueueProjectRefresh(state));
+  REQUIRE(chipnomadQueuePlaybackQueueLiveChain(state, 0, 0, 0));
+  REQUIRE(chipnomadQueuePlaybackQueueLiveChain(state, 1, 0, 0));
+  float audio[2048]{};
+  chipnomadRender(state, audio, 1024);
+  int noteOns = 0;
+  for (const auto& event : g_sentMidiEvents) if (event.type == 0x90) ++noteOns;
+  REQUIRE(noteOns == 2);
+  // MIDI Layer lanes use their own router owners under the same track.
+  midiRouterEmitNoteOn(state->midiRouter, PROJECT_MAX_TRACKS, 0, 2, 70, 100, 0);
+  g_sentMidiEvents.clear();
+  int urgent = 0;
+  SUBCASE("normal stop") { urgent = 0; }
+  SUBCASE("urgent stop") { urgent = 1; }
+  REQUIRE(chipnomadQueuePlaybackQueueLiveChain(state, 0, -1, urgent));
+  state->playbackState.tracks[0].phraseRow = 15;
+  chipnomadRender(state, audio, 1024);
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::stopped);
+  CHECK(state->playbackState.tracks[1].mode == PlaybackMode::live);
+  int trackOff = 0, layerOff = 0, otherOff = 0;
+  for (const auto& event : g_sentMidiEvents) if (event.type == 0x80) {
+    if (event.channel == 0) ++trackOff;
+    if (event.channel == 1) ++otherOff;
+    if (event.channel == 2) ++layerOff;
+  }
+  CHECK(trackOff == 1);
+  CHECK(layerOff == 1);
+  CHECK(otherOff == 0);
+}
+
 TEST_CASE_FIXTURE(PlaybackFixture, "playback init all tracks stopped") {
   CHECK_FALSE(playbackIsPlaying(&state->playbackState));
 }
@@ -325,6 +372,74 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Live stopped tracks wait for the first activ
       CHECK(launched.queue.liveAction == LiveQueueAction::none);
     }
   }
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Live waiting tracks follow actual simplified pattern boundaries") {
+  auto* p = &state->project;
+  p->tracksCount = 2;
+  p->viewMode = ViewMode::simplified;
+  for (auto& speed : p->grooves[0].speed) speed = 1;
+  p->song[0][0] = 5;
+  p->song[1][1] = 6;
+  p->patterns[5].bars[0].phrase = 0;
+  p->patterns[5].bars[1].phrase = 0;
+  p->patterns[6].length = 1;
+  p->patterns[6].bars[0].phrase = 0;
+  SUBCASE("a shorter unrelated chain must not launch early") {
+    p->patterns[5].length = 2;
+    p->chains[5].rows[1].phrase = EMPTY_VALUE_16;
+  }
+  SUBCASE("a longer unrelated chain must not delay launch") {
+    p->patterns[5].length = 1;
+    p->chains[5].rows[1].phrase = 0;
+  }
+  playbackStartLiveChain(&state->playbackState, 0, 0);
+  playbackNextFrame(state);
+  playbackQueueLiveChain(&state->playbackState, 1, 1, 0);
+  auto& reference = state->playbackState.tracks[0];
+  auto& waiting = state->playbackState.tracks[1];
+  reference.phraseRow = 15;
+  playbackNextFrame(state);
+  if (p->patterns[5].length == 2) {
+    CHECK(waiting.mode == PlaybackMode::stopped);
+    CHECK(reference.chainRow == 1);
+    reference.phraseRow = 15;
+    playbackNextFrame(state);
+  }
+  CHECK(waiting.mode == PlaybackMode::live);
+  CHECK(waiting.phraseRow == 0);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "Live queues leave single-phrase playback at its boundary") {
+  auto* p = &state->project;
+  p->tracksCount = 2;
+  for (auto& speed : p->grooves[0].speed) speed = 1;
+  p->song[0][0] = 0;
+  p->song[1][0] = 1;
+  p->song[1][1] = 1;
+  p->chains[0].rows[0].phrase = p->chains[0].rows[1].phrase = 0;
+  p->chains[1].rows[0].phrase = 0;
+  p->patterns[0].length = 2;
+  p->patterns[0].bars[0].phrase = p->patterns[0].bars[1].phrase = 0;
+  p->patterns[1].length = 1;
+  p->patterns[1].bars[0].phrase = 0;
+  SUBCASE("classic phrase playback") {
+    playbackStartPhrase(&state->playbackState, 0, 0, 0, 1);
+  }
+  SUBCASE("simplified active bar playback") {
+    p->viewMode = ViewMode::simplified;
+    p->playheadMode = PlayheadMode::loopActiveBar;
+    playbackStartChain(&state->playbackState, 0, 0, 0, 1);
+  }
+  playbackNextFrame(state);
+  playbackQueueLiveChain(&state->playbackState, 0, 1, 0);
+  playbackQueueLiveChain(&state->playbackState, 1, 1, 0);
+  state->playbackState.tracks[0].phraseRow = 15;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::live);
+  CHECK(state->playbackState.tracks[0].songRow == 1);
+  CHECK(state->playbackState.tracks[1].mode == PlaybackMode::live);
+  CHECK(state->playbackState.tracks[1].phraseRow == 0);
 }
 
 TEST_CASE_FIXTURE(PlaybackFixture, "Live waiting launch supports urgent escalation replacement and cancellation") {
@@ -467,6 +582,52 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Sequence sources bypass sequencer output and
   sequenceGateSetAccents(&sequence, 8);
   CHECK(playbackSequenceGateOutput(&sequence, 0) == 32385);
   CHECK(playbackSequenceGateOutput(&sequence, 12) == 16192);
+  uint8_t waves[8][32]{};
+  for (int slot = 0; slot < 8; ++slot) {
+    sequenceGateSetPattern(&sequence, 64 + slot);
+    waves[slot][0] = 1;
+    waves[slot][2] = 15;
+    waves[slot][16] = 15;
+    CHECK(sequenceGatePattern(&sequence) == 64 + slot);
+    CHECK(playbackSequenceGateOutput(&sequence, 0, waves) == 32385);
+    CHECK(playbackSequenceGateOutput(&sequence, 6, waves) == 0);
+    CHECK(playbackSequenceGateOutput(&sequence, 12, waves) == 16192);
+  }
+  for (int i = 0; i < 16; ++i) waves[0][i] = i % 2 ? 0 : 7;
+  for (int rate = 0; rate < 15; ++rate) {
+    sequenceGateSetRate(&sequence, rate);
+    for (uint32_t tick = 0; tick < 800; ++tick) {
+      sequenceGateSetPattern(&sequence, 2);
+      int16_t preset = playbackSequenceGateOutput(&sequence, tick, waves);
+      sequenceGateSetPattern(&sequence, 64);
+      CHECK(playbackSequenceGateOutput(&sequence, tick, waves) == preset);
+    }
+  }
+  sequenceGateSetRate(&sequence, 9);
+  sequenceGateSetPattern(&sequence, 64);
+  sequenceGateSetLength(&sequence, 32);
+  sequenceGateSetAccents(&sequence, 0);
+  memset(waves[0], 0, sizeof(waves[0]));
+  waves[0][16] = 1;
+  waves[0][31] = 15;
+  CHECK(sequenceGateLength(&sequence) == 32);
+  CHECK(playbackSequenceGateOutput(&sequence, 15 * 6, waves) == 0);
+  CHECK(playbackSequenceGateOutput(&sequence, 16 * 6, waves) == 16192);
+  CHECK(playbackSequenceGateOutput(&sequence, 31 * 6, waves) == 16192);
+  CHECK(playbackSequenceGateOutput(&sequence, 32 * 6, waves) == 0);
+  sequenceGateSetAccents(&sequence, 16);
+  CHECK(playbackSequenceGateOutput(&sequence, 31 * 6, waves) == 32385);
+  sequenceGateSetAccents(&sequence, 0);
+  sequenceGateSetLength(&sequence, 17);
+  CHECK(playbackSequenceGateOutput(&sequence, 16 * 6, waves) == 16192);
+  CHECK(playbackSequenceGateOutput(&sequence, 17 * 6, waves) == 0);
+  sequenceGateSetPattern(&sequence, 2);
+  CHECK(sequenceGateLength(&sequence) == 16);
+  sequenceGateSetLength(&sequence, 4);
+  sequenceGateSetAccents(&sequence, 8);
+  sequenceGateSetPattern(&sequence, 255);
+  CHECK(sequenceGatePattern(&sequence) == 71);
+  sequenceGateSetPattern(&sequence, 2);
   for (SequenceGateTrigger trigger : {SequenceGateTrigger::free, SequenceGateTrigger::retrig,
                                       SequenceGateTrigger::phrase, SequenceGateTrigger::chain}) {
     sequenceGateSetTrigger(&sequence, trigger);
@@ -531,6 +692,19 @@ TEST_CASE_FIXTURE(PlaybackFixture, "Live urgent switches at a phrase boundary an
   CHECK(state->playbackState.tracks[0].chainRow == 0);
 
   playbackQueueLiveChain(&state->playbackState, 0, -1, 0);
+  CHECK(state->playbackState.tracks[0].queue.liveAction == LiveQueueAction::stopNormal);
+  state->playbackState.tracks[0].phraseRow = 15;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].mode == PlaybackMode::stopped);
+
+  playbackStartLiveChain(&state->playbackState, 0, 0);
+  playbackNextFrame(state);
+  playbackQueueLiveChain(&state->playbackState, 0, -1, 0);
+  playbackQueueLiveChain(&state->playbackState, 0, -1, 1);
+  CHECK(state->playbackState.tracks[0].queue.liveAction == LiveQueueAction::stopUrgent);
+  state->playbackState.tracks[0].phraseRow = 0;
+  playbackNextFrame(state);
+  CHECK(state->playbackState.tracks[0].mode != PlaybackMode::stopped);
   state->playbackState.tracks[0].phraseRow = 15;
   playbackNextFrame(state);
   CHECK(state->playbackState.tracks[0].mode == PlaybackMode::stopped);
@@ -1020,6 +1194,67 @@ TEST_CASE_FIXTURE(PlaybackFixture, "MOD 22 triggers on the second visit") {
   CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
   advanceFrames(96);
   CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "NTH phrases gate cells left and right independently") {
+  setInstrument(0, 0, 0, 15, 0);
+  auto& p = state->project;
+  PhraseRow* row = &p.phrases[0].rows[0];
+  row->note = 48;
+  row->instrument = 0;
+  row->fx[0] = {fxNTH, 0x93};
+  row->fx[1] = {fxPIT, 1};
+  PlaybackTrackState* track = &state->playbackState.tracks[0];
+  track->mode = PlaybackMode::phraseRow;
+  track->songRow = 0;
+  memset(track->conditionVisits, 0, sizeof(track->conditionVisits));
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
+  CHECK(track->note.fx[fxPIT].acc == 0);
+  track->note.pitchBase = EMPTY_VALUE_8;
+  track->note.pitchOffset = 0;
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
+  CHECK(track->note.fx[fxPIT].acc == 1);
+
+  memset(track->conditionVisits, 0, sizeof(track->conditionVisits));
+  row->fx[0] = {fxNTH, 0x30};
+  row->fx[1] = {FX_ID_EMPTY, 0};
+  track->note.pitchBase = EMPTY_VALUE_8;
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == EMPTY_VALUE_8);
+  track->currentPhraseRow = *row;
+  readPhraseRow(&state->playbackState, 0, 0);
+  CHECK(state->playbackState.tracks[0].note.pitchBase == 48);
+}
+
+TEST_CASE_FIXTURE(PlaybackFixture, "NTH tables gate earlier columns by loop count") {
+  setInstrument(0, 0, 0, 15, 0);
+  auto& p = state->project;
+  p.tables[0].rows[0].fx[0] = {fxPIT, 1};
+  p.tables[0].rows[0].fx[1] = {fxNTH, 1};
+  PlaybackTrackState* track = &state->playbackState.tracks[0];
+  track->mode = PlaybackMode::phraseRow;
+  PhraseRow row;
+  memset(&row, EMPTY_VALUE_8, sizeof(row));
+  row.note = 48;
+  row.instrument = 0;
+  readPhraseRowDirect(&state->playbackState, 0, &row, 0);
+  CHECK(track->note.instrumentTable.currentFX[0].command == FX_ID_EMPTY);
+
+  for (int i = 0; i < 16; ++i) playbackNextFrame(state);
+  CHECK(track->note.instrumentTable.currentFX[0].command == fxPIT);
+  for (int i = 0; i < 16; ++i) playbackNextFrame(state);
+  CHECK(track->note.instrumentTable.currentFX[0].command == FX_ID_EMPTY);
 }
 
 TEST_CASE_FIXTURE(PlaybackFixture, "SPD 01 doubles one track clock and persists") {

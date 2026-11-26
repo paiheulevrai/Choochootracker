@@ -40,7 +40,7 @@ struct ColorScheme {
   int warning;
 };
 
-// Key mapping: 10 buttons × 3 keys each
+// Key mapping: 13 actions, three physical inputs each.
 struct KeyMapping {
   InputCode keyUp[3];
   InputCode keyDown[3];
@@ -53,6 +53,8 @@ struct KeyMapping {
   InputCode keyMotionLive[3];
   InputCode keyMotionRecord[3];
   InputCode keyMotionErase[3];
+  InputCode keyUndo[3];
+  InputCode keyRedo[3];
 };
 
 enum class StickLiveMode { hold, toggle, free };
@@ -150,6 +152,7 @@ struct AppSettings {
   uint8_t midiOutputDelayMs;
   uint8_t midiAutoChannel; // 0 = off, 1-16 = selected instrument, before channel mapping.
   MidiRecordMode midiRecordMode;
+  uint8_t launchpadMiniMk3Enabled; // Dedicated Launchpad Mini MK3 pattern grid; off by default.
   // Saved to settings.txt: which instrument a MIDI-in note on a given
   // channel (0-15) plays during preview, e.g. channel 0 -> instrument 5.
   // -1 = channel not assigned (falls back to the currently selected

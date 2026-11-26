@@ -1,4 +1,5 @@
 #include "screens.h"
+#include "edit_history.h"
 #include "screen_settings.h"
 #include "common.h"
 #include "corelib_gfx.h"
@@ -16,6 +17,10 @@
 
 // Screen state variables
 static uint16_t lastChainValue = 0;
+#ifdef DESKTOP_BUILD
+static int keyJazzMaterializedChain = -1;
+static Chain keyJazzMaterializedSnapshot;
+#endif
 static bool sceneEditPending = false;
 static int sceneEditTaps = 1;
 
@@ -85,6 +90,15 @@ static ScreenData screen = {
   .getLoopRange = getLoopRange,
 };
 
+void screenSongRememberSelected(void) {
+  const Project& project = chipnomadState->project;
+  if (project.viewMode != ViewMode::simplified || screen.selectMode != 0) return;
+  uint16_t selected = project.song[screen.cursorRow][screen.cursorCol];
+  if (selected < PROJECT_MAX_PATTERNS) {
+    lastChainValue = selected;
+  }
+}
+
 static void selectedTrackBounds(int* first, int* last) {
   *first = screen.cursorCol;
   *last = screen.cursorCol;
@@ -147,6 +161,9 @@ static int livePlay(int tapCount) {
 
 static void init(void) {
   lastChainValue = 0;
+#ifdef DESKTOP_BUILD
+  keyJazzMaterializedChain = -1;
+#endif
   sceneEditPending = false;
   screen.cursorRow = 0;
   screen.cursorCol = 0;
@@ -218,7 +235,7 @@ static void drawField(int col, int row, CellState state) {
 static void drawRowHeader(int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
 
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor : cs.textInfo);
   gfxPrint(0, 3 + row - screen.topRow, byteToHex(row));
 }
 
@@ -226,7 +243,7 @@ static void drawColHeader(int col, CellState state) {
   static char digit[2] = "0";
   const ColorScheme cs = appSettings.colorScheme;
 
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor : cs.textInfo);
   digit[0] = col + 49;
   gfxPrint(3 + col * 3, 2, digit);
 }
@@ -339,37 +356,62 @@ static int inputScreenNavigation(int keys, int tapCount) {
   return 0;
 }
 
-// Canonical simplified mode: a freshly-assigned chain slot that is still
-// empty and unreferenced gets its default bar count wired immediately, so
-// the phrase screen's length field shows the configured default (e.g. "01")
-// instead of 00. Mirrors patternMaterializeIfPristine's pristine guard for
-// the classic-view data model.
-static void canonicalMaterializeIfPristine(int chain, int row, int col) {
+static bool canonicalChainPristine(int chain, int row, int col) {
   Project* p = &chipnomadState->project;
-  if (!canonicalSimplifiedActive || p->viewMode != ViewMode::classic) return;
-  if (chain < 0 || chain >= PROJECT_MAX_CHAINS) return;
-  if (!chainIsEmpty(p, chain)) return;
-  if (p->chainToPatternMap[chain] != EMPTY_VALUE_16) return;
-  if (isChainUsedElsewhere(p, chain, col, row)) return;
-  grooveboxAction(GrooveboxAction::resetLength, row, col);
+  if (!canonicalSimplifiedActive || p->viewMode != ViewMode::classic) return false;
+  if (chain < 0 || chain >= PROJECT_MAX_CHAINS) return false;
+  if (!chainSlotIsPristine(p, chain)) return false;
+  if (p->chainToPatternMap[chain] != EMPTY_VALUE_16) return false;
+  for (auto mapped : p->patternToChainMap)
+    if (mapped == chain) return false;
+  return !isChainUsedElsewhere(p, chain, col, row);
+}
+
+static bool assignSongValue(int value, int row, int col) {
+  Project& p = chipnomadState->project;
+  uint16_t before = p.song[row][col];
+  p.song[row][col] = value;
+  if (canonicalChainPristine(value, row, col) &&
+      !grooveboxAction(GrooveboxAction::resetLength, row, col)) {
+    p.song[row][col] = before;
+    return false;
+  }
+  patternMaterializeIfPristine(&p, value, row, col);
+  lastChainValue = value;
+  return true;
+}
+
+static int nextSongValue(int current) {
+  Project& p = chipnomadState->project;
+  for (int value = current + 1; value < PROJECT_MAX_CHAINS; ++value) {
+    if (viewModeIsUsedElsewhere(&p, value, -1, -1)) continue;
+    if (p.viewMode == ViewMode::simplified) {
+      bool retained = p.patternToChainMap[value] != EMPTY_VALUE_16;
+      for (const auto& bar : p.patterns[value].bars)
+        retained |= bar.phrase != EMPTY_VALUE_16 || bar.transpose != 0;
+      for (auto mapped : p.chainToPatternMap) retained |= mapped == value;
+      if (!retained) return value;
+    } else {
+      if (!chainSlotIsPristine(&p, value) || p.chainToPatternMap[value] != EMPTY_VALUE_16) continue;
+      bool retained = false;
+      for (auto mapped : p.patternToChainMap) retained |= mapped == value;
+      if (!retained) return value;
+    }
+  }
+  return EMPTY_VALUE_16;
 }
 
 static int editCell(int col, int row, CellEditAction action) {
+  Project& project = chipnomadState->project;
   if (action == CellEditAction::doubleTap) {
-    int current = chipnomadState->project.song[row][col];
+    int current = project.song[row][col];
     if (current != EMPTY_VALUE_16) {
-      int nextEmpty = viewModeFindEmpty(&chipnomadState->project, current + 1);
+      int nextEmpty = nextSongValue(current);
       if (nextEmpty != EMPTY_VALUE_16) {
-        chipnomadState->project.song[row][col] = nextEmpty;
-        lastChainValue = nextEmpty;
-        if (patternMaterializeIfPristine(&chipnomadState->project, nextEmpty,
-          row, col)) {
-          projectModified = 1;
-          chipnomadQueueProjectRefresh(chipnomadState);
-        }
-        canonicalMaterializeIfPristine(nextEmpty, row, col);
+        return assignSongValue(nextEmpty, row, col);
       } else {
-        screenMessage(MESSAGE_TIME, "No free chains");
+        screenMessage(MESSAGE_TIME_ERROR, "No free chain or pattern");
+        return 0;
       }
     }
     return 1;
@@ -387,12 +429,13 @@ static int editCell(int col, int row, CellEditAction action) {
   } else if (action == CellEditAction::shallowClone) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
-      int cloned = viewModeCloneToNext(&chipnomadState->project, current);
+      int cloned = viewModeCloneToNext(&chipnomadState->project, current, col);
       if (cloned != EMPTY_VALUE_16) {
         chipnomadState->project.song[row][col] = cloned;
         lastChainValue = cloned;
         return 1;
       }
+      screenMessage(MESSAGE_TIME_ERROR, "No free chain or pattern");
     }
     return 0;
   } else if (action == CellEditAction::deepClone) {
@@ -401,26 +444,25 @@ static int editCell(int col, int row, CellEditAction action) {
     int current = chipnomadState->project.song[row][col];
     if (current != EMPTY_VALUE_16) {
       // Deep clone the phrases in the existing cell (don't create a new one)
-      if (viewModeDeepClone(&chipnomadState->project, current)) {
+      if (viewModeDeepClone(&chipnomadState->project, current, col)) {
         return 1;
       }
+      screenMessage(MESSAGE_TIME_ERROR, "Cannot clone phrases");
     }
     return 0;
   }
-  // Classic insert semantics (last used value on tap, +/- to step). If a
-  // blank cell just received a value in canonical simplified mode, give a
-  // pristine chain its default bar count right away.
-  uint16_t before = chipnomadState->project.song[row][col];
-  int handled = edit16withLimit(action, &chipnomadState->project.song[row][col],
-    &lastChainValue, 16, PROJECT_MAX_CHAINS - 1);
-  if (handled && before == EMPTY_VALUE_16 &&
-      chipnomadState->project.song[row][col] != EMPTY_VALUE_16) {
-    canonicalMaterializeIfPristine(chipnomadState->project.song[row][col], row, col);
-  }
-  return handled;
+  uint16_t value = project.song[row][col], last = lastChainValue;
+  if (!edit16withLimit(action, &value, &last, 16, PROJECT_MAX_CHAINS - 1)) return 0;
+  if (value == EMPTY_VALUE_16) return 1;
+  if (!assignSongValue(value, row, col)) return 0;
+  lastChainValue = last;
+  return 1;
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
+  EditHistoryScope history("Song edit");
+  if (action != CellEditAction::copy && action != CellEditAction::switchSelection &&
+      !editHistoryCapture(EditObject::song)) return 1;
   int handled = 0;
   int startCol, startRow, endCol, endRow;
   getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
@@ -504,6 +546,7 @@ static int onEdit(int col, int row, CellEditAction action) {
 #define MERGE_REFUSAL_TEXT "Pattern too long to merge"
 
 static void songMergeSelectedPatternsUp(void) {
+  if (!editHistoryCapture(EditObject::song)) return;
   Project* p = &chipnomadState->project;
   if (p->viewMode != ViewMode::simplified) return;
   if (screen.selectMode != 1) return;
@@ -541,6 +584,7 @@ static void songMergeSelectedPatternsUp(void) {
     int target = p->song[rows[0]][col];
     for (int i = 1; i < count; i++) {
       int src = p->song[rows[i]][col];
+      if (!editHistoryCapture(EditObject::pattern, src)) return;
       if (patternAppendPattern(p, target, src) < 0) {
         // Cannot happen after the length check; guard anyway.
         refused = 1;
@@ -586,6 +630,7 @@ static void songMergeCanonicalUp() {
 #define CHAIN_MERGE_REFUSAL_TEXT "Chain too long to merge"
 
 static void songMergeSelectedChainsUp(void) {
+  if (!editHistoryCapture(EditObject::song)) return;
   Project* p = &chipnomadState->project;
   if (p->viewMode != ViewMode::classic) return;
   if (screen.selectMode != 1) return;
@@ -609,6 +654,7 @@ static void songMergeSelectedChainsUp(void) {
     // Length check BEFORE mutating: total phrase rows across all selected
     // chains must fit in one chain (16 rows).
     int target = p->song[rows[0]][col];
+    if (!editHistoryCapture(EditObject::chain, target)) return;
     int targetUsed = 0;
     for (int d = 0; d < 16; d++)
       if (p->chains[target].rows[d].phrase != EMPTY_VALUE_16) targetUsed++;
@@ -629,6 +675,7 @@ static void songMergeSelectedChainsUp(void) {
     while (write < 16 && p->chains[target].rows[write].phrase != EMPTY_VALUE_16) write++;
     for (int i = 1; i < count; i++) {
       int srcIdx = p->song[rows[i]][col];
+      if (!editHistoryCapture(EditObject::chain, srcIdx)) return;
       Chain* src = &p->chains[srcIdx];
       for (int d = 0; d < 16 && write < 16; d++) {
         if (src->rows[d].phrase == EMPTY_VALUE_16) continue;
@@ -658,6 +705,7 @@ static void songMergeSelectedChainsUp(void) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  EditHistoryScope history("Song edit");
   int handled = 0;
   if (grooveboxEditorActive && chipnomadState->project.viewMode == ViewMode::classic &&
       screen.selectMode == 0) {
@@ -732,6 +780,7 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
       case MUTE_SOLO_EMPTY:
         if (isKeyDown && keys == keyOpt) {
           if (tapCount == 3) {
+            if (!editHistoryCapture(EditObject::song)) return 1;
             // Toggle highlight on triple-tap Opt
             uint8_t* highlight = &chipnomadState->project.songHighlight[screen.cursorRow][screen.cursorCol];
             *highlight ^= 1;
@@ -842,6 +891,8 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
   // Only call common input handling if we didn't handle Song-specific input
   if (!handled) {
     if (isKeyDown && screen.selectMode == 0 && inputScreenNavigation(keys, tapCount)) return 1;
+    if (isKeyDown && (keys == keyUp || keys == keyDown || keys == keyLeft || keys == keyRight))
+      screenSongRememberSelected();
     return screenInput(&screen, isKeyDown, keys, tapCount);
   }
 
@@ -895,6 +946,12 @@ static void keyJazzGetActiveRange(int* startCol, int* startRow, int* endCol, int
 }
 
 int songKeyJazzHandleRawKey(InputCode input, int isDown) {
+  EditHistoryScope history("Song entry");
+  if (isDown && inputHexDigitValue(input) < 0) keyJazzMaterializedChain = -1;
+  if (isDown && keyJazzEnabled && input.deviceType == InputDeviceType::keyboard &&
+      (inputHexDigitValue(input) >= 0 || inputIsCutKey(input) ||
+       inputIsPasteKey(input) || inputIsDeleteKey(input) || inputIsBackspaceKey(input)) &&
+      !editHistoryCapture(EditObject::song)) return 1;
   if (input.deviceType != InputDeviceType::keyboard) return 0;
 
   if (inputIsKeyJazzToggle(input)) {
@@ -1010,25 +1067,38 @@ int songKeyJazzHandleRawKey(InputCode input, int isDown) {
   if (isDown) {
     int row = screen.cursorRow;
     int col = screen.cursorCol;
-    uint16_t current = chipnomadState->project.song[row][col];
+    Project& p = chipnomadState->project;
+    uint16_t current = p.song[row][col];
     // A cursor move since the last digit starts a fresh value; consecutive
     // digits on the same cell shift into the existing one (typing "3F").
     uint16_t base = (row == keyJazzEditRow && col == keyJazzEditCol && current != EMPTY_VALUE_16) ? current : 0;
     int value = base * 16 + digit;
     if (value > PROJECT_MAX_CHAINS - 1) value = PROJECT_MAX_CHAINS - 1;
-    chipnomadState->project.song[row][col] = (uint16_t)value;
-    lastChainValue = (uint16_t)value;
+    bool draft = row == keyJazzEditRow && col == keyJazzEditCol &&
+      current == keyJazzMaterializedChain && canonicalSimplifiedActive &&
+      p.viewMode == ViewMode::classic &&
+      !isChainUsedElsewhere(&p, current, col, row) &&
+      memcmp(&p.chains[current], &keyJazzMaterializedSnapshot, sizeof(Chain)) == 0;
+    if (draft)
+      for (const auto& bar : p.chains[current].rows)
+        if (bar.phrase < PROJECT_MAX_PHRASES && !phraseIsEmpty(&p, bar.phrase)) draft = false;
+    bool pristine = canonicalChainPristine(value, row, col);
+    if (draft && current != value) {
+      if (!editHistoryCapture(EditObject::chain, current)) return 1;
+      // Move the first digit's untouched bars instead of leaving an orphan chain.
+      if (pristine) {
+        if (!editHistoryCapture(EditObject::chain, value)) return 1;
+        p.chains[value] = p.chains[current];
+      }
+    }
+    if (!assignSongValue(value, row, col)) return 1;
+    if (draft && current != value) chainClear(&p.chains[current]);
+    keyJazzMaterializedChain = pristine || (draft && current == value) ? value : -1;
+    if (keyJazzMaterializedChain >= 0) keyJazzMaterializedSnapshot = p.chains[value];
     keyJazzEditRow = row;
     keyJazzEditCol = col;
-    // Simplified view: typing a pattern number onto a previously-empty row
-    // materializes it at the app's default length (View window setting).
-    if (current == EMPTY_VALUE_16) {
-      if (patternMaterializeIfPristine(&chipnomadState->project, value, row, col)) {
-        projectModified = 1;
-        chipnomadQueueProjectRefresh(chipnomadState);
-      }
-      canonicalMaterializeIfPristine(value, row, col);
-    }
+    projectModified = 1;
+    chipnomadQueueProjectRefresh(chipnomadState);
     drawField(col, row, CellState::normal);
   }
   return 1;
@@ -1051,4 +1121,8 @@ const AppScreen screenSong = {
 
 LoopRange songScreenGetLoopRange(void) {
   return getLoopRange();
+}
+
+int screenSongGetTopRow(void) {
+  return screen.topRow;
 }

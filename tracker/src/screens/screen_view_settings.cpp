@@ -8,7 +8,7 @@
 #include <string.h>
 #include <chrono>
 
-// View settings window: opened from the Project screen's "View" row.
+// Editing mode settings, opened from the Project screen.
 //   row 0: Mode            active project view mode. Editing it (left/right
 //                          or tap) opens the CONVERSION screen - switching
 //                          modes converts the whole song structure.
@@ -89,7 +89,7 @@ static int getColumnCount(int) { return 1; }
 static void noHeader(int, CellState) {}
 static void viewStatic(void) {
   gfxSetFgColor(appSettings.colorScheme.textTitles);
-  gfxPrint(0, 0, "VIEW");
+  gfxPrint(0, 0, "EDITING MODE");
 }
 
 // Fixed description shown under the cursor while it rests on the Mode row
@@ -185,14 +185,14 @@ static void viewField(int, int row, CellState state) {
     // Clear the value area first - "Simplified" is 10 chars, "Classic" is 7,
     // so without clearing, an earlier "Simplified" leaves stale "ied".
     gfxClearRect(23, 2, 10, 1);
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrint(23, 2, p && p->viewMode == ViewMode::simplified ? "Simplified" :
       grooveboxEditorActive ? "Groovebox" : canonicalSimplifiedActive ? "Simplified" : "Classic");
   } else if (row == 1) {
     gfxSetFgColor(cs.textDefault);
     gfxPrint(0, 3, "Default mode");
     gfxClearRect(23, 3, 10, 1);
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrint(23, 3, modeNames[appSettings.defaultViewMode ? 1 : 0]);
   } else if (row == 2) {
     if (!simplifiedActive()) {
@@ -203,7 +203,7 @@ static void viewField(int, int row, CellState state) {
     }
     gfxSetFgColor(cs.textDefault);
     gfxPrint(0, 4, "Default length");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrintf(23, 4, "%02d", appSettings.defaultPatternLength);
   } else if (row == 3) {
     if (!simplifiedActive()) {
@@ -215,7 +215,7 @@ static void viewField(int, int row, CellState state) {
     // Value scrolls when it does not fit the 8-char window.
     const char* text = playheadNames[p ? (int)p->playheadMode : 1];
     const size_t length = strlen(text);
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxClearRect(kMarqueeValueX, 5, kMarqueeWidth, 1);
     if (length > kMarqueeWidth) {
       const size_t remaining = length - marqueeOffset;
@@ -234,13 +234,11 @@ static int viewEdit(int, int row, CellEditAction action) {
   if (row == 0) {
     // Historical Pattern-format projects use the import converter once.
     if (action == CellEditAction::increase || action == CellEditAction::decrease) {
-      int current = grooveboxEditorActive ? 1 : canonicalSimplifiedActive ? 2 : 0;
-      int next = (current + (action == CellEditAction::increase ? 1 : 2)) % 3;
       if (p->viewMode == ViewMode::simplified) {
         screenViewConvertSetup(&screenViewSettings, ViewMode::classic);
       } else {
-        grooveboxEditorActive = next == 1;
-        canonicalSimplifiedActive = next == 2;
+        canonicalSimplifiedActive = !canonicalSimplifiedActive && !grooveboxEditorActive;
+        grooveboxEditorActive = false;
         screenFullRedraw(&viewData);
       }
       return 1;

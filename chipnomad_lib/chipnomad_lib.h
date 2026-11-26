@@ -55,7 +55,10 @@ struct MotionRecordEvent {
   FXId fx;
   uint8_t value;
   uint8_t erase;
+  uint8_t track = 0;
+  uint8_t instrument = EMPTY_VALUE_8;
 };
+constexpr uint8_t motionRecordEraseMidiCC = 2;
 
 // UI-facing copy of the audio state.  The callback never exposes its mutable
 // PlaybackState to the UI.
@@ -71,6 +74,8 @@ struct PlaybackStatus {
   uint8_t trackEnabled[PROJECT_MAX_TRACKS];
   uint8_t isPlaying;
   uint8_t transportPlaying;
+  BlendError blendError;
+  uint32_t blendErrorCount;
   // Audio-thread tick counter and the host timestamp of that tick. They are
   // published with the status snapshot so the UI can follow Link phase
   // without racing the audio callback.
@@ -126,6 +131,7 @@ struct ChipNomadState {
   uint32_t insertResetSeen[PROJECT_MAX_TRACKS];
   uint8_t insertValues[PROJECT_MAX_TRACKS][2][8];
   uint8_t insertActive[PROJECT_MAX_TRACKS];
+  uint8_t trackMixMask;
   uint8_t audioInputRoutedTrackMask;
   uint8_t audioModTrackMask;
   uint8_t audioWaveTrackMask;
@@ -319,6 +325,7 @@ void chipnomadSetLiveStickAxes(float leftVertical, float leftHorizontal,
                                float rightVertical, float rightHorizontal);
 void chipnomadSetLiveStickEnabled(int enabled);
 void chipnomadSetMotionRecordMode(int record, int erase);
+void chipnomadSetMidiCCEraseEnabled(int enabled);
 int chipnomadConsumeMotionRecordEvent(MotionRecordEvent* event);
 int chipnomadGetMotionRecordOverflow(void);
 unsigned int chipnomadGetMotionRecordDroppedCount(void);

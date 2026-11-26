@@ -6,6 +6,7 @@
 #include <cstring>
 #include "selection_popup.h"
 #include "copy_paste.h"
+#include "field_style.h"
 
 struct GrooveboxUIFixture {
   ChipNomadState* savedState = chipnomadState;
@@ -56,12 +57,14 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox semantic text colours follow th
     cs.textValue = palette + 5; cs.textEmpty = palette + 6;
     cs.textInfo = palette + 7; cs.warning = palette + 8;
     cs.cursor = palette + 9; cs.playMarkers = palette + 10;
+    CHECK(fieldValueColor(CellState::focus) == cs.cursor);
+    CHECK(fieldNameColor(CellState::focus) == cs.cursor);
     screenGroovebox.init(); screenGroovebox.setup(-1);
     CHECK(mockGfxColors[0][0] == cs.textTitles);
     CHECK(mockGfxColors[0][13] == cs.textLabel);
     CHECK(mockGfxColors[0][17] == cs.textDefault);
-    CHECK(mockGfxColors[13][3] == cs.textValue);
-    CHECK(mockGfxColors[13][8] == cs.textValue);
+    CHECK(mockGfxColors[13][3] == cs.cursor);
+    CHECK(mockGfxColors[13][8] == cs.cursor);
     CHECK(mockGfxColors[14][3] == cs.textLabel);
     CHECK(mockGfxColors[14][8] == cs.textDefault);
     CHECK(mockGfxColors[13][18] == cs.textNames);
@@ -72,11 +75,11 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox semantic text colours follow th
     CHECK(mockGfxColors[17][0] == cs.textInfo);
     screenGroovebox.onInput(1, keyRight, 1);
     CHECK(mockGfxColors[13][8] == cs.textNames);
-    CHECK(mockGfxColors[13][13] == cs.textValue);
-    CHECK(mockGfxColors[13][18] == cs.textValue);
+    CHECK(mockGfxColors[13][13] == cs.cursor);
+    CHECK(mockGfxColors[13][18] == cs.cursor);
     screenGroovebox.onInput(1, keyShift | keyUp, 1);
-    CHECK(mockGfxColors[0][20] == cs.textValue);
-    CHECK(mockGfxColors[0][27] == cs.textValue);
+    CHECK(mockGfxColors[0][20] == cs.cursor);
+    CHECK(mockGfxColors[0][27] == cs.cursor);
     CHECK(mockGfxColors[13][18] == cs.textNames);
     p.song[1][0] = 0;
     screenGroovebox.fullRedraw();
@@ -396,7 +399,7 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "canonical Simplified doubles shared patte
   CHECK(grooveboxTrackLength(&p, 1, 0) == 2);
 }
 
-TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox view entry includes canonical Simplified without converting classic data") {
+TEST_CASE_FIXTURE(GrooveboxUIFixture, "Editing mode switches between Classic and Simplified without conversion") {
   screenViewSettings.setup(0);
   REQUIRE(mockScreenData != nullptr);
   auto edit = mockScreenData->onEdit;
@@ -407,19 +410,15 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox view entry includes canonical S
   CHECK(chipnomadState->project.viewMode == ViewMode::classic);
   CHECK_FALSE(projectModified);
   edit(0, 0, CellEditAction::decrease);
-  CHECK(grooveboxEditorActive);
+  CHECK_FALSE(grooveboxEditorActive);
   CHECK_FALSE(canonicalSimplifiedActive);
   CHECK(chipnomadState->project.viewMode == ViewMode::classic);
   CHECK_FALSE(projectModified);
-  edit(0, 0, CellEditAction::decrease);
-  CHECK_FALSE(grooveboxEditorActive);
-  CHECK_FALSE(canonicalSimplifiedActive);
-  edit(0, 0, CellEditAction::increase);
-  CHECK(grooveboxEditorActive);
   edit(0, 0, CellEditAction::increase);
   CHECK(canonicalSimplifiedActive);
   edit(0, 0, CellEditAction::increase);
   CHECK_FALSE(grooveboxEditorActive);
+  CHECK_FALSE(canonicalSimplifiedActive);
   CHECK(chipnomadState->project.viewMode == ViewMode::classic);
   chipnomadState->project.viewMode = ViewMode::simplified;
   edit(0, 0, CellEditAction::increase);
@@ -430,7 +429,7 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox view entry includes canonical S
   CHECK_FALSE(grooveboxEditorActive);
   chipnomadState->project.viewMode = ViewMode::classic;
   screenGrooveboxAfterConversion.setup(0);
-  CHECK(grooveboxEditorActive);
+  CHECK_FALSE(grooveboxEditorActive);
   row = 11; track = 2; bar = 8;
   screenGrooveboxAfterConversion.getPlaybackLevel();
   CHECK(row == 11);
@@ -484,8 +483,8 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox bank allocation and empty/OFF b
   p.tracksCount = 8;
   REQUIRE(grooveboxAction(GrooveboxAction::emptyBar, 0, 2));
   CHECK(p.song[0][2] == 0x30);
-  CHECK(p.chains[0x30].rows[0].phrase == 0x100);
-  CHECK(p.phrases[0x100].rows[0].note == EMPTY_VALUE_8);
+  CHECK(p.chains[0x30].rows[0].phrase == 0x30);
+  CHECK(p.phrases[0x30].rows[0].note == EMPTY_VALUE_8);
   CHECK(grooveboxTrackLength(&p, 0, 2) == 1);
   REQUIRE(grooveboxAction(GrooveboxAction::offBar, 0, 2));
   int off = p.chains[0x30].rows[1].phrase;
@@ -505,7 +504,7 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox new clips use one-based hexadec
       REQUIRE(grooveboxAction(GrooveboxAction::emptyBar, r, t));
       int expected = (t + 1) * 0x10 + r;
       CHECK(p.song[r][t] == expected);
-      CHECK(p.chains[expected].rows[0].phrase == t * 0x80 + r);
+      CHECK(p.chains[expected].rows[0].phrase == (t + 1) * 0x10 + r);
     }
   }
 }
@@ -556,8 +555,8 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox empty scene preparation is atom
     REQUIRE(p.song[0][t] == (t + 1) * 0x10);
     CHECK(grooveboxTrackLength(&p, 0, t) == 3);
     for (int b = 0; b < 3; ++b) {
-      CHECK(p.chains[p.song[0][t]].rows[b].phrase == t * 0x80 + b);
-      CHECK(phraseIsEmpty(&p, t * 0x80 + b));
+      CHECK(p.chains[p.song[0][t]].rows[b].phrase == (t + 1) * 0x10 + b);
+      CHECK(phraseIsEmpty(&p, (t + 1) * 0x10 + b));
     }
   }
   CHECK(projectModified);
@@ -634,6 +633,26 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox simplified Length header resize
   CHECK(grooveboxEditorActive);
 }
 
+TEST_CASE_FIXTURE(GrooveboxUIFixture, "Simplified new patterns use default length without changing the previous pattern") {
+  auto& p = chipnomadState->project;
+  canonicalSimplifiedActive = true;
+  appSettings.defaultPatternLength = 2;
+  p.song[0][0] = EMPTY_VALUE_16;
+  REQUIRE(grooveboxAction(GrooveboxAction::newPattern, 0, 0));
+  const int first = p.song[0][0];
+  REQUIRE(first < PROJECT_MAX_CHAINS);
+  CHECK(grooveboxTrackLength(&p, 0, 0) == 2);
+  p.phrases[p.chains[first].rows[0].phrase].rows[0].note = 60;
+  REQUIRE(grooveboxAction(GrooveboxAction::newPattern, 0, 0));
+  CHECK(p.song[0][0] != first);
+  CHECK(grooveboxTrackLength(&p, 0, 0) == 2);
+  CHECK(p.phrases[p.chains[first].rows[0].phrase].rows[0].note == 60);
+  for (auto& phrase : p.phrases) phrase.rows[0].note = 48;
+  const int previous = p.song[0][0];
+  CHECK_FALSE(grooveboxAction(GrooveboxAction::newPattern, 0, 0));
+  CHECK(p.song[0][0] == previous);
+}
+
 TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox full-size new scene and Length limits are bounded") {
   auto& p = chipnomadState->project;
   appSettings.defaultPatternLength = 16;
@@ -641,7 +660,7 @@ TEST_CASE_FIXTURE(GrooveboxUIFixture, "Groovebox full-size new scene and Length 
   for (int t = 0; t < 8; ++t) {
     CHECK(grooveboxTrackLength(&p, 0, t) == 16);
     for (int b = 0; b < 16; ++b)
-      CHECK(p.chains[p.song[0][t]].rows[b].phrase == t * 0x80 + b);
+      CHECK(p.chains[p.song[0][t]].rows[b].phrase == (t + 1) * 0x10 + b);
   }
   auto original = std::make_unique<Project>(p);
   screenGroovebox.onInput(1, keyShift | keyUp, 1);

@@ -37,7 +37,7 @@ void fieldAt(int y, const char* label, const char* value, CellState state) {
   gfxSetFgColor(appSettings.colorScheme.textLabel);
   gfxPrint(0, y, label);
   gfxClearRect(18, y, 16, 1);
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue :
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor :
                 appSettings.colorScheme.textDefault);
   gfxPrintf(18, y, "%.16s", value);
 }

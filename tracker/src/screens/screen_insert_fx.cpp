@@ -40,8 +40,11 @@ static void hint(int col, int row) {
   if (row % 5) {
     char decoded[32];
     insertDescribe(decoded, sizeof(decoded), c.module, p, c.values[p]);
-    screenMessage(0, "F%d%d %s: %s", row / 5 + 1, p + 1,
-                  insertDescriptor(c.module).parameters[p].name, decoded);
+    if (c.module == insertTranceGate && p == 0 && c.values[p] >= tranceGateUserFirst)
+      screenMessage(0, "%s  EDIT x2: AY wave", decoded);
+    else
+      screenMessage(0, "F%d%d %s: %s", row / 5 + 1, p + 1,
+                    insertDescriptor(c.module).parameters[p].name, decoded);
   } else
     screenMessage(0, "TF%d %s", row / 5 + 1,
                   col ? "Bypass retains settings" : "Select insert module");
@@ -97,9 +100,11 @@ static int edit(int col, int row, CellEditAction action) {
     const auto& a = insertDescriptor(c.module).parameters[p];
     // Shape/Freeze is a packed byte, discrete for DSP slew rather than an enum.
     const bool packedShapeFreeze = c.module == insertBeads && p == 6;
+    const int maximum = c.module == insertTranceGate && (p == 2 || p == 4)
+      ? tranceGatePatternLengthLimit(c.values[0]) - 1 : insertParameterMaximum(c.module, p);
     handled = edit8noLast(action, &v,
                           a.mapping == InsertMapping::discrete && !packedShapeFreeze ? 1 : 16, 0,
-                          insertParameterMaximum(c.module, p));
+                          maximum);
     if (handled) insertEdit(&c, p, v);
   }
   if (handled) {
@@ -198,6 +203,15 @@ static int cycleInsertModule(int module, int direction) {
   return modules[0];
 }
 static int onInput(int down, int keys, int taps) {
+  if (down && keys == keyEdit && taps == 2 && data.cursorRow % 5 &&
+      parameter(data.cursorCol, data.cursorRow) == 0) {
+    const auto& c = config(data.cursorRow);
+    if (c.module == insertTranceGate && c.values[0] >= tranceGateUserFirst &&
+        c.values[0] < tranceGateUserFirst + tranceGateUserCount) {
+      screenAYWavetableOpen(c.values[0] - tranceGateUserFirst, &screenInsertFX);
+      return 1;
+    }
+  }
   if (data.cursorRow % 5 == 0 && data.cursorCol == 0) {
     auto input = popupEditInput(down, keys, &moduleButtonDown);
     if (input == PopupEditInput::hold) return 1;

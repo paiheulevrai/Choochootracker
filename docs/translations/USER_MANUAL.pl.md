@@ -1260,7 +1260,7 @@ Używaj go do balansowania 8 ścieżek, kształtowania każdej ścieżki za pomo
 | REV | Wysyłka do wspólnego reverbu, `000-100` |
 | DLY | Wysyłka do wspólnego delay ping-pong, `000-100` |
 | PAN | Panoramowanie sygnału na lewo lub prawo |
-| TLT | Tilt EQ na ścieżkę, `00-FF`; `80` jest neutralne, niskie wartości podkreślają bas, wysokie podkreślają soprany. Niskie wartości powodują lekkie przesterowanie. |
+| TLT | Tilt EQ na ścieżkę, `00-FF`; `80` jest neutralne, niskie wartości podkreślają bas, wysokie podkreślają soprany. |
 | M | `*` wycisza tę ścieżkę |
 | S | `*` solo tej ścieżki |
 

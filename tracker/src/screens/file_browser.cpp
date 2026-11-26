@@ -38,6 +38,7 @@ static int isFolderMode = 0;
 static void (*onFileSelected)(const char* path);
 static void (*onCancelled)(void);
 static void (*onPreview)(const char* path);
+static bool playHeld = false;
 static int previewOscillator = -1;
 static char midiPreviewPath[2048];
 static int getEntryIndex(void);
@@ -189,6 +190,17 @@ static void fileBrowserGoUp(void) {
 void fileBrowserSetup(const char* title, const char* extension, const char* startPath, void (*fileCallback)(const char*), void (*cancelCallback)(void)) {
   fileBrowserSetupWithPreview(title, extension, startPath, fileCallback,
     cancelCallback, NULL);
+}
+
+void fileBrowserSetupSelected(const char* title, const char* extension, const char* startPath,
+    const char* selectedPath, void (*fileCallback)(const char*), void (*cancelCallback)(void)) {
+  fileBrowserSetupWithPreview(title, extension, startPath, fileCallback,
+    cancelCallback, NULL);
+  if (!selectedPath || !selectedPath[0]) return;
+  const char* separator = strrchr(selectedPath, PATH_SEPARATOR);
+  const char* name = separator ? separator + 1 : selectedPath;
+  fileBrowserRefreshWithSelection(name);
+  resetScrollStateOnSelectionChange();
 }
 
 int fileBrowserGetAdjacentPath(const char* currentPath, const char* extension,
@@ -509,6 +521,24 @@ static void fileBrowserDraw(void) {
   }
 }
 
+void fileBrowserStopHeldPreview(void) {
+  if (!playHeld) return;
+  playHeld = false;
+  if (!midiPreviewPath[0]) audioManager.stopSamplePreview();
+}
+
+static void previewSelectedFile(void) {
+  int index = getEntryIndex();
+  if (index < 0 || index >= entryCount || entries[index].isDirectory) {
+    audioManager.stopSamplePreview();
+    return;
+  }
+  char path[2048];
+  snprintf(path, sizeof(path), "%s%s%s", currentPath, PATH_SEPARATOR_STR, entries[index].name);
+  midiPreviewPath[0] = 0;
+  onPreview(path);
+}
+
 static int fileBrowserInput(int keys, int tapCount) {
   int maxIndex = entryCount - 1;
   if (isFolderMode) maxIndex += 2;
@@ -537,6 +567,7 @@ static int fileBrowserInput(int keys, int tapCount) {
     }
 
     resetScrollStateOnSelectionChange();
+    if (playHeld && selectedIndex != oldSelectedIndex) previewSelectedFile();
 
     if (topIndex != oldTopIndex) {
       fileBrowserDraw();
@@ -600,16 +631,6 @@ static int fileBrowserInput(int keys, int tapCount) {
       }
     }
     return 1;
-  } else if (keys == keyPlay && onPreview) {
-    int entryIdx = getEntryIndex();
-    if (entryIdx >= 0 && entryIdx < entryCount && !entries[entryIdx].isDirectory) {
-      char fullPath[2048];
-      snprintf(fullPath, sizeof(fullPath), "%s%s%s", currentPath,
-        PATH_SEPARATOR_STR, entries[entryIdx].name);
-      midiPreviewPath[0] = 0;
-      onPreview(fullPath);
-    }
-    return 1;
   }
 
   return 0;
@@ -624,6 +645,7 @@ void fileBrowserSetPath(const char* path) {
 // AppScreen interface
 
 static void setup(int input) {
+  playHeld = false;
   resetScrollStateOnSelectionChange();
   optHeld = false;
   optLongHandled = false;
@@ -647,6 +669,20 @@ static void draw(void) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  if (!isKeyDown && !(keys & keyPlay)) fileBrowserStopHeldPreview();
+  if (isKeyDown && keys == keyPlay && onPreview) {
+    if (!playHeld) {
+      playHeld = true;
+      previewSelectedFile();
+    }
+    return 1;
+  }
+  if (playHeld && (keys == (keyPlay | keyUp) || keys == (keyPlay | keyDown)))
+    keys &= ~keyPlay;
+  if (isKeyDown && keys == (keyPlay | keyOpt) && playHeld) {
+    fileBrowserStopHeldPreview();
+    keys = keyOpt;
+  }
   if (isKeyDown && keys == keyOpt) {
     if (!optHeld) {
       optHeld = true;

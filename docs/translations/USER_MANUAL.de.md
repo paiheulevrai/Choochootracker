@@ -1251,7 +1251,7 @@ Benutze ihn, um die 8 Spuren auszubalancieren, jede Spur mit Tilt EQ zu formen u
 | REV | Send an den gemeinsamen Reverb, `000-100` |
 | DLY | Send an das gemeinsame Ping-Pong Delay, `000-100` |
 | PAN | Verschiebt das Audio nach links oder rechts |
-| TLT | Spurbezogener Tilt EQ, `00-FF`; `80` ist neutral, niedrige Werte bevorzugen Bass, hohe Werte Höhen. Niedrige Werte erzeugen sanfte Übersteuerung. |
+| TLT | Spurbezogener Tilt EQ, `00-FF`; `80` ist neutral, niedrige Werte bevorzugen Bass, hohe Werte Höhen. |
 | M | `*` stummschaltet diese Spur |
 | S | `*` solo schaltet diese Spur |
 

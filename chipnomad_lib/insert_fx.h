@@ -56,7 +56,14 @@ float insertMap(int module, int parameter, int value);
 void insertSelect(InsertConfig*, int module);
 void insertEdit(InsertConfig*, int parameter, int value);
 void insertDescribe(char*, size_t, int module, int parameter, int value);
-bool tranceGatePatternOpen(uint8_t pattern, uint8_t length, uint32_t step);
+constexpr uint8_t tranceGateUserFirst = 64;
+constexpr uint8_t tranceGateUserCount = 8;
+constexpr uint8_t tranceGatePatternLengthLimit(uint8_t pattern) {
+  return pattern >= tranceGateUserFirst && pattern < tranceGateUserFirst + tranceGateUserCount ? 32 : 16;
+}
+uint32_t tranceGatePatternMask(uint8_t pattern, const uint8_t (*wavetables)[32], uint8_t length = 32);
+bool tranceGatePatternOpen(uint8_t pattern, uint8_t length, uint32_t step,
+                           const uint8_t (*wavetables)[32] = nullptr);
 float tranceGateTicksPerStep(uint8_t rate);
 class InsertChain {
  public:
@@ -68,14 +75,13 @@ class InsertChain {
   // Audio-thread attachment of a producer-prepared lease, before sync().
   void attachBeads(int slot, const BeadsPool::Handle&);
   void reset();
-  // The tracker clock is 24 ticks per quarter note. Tempo is updated at its
-  // frame boundary, while trigger() aligns track gates with note-on events.
+  // The tracker clock is 24 ticks per quarter note.
   void setTempo(float tickRate);
   void trigger();
   uint16_t sync(const InsertConfig config[2], InsertAutomation*, bool rendered = true);
   bool active() const;
   void process(float* interleaved, int frames, const uint8_t effective[2][8],
-               const float* sidechain[2] = nullptr);
+               const float* sidechain[2] = nullptr, const uint8_t (*wavetables)[32] = nullptr);
 
  private:
   struct Impl;

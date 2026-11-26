@@ -7,5 +7,6 @@ namespace soundbank {
 // Handles, rather than owning pointers, remain safe in copied/old projects.
 uint32_t publish(std::shared_ptr<const PreparedPreset> preset);
 const PreparedPreset* prepared(uint32_t handle);
+std::shared_ptr<const PreparedPreset> retain(uint32_t handle);
 void collect(const std::function<bool(uint32_t)>& inUse);
 }  // namespace soundbank

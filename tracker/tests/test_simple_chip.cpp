@@ -7,6 +7,27 @@
 #include <cstring>
 #include <memory>
 #include <vector>
+TEST_CASE("Simple chip retriggers stay continuous") {
+ for(auto type:{InstrumentType::SegaPSG,InstrumentType::GBPulse,InstrumentType::GBNoise}) {
+  Instrument instrument{};getInstrumentFunctions(type).init(&instrument);
+  instrument.chip.simpleChip.attack=0;
+  instrument.chip.simpleChip.sustain=255;
+  float worst=0;
+  for(int offset:{127,321,601}) {
+   SimpleChipVoice voice;voice.init(48000);
+   voice.configure(type,&instrument.chip.simpleChip,6000,1);voice.noteOn();
+   std::vector<float> audio(offset);voice.render(audio.data(),audio.size());
+   voice.noteOn();float next=0;voice.render(&next,1);
+   worst=std::fmax(worst,std::fabs(next-audio.back()));
+   voice.kill();voice.kill();
+   float tail[128];voice.render(tail,128);
+   CHECK(std::fabs(tail[0]-next)<.04f);
+   CHECK(tail[127]==0);
+   CHECK_FALSE(voice.active());
+  }
+  CAPTURE(type);CAPTURE(worst);CHECK(worst<.04f);
+ }
+}
 TEST_CASE("Sega tone follows keyboard pitch and live octave changes") {
  for(int rate:{44100,48000,96000}) {
   Instrument instrument{};getInstrumentFunctions(InstrumentType::SegaPSG).init(&instrument);
@@ -35,7 +56,9 @@ TEST_CASE("Simple chip starter recipes render and survive CNI round trips"){
      std::vector<float> audio(rate);voice.render(audio.data(),audio.size());double energy=0,mean=0;
      for(float v:audio){REQUIRE(std::isfinite(v));CHECK(std::abs(v)<2);energy+=v*v;mean+=v;}
      CHECK(energy>1e-5);CHECK(std::abs(mean/rate)<.1);
-     voice.noteOff();voice.render(audio.data(),audio.size());voice.kill();voice.render(audio.data(),audio.size());for(float v:audio)REQUIRE(v==0);
+     voice.noteOff();voice.render(audio.data(),audio.size());float last=audio.back();voice.kill();voice.render(audio.data(),audio.size());
+     CHECK(std::fabs(audio.front()-last)<.04f);
+     for(size_t j=(size_t)(rate*.002f);j<audio.size();++j)REQUIRE(audio[j]==0);
    }
  }
  std::remove("test_simple.cni");projectFree(p.get());projectFree(q.get());

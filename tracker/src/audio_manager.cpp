@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <string.h>
 #include "audio_manager.h"
+#include "edit_history.h"
 #include "app.h"
 #include "audio_input_manager.h"
 #include "output_safety_limiter.h"
@@ -360,6 +361,7 @@ static int refreshDevices(void) {
 
 static void replaceProject(Project* replacement) {
   if (!replacement || !chipnomadState) return;
+  editHistoryClear();
   pause();
   chipnomadDiscardQueuedProject(chipnomadState);
   projectFree(&chipnomadState->project);
@@ -392,6 +394,7 @@ static void ensureInstrumentVoices(InstrumentType type) {
 
 static int mutateProject(ProjectMutation* mutation, void* userdata) {
   if (!mutation || !chipnomadState) return 1;
+  editHistoryBarrier();
   pause();
   int result = mutation(userdata);
   chipnomadInitChips(chipnomadState, aSampleRate, NULL);
@@ -525,13 +528,6 @@ static int previewSCWFCommon(const char* path, const InstrumentSCWF* settings,
                              int oscillator, int byowtbl, bool play = true) {
   if (!settings || oscillator < 0 || oscillator > 1) return 1;
   pause();
-  // SCWF previews are intentionally toggled by START: the second press stops
-  // the currently sounding oscillator/table without reloading the WAV.
-  if (play && ((byowtbl && previewMode == PREVIEW_BYOWTBL) || (!byowtbl && previewMode == PREVIEW_SCWF))) {
-    stopSamplePreview();
-    resume();
-    return 0;
-  }
   stopSamplePreview();
   char error[64];
   InstrumentSCWF* preview = byowtbl ? static_cast<InstrumentSCWF*>(&byowtblPreview) : &scwfPreview;

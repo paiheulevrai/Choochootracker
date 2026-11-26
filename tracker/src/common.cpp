@@ -93,6 +93,7 @@ void initDefaultAppSettings(void) {
   appSettings.midiOutputDelayMs = 0;
   appSettings.midiAutoChannel = 16;
   appSettings.midiRecordMode = MidiRecordMode::quantized;
+  appSettings.launchpadMiniMk3Enabled = 0;
   for (int i = 0; i < MIDI_CHANNEL_COUNT; i++) appSettings.midiChannelInstrument[i] = -1;
   appSettings.persistentWaveform = 0;
 #ifdef ANDROID_BUILD
@@ -298,6 +299,7 @@ int settingsSave(void) {
   fprintf(file, "midiOutputDelayMs: %d\n", appSettings.midiOutputDelayMs);
   fprintf(file, "midiAutoChannel: %u\n", appSettings.midiAutoChannel);
   fprintf(file, "midiRecordMode: %s\n", appSettings.midiRecordMode == MidiRecordMode::free ? "FREE" : "QUANTIZED");
+  fprintf(file, "launchpadMiniMk3Enabled: %u\n", appSettings.launchpadMiniMk3Enabled ? 1 : 0);
   fprintf(file, "clockSource: %d\n", (int)appSettings.clockSource);
   fprintf(file, "midiClockMode: %d\n",
     appSettings.clockSource == ClockSource::midiClock ? 1 : 0);
@@ -328,6 +330,8 @@ int settingsSave(void) {
   fprintf(file, "keyMotionLive: %d,%d,%d\n", appSettings.keyMapping.keyMotionLive[0].code, appSettings.keyMapping.keyMotionLive[1].code, appSettings.keyMapping.keyMotionLive[2].code);
   fprintf(file, "keyMotionRecord: %d,%d,%d\n", appSettings.keyMapping.keyMotionRecord[0].code, appSettings.keyMapping.keyMotionRecord[1].code, appSettings.keyMapping.keyMotionRecord[2].code);
   fprintf(file, "keyMotionErase: %d,%d,%d\n", appSettings.keyMapping.keyMotionErase[0].code, appSettings.keyMapping.keyMotionErase[1].code, appSettings.keyMapping.keyMotionErase[2].code);
+  fprintf(file, "keyUndo: %d,%d,%d\n", appSettings.keyMapping.keyUndo[0].code, appSettings.keyMapping.keyUndo[1].code, appSettings.keyMapping.keyUndo[2].code);
+  fprintf(file, "keyRedo: %d,%d,%d\n", appSettings.keyMapping.keyRedo[0].code, appSettings.keyMapping.keyRedo[1].code, appSettings.keyMapping.keyRedo[2].code);
 
   // Save key mapping device types
   fprintf(file, "keyUpType: %d,%d,%d\n", appSettings.keyMapping.keyUp[0].deviceType, appSettings.keyMapping.keyUp[1].deviceType, appSettings.keyMapping.keyUp[2].deviceType);
@@ -341,6 +345,8 @@ int settingsSave(void) {
   fprintf(file, "keyMotionLiveType: %d,%d,%d\n", appSettings.keyMapping.keyMotionLive[0].deviceType, appSettings.keyMapping.keyMotionLive[1].deviceType, appSettings.keyMapping.keyMotionLive[2].deviceType);
   fprintf(file, "keyMotionRecordType: %d,%d,%d\n", appSettings.keyMapping.keyMotionRecord[0].deviceType, appSettings.keyMapping.keyMotionRecord[1].deviceType, appSettings.keyMapping.keyMotionRecord[2].deviceType);
   fprintf(file, "keyMotionEraseType: %d,%d,%d\n", appSettings.keyMapping.keyMotionErase[0].deviceType, appSettings.keyMapping.keyMotionErase[1].deviceType, appSettings.keyMapping.keyMotionErase[2].deviceType);
+  fprintf(file, "keyUndoType: %d,%d,%d\n", appSettings.keyMapping.keyUndo[0].deviceType, appSettings.keyMapping.keyUndo[1].deviceType, appSettings.keyMapping.keyUndo[2].deviceType);
+  fprintf(file, "keyRedoType: %d,%d,%d\n", appSettings.keyMapping.keyRedo[0].deviceType, appSettings.keyMapping.keyRedo[1].deviceType, appSettings.keyMapping.keyRedo[2].deviceType);
 
   fprintf(file, "colorBackground: 0x%06x\n", appSettings.colorScheme.background);
   fprintf(file, "colorTextEmpty: 0x%06x\n", appSettings.colorScheme.textEmpty);
@@ -564,6 +570,10 @@ int settingsLoad(void) {
     } else if (strncmp(line, "midiRecordMode: ", 16) == 0) {
       if (strcmp(line + 16, "FREE") == 0) appSettings.midiRecordMode = MidiRecordMode::free;
       else if (strcmp(line + 16, "QUANTIZED") == 0) appSettings.midiRecordMode = MidiRecordMode::quantized;
+    } else if (strncmp(line, "launchpadMiniMk3Enabled: ", 25) == 0) {
+      int value = 0;
+      if (sscanf(line + 25, "%d", &value) == 1 && (value == 0 || value == 1))
+        appSettings.launchpadMiniMk3Enabled = (uint8_t)value;
     } else if (strncmp(line, "midiOutputDelayMs: ", 19) == 0) {
       int value = 0;
       if (sscanf(line + 19, "%d", &value) == 1 && value >= 0 && value <= 200)
@@ -655,6 +665,10 @@ int settingsLoad(void) {
       sscanf(line + 17, "%d,%d,%d", &appSettings.keyMapping.keyMotionRecord[0].code, &appSettings.keyMapping.keyMotionRecord[1].code, &appSettings.keyMapping.keyMotionRecord[2].code);
     } else if (strncmp(line, "keyMotionErase: ", 16) == 0) {
       sscanf(line + 16, "%d,%d,%d", &appSettings.keyMapping.keyMotionErase[0].code, &appSettings.keyMapping.keyMotionErase[1].code, &appSettings.keyMapping.keyMotionErase[2].code);
+    } else if (strncmp(line, "keyUndo: ", 9) == 0) {
+      sscanf(line + 9, "%d,%d,%d", &appSettings.keyMapping.keyUndo[0].code, &appSettings.keyMapping.keyUndo[1].code, &appSettings.keyMapping.keyUndo[2].code);
+    } else if (strncmp(line, "keyRedo: ", 9) == 0) {
+      sscanf(line + 9, "%d,%d,%d", &appSettings.keyMapping.keyRedo[0].code, &appSettings.keyMapping.keyRedo[1].code, &appSettings.keyMapping.keyRedo[2].code);
     } else if (strncmp(line, "keyUpType: ", 11) == 0) {
       sscanf(line + 11, "%d,%d,%d", (int *)&appSettings.keyMapping.keyUp[0].deviceType, (int *)&appSettings.keyMapping.keyUp[1].deviceType, (int *)&appSettings.keyMapping.keyUp[2].deviceType);
     } else if (strncmp(line, "keyDownType: ", 13) == 0) {
@@ -677,6 +691,10 @@ int settingsLoad(void) {
       sscanf(line + 21, "%d,%d,%d", (int *)&appSettings.keyMapping.keyMotionRecord[0].deviceType, (int *)&appSettings.keyMapping.keyMotionRecord[1].deviceType, (int *)&appSettings.keyMapping.keyMotionRecord[2].deviceType);
     } else if (strncmp(line, "keyMotionEraseType: ", 20) == 0) {
       sscanf(line + 20, "%d,%d,%d", (int *)&appSettings.keyMapping.keyMotionErase[0].deviceType, (int *)&appSettings.keyMapping.keyMotionErase[1].deviceType, (int *)&appSettings.keyMapping.keyMotionErase[2].deviceType);
+    } else if (strncmp(line, "keyUndoType: ", 13) == 0) {
+      sscanf(line + 13, "%d,%d,%d", (int *)&appSettings.keyMapping.keyUndo[0].deviceType, (int *)&appSettings.keyMapping.keyUndo[1].deviceType, (int *)&appSettings.keyMapping.keyUndo[2].deviceType);
+    } else if (strncmp(line, "keyRedoType: ", 13) == 0) {
+      sscanf(line + 13, "%d,%d,%d", (int *)&appSettings.keyMapping.keyRedo[0].deviceType, (int *)&appSettings.keyMapping.keyRedo[1].deviceType, (int *)&appSettings.keyMapping.keyRedo[2].deviceType);
     } else if (strncmp(line, "colorBackground: ", 17) == 0) {
       sscanf(line + 17, "0x%x", &appSettings.colorScheme.background);
     } else if (strncmp(line, "colorTextEmpty: ", 16) == 0) {

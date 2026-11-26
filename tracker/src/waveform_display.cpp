@@ -32,6 +32,7 @@
 
 static Bitmap* emptyBitmap = NULL;
 static Bitmap* waveformBitmaps[PROJECT_MAX_TRACKS];
+static Bitmap* songWaveformBitmap = NULL;
 static int charW = 0;
 static int charH = 0;
 static uint8_t noisePattern[512];
@@ -56,6 +57,8 @@ void waveformDisplayInit(void) {
 
   if (emptyBitmap) gfxBitmapFree(emptyBitmap);
   emptyBitmap = gfxBitmapCreate(1, 1);
+  if (songWaveformBitmap) gfxBitmapFree(songWaveformBitmap);
+  songWaveformBitmap = gfxBitmapCreate(3, 1);
 
   for (int i = 0; i < PROJECT_MAX_TRACKS; i++) {
     if (waveformBitmaps[i]) gfxBitmapFree(waveformBitmaps[i]);
@@ -329,6 +332,16 @@ void waveformDisplayRefresh(void) {
 Bitmap* waveformDisplayGetBitmap(int trackIdx) {
   if (trackIdx < 0 || trackIdx >= PROJECT_MAX_TRACKS) return emptyBitmap;
   return waveformBitmaps[trackIdx];
+}
+
+Bitmap* waveformDisplayGetSongBitmap(int trackIdx) {
+  Bitmap* source = waveformDisplayGetBitmap(trackIdx);
+  if (!source || !songWaveformBitmap) return nullptr;
+  gfxBitmapClear(songWaveformBitmap);
+  for (int y = 0; y < charH; ++y)
+    for (int x = 0; x < charW * 3; ++x)
+      songWaveformBitmap->data[y * charW * 3 + x] = source->data[y * charW + x / 3];
+  return songWaveformBitmap;
 }
 
 // ============================================================================

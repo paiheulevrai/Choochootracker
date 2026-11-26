@@ -1401,7 +1401,7 @@ Gebruik het om de 8 tracks in balans te brengen, elke track vorm te geven met Ti
 | REV | Send naar de gedeelde reverb, `000-100` |
 | DLY | Send naar de gedeelde ping-pong delay, `000-100` |
 | PAN | Vouwt de audio naar links of rechts |
-| TLT | Per-track Tilt EQ, `00-FF`; `80` is neutraal, lage waarden benadrukken bas en hoge waarden benadrukken hoge tonen. Lage waarden introduceren een zachte overdrive. |
+| TLT | Per-track Tilt EQ, `00-FF`; `80` is neutraal, lage waarden benadrukken bas en hoge waarden benadrukken hoge tonen. |
 | M | `*` dempt deze track |
 | S | `*` solo’s deze track |
 

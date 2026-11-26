@@ -8,6 +8,10 @@ cd "$PAK_DIR" || exit 1
 
 exec >>"$LOG_DIR/ChooChooTracker.txt" 2>&1
 export CCT_NEXTUI=1
+# NextUI's default ALSA route can fail while the capture-only UAC1 gadget is active.
+if [ -z "${AUDIODEV:-}" ] && [ -L /sys/kernel/config/usb_gadget/g1/configs/c.1/uac1.usb0 ]; then
+    export AUDIODEV=plughw:CARD=audiocodec,DEV=0
+fi
 # TrimUI's built-in pad identifies as an Xbox 360 controller, but its face
 # buttons use Nintendo labels. Keep EDIT on the physical A button.
 export SDL_GAMECONTROLLERCONFIG="${SDL_GAMECONTROLLERCONFIG:+$SDL_GAMECONTROLLERCONFIG

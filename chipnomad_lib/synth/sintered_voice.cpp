@@ -10,7 +10,9 @@ static float foldS(float x) { return fabsf(audioFmod4(x + 1.0f) - 2.0f) - 1.0f; 
 
 void SinteredVoice::init(float sampleRate) {
   sampleRate_ = sampleRate > 0.0f ? sampleRate : 48000.0f;
-  post_.init(sampleRate_); kill();
+  active_ = gateHigh_ = false;
+  declick_.init(sampleRate_);
+  post_.init(sampleRate_); post_.kill();
 }
 
 void SinteredVoice::configure(const InstrumentSintered* instrument, float pitchCents, float gain,
@@ -24,6 +26,7 @@ void SinteredVoice::configure(const InstrumentSintered* instrument, float pitchC
 }
 
 void SinteredVoice::noteOn() {
+  declick_.trigger(true);
   age_ = amplitude_ = feedback_ = dc_ = noiseLow_ = 0.0f; combIndex_ = 0; active_ = true;
   decayAge_ = 0.0f; gateHigh_ = true;
   randomState_ = 0x53494e54u; memset(phase_, 0, sizeof(phase_)); memset(comb_, 0, sizeof(comb_)); post_.noteOn(true);
@@ -32,7 +35,11 @@ void SinteredVoice::noteOn() {
   duration_ = .018f + d * d * tails[(int)parameters_.model];
 }
 void SinteredVoice::noteOff() { gateHigh_ = false; }
-void SinteredVoice::kill() { active_ = gateHigh_ = false; post_.kill(); }
+void SinteredVoice::kill() {
+  declick_.cut(active_);
+  active_ = gateHigh_ = false;
+  post_.kill();
+}
 float SinteredVoice::random() { randomState_ = randomState_ * 1664525u + 1013904223u; return ((randomState_ >> 8) * (1.0f / 8388608.0f)) - 1.0f; }
 float SinteredVoice::osc(float frequency, int slot) {
   phase_[slot] += frequency / sampleRate_; phase_[slot] -= floorf(phase_[slot]); return sinf(2.0f * kPi * phase_[slot]);
@@ -53,7 +60,7 @@ float SinteredVoice::saw(float frequency, int slot) {
 
 void SinteredVoice::render(float* output, size_t frames) {
   if (!output) return;
-  if (!active_) { memset(output, 0, frames * sizeof(float)); return; }
+  if (!active_) { declick_.renderTail(output, frames); return; }
   const float baseMod = parameters_.mod / 255.0f, baseA = parameters_.a / 255.0f;
   const float baseB = parameters_.b / 255.0f, baseC = parameters_.c / 255.0f;
   static constexpr float modelGain[] = {1.822647f, 1.995262f, 1.995262f, 1.995262f, 1.995262f, 1.995262f, .75f};
@@ -79,7 +86,7 @@ void SinteredVoice::render(float* output, size_t frames) {
     }
   }
   for (size_t i = 0; i < frames; ++i) {
-    if (decayAge_ >= duration_) { kill(); memset(output + i, 0, (frames - i) * sizeof(float)); break; }
+    if (decayAge_ >= duration_) { kill(); declick_.renderTail(output + i, frames - i); break; }
     float movement = 0.0f;
     if (parameters_.motion != 128) {
       float x = age_ / motionTime;
@@ -155,7 +162,7 @@ void SinteredVoice::render(float* output, size_t frames) {
     amplitude_ = expf(-5.5f * decayAge_ / duration_);
     float processed = post_.process(audioTanh(sample) * amplitude_ * calibration);
     if (parameters_.model == SinteredModel::squall) processed = audioTanh(processed * (1.0f + c * 15.0f));
-    output[i] = audioTanh(processed);
+    output[i] = declick_.process(audioTanh(processed));
     age_ += 1.0f / sampleRate_;
     if (!holding) decayAge_ += 1.0f / sampleRate_;
   }

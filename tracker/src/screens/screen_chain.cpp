@@ -5,6 +5,7 @@
 #include "chipnomad_lib.h"
 #include "project_utils.h"
 #include "copy_paste.h"
+#include "edit_history.h"
 #include <string.h>
 
 static int chain = 0;
@@ -116,13 +117,13 @@ static void drawField(int col, int row, CellState state) {
 static void drawRowHeader(int row, CellState state) {
   if (row < screen.topRow || row >= screen.topRow + screenVisibleRows()) return;
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor : cs.textInfo);
   gfxPrintf(1, 3 + row - screen.topRow, "%X", row);
 }
 
 static void drawColHeader(int col, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor : cs.textInfo);
 
   if (col == 0) {
     // Phrase
@@ -227,10 +228,21 @@ static void drawMinimap(void) {
 
 static int editCell(int col, int row, enum CellEditAction action) {
   if (col == 0) {
+    if (action == CellEditAction::tap &&
+        chipnomadState->project.chains[chain].rows[row].phrase == EMPTY_VALUE_16) {
+      int nextEmpty = findEmptyPhraseForTrack(&chipnomadState->project, *pSongTrack);
+      if (nextEmpty == EMPTY_VALUE_16) {
+        screenMessage(MESSAGE_TIME_ERROR, "No empty phrases");
+        return 0;
+      }
+      chipnomadState->project.chains[chain].rows[row].phrase = nextEmpty;
+      lastPhraseValue = nextEmpty;
+      return 1;
+    }
     if (action == CellEditAction::doubleTap) {
       uint16_t current = chipnomadState->project.chains[chain].rows[row].phrase;
       if (current != EMPTY_VALUE_16) {
-        int nextEmpty = findEmptyPhrase(&chipnomadState->project, current + 1);
+        int nextEmpty = findEmptyPhraseForTrack(&chipnomadState->project, *pSongTrack);
         if (nextEmpty != EMPTY_VALUE_16) {
           chipnomadState->project.chains[chain].rows[row].phrase = nextEmpty;
           lastPhraseValue = nextEmpty;
@@ -242,12 +254,14 @@ static int editCell(int col, int row, enum CellEditAction action) {
     } else if (action == CellEditAction::shallowClone || action == CellEditAction::deepClone) {
       uint16_t current = chipnomadState->project.chains[chain].rows[row].phrase;
       if (current != EMPTY_VALUE_16) {
-        int cloned = clonePhraseToNext(current);
+        int cloned = findEmptyPhraseForTrack(&chipnomadState->project, *pSongTrack);
+        if (cloned != EMPTY_VALUE_16 && !clonePhrase(current, cloned)) cloned = EMPTY_VALUE_16;
         if (cloned != EMPTY_VALUE_16) {
           chipnomadState->project.chains[chain].rows[row].phrase = cloned;
           lastPhraseValue = cloned;
           return 1;
         }
+        screenMessage(MESSAGE_TIME_ERROR, "Cannot clone phrase");
       }
       return 0;
     }
@@ -258,6 +272,9 @@ static int editCell(int col, int row, enum CellEditAction action) {
 }
 
 static int onEdit(int col, int row, enum CellEditAction action) {
+  EditHistoryScope history("Chain edit");
+  if (action != CellEditAction::copy && action != CellEditAction::switchSelection &&
+      !editHistoryCapture(EditObject::chain, chain)) return 1;
   int handled = 0;
 
   int startCol, startRow, endCol, endRow;
@@ -424,6 +441,8 @@ int chainKeyJazzHandleRawKey(InputCode input, int isDown) {
 
   if (isDown) {
     int row = screen.cursorRow;
+    EditHistoryScope history("Chain entry");
+    if (!editHistoryCapture(EditObject::chain, chain)) return 1;
     uint16_t current = chipnomadState->project.chains[chain].rows[row].phrase;
     uint16_t base = (row == keyJazzEditRow && current != EMPTY_VALUE_16) ? current : 0;
     int value = base * 16 + digit;

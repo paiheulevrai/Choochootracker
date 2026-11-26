@@ -1229,7 +1229,7 @@ static int projectLoadInternal(FILE* file, Project* project) {
     p.chipSetup.ay.isYM = (uint8_t)tempIsYM;
     consumeLine(file);
 
-    // TODO: Remove old pan logic for the first public release
+    // Older projects stored per-channel pan instead of a stereo mode.
     line = peekLine(file);
     if (line == NULL) return 1;
     if (strncmp(line, "- *AY8910* PanA:", 15) == 0) {

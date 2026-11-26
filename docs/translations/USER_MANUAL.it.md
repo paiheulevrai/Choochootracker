@@ -1309,7 +1309,7 @@ Usalo per bilanciare le 8 tracce, modellare ogni traccia con Tilt EQ e inviare a
 | REV | Invio al riverbero condiviso, `000-100` |
 | DLY | Invio al delay ping-pong condiviso, `000-100` |
 | PAN | Sposta l’audio a sinistra o destra |
-| TLT | Tilt EQ per traccia, `00-FF`; `80` è neutro, valori bassi favoriscono bassi e valori alti gli acuti. I valori bassi introducono un leggero overdrive morbido. |
+| TLT | Tilt EQ per traccia, `00-FF`; `80` è neutro, valori bassi favoriscono bassi e valori alti gli acuti. |
 | M | `*` silenzia questa traccia |
 | S | `*` ascolto solo questa traccia |
 

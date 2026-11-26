@@ -261,7 +261,7 @@ void drawCursor(int col,int row){
 }
 void drawField(int col,int row,CellState state){
  if(sid()&&row==4&&col==1){
-  gfxSetFgColor(state==CellState::focus?appSettings.colorScheme.textValue:appSettings.colorScheme.textInfo);
+  gfxSetFgColor(state==CellState::focus?appSettings.colorScheme.cursor:appSettings.colorScheme.textInfo);
   gfxClearRect(28,7,4,1);gfxPrint(28,7,"EDIT");return;
  }
  if(sid()&&row>=5){
@@ -282,7 +282,7 @@ void drawField(int col,int row,CellState state){
  }
  if(row==6){instrumentFMToneDrawField(col,state);return;}if(row>=7){instrumentFMAmpDrawField(col,row-7,state);return;}
  if(row<3){instrumentCommonDrawField(col,row,state);return;}
- if(row==5&&col==1){gfxSetFgColor(state==CellState::focus?appSettings.colorScheme.textValue:appSettings.colorScheme.textInfo);gfxClearRect(kColumnNameX[1],9,4,1);gfxPrint(kColumnNameX[1],9,"EDIT");return;}
+ if(row==5&&col==1){gfxSetFgColor(state==CellState::focus?appSettings.colorScheme.cursor:appSettings.colorScheme.textInfo);gfxClearRect(kColumnNameX[1],9,4,1);gfxPrint(kColumnNameX[1],9,"EDIT");return;}
  // The selected field's label lights up with its value.
  const int x=kColumnValueX[0],y=row==3?6:row==4?7:9;
  fieldDrawLabel(0,y,row==3?"Bank":row==4?"Preset":"Fine",state);

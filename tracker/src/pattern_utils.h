@@ -74,18 +74,19 @@ int patternAppendPattern(Project* p, int targetIdx, int srcIdx);
 
 // Clone-on-write for simplified-mode bar editing: when the phrase bound to
 // `barIdx` of `patternIdx` is also referenced elsewhere (another pattern
-// bar or any chain row), copy it into a fresh lowest-free slot and point
+// bar or any chain row), copy it into a fresh slot and point
 // only THIS bar at the copy — editing one bar of a multiplied pattern never
 // mutates its siblings or the classic view's phrases. Returns the (possibly
 // new) phrase index, or EMPTY_VALUE_16 when the phrase pool is exhausted.
-// `st` (optional) claims the clone in a conversion allocator state.
+// `st` (optional) claims the clone in a conversion allocator state; otherwise
+// `track` selects its bank, or -1 uses the legacy allocation policy.
 int patternEnsureBarExclusive(Project* p, struct ConversionPhraseState* st,
-  int patternIdx, int barIdx);
+  int patternIdx, int barIdx, int track = -1);
 
 // Canonical Simplified: isolate only this chain row, preserving its transpose
 // and every Song occurrence of the chain. Never called from the audio thread.
 // Returns EMPTY_VALUE_16 without mutation on invalid input or slot exhaustion.
-int chainEnsureBarExclusive(Project* p, int chainIdx, int barIdx);
+int chainEnsureBarExclusive(Project* p, int chainIdx, int barIdx, int track = -1);
 // Reuse exact stored content after an edit. Only a known editor-created copy
 // can be cleared, and only after checking all retained references. Pass -1
 // when ownership is unknown: matching can rebind, but never clears old data.
@@ -100,6 +101,10 @@ int patternFindClosestEmptyPhrase(Project* p, int patternIdx);
 // Find the closest unallocated pattern index to `startIdx`, scanning outward.
 // Returns EMPTY_VALUE_16 if patterns are full.
 int findClosestEmptyPattern(Project* p, int startIdx);
+
+// Allocate a new pattern in the selected track's 16-ID bank when possible,
+// then try the opposite bank and finally any remaining pattern slot.
+int findEmptyPatternForTrack(Project* p, int track);
 
 // Find the closest unallocated chain index to `startIdx`, scanning outward.
 // Returns EMPTY_VALUE_16 if chains are full.
@@ -120,7 +125,7 @@ int patternMaterializeIfPristine(Project* p, int patternIdx, int excludeRow,
 // Returns 1 if successful, 0 if doubling would exceed PROJECT_MAX_PATTERN_LENGTH.
 // Bars beyond the original length are filled with copies of the existing bars
 // (1-bar A → 2-bar A,A; 2-bar A,B → 4-bar A,B,A,B; per decision #4).
-int patternMultiplyLengthByTwo(Project* p, int patternIdx);
+int patternMultiplyLengthByTwo(Project* p, int patternIdx, int track = -1);
 
 // Halve a pattern's length by 2 by dropping the second half.
 // Returns 1 if successful, 0 if the current length is odd or already 1.
@@ -129,9 +134,9 @@ int patternMultiplyLengthByTwo(Project* p, int patternIdx);
 int patternHalveLengthByTwo(Project* p, int patternIdx);
 
 // Add one empty bar to the end of a pattern. The new bar references a freshly
-// allocated empty phrase (closest unallocated to the pattern index).
+// allocated empty phrase, preferring the track bank when track is supplied.
 // Returns 1 if successful, 0 if the pattern is already at max length.
-int patternAddEmptyBar(Project* p, int patternIdx);
+int patternAddEmptyBar(Project* p, int patternIdx, int track = -1);
 
 // Remove the last bar from a pattern. The phrase that was in the last bar is
 // NOT freed (it might be referenced elsewhere). Only `length` decreases.

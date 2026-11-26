@@ -1,5 +1,6 @@
 #include "field_style.h"
 #include "screen_instrument.h"
+#include "edit_history.h"
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "model_catalog.h"
@@ -16,6 +17,8 @@ static void drawPreview(const InstrumentMME* mme) {
   gfxDrawBitmap(previewBitmap, 0, 16);
 }
 static void selectModel(int value) {
+  EditHistoryScope history("Instrument model");
+  if (!editHistoryCaptureModel(cInstrument)) return;
   chipnomadState->project.instruments[cInstrument].chip.mme.model = (MMEModel)value;
   projectModified = 1; screenSetup(&screenInstrument, cInstrument);
 }
@@ -68,7 +71,7 @@ static void drawField(int col, int row, CellState state) {
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostField(col, row, state, m); return; }
   // The selected field's label lights up with its value; Model is a title.
   if (row == 3) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textTitles);
     gfxPrint(0, 6, "Model");
   } else {
     fieldDrawLabel(0, row + 4, macroName(m->model, row - 4), state);

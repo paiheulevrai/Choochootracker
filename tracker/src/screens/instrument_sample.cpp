@@ -173,7 +173,7 @@ static void drawField(int col, int row, CellState state) {
   // The selected field's label lights up with its value; Sample is a title.
   static const char* const labels[] = {"Pitch", "Stretch", "Loop", "Speed"};
   if (row == 3 && col == 0) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textTitles);
     gfxPrint(0, 6, "Sample");
   } else if (!col && row >= 4 && row <= 7) {
     fieldDrawLabel(0, row + 4, labels[row - 4], state);

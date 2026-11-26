@@ -51,6 +51,14 @@ class LibraryTest(unittest.TestCase):
             "instruments/FACTORY/builtins.tsv": b"builtins",
             "instruments/FACTORY/banks.zip": b"bank",
             "projects/DNB.cct": b"song",
+            "licenses/chip-banks/expansion/ymulator.opm": b"source bank",
+            "licenses/chip-banks/expansion/16bit-station.wopn": b"binary bank",
+            "licenses/chip-banks/expansion/emu2413.c": b"tone tables",
+            "licenses/chip-banks/expansion/ymulator.opm.LICENSE": b"GPL notice",
+            "licenses/chip-banks/expansion/README.txt": b"source attribution",
+            "licenses/chip-banks/expansion/expansion.py": b"conversion source",
+            "licenses/chip-banks/expansion/four_op.py": b"other converter",
+            "licenses/chip-banks/expansion/sources.json": b"provenance",
         }
 
     def write_package(self, data_override=None):
@@ -94,8 +102,21 @@ class LibraryTest(unittest.TestCase):
         self.assertFalse((runtime / "instruments").exists())
         licenses = list((runtime / "licenses").iterdir())
         self.assertEqual({p.read_bytes() for p in licenses},
-                         {b"engine license", b"font license"})
+                         {b"engine license", b"font license", b"GPL notice",
+                          b"source attribution"})
         self.assertTrue(all(p.is_file() for p in licenses))
+        self.assertIn("LICENSE.chip-banks.expansion.ymulator.opm.LICENSE.txt",
+                      {p.name for p in licenses})
+        self.assertTrue(all(not p.name.endswith(".txt.txt") for p in licenses))
+        with tarfile.open(fileobj=io.BytesIO((runtime / "data.tar.gz").read_bytes()),
+                          mode="r:gz") as data:
+            for name in ("16bit-station.wopn", "emu2413.c", "ymulator.opm",
+                         "expansion.py", "four_op.py", "sources.json"):
+                path = "licenses/chip-banks/expansion/" + name
+                self.assertEqual(data.extractfile(path).read(), self.assets[path])
+                self.assertEqual(
+                    (runtime / "sources/chip-banks/expansion" / name).read_bytes(),
+                    self.assets[path])
         self.assertFalse((runtime / "fonts/Pixel/licenses").exists())
         self.assertNotIn(b"\r", (port / "ChooChooTracker.sh").read_bytes())
         self.assertNotIn(b"\r", (runtime / "choochootracker.gptk").read_bytes())

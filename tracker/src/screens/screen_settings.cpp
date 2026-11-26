@@ -2,6 +2,7 @@
 #include "screen_midi.h"
 #include "common.h"
 #include "app.h"
+#include "edit_history.h"
 #include "corelib_gfx.h"
 #include "corelib_mainloop.h"
 #include "screens.h"
@@ -13,16 +14,18 @@
 // Android adds a "Working folder" row (row 7) before Quit.
 #ifdef ANDROID_BUILD
 #define SETTINGS_WORKING_FOLDER_ROW 7
-#define SETTINGS_QUIT_ROW 8
-#define SETTINGS_TOTAL_ROWS 9
+#define SETTINGS_QUIT_ROW 9
+#define SETTINGS_TOTAL_ROWS 10
+#define SETTINGS_HISTORY_ROW 8
 static char workingFolderStatus[256];
 static void refreshWorkingFolderStatus(void) {
   if (fileGetWorkingFolderStatus(workingFolderStatus, sizeof(workingFolderStatus)) != 0)
     snprintf(workingFolderStatus, sizeof(workingFolderStatus), "Unavailable");
 }
 #else
-#define SETTINGS_QUIT_ROW 7
-#define SETTINGS_TOTAL_ROWS 8
+#define SETTINGS_QUIT_ROW 8
+#define SETTINGS_TOTAL_ROWS 9
+#define SETTINGS_HISTORY_ROW 7
 #endif
 
 static int columnCount(int) { return 1; }
@@ -37,6 +40,7 @@ static void drawStatic(void) { gfxSetFgColor(appSettings.colorScheme.textTitles)
 static void drawCursor(int, int row) {
   if (row < 6) { static const int widths[] = {8, 5, 4, 6, 5, 8}; gfxCursor(0, 2 + row, widths[row]); }
   else if (row == 6) gfxCursor(0, 10, 14);
+  else if (row == SETTINGS_HISTORY_ROW) gfxCursor(0, 14, 12);
 #ifdef ANDROID_BUILD
   else if (row == SETTINGS_WORKING_FOLDER_ROW) gfxCursor(0, 12, 14);
 #endif
@@ -46,11 +50,12 @@ static void noHeader(int, CellState) {}
 static void drawField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   gfxSetFgColor(cs.textDefault);
-  if (row < 6) { static const char* labels[] = {"Controls", "Audio", "MIDI", "Synths", "Mixer", "Graphics"}; gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, 2 + row, labels[row]); }
-  else if (row == 6) { gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, 10, "Support report"); }
+  if (row < 6) { static const char* labels[] = {"Controls", "Audio", "MIDI", "Synths", "Mixer", "Graphics"}; gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, 2 + row, labels[row]); }
+  else if (row == 6) { gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, 10, "Support report"); }
+  else if (row == SETTINGS_HISTORY_ROW) { gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, 14, "Edit history"); }
 #ifdef ANDROID_BUILD
   else if (row == SETTINGS_WORKING_FOLDER_ROW) {
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrint(0, 12, "Working folder");
     gfxPrint(23, 12, strncmp(workingFolderStatus, "Folder:", 7) == 0 ? "FOLDER " :
       strncmp(workingFolderStatus, "Shared", 6) == 0 ? "SHARED " :
@@ -58,7 +63,7 @@ static void drawField(int, int row, CellState state) {
       strcmp(workingFolderStatus, "Unavailable") == 0 ? "N/A    " : "PRIVATE");
   }
 #endif
-  else if (row == SETTINGS_QUIT_ROW) { gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, 18, "Quit ChooChooTracker"); }
+  else if (row == SETTINGS_QUIT_ROW) { gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, 18, "Quit ChooChooTracker"); }
 }
 static int onEdit(int, int row, CellEditAction action) {
 #ifdef ANDROID_BUILD
@@ -87,11 +92,12 @@ static int onEdit(int, int row, CellEditAction action) {
   else if (row == SETTINGS_WORKING_FOLDER_ROW) {
     if (strcmp(workingFolderStatus, "Unavailable") == 0) screenMessage(MESSAGE_TIME, "Not available in this build");
     else filePickWorkingFolder();
-    return 0;
+    return 1;
   }
 #endif
+  else if (row == SETTINGS_HISTORY_ROW) { editHistoryOpenMenu(); return 1; }
   else if (row == SETTINGS_QUIT_ROW) { mainLoopTriggerQuit(); return 1; }
-  return 0;
+  return row <= 5;
 }
 static ScreenData data = {
   .rows = SETTINGS_TOTAL_ROWS, .cursorRow = 0, .cursorCol = 0, .topRow = 0, .selectMode = -1,
@@ -102,6 +108,6 @@ static ScreenData data = {
   .onEdit = onEdit, .onInput = NULL, .onRawInput = NULL, .isCellValid = NULL, .getLoopRange = NULL,
 };
 static void fullRedraw(void) { screenFullRedraw(&data); }
-static int onInput(int isKeyDown, int keys, int taps) { if (keys == keyOpt || keys == (keyUp | keyShift)) { screenSetup(&screenSong, 0); return 1; } return screenInput(&data, isKeyDown, keys, taps); }
+static int onInput(int isKeyDown, int keys, int taps) { if (keys == (keyUp | keyShift)) { screenSetup(&screenSong, 0); return 1; } return screenInput(&data, isKeyDown, keys, taps); }
 static ScreenPlaybackLevel playbackLevel(void) { return ScreenPlaybackLevel::song; }
 const AppScreen screenSettings = {NULL, setup, fullRedraw, draw, onInput, playbackLevel};

@@ -75,6 +75,7 @@ const AppScreen screenProjectTuning = {nullptr, nullptr, noOp, noOp, ignoreInput
 const AppScreen screenLinkOptions = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenSyncOut = {nullptr, nullptr, noOp, noOp, ignoreInput};
 const AppScreen screenAYWavetable = {nullptr, nullptr, noOp, noOp, ignoreInput};
+void screenAYWavetableOpen(int index, const AppScreen*) { screenSetup(&screenAYWavetable, index); }
 const AppScreen* currentScreen = &screenSong;
 ScreenData* mockScreenData;
 const char* mockBrowserTitle;
@@ -133,6 +134,8 @@ int screenTouchTap(int, int) { return 0; }
 TouchAdjustResult screenTouchAdjust(int, int) { return touchAdjustNone; }
 void screenQuickHelpOpen(const AppScreen*) {}
 void fileBrowserSetup(const char* title, const char* extension, const char*,
+  void (*)(const char*), void (*)(void)) {}
+void fileBrowserSetupSelected(const char* title, const char* extension, const char*, const char*,
                       void (*)(const char*), void (*)(void)) {
   mockBrowserTitle = title;
   mockBrowserExtension = extension;

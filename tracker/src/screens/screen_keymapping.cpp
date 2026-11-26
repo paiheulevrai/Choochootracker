@@ -7,6 +7,7 @@
 #include "corelib_input.h"
 #include "corelib_keymap.h"
 #include "app.h"
+#include "console_input.h"
 #include <errno.h>
 #include <string.h>
 
@@ -25,9 +26,11 @@ static int captureCol = 0;
 static CaptureState captureState = STATE_NAVIGATION;
 static InputCode pendingCapture = {InputDeviceType::none, 0};
 #ifdef CCT_CONSOLE_CONTROLS
-static constexpr int doneRow = 12;
-static InputCode requiredCapture = {InputDeviceType::none, 0};
+static constexpr int doneRow = 14;
 static KeyMapping candidateMapping;
+static KeyMapping editorMapping;
+static bool editorVerified = true;
+static bool saveAfterVerification = false;
 static InputCode heldInputs[16];
 static int heldCount = 0;
 static uint32_t lastInputTime, stepStartTime;
@@ -37,24 +40,34 @@ static constexpr uint32_t stepTimeoutMs = 15000;
 static constexpr uint32_t restartHoldMs = 1000;
 static bool calibrating = false;
 static bool startupRecovery = false;
+static bool migrationRecovery = false;
+static bool recoveryFile = false;
+struct VerificationStep {
+  int row;
+  InputCode required;
+};
+static VerificationStep verificationSteps[8 + 13 * 3];
+static int verificationCount = 0;
 static int verifyStep = 0;
 static bool verifyConflict = false;
-static int extraVerifyRow = -1;
 static char recoveryPath[PATH_LENGTH + 32];
 static InputCode resetInput = {InputDeviceType::none, 0};
 static bool resetHeld = false;
 static int resetTaps = 0;
 static uint32_t resetTime;
 #else
-static constexpr int doneRow = 11;
+static constexpr int doneRow = 13;
 static InputCode captureTrigger = {InputDeviceType::none, 0};
 static InputCode captureIgnore = {InputDeviceType::none, 0};
 #endif
 static void fullRedraw(void);
 static void applyPendingCapture(void);
+#ifdef CCT_CONSOLE_CONTROLS
+static void startCapture(bool calibration, bool keepHeld = false);
+#endif
 
 static const char* buttonNames[] = {
-  "Up", "Down", "Left", "Right", "Edit (A)", "Opt (B)", "Play", "Shift", "Stick live", "Motion rec", "Motion del"
+  "Up", "Down", "Left", "Right", "Edit (A)", "Opt (B)", "Play", "Shift", "Stick live", "Motion rec", "Motion del", "Undo", "Redo"
 };
 
 static InputCode* getKeySlot(KeyMapping& mapping, int row, int col) {
@@ -70,50 +83,19 @@ static InputCode* getKeySlot(KeyMapping& mapping, int row, int col) {
     case 8: return &mapping.keyMotionLive[col];
     case 9: return &mapping.keyMotionRecord[col];
     case 10: return &mapping.keyMotionErase[col];
+    case 11: return &mapping.keyUndo[col];
+    case 12: return &mapping.keyRedo[col];
   }
   return NULL;
 }
 
 static InputCode* getKeySlot(int row, int col) {
 #ifdef CCT_CONSOLE_CONTROLS
-  return getKeySlot(captureState == STATE_NAVIGATION ? appSettings.keyMapping : candidateMapping, row, col);
+  return getKeySlot(captureState == STATE_NAVIGATION ? editorMapping : candidateMapping, row, col);
 #else
   return getKeySlot(appSettings.keyMapping, row, col);
 #endif
 }
-
-#ifdef PORTMASTER_BUILD
-// PortMaster normally delivers every physical control twice: once through
-// SDL's controller API and once through gptokeyb as a keyboard key.  Keep
-// saved mappings keyboard-based, but use the controller event as a reliable
-// fallback when Knulli does not deliver the keyboard event to the capture UI.
-static int portMasterGamepadToKeyboard(InputCode input, InputCode* output) {
-  const char* nextui = getenv("CCT_NEXTUI");
-  if (nextui && strcmp(nextui, "1") == 0) return 0;
-  if (input.deviceType != InputDeviceType::gamepad) return 0;
-
-  int key = 0;
-  switch (input.code) {
-    case SDL_CONTROLLER_BUTTON_DPAD_UP: key = BTN_UP; break;
-    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: key = BTN_DOWN; break;
-    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: key = BTN_LEFT; break;
-    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: key = BTN_RIGHT; break;
-    case SDL_CONTROLLER_BUTTON_A: key = BTN_A; break;
-    case SDL_CONTROLLER_BUTTON_B: key = BTN_B; break;
-    case SDL_CONTROLLER_BUTTON_X: key = BTN_X; break;
-    case SDL_CONTROLLER_BUTTON_Y: key = BTN_Y; break;
-    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: key = BTN_L1; break;
-    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: key = BTN_R1; break;
-    case SDL_CONTROLLER_BUTTON_BACK: key = BTN_SELECT; break;
-    case SDL_CONTROLLER_BUTTON_START: key = BTN_START; break;
-    case gamepadTriggerLeft: key = BTN_L2; break;
-    case gamepadTriggerRight: key = BTN_R2; break;
-    default: return 0;
-  }
-  *output = (InputCode){InputDeviceType::keyboard, key};
-  return 1;
-}
-#endif
 
 static bool sameInput(InputCode first, InputCode second) {
   return first.deviceType == second.deviceType && first.code == second.code;
@@ -124,24 +106,31 @@ void screenKeyMappingCancel(void) {
   captureState = STATE_NAVIGATION;
   heldCount = 0;
   pendingCapture = {InputDeviceType::none, 0};
-  requiredCapture = {InputDeviceType::none, 0};
   resetInput = {InputDeviceType::none, 0};
   resetHeld = false;
   resetTaps = 0;
+  editorMapping = appSettings.keyMapping;
+  editorVerified = true;
+  saveAfterVerification = false;
   inputRawCallback = NULL;
   appResetInputState();
 }
 
 static void cancelCapture(const char* message) {
+  KeyMapping staged = editorMapping;
+  bool verified = editorVerified;
   screenKeyMappingCancel();
-  if (startupRecovery) screenSetup(&screenTitle, 0);
+  editorMapping = staged;
+  editorVerified = verified;
+  if (migrationRecovery) startCapture(true);
+  else if (startupRecovery) screenSetup(&screenTitle, 0);
   else fullRedraw();
   screenMessage(MESSAGE_TIME_ERROR, "%s", message);
 }
 
 static int mappedRow(InputCode input) {
   // Match the app's priority: motion controls are handled before navigation.
-  const int motionRows[] = {9, 8, 10};
+  const int motionRows[] = {11, 12, 9, 8, 10};
   for (int row : motionRows) {
     for (int col = 0; col < 3; ++col)
       if (sameInput(*getKeySlot(candidateMapping, row, col), input)) return row;
@@ -153,6 +142,27 @@ static int mappedRow(InputCode input) {
 }
 
 static void beginVerification(void) {
+  verificationCount = 8;
+  for (int row = 0; row < 8; ++row)
+    verificationSteps[row] = {row, {InputDeviceType::none, 0}};
+  if (!calibrating || !startupRecovery) {
+    for (int row = calibrating ? 8 : 0; row < 13; ++row) {
+      for (int col = 0; col < 3; ++col) {
+        InputCode input = *getKeySlot(candidateMapping, row, col);
+        if (input.deviceType == InputDeviceType::none) continue;
+        bool previouslyMapped = false;
+        for (int oldCol = 0; oldCol < 3; ++oldCol) {
+          if (sameInput(input, consoleInput::normalize(*getKeySlot(appSettings.keyMapping, row, oldCol))))
+            previouslyMapped = true;
+        }
+        if (previouslyMapped) continue;
+        if (row < 8 && verificationSteps[row].required.deviceType == InputDeviceType::none)
+          verificationSteps[row].required = input;
+        else
+          verificationSteps[verificationCount++] = {row, input};
+      }
+    }
+  }
   verifyStep = 0;
   verifyConflict = false;
   captureState = STATE_WAIT_VERIFY;
@@ -186,39 +196,56 @@ static void onRawInput(InputCode input, int isDown) {
     return;
   }
   if (captureState == STATE_CAPTURING) {
-#ifdef PORTMASTER_BUILD
-    InputCode translatedInput;
-    if (portMasterGamepadToKeyboard(input, &translatedInput)) input = translatedInput;
-#endif
     pendingCapture = input;
     captureState = STATE_CAPTURE_DONE;
   } else if (captureState == STATE_VERIFYING || captureState == STATE_VERIFY_DONE) {
-    int expectedRow = verifyStep < 8 ? verifyStep : extraVerifyRow;
+    const VerificationStep& expected = verificationSteps[verifyStep];
     int row = mappedRow(input);
-    if (row >= 0 && row != expectedRow) {
+    if (row >= 0 && row != expected.row) {
       verifyConflict = true;
       captureState = STATE_VERIFYING;
       screenMessage(MESSAGE_TIME_ERROR, "Wrong control; release and try again");
-    } else if (row == expectedRow && !verifyConflict) {
-      if (expectedRow == captureRow && requiredCapture.deviceType != InputDeviceType::none &&
-          !sameInput(input, requiredCapture))
+    } else if (row == expected.row && !verifyConflict) {
+      if (expected.required.deviceType != InputDeviceType::none &&
+          !sameInput(input, expected.required))
         screenMessage(MESSAGE_TIME_ERROR, "Test the newly assigned key or button");
       else captureState = STATE_VERIFY_DONE;
     }
   }
 }
 
-static void startCapture(bool calibration, bool keepHeld = false) {
+static void startCapture(bool calibration, bool keepHeld) {
   calibrating = calibration;
-  candidateMapping = appSettings.keyMapping;
-  extraVerifyRow = -1;
-  requiredCapture = {InputDeviceType::none, 0};
+  candidateMapping = editorMapping;
+  saveAfterVerification = false;
   verifyConflict = false;
   if (calibration) {
+    for (int row = 0; row < 13; ++row)
+      for (int col = 0; col < 3; ++col)
+        *getKeySlot(candidateMapping, row, col) =
+          consoleInput::normalize(*getKeySlot(candidateMapping, row, col));
     captureRow = captureCol = 0;
     for (int row = 0; row < 8; ++row)
       for (int col = 0; col < 3; ++col)
         *getKeySlot(candidateMapping, row, col) = {InputDeviceType::none, 0};
+    bool cleared = false;
+    for (int row = 8; row < 13; ++row) {
+      for (int col = 0; col < 3; ++col) {
+        const InputCode input = *getKeySlot(candidateMapping, row, col);
+        if (consoleInput::aliasIndex(input) < 0) continue;
+        bool conflict = false;
+        for (int other = row + 1; other < 13; ++other)
+          for (int slot = 0; slot < 3; ++slot)
+            if (sameInput(input, *getKeySlot(candidateMapping, other, slot))) conflict = true;
+        if (!conflict) continue;
+        for (int other = row; other < 13; ++other)
+          for (int slot = 0; slot < 3; ++slot)
+            if (sameInput(input, *getKeySlot(candidateMapping, other, slot)))
+              *getKeySlot(candidateMapping, other, slot) = {InputDeviceType::none, 0};
+        cleared = true;
+      }
+    }
+    if (cleared) screenMessage(MESSAGE_TIME_ERROR, "Conflicting Motion/Undo bindings cleared");
   }
   if (!keepHeld) {
     heldCount = 0;
@@ -252,7 +279,7 @@ static void onRawInput(InputCode input, int isDown) {
 #endif
 
 static int getColumnCount(int row) {
-  if (row < 11) return 3;
+  if (row < 13) return 3;
   return 1;
 }
 
@@ -261,7 +288,7 @@ static void drawStatic(void) {
   gfxPrint(0, 0, "Key Mapping");
 
   gfxSetFgColor(appSettings.colorScheme.textLabel);
-  for (int i = 0; i < 11; i++) {
+  for (int i = 0; i < 13; i++) {
     gfxPrint(0, i + 2, buttonNames[i]);
   }
 
@@ -269,24 +296,29 @@ static void drawStatic(void) {
     gfxSetFgColor(appSettings.colorScheme.textValue);
 #ifdef CCT_CONSOLE_CONTROLS
     if (captureState == STATE_WAIT_RELEASE || captureState == STATE_WAIT_VERIFY)
-      gfxPrint(0, 16, "Release all buttons... (15s)");
-    else if (captureState == STATE_VERIFYING || captureState == STATE_VERIFY_DONE)
-      gfxPrintf(0, 16, "Test: press %s (15s)", buttonNames[verifyStep < 8 ? verifyStep : extraVerifyRow]);
-    else if (calibrating) gfxPrintf(0, 16, "Press physical %s (15s)", buttonNames[captureRow]);
-    else gfxPrint(0, 16, "Press new key...");
-    gfxPrint(0, 17, calibrating ? "Hold any button 1s: restart" : "15s per step or changes cancel");
+      gfxPrint(0, 17, "Release all buttons... (15s)");
+    else if (captureState == STATE_VERIFYING || captureState == STATE_VERIFY_DONE) {
+      const VerificationStep& step = verificationSteps[verifyStep];
+      if (step.required.deviceType == InputDeviceType::none)
+        gfxPrintf(0, 17, "Test: press %s (15s)", buttonNames[step.row]);
+      else
+        gfxPrintf(0, 17, "Test: %s (%s)", buttonNames[step.row], inputGetKeyName(step.required));
+    }
+    else if (calibrating) gfxPrintf(0, 17, "Press physical %s (15s)", buttonNames[captureRow]);
+    else gfxPrint(0, 17, "Press new key...");
+    gfxPrint(0, 18, calibrating ? "Hold any button 1s: restart" : "15s per step or test cancels");
 #else
-    gfxPrint(0, 16, "Press any key...");
+    gfxPrint(0, 17, "Press any key...");
 #endif
   } else {
     gfxSetFgColor(appSettings.colorScheme.textInfo);
-    gfxPrint(0, 16, "Tap unmapped key 5x");
-    gfxPrint(0, 17, "to reset defaults");
+    gfxPrint(0, 17, "Tap unmapped key 5x");
+    gfxPrint(0, 18, "to reset defaults");
   }
 }
 
 static void drawCursor(int col, int row) {
-  if (row < 11) {
+  if (row < 13) {
     InputCode* slot = getKeySlot(row, col);
     int width = slot ? strlen(inputGetKeyName(*slot)) : 3;
     gfxCursor(11 + col * 8, row + 2, width);
@@ -296,13 +328,13 @@ static void drawCursor(int col, int row) {
 }
 
 static void drawField(int col, int row, CellState state) {
-  if (row < 11) {
+  if (row < 13) {
     gfxClearRect(11 + col * 8, row + 2, 7, 1);
     InputCode* slot = getKeySlot(row, col);
     if (slot) {
       int isEmpty = (slot->deviceType == InputDeviceType::none);
       if (state == CellState::focus) {
-        gfxSetFgColor(appSettings.colorScheme.textValue);
+        gfxSetFgColor(appSettings.colorScheme.cursor);
       } else if (isEmpty) {
         gfxSetFgColor(appSettings.colorScheme.textEmpty);
       } else {
@@ -315,7 +347,7 @@ static void drawField(int col, int row, CellState state) {
       gfxPrint(11 + col * 8, row + 2, trimmed);
     }
   } else {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     gfxPrint(0, row + 2, row == doneRow ? "Done" : "Calibrate controls");
   }
 }
@@ -326,9 +358,25 @@ static void drawRowHeader(int row, CellState state) {
 static void drawColHeader(int col, CellState state) {
 }
 
+#ifdef CCT_CONSOLE_CONTROLS
+static int saveEditorMapping(void) {
+  KeyMapping previous = appSettings.keyMapping;
+  appSettings.keyMapping = editorMapping;
+  if (settingsSave() != 0) {
+    appSettings.keyMapping = previous;
+    fullRedraw();
+    screenMessage(MESSAGE_TIME_ERROR, "Could not save controls");
+    return 1;
+  }
+  appResetInputState();
+  screenSetup(&screenControlsSettings, 0);
+  return 1;
+}
+#endif
+
 static int onEdit(int col, int row, CellEditAction action) {
   if (captureState != STATE_NAVIGATION) return 1;
-  if (row < 11) {
+  if (row < 13) {
     if (action == CellEditAction::tap) {
       captureRow = row;
       captureCol = col;
@@ -341,25 +389,37 @@ static int onEdit(int col, int row, CellEditAction action) {
       fullRedraw();
 #endif
       return 1;
-    } else if (action == CellEditAction::clear && col > 0) {
+    } else if (action == CellEditAction::clear && (col > 0 || row >= 8)) {
 #ifdef CCT_CONSOLE_CONTROLS
-      candidateMapping = appSettings.keyMapping;
-      InputCode* slot = getKeySlot(candidateMapping, row, col);
+      InputCode* slot = getKeySlot(editorMapping, row, col);
       if (slot) {
         slot->deviceType = InputDeviceType::none;
         slot->code = 0;
       }
-      heldCount = 0;
-      extraVerifyRow = -1;
-      inputRawCallback = onRawInput;
-      lastInputTime = mainLoopGetTicks();
-      beginVerification();
+      editorVerified = false;
+      fullRedraw();
 #else
       *getKeySlot(row, col) = {InputDeviceType::none, 0};
 #endif
       return 1;
     }
   } else if (row == doneRow && action == CellEditAction::tap) {
+#ifdef CCT_CONSOLE_CONTROLS
+    if (!editorVerified) {
+      candidateMapping = editorMapping;
+      if (!consoleInput::migrate(candidateMapping)) {
+        screenMessage(MESSAGE_TIME_ERROR, "Conflicting controls; change them first");
+        return 1;
+      }
+      calibrating = false;
+      saveAfterVerification = true;
+      heldCount = 0;
+      inputRawCallback = onRawInput;
+      beginVerification();
+      return 1;
+    }
+    return saveEditorMapping();
+#else
     if (settingsSave() != 0) {
       screenMessage(MESSAGE_TIME_ERROR, "Could not save controls");
       return 1;
@@ -370,8 +430,9 @@ static int onEdit(int col, int row, CellEditAction action) {
     appResetInputState();
     screenSetup(&screenControlsSettings, 0);
     return 1;
+#endif
 #ifdef CCT_CONSOLE_CONTROLS
-  } else if (row == 11 && action == CellEditAction::tap) {
+  } else if (row == 13 && action == CellEditAction::tap) {
     startCapture(true);
     return 1;
 #endif
@@ -410,7 +471,11 @@ static void setup(int input) {
   screenKeyMappingData.cursorCol = 0;
 #ifdef CCT_CONSOLE_CONTROLS
   screenKeyMappingCancel();
-  startupRecovery = input == 1;
+  startupRecovery = input != 0;
+  migrationRecovery = (input & 2) != 0;
+  recoveryFile = (input & 1) != 0;
+  if (migrationRecovery)
+    screenMessage(MESSAGE_TIME_ERROR, "Conflicting controls; calibrate to keep changes");
   if (startupRecovery) startCapture(true);
 #else
   captureState = STATE_NAVIGATION;
@@ -445,36 +510,8 @@ static void applyPendingCapture(void) {
     }
 #endif
     InputCode previous = *slot;
-#ifdef CCT_CONSOLE_CONTROLS
-    bool conflictsOtherRow = false;
-    for (int row = 0; row < 11; ++row)
-      for (int col = 0; col < 3; ++col)
-        if (row != captureRow && sameInput(*getKeySlot(candidateMapping, row, col), pendingCapture))
-          conflictsOtherRow = true;
-
-    if (!calibrating && conflictsOtherRow && previous.deviceType != pendingCapture.deviceType) {
-      // Swap within the captured device path, not a keyboard key into a pad slot.
-      InputCode* deviceSlot = NULL;
-      for (int col = 0; col < 3; ++col) {
-        InputCode* other = getKeySlot(candidateMapping, captureRow, col);
-        if (col != captureCol && other->deviceType == pendingCapture.deviceType &&
-            !sameInput(*other, pendingCapture)) {
-          deviceSlot = other;
-          break;
-        }
-      }
-      if (!deviceSlot) {
-        cancelCapture("Use Calibrate controls for this swap");
-        return;
-      }
-      InputCode displaced = *deviceSlot;
-      *deviceSlot = previous;
-      previous = displaced;
-    }
-#endif
-
     // Find conflicting slot and swap
-    for (int row = 0; row < 11; row++) {
+    for (int row = 0; row < 13; row++) {
       for (int col = 0; col < 3; col++) {
         if (row == captureRow && col == captureCol) continue;
         InputCode* other = getKeySlot(row, col);
@@ -485,9 +522,6 @@ static void applyPendingCapture(void) {
     }
 
     *slot = pendingCapture;
-#ifdef CCT_CONSOLE_CONTROLS
-    if (!calibrating) requiredCapture = pendingCapture;
-#endif
   }
   pendingCapture = (InputCode){InputDeviceType::none, 0};
 #ifdef CCT_CONSOLE_CONTROLS
@@ -496,8 +530,20 @@ static void applyPendingCapture(void) {
     stepStartTime = mainLoopGetTicks();
     fullRedraw();
   } else {
-    extraVerifyRow = !calibrating && captureRow >= 8 ? captureRow : -1;
-    beginVerification();
+    if (calibrating) {
+      beginVerification();
+    } else {
+      if (!consoleInput::migrate(candidateMapping)) {
+        cancelCapture("Conflicting controls; change cancelled");
+        return;
+      }
+      KeyMapping staged = candidateMapping;
+      screenKeyMappingCancel();
+      editorMapping = staged;
+      editorVerified = false;
+      fullRedraw();
+      screenMessage(MESSAGE_TIME, "Change staged; Done to test and save");
+    }
   }
 #else
   appResetInputState();
@@ -510,7 +556,10 @@ void screenKeyMappingTick(void) {
     if (inputRawCallback == onRawInput) screenKeyMappingCancel();
     return;
   }
-  if (captureState == STATE_NAVIGATION) return;
+  if (captureState == STATE_NAVIGATION) {
+    if (migrationRecovery) startCapture(true);
+    return;
+  }
   uint32_t now = mainLoopGetTicks();
   if (calibrating && captureState != STATE_WAIT_RELEASE && heldCount &&
       now - pressStartTime >= restartHoldMs) {
@@ -518,7 +567,7 @@ void screenKeyMappingTick(void) {
     return;
   }
   if (now - stepStartTime >= stepTimeoutMs) {
-    cancelCapture("Controls unchanged: test timed out");
+    cancelCapture("Timed out; active controls unchanged");
     return;
   }
   if (heldCount || now - lastInputTime < releaseQuietMs) return;
@@ -537,25 +586,38 @@ void screenKeyMappingTick(void) {
   } else if (captureState == STATE_CAPTURE_DONE) {
     applyPendingCapture();
   } else if (captureState == STATE_VERIFY_DONE) {
-    if (++verifyStep < (extraVerifyRow < 0 ? 8 : 9)) {
+    if (++verifyStep < verificationCount) {
       captureState = STATE_VERIFYING;
       stepStartTime = now;
       fullRedraw();
     } else {
       KeyMapping previous = appSettings.keyMapping;
-      appSettings.keyMapping = candidateMapping;
+      if (!consoleInput::migrate(candidateMapping)) {
+        cancelCapture("Conflicting controls; calibrate again");
+        return;
+      }
+      if (startupRecovery) appSettings.keyMapping = candidateMapping;
       if (startupRecovery && settingsSave() != 0) {
         appSettings.keyMapping = previous;
         cancelCapture("Could not save controls; try again");
         return;
       }
+      migrationRecovery = false;
+      bool shouldSave = saveAfterVerification;
+      KeyMapping staged = candidateMapping;
       screenKeyMappingCancel();
       if (startupRecovery) {
-        int deleted = fileDelete(recoveryPath);
+        int deleted = recoveryFile ? fileDelete(recoveryPath) : 0;
         screenSetup(&screenTitle, 0);
         screenMessage(deleted ? MESSAGE_TIME_ERROR : MESSAGE_TIME,
                       deleted ? "Controls saved; remove configure-controls" : "Controls calibrated and saved");
       } else {
+        editorMapping = staged;
+        editorVerified = true;
+        if (shouldSave) {
+          saveEditorMapping();
+          return;
+        }
         fullRedraw();
         screenMessage(MESSAGE_TIME, "Controls tested; Done to save");
       }
@@ -596,13 +658,10 @@ static int onInput(int isKeyDown, int keys, int tapCount) {
 #ifdef CCT_CONSOLE_CONTROLS
     KeyMapping previous = appSettings.keyMapping;
     inputInitDefaultKeyMapping();
-    candidateMapping = appSettings.keyMapping;
+    editorMapping = appSettings.keyMapping;
     appSettings.keyMapping = previous;
-    heldCount = 0;
-    extraVerifyRow = -1;
-    inputRawCallback = onRawInput;
-    lastInputTime = mainLoopGetTicks();
-    beginVerification();
+    editorVerified = false;
+    fullRedraw();
 #else
     inputInitDefaultKeyMapping();
     fullRedraw();

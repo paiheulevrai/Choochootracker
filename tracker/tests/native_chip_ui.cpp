@@ -11,6 +11,7 @@
 #include <cmath>
 #include "chipnomad_lib.h"
 #include "app.h"
+#include "edit_history.h"
 #include "screen_project.h"
 #include "screen_export.h"
 #include "midi/smf_file.h"
@@ -202,6 +203,9 @@ static void captureHomepage() {
       case 17: return sampleSlicesTheme;
       case 18: return insertTheme;
       case 19: return reverbTheme;
+      case 20: return "IDEColorThemes/GruvLight.cth";
+      case 21: return "IDEColorThemes/MatchaDark.cth";
+      case 22: return "IDEColorThemes/TokyoNightDark.cth";
       default: return baseTheme;
     }
   };
@@ -329,8 +333,36 @@ static void captureHomepage() {
   key(1, keyShift | keyUp);
   capture("reverb");
   screenMessage(0, "");
+
+  Instrument& fatty = prepareHomepageInstrument(InstrumentType::Bass808, "Deep Glide");
+  fatty.chip.bass808.subWaveform = 3; fatty.chip.bass808.subLevel = 176;
+  fatty.chip.bass808.drive = 112; fatty.chip.bass808.glide = 68;
+  fatty.chip.bass808.filterCutoffHz = 2345; fatty.chip.bass808.filterResonance = 128;
+  show(20, "engine-fatty", &screenInstrument);
+
+  Instrument& sophie = prepareHomepageInstrument(InstrumentType::DigiSophie, "Metallic Shard");
+  sophie.chip.drumSynth.engine = static_cast<DrumSynthEngine>(3);
+  sophie.chip.drumSynth.decay = 144; sophie.chip.drumSynth.tone = 164;
+  sophie.chip.drumSynth.sweep = 152; sophie.chip.drumSynth.noise = 104;
+  sophie.chip.drumSynth.fm = 96; sophie.chip.drumSynth.drive = 88;
+  show(21, "engine-digisophie", &screenInstrument);
+
+  auto& source = chipnomadState->project.instruments[1];
+  getInstrumentFunctions(source.type).free(&source);
+  memset(&source, 0, sizeof(source));
+  getInstrumentFunctions(InstrumentType::Monk).init(&source);
+  snprintf(source.name, sizeof(source.name), "Vowel Source");
+  source.volume = 224; source.pan = 128;
+  Instrument& carrier = prepareHomepageInstrument(InstrumentType::Braids, "Vocoded CSAW");
+  carrier.chip.braids.model = 0;
+  carrier.chip.braids.attack = carrier.chip.braids.decay = 0;
+  carrier.chip.braids.sustain = 255;
+  carrier.modulation[0] = {ModulationType::Audio, 1, 127, 0, 0, 64, 64,
+    (uint8_t)AudioModulationMode::vocoder};
+  *pSongTrack = 1;
+  show(22, "track-vocoder", &screenModulation);
   soundbankShutdown();
-  printf("Captured 20 homepage screens as 640x480 BMPs.\n");
+  printf("Captured 23 homepage screens as 640x480 BMPs.\n");
 }
 int main(int argc,char** argv){
   if(argc!=2&&argc!=3) return 1;
@@ -439,6 +471,273 @@ int main(int argc,char** argv){
     return 0;
   }
   chipnomadState=chipnomadCreate();require(chipnomadState,"state");require(!projectLoad(&chipnomadState->project,"projects/gm-midi-demo.cct"),"fixture");
+  if(argc==3 && !strcmp(argv[2],"--song-branches-only")) {
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+    // PortMaster's gptokeyb profile sends Z for B, regardless of desktop layout.
+    const InputCode buttonB = {InputDeviceType::keyboard, SDLK_z};
+    appSettings.keyMapping.keyOpt[0] = buttonB;
+    auto send = [](InputCode input, MainLoopEvent type) {
+      MainLoopEventData event{};
+      event.type = type;
+      event.data.input = input;
+      appOnEvent(event);
+      screenApplyPending();
+    };
+    auto shift = [&](int direction) {
+      appResetInputState();
+      send({InputDeviceType::logical, keyShift}, MainLoopEvent::keyDown);
+      send({InputDeviceType::logical, direction}, MainLoopEvent::keyDown);
+      send({InputDeviceType::logical, direction}, MainLoopEvent::keyUp);
+      send({InputDeviceType::logical, keyShift}, MainLoopEvent::keyUp);
+    };
+    struct Branch { const AppScreen* screen; int enter, leave; const char* name; };
+    bool stayed = true;
+    for (const Branch& branch : {Branch{&screenProject, keyUp, keyDown, "Project"},
+                                 Branch{&screenSettings, keyDown, keyUp, "Settings"}}) {
+      screenSetup(&screenSong, 0);
+      screenApplyPending();
+      shift(branch.enter);
+      require(currentScreen == branch.screen, "Shift enters the Song branch");
+      for (auto eventType : {MainLoopEvent::keyDown, MainLoopEvent::keyUp}) {
+        send(buttonB, eventType);
+        if (currentScreen != branch.screen) {
+          fprintf(stderr, "FAIL: B %s leaves %s\n", eventType == MainLoopEvent::keyDown ? "press" : "release", branch.name);
+          stayed = false;
+          break;
+        }
+      }
+      if (currentScreen != branch.screen) continue;
+      shift(branch.leave);
+      require(currentScreen == &screenSong, "Shift returns from the Song branch");
+    }
+    require(stayed, "B does not leave Project or Settings");
+    chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
+    gfxCleanup(); SDL_Quit();
+    puts("PASS: B stays in Project and Settings; Shift navigation still works.");
+    return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--song-creation-only")) {
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+    require(audioManager.start(48000, 256) == 0, "Song creation audio fixture");
+    audioPause(1);
+    for (bool simplified : {false, true}) {
+      projectFree(&chipnomadState->project); projectInitAY(&chipnomadState->project);
+      auto& p = chipnomadState->project;
+      canonicalSimplifiedActive = simplified;
+      appSettings.defaultPatternLength = 4;
+      screenSong.init();
+      *pChainRow = 0;
+      chipnomadInitChips(chipnomadState, 48000, nullptr);
+      screenSetup(&screenSong, 0); appDraw();
+      editHistoryClear();
+      appChord(0, keyEdit);
+      require(p.song[0][0] == 0, "tap recalls initial ID without a track bank");
+      require(grooveboxTrackLength(&p, 0, 0) == (simplified ? 4 : 0),
+        "only Simplified materializes the default length");
+      appChord(0, keyUndo);
+      require(p.song[0][0] == EMPTY_VALUE_16 && chainSlotIsPristine(&p, 0),
+        "creation undo includes materialized bars");
+      appChord(0, keyRedo);
+      require(p.song[0][0] == 0 && grooveboxTrackLength(&p, 0, 0) == (simplified ? 4 : 0),
+        "creation redo restores the exact length");
+      p.chains[0].rows[0].phrase = 5;
+      p.phrases[5].rows[0].note = 60;
+      appChord(0, keyDown); appChord(0, keyEdit);
+      require(p.song[1][0] == 0, "tap links the last selected chain");
+      appChord(0, keyUndo);
+      require(p.song[1][0] == EMPTY_VALUE_16, "undo removes the linked occurrence");
+      appChord(0, keyRedo);
+      require(p.song[1][0] == 0 && p.phrases[5].rows[0].note == 60, "redo preserves shared content");
+      screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+      require(p.song[1][0] == 1, "double-tap chooses the next free ID");
+      require(grooveboxTrackLength(&p, 1, 0) == (simplified ? 4 : 0), "double-tap default length");
+      p.chains[2].rows[7].transpose = 1;
+      p.chainToPatternMap[3] = 20;
+      p.patternToChainMap[21] = 4;
+      p.song[9][0] = 5;
+      screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+      require(p.song[1][0] == 6, "next ID skips retained, converted and referenced slots");
+      chainClear(&p.chains[2]); p.chainToPatternMap[3] = EMPTY_VALUE_16;
+      p.patternToChainMap[21] = EMPTY_VALUE_16; p.song[9][0] = EMPTY_VALUE_16;
+      p.song[1][0] = PROJECT_MAX_CHAINS - 1;
+      screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+      require(p.song[1][0] == PROJECT_MAX_CHAINS - 1 &&
+        strstr(screenGetActiveMessage(), "No free"), "allocation at the last ID does not wrap");
+      if (!simplified) continue;
+
+      auto raw = [&](SDL_Keycode code) {
+        MainLoopEventData event{};
+        event.data.input = {InputDeviceType::keyboard, code};
+        event.type = MainLoopEvent::keyDown; appOnEvent(event); appDraw();
+        event.type = MainLoopEvent::keyUp; appOnEvent(event); appDraw();
+      };
+      appChord(0, keyDown);
+      raw(SDLK_ESCAPE);
+      raw(SDLK_2);
+      require(p.song[2][0] == 2 && grooveboxTrackLength(&p, 2, 0) == 4, "first hex digit materializes");
+      raw(SDLK_a);
+      require(p.song[2][0] == 0x2a && grooveboxTrackLength(&p, 2, 0) == 4, "second hex digit materializes final ID");
+      require(chainSlotIsPristine(&p, 2), "typing two digits leaves no intermediate chain");
+      require(editHistoryUndo(), "hex second digit undo");
+      require(p.song[2][0] == 2 && grooveboxTrackLength(&p, 2, 0) == 4, "hex undo restores first digit and bars");
+      require(editHistoryRedo() && p.song[2][0] == 0x2a && chainSlotIsPristine(&p, 2), "hex redo restores final ID");
+      appChord(0, keyDown);
+      p.chains[0x3f].rows[0].phrase = 6;
+      p.phrases[6].rows[0].note = 68;
+      raw(SDLK_3); raw(SDLK_f);
+      require(p.song[3][0] == 0x3f && p.phrases[6].rows[0].note == 68 &&
+        grooveboxTrackLength(&p, 3, 0) == 1 && chainSlotIsPristine(&p, 3),
+        "typing an existing ID preserves its contents and frees the intermediate chain");
+      appChord(0, keyDown);
+      for (auto& full : p.phrases) full.rows[0].note = 48;
+      projectModified = 0; raw(SDLK_b);
+      require(p.song[4][0] == EMPTY_VALUE_16 && !projectModified &&
+        strstr(screenGetActiveMessage(), "No free phrase"), "hex allocation failure leaves no partial assignment");
+      raw(SDLK_ESCAPE); appChord(0, keyEdit);
+      require(p.song[4][0] == 0x3f, "failed hex entry preserves last selected ID");
+    }
+    canonicalSimplifiedActive = false;
+    editHistoryClear(); audioManager.stop(); chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
+    gfxCleanup(); SDL_Quit();
+    printf("Classic and Simplified Song creation UI passed\n");
+    return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--undo-only")) {
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+#ifdef BMP_STREAM_TEST
+    captureAudioCallback = true;
+#endif
+    require(audioManager.start(48000, 256) == 0, "undo audio fixture");
+    audioPause(1);
+    projectFree(&chipnomadState->project); projectInitAY(&chipnomadState->project);
+    auto& p = chipnomadState->project;
+    p.song[0][0] = 0; p.chains[0].rows[0].phrase = 0;
+    *pSongRow = *pSongTrack = *pChainRow = 0;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    auto undo = [&]() { appChord(0, keyUndo); };
+    auto redo = [&]() { appChord(0, keyRedo); };
+    auto open = [&](const AppScreen* screen, int value) { screenSetup(screen, value); appDraw(); };
+    editHistoryClear();
+    open(&screenPhrase, 0);
+    const Phrase empty = p.phrases[0];
+    appChord(keyEdit, keyUp);
+    const Phrase edited = p.phrases[0];
+    require(std::memcmp(&edited, &empty, sizeof(Phrase)), "production phrase edit");
+    undo();
+    require(!std::memcmp(&p.phrases[0], &empty, sizeof(Phrase)), "phrase undo");
+    redo();
+    require(!std::memcmp(&p.phrases[0], &edited, sizeof(Phrase)), "phrase redo");
+
+    editHistoryClear(); open(&screenChain, 0);
+    const Chain oldChain = p.chains[0];
+    appChord(keyEdit, keyUp); const Chain newChain = p.chains[0];
+    require(std::memcmp(&newChain, &oldChain, sizeof(Chain)), "production chain edit");
+    undo(); require(!std::memcmp(&p.chains[0], &oldChain, sizeof(Chain)), "chain undo");
+    redo(); require(!std::memcmp(&p.chains[0], &newChain, sizeof(Chain)), "chain redo");
+
+    editHistoryClear(); open(&screenTable, 7);
+    const Table oldTable = p.tables[7];
+    appChord(keyEdit, keyUp); const Table newTable = p.tables[7];
+    require(std::memcmp(&newTable, &oldTable, sizeof(Table)), "production table edit");
+    undo(); require(!std::memcmp(&p.tables[7], &oldTable, sizeof(Table)), "table undo preserves selected table");
+    redo(); require(!std::memcmp(&p.tables[7], &newTable, sizeof(Table)), "table redo");
+
+    editHistoryClear(); open(&screenSong, 0);
+    const auto oldCell = p.song[0][0];
+    appChord(keyEdit, keyUp);
+    require(p.song[0][0] != oldCell, "production song edit");
+    open(&screenSettings, 0);
+    require(screenTouchTap(2, 14), "touch history entry");
+    appChord(0, keyEdit);
+    require(currentScreen == &screenSelectionPopup, "touch/controller opens history menu");
+    appChord(0, keyEdit);
+    require(currentScreen == &screenSettings && p.song[0][0] == oldCell, "controller history menu undo");
+    redo(); require(p.song[0][0] != oldCell, "menu undo keeps redo");
+
+    p.song[0][0] = 0; p.chains[0].rows[0].phrase = 0; p.chains[0].rows[1].phrase = 0;
+    canonicalSimplifiedActive = true;
+    editHistoryClear(); open(&screenPhrase, 0);
+    appChord(keyEdit, keyUp);
+    const int fresh = p.chains[0].rows[0].phrase;
+    require(fresh != 0, "canonical edit isolates shared bar");
+    const Phrase isolated = p.phrases[fresh];
+    undo();
+    require(p.chains[0].rows[0].phrase == 0 && p.chains[0].rows[1].phrase == 0, "one undo restores shared references");
+    redo();
+    require(p.chains[0].rows[0].phrase == fresh && !std::memcmp(&p.phrases[fresh], &isolated, sizeof(Phrase)), "shared bar redo exact");
+    editHistoryClear();
+    p.chains[0].rows[0].phrase = p.chains[0].rows[1].phrase = 0;
+    open(&screenPhrase, 0);
+    auto rawJazz = [&](SDL_Keycode code, bool down) {
+      MainLoopEventData event{};
+      event.type = down ? MainLoopEvent::keyDown : MainLoopEvent::keyUp;
+      event.data.input = {InputDeviceType::keyboard, code};
+      appOnEvent(event); appDraw();
+    };
+    rawJazz(SDLK_ESCAPE, true); rawJazz(SDLK_ESCAPE, false);
+    rawJazz(SDLK_x, true); rawJazz(SDLK_x, false);
+    const auto jazzPhrase = p.chains[0].rows[0].phrase;
+    require(jazzPhrase != 0, "key jazz isolates shared bar");
+    undo(); require(p.chains[0].rows[0].phrase == 0, "key jazz undo includes release reconciliation");
+    redo(); require(p.chains[0].rows[0].phrase == jazzPhrase, "key jazz redo restores binding");
+    rawJazz(SDLK_ESCAPE, true); rawJazz(SDLK_ESCAPE, false);
+    canonicalSimplifiedActive = false;
+
+    auto& instrument = prepareHomepageInstrument(InstrumentType::Braids, "Undo");
+    open(&screenInstrument, 0); editHistoryClear();
+    const Instrument original = instrument;
+    require(instrumentCommonOnEdit(0, 0, CellEditAction::increase), "production instrument engine change");
+    appDraw();
+    const Instrument switched = instrument;
+    require(switched.type != original.type, "engine actually changes");
+    undo(); require(!std::memcmp(&instrument, &original, sizeof(Instrument)), "engine undo includes envelope and modulation");
+    redo(); require(!std::memcmp(&instrument, &switched, sizeof(Instrument)), "engine redo exact");
+    undo(); editHistoryClear();
+    screenInstrumentBraids.cursorRow = 3; screenInstrumentBraids.cursorCol = 0;
+    const auto oldModel = instrument.chip.braids.model;
+    appChord(keyEdit, keyRight);
+    const auto newModel = instrument.chip.braids.model;
+    require(newModel != oldModel, "production model edit");
+    undo(); require(instrument.chip.braids.model == oldModel, "model undo");
+    redo(); require(instrument.chip.braids.model == newModel, "model redo");
+
+    MainLoopEventData raw{};
+    raw.data.input = {InputDeviceType::keyboard, SDLK_z};
+    SDL_SetModState(KMOD_CTRL); raw.type = MainLoopEvent::keyDown; appOnEvent(raw); appDraw();
+    require(instrument.chip.braids.model == oldModel, "Ctrl-Z undoes before key jazz");
+    SDL_SetModState(KMOD_NONE); raw.type = MainLoopEvent::keyUp; appOnEvent(raw); appDraw();
+    SDL_SetModState(SDL_Keymod(KMOD_CTRL | KMOD_SHIFT)); raw.type = MainLoopEvent::keyDown; appOnEvent(raw); appDraw();
+    require(instrument.chip.braids.model == newModel, "Ctrl-Shift-Z redoes");
+    SDL_SetModState(KMOD_NONE); raw.type = MainLoopEvent::keyUp; appOnEvent(raw); appDraw();
+    editHistoryClear();
+    screenInstrumentBraids.cursorRow = 3; screenInstrumentBraids.cursorCol = 0;
+    appChord(0, keyEdit);
+    require(currentScreen == &screenSelectionPopup, "model popup opens");
+    appChord(0, keyRight); appChord(0, keyDown); appChord(0, keyEdit);
+    require(currentScreen == &screenInstrument && instrument.chip.braids.model != newModel, "model popup commits");
+    const auto popupModel = instrument.chip.braids.model;
+    undo(); require(instrument.chip.braids.model == newModel, "popup model undo");
+    redo(); require(instrument.chip.braids.model == popupModel, "popup model redo");
+
+    editHistoryClear();
+    auto& sampler = prepareHomepageInstrument(InstrumentType::Sample, "Undo PCM").chip.sample;
+    sampler.frameCount = 4; sampler.channels = 1; sampler.sampleRate = 48000;
+    sampler.data = static_cast<int16_t*>(malloc(8));
+    require(sampler.data != nullptr, "sampler undo PCM");
+    for (int i = 0; i < 4; ++i) sampler.data[i] = int16_t(1000 + i);
+    open(&screenInstrument, 0);
+    require(instrumentCommonOnEdit(0, 0, CellEditAction::increase), "sampler engine switch");
+    appDraw(); undo();
+    require(instrument.type == InstrumentType::Sample, "sampler engine undo");
+    for (int i = 0; i < 4; ++i) require(instrument.chip.sample.data[i] == 1000 + i, "sampler undo preserves PCM");
+    redo(); require(instrument.type != InstrumentType::Sample, "sampler engine redo");
+    require(editHistoryBytes() <= 256 * 1024 && editHistoryResourceBytes() <= 8 * 1024 * 1024, "bounded UI history");
+    capture("undo-model");
+    editHistoryClear(); audioManager.stop(); chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
+    gfxCleanup(); SDL_Quit();
+    printf("Undo production UI passed: Phrase, Chain, Song, Table, shared bars, engines, models, controller menu, desktop shortcuts\n");
+    return 0;
+  }
 #ifdef BMP_STREAM_TEST
   if(argc==3 && !strcmp(argv[2],"--project-options-only")) {
     settingsOverride = std::filesystem::absolute(std::filesystem::path(output) / "project-options-settings.txt").string();
@@ -448,6 +747,7 @@ int main(int argc,char** argv){
     chipnomadInitChips(chipnomadState, 48000, nullptr);
     struct Probe {
       int sends = 0, frames = 0, rate = 0, transport = -1;
+      double tempo = 0;
       bool enabled = false, audio = false, receive = false;
       bool missingPackets = false;
       LinkAudioLocalDelay localDelay;
@@ -464,7 +764,7 @@ int main(int argc,char** argv){
     backend.captureAudioSessionState = [](void*, void*, double*, double*, uint64_t*, uint64_t*, int*) { return 0; };
     backend.onAudioFrame = [](void*, void*, uint64_t, uint64_t) {};
     backend.resetHostTimeFilter = [](void*, void*) {};
-    backend.setTempo = [](void*, void*, double) { return 1; };
+    backend.setTempo = [](void* data, void*, double bpm) { static_cast<Probe*>(data)->tempo = bpm; return 1; };
     backend.setTransportSync = [](void* data, void*, int enabled) { static_cast<Probe*>(data)->transport = enabled; };
     backend.setAudioEnabled = [](void* data, void*, int enabled) { static_cast<Probe*>(data)->audio = enabled; return 1; };
     backend.sendAudio = [](void* data, void*, const int16_t* samples, int frames, int rate) {
@@ -499,8 +799,41 @@ int main(int argc,char** argv){
             "session starts with local audio On and send Off");
     auto touch = [&](int x, int y) { require(screenTouchTap(x,y), "project option touch target"); appDraw(); };
     auto back = [&]() { key(1,keyOpt); key(0,0); };
+    screenSetup(&screenSettings, 0);
+    key(1,keyEdit); key(0,0);
+    require(currentScreen == &screenControlsSettings, "Settings A opens the selected submenu");
+    back();
+    screenSetup(&screenProject, 0); appDraw();
+    screenProjectExtra.cursorRow = 7;
+    key(1,keyEdit); key(0,0);
+    require(currentScreen == &screenLinkOptions, "Project A opens the selected submenu");
+    back();
     screenSetup(&screenProject, 0); appDraw();
     require(screenProjectExtra.rows == 12, "same compact Project layout on all platforms");
+    const float initialTempo = chipnomadState->project.tickRate;
+    touch(23,9);
+    require(chipnomadState->project.tickRate == initialTempo, "first tap does not change tempo");
+    SDL_Delay(500);
+    touch(23,9);
+    require(chipnomadState->project.tickRate > 40 && chipnomadState->project.tickRate < 52,
+            "touch tap tempo updates the local project");
+    screenSetup(&screenProject, 0); appDraw();
+    screenProjectExtra.cursorRow = 4; screenProjectExtra.cursorCol = 1;
+    appResetInputState();
+    appButton(keyEdit, true); appButton(keyEdit, false);
+    SDL_Delay(200);
+    appButton(keyEdit, true); appButton(keyEdit, false);
+    const float twoTapTempo = chipnomadState->project.tickRate;
+    SDL_Delay(400);
+    appButton(keyEdit, true); appButton(keyEdit, false);
+    require(chipnomadState->project.tickRate < twoTapTempo * 0.9f,
+            "third rapid Edit tap contributes to tempo");
+    require(projectCommonOnEdit(0,5,CellEditAction::increase), "select MIDI clock");
+    const float midiTempo = chipnomadState->project.tickRate;
+    touch(23,9); SDL_Delay(150); touch(23,9);
+    require(chipnomadState->project.tickRate == midiTempo, "tap tempo does not override MIDI clock");
+    require(projectCommonOnEdit(0,5,CellEditAction::clear), "restore local clock");
+    screenSetup(&screenProject, 0);
     capture("project-menu");
     gfxSetCursorBrackets(0);
     screenProjectExtra.cursorRow = 6;
@@ -552,6 +885,8 @@ int main(int argc,char** argv){
     require(projectCommonOnEdit(0,5,CellEditAction::increase), "select MIDI sync");
     require(projectCommonOnEdit(0,5,CellEditAction::increase), "select Link sync");
     require(projectCommonOnEdit(0,6,CellEditAction::tap) && probe.enabled, "Link connection stays on Project");
+    touch(23,9); SDL_Delay(500); touch(23,9);
+    require(probe.tempo > 100 && probe.tempo < 130, "tap tempo updates Link");
     appDraw(); capture("project-menu-link");
     touch(2,12);
     touch(20,5); tapEdit(); require(probe.audio, "Send toggle enables backend");
@@ -612,7 +947,7 @@ int main(int argc,char** argv){
     require(!probe.receive && !audible(local), "Receive Off stops remote audio");
     back();
     touch(2,16); require(currentScreen == &screenScale, "Scale stays directly accessible"); back();
-    touch(2,17); require(currentScreen == &screenViewSettings, "View stays directly accessible");
+    touch(10,17); require(currentScreen == &screenViewSettings, "Editing mode stays directly accessible");
     audioManager.stop(); chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
     linkClientSetBackend(nullptr);
     require(std::filesystem::remove(samplePath), "remove audio fixture");
@@ -724,9 +1059,24 @@ int main(int argc,char** argv){
       require(energy(render(4)) < energy(low) * .75, "WAV audition responds to MIDI velocity");
       send(0x80, 48, 0); render(48);
       key(1, keyPlay);
+      require(energy(render(1)) > 1, "holding PLAY auditions the highlighted WAV");
+      key(1, keyPlay | keyDown);
+      require(energy(render(1)) > 1, "PLAY+Down auditions the next WAV");
+      key(1, keyPlay | keyDown);
+      render(16); // Let the output DC filter settle.
+      require(energy(render(1)) < .1, "PLAY+Down wrapping to a folder stops the WAV");
+      key(1, keyPlay | keyUp);
+      require(energy(render(1)) > 1, "PLAY+Up from a folder auditions a WAV");
+      key(0, keyUp);
+      render(16);
+      require(energy(render(1)) < .1, "releasing PLAY while Up is held stops the WAV");
+      key(0, 0);
+      key(1, keyPlay);
       send(0x90, 48, 100);
-      require(energy(render(4)) > 1, "MIDI reloads candidate after legacy PLAY preview");
+      require(energy(render(4)) > 1, "MIDI reloads candidate after PLAY preview");
+      key(0, 0);
       send(0x80, 48, 0); render(48);
+      key(1, keyUp);
       key(1, keyDown); send(0x90, 48, 100);
       require(energy(render(4)) > 1, "moving to next WAV prepares new candidate");
       key(1, keyOpt); key(0, 0);
@@ -859,7 +1209,7 @@ int main(int argc,char** argv){
     return 0;
   }
 #endif
-  if(argc==3 && !strcmp(argv[2],"--midi-recording-only")) {
+  if(argc==3 && (!strcmp(argv[2],"--midi-recording-only") || !strcmp(argv[2],"--midi-step-undo-only"))) {
     screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
     projectInitAY(&chipnomadState->project);
     auto& p = chipnomadState->project;
@@ -904,6 +1254,17 @@ int main(int argc,char** argv){
     send(0x90, 64, 90);
     require(p.phrases[0].rows[6].note == 52, "next stopped MIDI advances one row");
     send(0x80, 64, 0);
+    if (!strcmp(argv[2], "--midi-step-undo-only")) {
+      rec.type = MainLoopEvent::keyUp; appOnEvent(rec);
+      require(editHistoryUndo(), "step MIDI note can be undone");
+      require(p.phrases[0].rows[6].note == EMPTY_VALUE_8 && p.phrases[0].rows[5].note == 48,
+        "step MIDI undo preserves the previous note");
+      require(editHistoryRedo() && p.phrases[0].rows[6].note == 52, "step MIDI note can be redone");
+      midiRouterSetBackend(nullptr);
+      editHistoryClear(); chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit();
+      printf("Stopped MIDI step undo and redo passed\n");
+      return 0;
+    }
     chipnomadQueuePlaybackStop(chipnomadState);
     require(chipnomadQueuePlaybackStartSong(chipnomadState, 0, 0, 1), "start before stopping");
     chipnomadRender(chipnomadState, audio, 2048);
@@ -1228,6 +1589,61 @@ int main(int argc,char** argv){
       require(modulation.destination==0,"None does not retain routes");
     printf("Modulation transfer: direct and popup changes, both headers, CNI and live playback passed\n");
     chipnomadDestroy(chipnomadState);gfxCleanup();SDL_Quit();return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--trance-user-only")) {
+    projectFree(&chipnomadState->project);
+    projectInitAY(&chipnomadState->project);
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit(); backgroundInit();
+    auto& project = chipnomadState->project;
+    *pSongTrack = 0;
+    getInstrumentFunctions(InstrumentType::AY1).init(&project.instruments[0]);
+    auto& mod = project.instruments[0].modulation[0];
+    mod.type = ModulationType::Sequence;
+    mod.p1 = static_cast<uint8_t>(SequenceSource::tranceGate);
+    sequenceGateDefaults(&mod);
+    sequenceGateSetPattern(&mod, 71);
+    project.ayWavetables[7][0] = 0;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    chipnomadReserveRenderBuffers(chipnomadState, 512);
+    screenSetup(&screenModulation, 0); appDraw();
+    for (int i = 0; i < 3; ++i) { key(1, keyDown); key(0, 0); }
+    appResetInputState();
+    appButton(keyEdit, true); appButton(keyEdit, false);
+    appButton(keyEdit, true); appButton(keyEdit, false);
+    require(currentScreen == &screenAYWavetable, "modulation motif opens AY editor");
+    key(1, keyEdit | keyRight); key(0, 0);
+    require(project.ayWavetables[7][0] == 1, "modulation selects AY wave 07");
+    key(1, keyShift | keyUp); key(0, 0);
+    require(currentScreen == &screenModulation, "AY editor returns to modulation");
+    for (int i = 0; i < 2; ++i) { key(1, keyDown); key(0, 0); }
+    for (int i = 0; i < 16; ++i) { key(1, keyEdit | keyRight); key(0, 0); }
+    require(sequenceGateLength(&mod) == 32, "modulation AY length reaches 32 steps");
+    sequenceGateSetPattern(&mod, 0);
+    key(1, keyEdit | keyRight); key(0, 0);
+    require(sequenceGateLength(&mod) <= 16, "preset gate length remains limited to 16 steps");
+    for (bool master : {false, true}) {
+      auto& config = master ? project.masterInserts[0] : project.trackInserts[0][0];
+      insertSelect(&config, insertTranceGate);
+      insertEdit(&config, 0, 64);
+      project.ayWavetables[0][0] = 0;
+      if (master) screenInsertFXOpenMaster(); else screenInsertFXOpenTrack();
+      appDraw();
+      if (!master) { key(1, keyDown); key(0, 0); }
+      appResetInputState();
+      appButton(keyEdit, true); appButton(keyEdit, false);
+      appButton(keyEdit, true); appButton(keyEdit, false);
+      require(currentScreen == &screenAYWavetable, "insert pattern opens AY editor");
+      key(1, keyEdit | keyRight); key(0, 0);
+      require(project.ayWavetables[0][0] == 1, "insert selects AY wave 00");
+      key(1, keyShift | keyUp); key(0, 0);
+      require(currentScreen == &screenInsertFX && screenInsertFXIsMaster() == master,
+              "AY editor returns to the same insert page");
+    }
+    screenAYWavetableOpen(0, nullptr); appDraw();
+    key(1, keyShift | keyUp); key(0, 0);
+    require(currentScreen == &screenTable, "normal AY editor returns to Table");
+    printf("User Trance Gate AY navigation passed\n");
+    chipnomadDestroy(chipnomadState); SDL_Quit(); return 0;
   }
   if(argc==3 && !strcmp(argv[2],"--modulation-gate-only")) {
     projectFree(&chipnomadState->project);
@@ -1835,6 +2251,46 @@ int main(int argc,char** argv){
     chipnomadDestroy(chipnomadState);SDL_Quit();return 0;
   }
   chipnomadInitChips(chipnomadState,48000,nullptr);chipnomadReserveRenderBuffers(chipnomadState,1024);screensInitAll();waveformDisplayInit();monitorDisplayInit();
+  if(argc==3 && !strcmp(argv[2],"--sidebar-only")) {
+    prepareHomepageInstrument(InstrumentType::Braids, "Sidebar");
+    chipnomadState->uiPlaybackStatus.tracks[0].note.instrument = 0;
+    chipnomadState->voiceMonitors[0].active = 1;
+    chipnomadState->voiceMonitors[0].envelope = 1;
+    std::fill_n(chipnomadState->voiceMonitors[0].samples, VOICE_MONITOR_SAMPLES, 0.25f);
+    appSettings.persistentWaveform = 1;
+    screenSetup(&screenSong, 0); capture("sidebar-song");
+    const auto frame = framePixels();
+    auto checkCenter = [](const std::vector<uint32_t>& pixels, int mapRow) {
+      const uint32_t background = pixels[11 * 24 * 640 + 34 * 16];
+      int top = mapRow * 24, bottom = 11 * 24 - 1;
+      int left = 40 * 16, right = 35 * 16 - 1;
+      for (int y = 11 * 24; y < mapRow * 24; ++y)
+        for (int x = 35 * 16; x < 40 * 16; ++x)
+          if (pixels[y * 640 + x] != background) {
+            top = std::min(top, y); bottom = std::max(bottom, y);
+            left = std::min(left, x); right = std::max(right, x);
+          }
+      require(top <= bottom && abs((top - 11 * 24) - (mapRow * 24 - 1 - bottom)) <= 1,
+              "keyboard is vertically centered between track list and navigation map");
+      require(left <= right && abs((left - 35 * 16) - (40 * 16 - 1 - right)) <= 1,
+              "keyboard is horizontally centered under track names");
+    };
+    checkCenter(frame, 15);
+    bool different = false;
+    for (int y = 0; y < 24; ++y)
+      for (int x = 31 * 16; x < 34 * 16; ++x)
+        different |= frame[(3 * 24 + y) * 640 + x] != frame[(4 * 24 + y) * 640 + x];
+    require(different, "wide waveform updates separately for each track");
+    screenSetup(&screenChain, 0); capture("sidebar-chain"); checkCenter(framePixels(), 16);
+    screenSetup(&screenPhrase, 0); capture("sidebar-phrase"); checkCenter(framePixels(), 15);
+    screenSetup(&screenInstrument, 0); capture("sidebar-instrument"); checkCenter(framePixels(), 14);
+    screenSetup(&screenProject, 0); capture("sidebar-project");
+    screenSetup(&screenMixer, 0);
+    chipnomadState->audioOverload = 1;
+    capture("sidebar-mixer-clip");
+    printf("Sidebar captures: Song, Chain, Phrase, Project and Mixer clip\n");
+    chipnomadDestroy(chipnomadState); SDL_Quit(); return 0;
+  }
   if(argc==3 && !strcmp(argv[2],"--canonical-song-audio-only")) {
     const char* fixture = std::getenv("CCT_COMPARE_FIXTURE");
     const char* mode = std::getenv("CCT_COMPARE_MODE");
@@ -1898,6 +2354,43 @@ int main(int argc,char** argv){
       fixture, mode, frames / 48000.0, frames);
     chipnomadDestroy(state);
     chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit(); return 0;
+  }
+  if(argc==3 && !strcmp(argv[2],"--simplified-new-pattern-only")) {
+    screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
+    projectFree(&chipnomadState->project);
+    projectInitAY(&chipnomadState->project);
+    auto& p = chipnomadState->project;
+    for (auto& row : p.song) for (auto& cell : row) cell = EMPTY_VALUE_16;
+    canonicalSimplifiedActive = true;
+    grooveboxEditorActive = false;
+    appSettings.defaultPatternLength = 2;
+    chipnomadInitChips(chipnomadState, 48000, nullptr);
+    screenSong.init();
+    screenSetup(&screenSong, 0);
+    tapEdit();
+    require(p.song[0][0] == 0x10, "Song tap creates a pattern in track one bank");
+    require(p.chains[0x10].rows[0].phrase == 0x10 &&
+      p.chains[0x10].rows[1].phrase == 0x11, "Simplified bars use track one phrase bank");
+    require(grooveboxTrackLength(&p, 0, 0) == 2, "new Simplified pattern has two real bars");
+    const int first = p.song[0][0];
+    screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+    require(p.song[0][0] != first && grooveboxTrackLength(&p, 0, 0) == 2,
+      "double-tap creates another two-bar pattern");
+    appChord(keyShift, keyRight);
+    require(currentScreen == &screenPhrase && grooveboxTrackLength(&p, 0, 0) == 2,
+      "Phrase opens the configured two-bar pattern");
+    canonicalSimplifiedActive = false;
+    p.song[0][1] = 3;
+    screenSetup(&screenSong, 0);
+    *pSongRow = 0; *pSongTrack = 1;
+    editHistoryClear();
+    screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+    require(p.song[0][1] == 0x20, "Classic automatic chain uses track two bank");
+    appChord(0, keyUndo);
+    require(p.song[0][1] == 3, "undo restores the original Classic chain ID");
+    chipnomadDestroy(chipnomadState); gfxCleanup(); SDL_Quit();
+    printf("Simplified Song creation uses the configured pattern length\n");
+    return 0;
   }
   if(argc==3 && (!strcmp(argv[2],"--canonical-simple-only") || !strcmp(argv[2],"--canonical-audio-only"))) {
     auto renderFixture = [&](const std::string& path, bool canonical, bool converted) {
@@ -1989,12 +2482,12 @@ int main(int argc,char** argv){
       screenSetup(&screenViewSettings, 0); appDraw(); appChord(keyEdit, keyRight);
       require(!canonicalSimplifiedActive && !grooveboxEditorActive && p.viewMode == ViewMode::classic,
         "Simple C returns to Classic directly");
-      appChord(keyEdit, keyLeft); appChord(keyEdit, keyLeft);
-      require(grooveboxEditorActive && !canonicalSimplifiedActive, "Simple C switches directly to Groovebox");
+      appChord(keyEdit, keyLeft);
+      require(canonicalSimplifiedActive && !grooveboxEditorActive, "Classic switches directly to Simple C");
       appChord(keyEdit, keyLeft);
       require(currentScreen == &screenViewSettings && !grooveboxEditorActive &&
         !canonicalSimplifiedActive && p.viewMode == ViewMode::classic,
-        "three-editor cycle returns to Classic without a conversion choice");
+        "two-editor cycle returns to Classic without a conversion choice");
       require(!memcmp(original.get(), &p, sizeof(Project)), "canonical mode roundtrip preserves entire project");
       if (grooveboxCellShared(&p, 0, 0, 0)) {
         canonicalSimplifiedActive = true;
@@ -2504,7 +2997,8 @@ int main(int argc,char** argv){
       key(1, keyEdit | keyLeft); key(0, 0);
       require(canonicalSimplifiedActive, "View selects canonical Simplified without conversion");
       key(1, keyEdit | keyLeft); key(0, 0);
-      require(grooveboxEditorActive, "View selects Groovebox without conversion");
+      require(!canonicalSimplifiedActive && !grooveboxEditorActive, "View returns to Classic");
+      grooveboxEditorActive = true;
       screenSetup(&screenSong, -1); appDraw();
       require(currentScreen == &screenSong && grooveboxEditorActive, "Canonical Scenes retains Song editing");
       capture((std::string(name) + "-clips").c_str());
@@ -2760,14 +3254,16 @@ int main(int argc,char** argv){
     require(project.song[3][1] == 0x21, "CLIPS creates next track-two chain in the 20 bank");
     key(1, keyShift | keyRight); key(0, 0);
     tapEdit();
-    require(project.chains[0x21].rows[0].phrase == 0x81, "grid retains phrase bank for track two");
+    require(project.chains[0x21].rows[0].phrase == 0x21, "grid retains phrase bank for track two");
     appChord(keyShift, keyUp); appChord(0, keyRight); appChord(0, keyEdit);
     for (int i = 0; i < 11; ++i) appChord(0, keyDown);
     appChord(0, keyEdit);
     require(currentScreen == &screenViewSettings && grooveboxEditorActive, "Tools opens explicit View choice");
     key(1, keyEdit | keyRight); key(0, 0);
-    require(canonicalSimplifiedActive && !grooveboxEditorActive && project.viewMode == ViewMode::classic,
-      "View switches from Groovebox to canonical Simplified without conversion");
+    require(!canonicalSimplifiedActive && !grooveboxEditorActive && project.viewMode == ViewMode::classic,
+      "View switches from Groovebox to Classic without conversion");
+    key(1, keyEdit | keyRight); key(0, 0);
+    require(canonicalSimplifiedActive && project.viewMode == ViewMode::classic, "View switches to Simplified");
     key(1, keyEdit | keyRight); key(0, 0);
     require(!canonicalSimplifiedActive && project.viewMode == ViewMode::classic, "View switches back to Classic");
     screenSetup(&screenSong, -1); appDraw();

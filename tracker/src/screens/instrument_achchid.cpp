@@ -1,5 +1,6 @@
 #include "field_style.h"
 #include "screen_instrument.h"
+#include "edit_history.h"
 #include "corelib_gfx.h"
 #include "utils.h"
 #include "model_catalog.h"
@@ -35,7 +36,12 @@ static void drawPreview(const InstrumentAChChid* a) {
   gfxSetFgColor(appSettings.colorScheme.textInfo);
   gfxDrawBitmap(previewBitmap, 0, 16);
 }
-static void selectModel(int value) { instrument()->model = (uint8_t)value; projectModified = 1; screenSetup(&screenInstrument, cInstrument); }
+static void selectModel(int value) {
+  EditHistoryScope history("Instrument model");
+  if (!editHistoryCaptureModel(cInstrument)) return;
+  instrument()->model = (uint8_t)value;
+  projectModified = 1; screenSetup(&screenInstrument, cInstrument);
+}
 static void cancelModel() { screenSetup(&screenInstrument, cInstrument); }
 static void openModel() { selectionPopupSetup("BRAIDS MODEL", braidsCategories, braidsCategoryCount, instrument()->model, selectModel, cancelModel); screenSetup(&screenSelectionPopup, 0); }
 static int columns(int row) { return row < 3 ? instrumentCommonColumnCount(row) : 2; }

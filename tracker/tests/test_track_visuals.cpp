@@ -468,6 +468,26 @@ TEST_CASE_FIXTURE(VisualFixture, "Detailed voice display includes waveform and e
   CHECK(blank(waveformDisplayGetBitmap(0)));
 }
 
+TEST_CASE_FIXTURE(VisualFixture, "Song waveform expands the existing track image without losing samples") {
+  chipnomadState->project.instruments[0].type = InstrumentType::Braids;
+  chipnomadState->uiPlaybackStatus.tracks[0].note.instrument = 0;
+  auto& voice = chipnomadState->voiceMonitors[0];
+  voice.active = 1;
+  voice.envelope = 1;
+  std::fill_n(voice.samples, VOICE_MONITOR_SAMPLES, 0.25f);
+  refreshWaveforms();
+  Bitmap* original = waveformDisplayGetBitmap(0);
+  Bitmap* wide = waveformDisplayGetSongBitmap(0);
+  REQUIRE(original != nullptr);
+  REQUIRE(wide != nullptr);
+  REQUIRE(wide->widthPixels == original->widthPixels * 3);
+  REQUIRE(wide->heightPixels == original->heightPixels);
+  for (int y = 0; y < wide->heightPixels; ++y)
+    for (int x = 0; x < wide->widthPixels; ++x)
+      CHECK(wide->data[y * wide->widthPixels + x] ==
+            original->data[y * original->widthPixels + x / 3]);
+}
+
 TEST_CASE_FIXTURE(VisualFixture, "AY Detailed display reads its own track and includes noise and envelope") {
   chipnomadState->project.instruments[0].type = InstrumentType::AY1;
   auto& track = chipnomadState->uiPlaybackStatus.tracks[5];

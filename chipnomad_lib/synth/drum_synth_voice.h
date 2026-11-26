@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "voice_post_processor.h"
+#include "voice_declick.h"
 #include "../project_instruments.h"
 #include "../external/digisophie/sophie.h"
 
@@ -16,7 +17,7 @@ class DrumSynthVoice {
   void noteOff();
   void kill();
   void render(float* output, size_t frames);
-  bool active() const { return active_; }
+  bool active() const { return active_ || declick_.tailActive(); }
   float envelopeLevel() const { return active_ ? envelope_ * (digiSophie_ ? post_.envelopeLevel() : 1.0f) : 0.0f; }
 
  private:
@@ -27,6 +28,7 @@ class DrumSynthVoice {
   const InstrumentDrumSynth* instrument_;
   InstrumentDrumSynth parameters_;
   VoicePostProcessor<> post_;
+  VoiceDeclick declick_;
   float sampleRate_, frequency_, age_, duration_, envelope_, phase_[8], noiseLow_;
   uint32_t randomState_;
   bool active_;

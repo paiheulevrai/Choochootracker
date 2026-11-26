@@ -106,7 +106,7 @@ private storage and does not ask again. In the Play Store build the row reads `N
 
 ### Navigation
 
-- Use **[UP/DOWN/LEFT/RIGHT]** to move the cursor.
+- Use **[UP/DOWN/LEFT/RIGHT]** to move the cursor. The focused field text uses the theme's cursor colour.
 - Hold **SELECT + [DIRECTION]** to move between screens.
 - SELECT + [LEFT/RIGHT] also exits branch pages to the neighbouring MSCPIT
   screen, like Instrument Pool: Project/Settings (including Settings submenus)
@@ -1140,10 +1140,18 @@ Inspired by Swedish "trig conditions", the tracker supports trigger probabilitie
 |---|---|---|
 | `PRO` | `00-64` | Absolute trigger probability from `0%` to `100%` |
 | `MOD` | `AB` | Trigger on iteration `A` of `B`; for example `12`, `22`, `14`, `34` |
+| `NTH` | `XY` | Gate cells left/right of the command in a Phrase, or columns left of it in a Table, using loop interval digits. |
 
 `MOD` counters are local to the track and phrase. Invalid combinations, such as `A` greater than `B`, do not trigger.
 
 `MOD34` triggers on the 3rd pass of every 4-pass cycle. `MOD1F` triggers on the 1st pass of every 16-pass cycle.
+
+For `NTH` in a Phrase, `0` is off, `1` triggers only the first pass, `2-8`
+trigger every Nth pass, `9` triggers passes 1&3, `A` 1&4, `B` passes 5-8, and
+`C` from pass 7 onward. ChooChooTracker adds `D` for the second pass only,
+`E` for odd passes and `F` for even passes. `X` controls the note and earlier
+FX on the left; `Y` controls later FX on the right. In a Table, `00` resets
+the counter and `01-FF` gates columns to the left every `XX+1` passes.
 
 #### Playback speed
 
@@ -1325,7 +1333,7 @@ Use it to balance the 8 tracks, shape each track with Tilt EQ, and send audio to
 | LVL | Post-engine track level, `000-100` |
 | REV | Send to the shared Clouds or Beads reverb, `000-100` |
 | DLY | Send to the shared ping-pong delay, `000-100` |
-| TLT | Per-track Tilt EQ, `00-FF`; `80` is neutral, low values favour bass and high values favour treble. Low values will introduce a soft overdrive. |
+| TLT | Per-track Tilt EQ, `00-FF`; `80` is neutral, low values favour bass and high values favour treble. |
 | M | `*` mutes this track |
 | S | `*` solos this track |
 
@@ -1417,7 +1425,7 @@ Use **Save** before changing instrument types or loading another project.
 - **MIDI** opens the [MIDI](#14-midi) submenu: device selection and the MIDI In channel-to-instrument mapping.
 - **Synths** contains **AY Quality**, **Sample dithering**, and global **Braids BITS / DRFT / SIGN** settings.
 - **Mixer** contains **Mix volume** and the per-project `250-4000 Hz` **Tilt pivot** (default `1 kHz`) used by all Mixer Tilt controls.
-- **Graphics** contains **Edit color theme**, **Load font**, **Song waveform**, **Track visuals**, **Waveform FPS**, and the active renderer (`GPU` or `Software`). **Waveform FPS** sets the refresh rate of the instrument scope and mixer visualizers from `01` to `60`. Track visuals selects **Detailed** (the synth waveform and its overlays) or **Audio waveform** (the actual summed output of that track) independently for every track; audio waveform clears any prior ADSR overlay immediately when playback starts. ChipNomad fonts and themes should work.
+- **Graphics** contains **Edit color theme**, **Load font**, **Song waveform**, **Track visuals**, **Waveform FPS**, and the active renderer (`GPU` or `Software`). Theme and font browsers reopen on the last loaded file for quick comparison during the session. **Waveform FPS** sets the refresh rate of the instrument scope and mixer visualizers from `01` to `60`. Track visuals selects **Detailed** (the synth waveform and its overlays) or **Audio waveform** (the actual summed output of that track) independently for every track; audio waveform clears any prior ADSR overlay immediately when playback starts. ChipNomad fonts and themes should work.
 - **Key mapping** customises the controls.
 - **Support report** writes a small diagnostic text file with the app version, platform, audio settings and CPU load, playback/overflow state, and a compact project summary. It does not include sample data or project title/author text. On Android and Web it opens the normal export/download flow; desktop and handheld builds save `support-report.txt` in the app's writable folder.
 - **Quit ChooChooTracker** exits cleanly.
@@ -1454,7 +1462,7 @@ Desktop, PortMaster and Web MIDI browsers. Settings > **MIDI** opens this submen
 
 - **Sound preview from a MIDI keyboard**: with a MIDI In device selected, playing notes on the connected keyboard auditions an instrument on any screen, the same as the on-screen **EDIT + PLAY** shortcut on the [Instrument](#5-instruments) screen. This is preview only - it does not enter notes into the song.
 - **Channel mapping**: opens a list of the 16 MIDI channels; assign each one an instrument (`OFF` by default) so notes received on that channel preview that instrument regardless of which one is selected on the Instrument screen - e.g. channel `01` -> instrument `05`. A channel left `OFF` falls back to the currently selected instrument, the original behavior. This mapping is saved to settings.txt.
-- **MIDI CC mapping**: maps an incoming controller to an instrument parameter, including its **Volume**, or to global controls. Global rows show `TRK 1`-`TRK 8` instead of an instrument and provide track **Mute**, **Solo**, **Volume**, **Reverb send**, and **Delay send**; **Song play/stop** has no target. A new mapping ignores the CC that learned/configured it and takes effect on the next physical movement, so setting up mappings during playback cannot reset a patch to zero. Mute and solo use `0-63` = off, `64-127` = on.
+- **MIDI CC mapping**: maps an incoming controller to an instrument parameter, including its **Volume**, or to global controls. The destination popup reopens on the last selected target for the next unassigned row during the current session. Global rows show `TRK 1`-`TRK 8` instead of an instrument and provide track **Mute**, **Solo**, **Volume**, **Reverb send**, and **Delay send**; **Song play/stop** has no target. A new mapping ignores the CC that learned/configured it and takes effect on the next physical movement, so setting up mappings during playback cannot reset a patch to zero. Mute and solo use `0-63` = off, `64-127` = on.
 - **Driving an external MIDI device**: give a track the [MIDI Out](#midi-out) instrument type and set its Channel; triggering notes on that track sends real MIDI to the selected MIDI Out device instead of making sound in ChooChooTracker.
 
 ## 15. Credits and licensing

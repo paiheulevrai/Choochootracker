@@ -1,4 +1,5 @@
 #include "screen_groovebox.h"
+#include "edit_history.h"
 #include "corelib_gfx.h"
 #include "project_utils.h"
 #include "utils.h"
@@ -41,7 +42,7 @@ struct GrooveboxReferences {
       for (const auto& b : pattern.bars)
         if (b.phrase < PROJECT_MAX_PHRASES) ++phrases[b.phrase];
     for (int c = 0; c < PROJECT_MAX_CHAINS; ++c) {
-      freeChains[c] = !chains[c] && p->chainToPatternMap[c] == EMPTY_VALUE_16 && chainIsEmpty(p, c);
+      freeChains[c] = !chains[c] && p->chainToPatternMap[c] == EMPTY_VALUE_16 && chainSlotIsPristine(p, c);
       chainFree += freeChains[c];
     }
     for (int f = 0; f < PROJECT_MAX_PHRASES; ++f) {
@@ -79,27 +80,18 @@ struct GrooveboxUndo {
   }
 };
 static std::unique_ptr<GrooveboxUndo> undo;
+void grooveboxDiscardUndo() { undo.reset(); }
 static void changed() {
+  if (grooveboxEditorActive && !canonicalSimplifiedActive) editHistoryBarrier();
   projectModified = true;
   chipnomadQueueProjectRefresh(chipnomadState);
-}
-
-static int allocateSlot(bool* free, int size, int start, int bankSize) {
-  for (int i = start; i < std::min(start + bankSize, size); ++i)
-    if (free[i]) { free[i] = false; return i; }
-  if (bankSize == 16)
-    for (int i = (start + 128) % 256; i < std::min((start + 128) % 256 + 16, size); ++i)
-      if (free[i]) { free[i] = false; return i; }
-  for (int i = 0; i < size; ++i)
-    if (free[i]) { free[i] = false; return i; }
-  return -1;
 }
 
 int grooveboxFindFreeChain(Project* p, int col) {
   if (!p || col < 0 || col >= p->tracksCount) return EMPTY_VALUE_16;
   GrooveboxReferences refs(p);
-  int slot = allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (col + 1) * 16, 16);
-  return slot < 0 ? EMPTY_VALUE_16 : slot;
+  int slot = allocateTrackSlot(refs.freeChains, PROJECT_MAX_CHAINS, col);
+  return slot < 0 || !editHistoryCapture(p, EditObject::chain, slot) ? EMPTY_VALUE_16 : slot;
 }
 
 bool grooveboxMergePatternsUp(int firstRow, int lastRow, int firstCol, int lastCol) {
@@ -136,12 +128,13 @@ bool grooveboxMergePatternsUp(int firstRow, int lastRow, int firstCol, int lastC
       ++count;
     }
     if (count < 2) continue;
-    slots[col] = allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (col + 1) * 16, 16);
+    slots[col] = allocateTrackSlot(refs.freeChains, PROJECT_MAX_CHAINS, col);
     if (slots[col] < 0) { screenMessage(MESSAGE_TIME_ERROR, "No free chain: merge cancelled"); return false; }
   }
   bool merged = false;
   for (int col = firstCol; col <= lastCol; ++col) {
     if (slots[col] < 0) continue;
+    if (!editHistoryCapture(EditObject::song) || !editHistoryCapture(EditObject::chain, slots[col])) return false;
     p->chains[slots[col]] = chains[col];
     for (int row = firstRow; row <= lastRow; ++row) p->song[row][col] = EMPTY_VALUE_16;
     p->song[firstRow][col] = slots[col];
@@ -173,13 +166,13 @@ bool grooveboxPrepareScene(int row) {
   int chains[PROJECT_MAX_TRACKS], phrases[PROJECT_MAX_TRACKS][16];
   for (int t = 0; t < p.tracksCount; ++t) {
     chains[t] = p.song[row][t] == EMPTY_VALUE_16 ?
-      allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (t + 1) * 16, 16) : p.song[row][t];
+      allocateTrackSlot(refs.freeChains, PROJECT_MAX_CHAINS, t) : p.song[row][t];
     if (chains[t] < 0) {
       screenMessage(MESSAGE_TIME_ERROR, "No free chains: scene not prepared");
       return false;
     }
     for (int b = 0; b < length; ++b) {
-      phrases[t][b] = allocateSlot(refs.freePhrases, PROJECT_MAX_PHRASES, t * 128, 128);
+      phrases[t][b] = allocateTrackSlot(refs.freePhrases, PROJECT_MAX_PHRASES, t);
       if (phrases[t][b] < 0) {
         screenMessage(MESSAGE_TIME_ERROR, "No free phrases: scene not prepared");
         return false;
@@ -191,10 +184,12 @@ bool grooveboxPrepareScene(int row) {
   auto& snapshot = *undo->preparedScene;
   for (int t = 0; t < p.tracksCount; ++t) {
     int c = chains[t], i = snapshot.chainCount++;
+    if (!editHistoryCapture(EditObject::song) || !editHistoryCapture(EditObject::chain, c)) return false;
     snapshot.chainSlots[i] = c; snapshot.chains[i] = p.chains[c];
     chainClear(&p.chains[c]);
     for (int b = 0; b < length; ++b) {
       int f = phrases[t][b], n = snapshot.phraseCount++;
+      if (!editHistoryCapture(EditObject::phrase, f)) return false;
       snapshot.phraseSlots[n] = f; snapshot.phrases[n] = p.phrases[f];
       phraseClear(&p.phrases[f]);
       p.chains[c].rows[b].phrase = f;
@@ -264,6 +259,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     return false;
   }
   if (action == GrooveboxAction::undo) {
+    editHistoryBarrier();
     if (!undo || undo->owner != chipnomadState) {
       screenMessage(MESSAGE_TIME_ERROR, "No Groovebox action to undo");
       return false;
@@ -299,6 +295,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     return true;
   }
   if (action == GrooveboxAction::pasteScene) {
+    if (!editHistoryCapture(EditObject::song)) return false;
     if (!sceneCopied) { screenMessage(MESSAGE_TIME_ERROR, "Copy a scene first"); return false; }
     for (auto c : p.song[row])
       if (c != EMPTY_VALUE_16) { screenMessage(MESSAGE_TIME_ERROR, "Paste into an empty scene"); return false; }
@@ -308,9 +305,10 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     changed();
     return true;
   }
-  int c = chainAt(&p, row, col);
+  const bool newPattern = action == GrooveboxAction::newPattern;
+  int c = newPattern ? -1 : chainAt(&p, row, col);
   GrooveboxReferences refs(&p);
-  int length = grooveboxTrackLength(&p, row, col);
+  int length = newPattern ? 0 : grooveboxTrackLength(&p, row, col);
   int reset = std::clamp((int)appSettings.defaultPatternLength, 1, 16);
   if (action != GrooveboxAction::makeIndependent && !canonicalSimplifiedActive &&
       c >= 0 && refs.chains[c] > 1) {
@@ -328,6 +326,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     if (length == 0) { screenMessage(MESSAGE_TIME_ERROR, "Track already has no bars"); return false; }
     undo = std::make_unique<GrooveboxUndo>(row);
     undo->saveChain(c);
+    if (!editHistoryCapture(EditObject::chain, c)) return false;
     int next = action == GrooveboxAction::shorten ? length - 1 :
       action == GrooveboxAction::halveLength ? length / 2 : reset;
     for (int i = next; i < length; ++i) p.chains[c].rows[i].phrase = EMPTY_VALUE_16;
@@ -338,7 +337,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     screenMessage(MESSAGE_TIME_ERROR, "No chain to make independent");
     return false;
   }
-  if (c < 0 && p.song[row][col] != EMPTY_VALUE_16) {
+  if (!newPattern && c < 0 && p.song[row][col] != EMPTY_VALUE_16) {
     screenMessage(MESSAGE_TIME_ERROR, "Invalid chain: open Classic");
     return false;
   }
@@ -346,11 +345,11 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
   bool linkedDuplicate = canonicalSimplifiedActive && !clone &&
     (action == GrooveboxAction::doubleLength || action == GrooveboxAction::duplicateBar);
   int target = c;
-  if (c < 0 || clone) target = allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (col + 1) * 16, 16);
+  if (c < 0 || clone) target = allocateTrackSlot(refs.freeChains, PROJECT_MAX_CHAINS, col);
   if (target < 0) { screenMessage(MESSAGE_TIME_ERROR, "No free chain"); return false; }
   int first = clone ? 0 : length;
   int count = clone ? 16 : action == GrooveboxAction::doubleLength ? length :
-    action == GrooveboxAction::resetLength ? reset - length : 1;
+    (action == GrooveboxAction::resetLength || newPattern) ? reset - length : 1;
   if (!clone && (length + count > 16 || count == 0)) {
     screenMessage(MESSAGE_TIME_ERROR, "Length must fit 1..16 bars");
     return false;
@@ -377,11 +376,12 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
       }
     }
     if (linkedDuplicate) continue;
-    slots[i] = allocateSlot(refs.freePhrases, PROJECT_MAX_PHRASES, col * 128, 128);
+    slots[i] = allocateTrackSlot(refs.freePhrases, PROJECT_MAX_PHRASES, col);
     if (slots[i] < 0) { screenMessage(MESSAGE_TIME_ERROR, "No free phrase: action cancelled"); return false; }
   }
   undo = std::make_unique<GrooveboxUndo>(row);
   undo->saveChain(target);
+  if (!editHistoryCapture(EditObject::song) || !editHistoryCapture(EditObject::chain, target)) return false;
   if (clone) p.chains[target] = p.chains[c];
   else if (c < 0) chainClear(&p.chains[target]);
   for (int i = 0; i < count; ++i) {
@@ -392,6 +392,7 @@ bool grooveboxAction(GrooveboxAction action, int row, int col) {
     }
     if (slots[i] < 0) continue;
     undo->savePhrase(slots[i]);
+    if (!editHistoryCapture(EditObject::phrase, slots[i])) return false;
     if (sources[i] >= 0) p.phrases[slots[i]] = p.phrases[sources[i]];
     else {
       phraseClear(&p.phrases[slots[i]]);
@@ -426,9 +427,12 @@ static PhraseRow* writableStep(bool recordUndo = true) {
   int chain = chainAt(p, scene, track);
   int phrase = grooveboxPhraseAt(p, scene, track, bar);
   if (phrase >= 0) {
+    if (!editHistoryCapture(p, EditObject::phrase, phrase)) return NULL;
     if (recordUndo) {
       undo = std::make_unique<GrooveboxUndo>(scene);
       undo->savePhrase(phrase);
+      if (!editHistoryCapture(EditObject::song) || !editHistoryCapture(EditObject::chain, chain) ||
+          !editHistoryCapture(EditObject::phrase, phrase)) return NULL;
     }
     return &p->phrases[phrase].rows[step];
   }
@@ -445,9 +449,9 @@ static PhraseRow* writableStep(bool recordUndo = true) {
       screenMessage(MESSAGE_TIME_ERROR, "Invalid chain: use Classic");
       return NULL;
     }
-    chain = allocateSlot(refs.freeChains, PROJECT_MAX_CHAINS, (track + 1) * 16, 16);
+    chain = allocateTrackSlot(refs.freeChains, PROJECT_MAX_CHAINS, track);
   }
-  phrase = allocateSlot(refs.freePhrases, PROJECT_MAX_PHRASES, track * 128, 128);
+  phrase = allocateTrackSlot(refs.freePhrases, PROJECT_MAX_PHRASES, track);
   if (chain < 0 || phrase < 0) {
     screenMessage(MESSAGE_TIME_ERROR, "No free chain or phrase");
     return NULL;
@@ -1011,7 +1015,7 @@ static ScreenPlaybackLevel playbackLevel() {
 const AppScreen screenGroovebox = {init, setup, fullRedraw, draw, input, playbackLevel};
 
 static void afterConversion(int) {
-  grooveboxEditorActive = chipnomadState->project.viewMode == ViewMode::classic;
+  grooveboxEditorActive = false;
   screenViewSettings.setup(0);
 }
 static void conversionViewRedraw() { screenViewSettings.fullRedraw(); }

@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "edit_history.h"
 #include "field_style.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -16,6 +17,8 @@ static void setEngine(int value) {
   d.engine = (DrumSynthEngine)value;
 }
 static void selectEngine(int value) {
+  EditHistoryScope history("Instrument model");
+  if (!editHistoryCaptureModel(cInstrument)) return;
   setEngine(value);
   projectModified = 1;
   screenSetup(&screenInstrument, cInstrument);
@@ -84,7 +87,7 @@ static void drawField(int col, int row, CellState state) {
   // The selected field's label lights up with its value; Model is a title.
   const bool used = row > 3 && drumSynthMacroUsed(d->engine, row - 4);
   if (row == 3) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textTitles);
     gfxPrint(0, 6, "Model");
   } else {
     fieldDrawLabel(0, row + 4, used ? macroName(d->engine, row - 4) : "---", state);

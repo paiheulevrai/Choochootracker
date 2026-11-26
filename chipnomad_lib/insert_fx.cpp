@@ -114,11 +114,11 @@ static const InsertDescriptor descriptors[] = {
       {"High F", "High frequency", "Hz", 2000, 14000, 182, M::exponential}}},
     {"Trance Gate",
      8,
-     {{"Pattern", "Pattern", "", 0, 63, 0, M::discrete},
+     {{"Pattern", "Pattern", "", 0, 71, 0, M::discrete},
       {"Rate", "Rate", "", 0, 14, 9, M::discrete},
-      {"Length", "Length", "steps", 0, 15, 15, M::discrete},
+      {"Length", "Length", "steps", 0, 31, 15, M::discrete},
       {"Gate", "Gate width", "%", 0, 1, 128, M::linear},
-      {"Phase", "Phase", "", 0, 15, 0, M::discrete},
+      {"Phase", "Phase", "", 0, 31, 0, M::discrete},
       {"Mode", "Mode", "", 0, 3, 0, M::discrete},
       {"Smooth", "Smooth", "%", 0, 1, 20, M::linear},
       {"Mix", "Mix", "%", 0, 1, 255, M::linear}}},
@@ -211,8 +211,14 @@ void insertSelect(InsertConfig* c, int m) {
 }
 void insertEdit(InsertConfig* c, int p, int v) {
   if (p < 0 || p >= insertDescriptor(c->module).count) return;
+  if (c->module == insertTranceGate && (p == 2 || p == 4))
+    v = std::min(v, (int)tranceGatePatternLengthLimit(c->values[0]) - 1);
   c->values[p] = insertClamp(c->module, p, v);
   ++c->edits[p];
+  if (c->module == insertTranceGate && p == 0 && tranceGatePatternLengthLimit(c->values[0]) == 16) {
+    if (c->values[2] > 15) insertEdit(c, 2, 15);
+    if (c->values[4] > 15) insertEdit(c, 4, 15);
+  }
 }
 void insertDescribe(char* text, size_t size, int m, int p, int value) {
   const auto& d = insertDescriptor(m);
@@ -282,7 +288,8 @@ void insertDescribe(char* text, size_t size, int m, int p, int value) {
         "Metric Flux", "Machine Prayer", "Ghost Train", "Overclock",
         "Warp Lattice", "Kinetic Dust", "Chrome Rattle", "Tension Field",
         "Rift Walker", "Echo Mosaic", "Shiver Grid", "Final Orbit"};
-    snprintf(text, size, "%02X %s", (unsigned)v, n[(int)v]);
+    if (v < tranceGateUserFirst) snprintf(text, size, "%02X %s", (unsigned)v, n[(int)v]);
+    else snprintf(text, size, "%02X AY %02X", (unsigned)v, (unsigned)v - tranceGateUserFirst);
   } else if (m == insertTranceGate && p == 1) {
     static const char* n[] = {"1/2", "1/2T", "1/2.", "1/4", "1/4T", "1/4.", "1/8", "1/8T", "1/8.", "1/16", "1/16T", "1/16.", "1/32", "1/32T", "1/32."};
     snprintf(text, size, "%s", n[(int)v]);
@@ -328,9 +335,19 @@ constexpr bool tranceGatePatternsAreUnique() {
   return true;
 }
 static_assert(tranceGatePatternsAreUnique(), "Trance Gate patterns must not be rotations or mirrors");
-bool tranceGatePatternOpen(uint8_t pattern, uint8_t length, uint32_t step) {
-  length = std::max<uint8_t>(1, std::min<uint8_t>(16, length));
-  return (tranceGatePatterns[pattern & 63] & (0x8000u >> (step % length))) != 0;
+uint32_t tranceGatePatternMask(uint8_t pattern, const uint8_t (*wavetables)[32], uint8_t length) {
+  if (pattern < tranceGateUserFirst) return (uint32_t)tranceGatePatterns[pattern] << 16;
+  if (pattern >= tranceGateUserFirst + tranceGateUserCount || !wavetables) return 0;
+  uint32_t mask = 0;
+  const uint8_t* wave = wavetables[pattern - tranceGateUserFirst];
+  for (int i = 0; i < (length > 16 ? 32 : 16); ++i)
+    if (wave[i]) mask |= 0x80000000u >> i;
+  return mask;
+}
+bool tranceGatePatternOpen(uint8_t pattern, uint8_t length, uint32_t step,
+                           const uint8_t (*wavetables)[32]) {
+  length = std::max<uint8_t>(1, std::min<uint8_t>(tranceGatePatternLengthLimit(pattern), length));
+  return (tranceGatePatternMask(pattern, wavetables, length) & (0x80000000u >> (step % length))) != 0;
 }
 float tranceGateTicksPerStep(uint8_t rate) {
   rate = std::min<uint8_t>(14, rate);
@@ -346,22 +363,23 @@ static uint32_t gateRandom(uint32_t value) {
   value *= 0x846ca68bU;
   return value ^ (value >> 16);
 }
-static bool tranceGateOpen(const uint8_t* v, uint64_t step) {
-  const int length = v[2] + 1;
+static bool tranceGateOpen(const uint8_t* v, uint64_t step, uint32_t pattern) {
+  const int length = std::min<int>(v[2] + 1, tranceGatePatternLengthLimit(v[0]));
+  const int patternLength = length > 16 ? 32 : 16;
   const int mode = v[5];
   const int span = mode == 2 && length > 1 ? length * 2 - 2 : length;
   const uint64_t loop = step / span;
   int position = (int)(step % span);
   if (mode == 1) position = length - 1 - position;
   else if (mode == 2 && position >= length) position = span - position;
-  bool bits[16];
+  bool bits[32];
   int opened = 0;
   for (int i = 0; i < length; ++i) {
-    bits[i] = (tranceGatePatterns[v[0]] & (0x8000u >> ((i - v[4] + 16) & 15))) != 0;
+    bits[i] = (pattern & (0x80000000u >> ((i - v[4] + 32) & (patternLength - 1)))) != 0;
     opened += bits[i];
   }
   if (mode == 3 && opened && opened < length) {
-    int open[16], closed[16], openCount = 0, closedCount = 0;
+    int open[32], closed[32], openCount = 0, closedCount = 0;
     for (int i = 0; i < length; ++i) {
       if (bits[i]) open[openCount++] = i;
       else closed[closedCount++] = i;
@@ -627,7 +645,8 @@ struct InsertChain::Impl {
     memcpy(s.previous, v, 8);
     s.dirty = false;
   }
-  void process(Slot& s, float* data, int frames, const uint8_t* incomingValues, const float* sidechain) {
+  void process(Slot& s, float* data, int frames, const uint8_t* incomingValues, const float* sidechain,
+               const uint8_t (*wavetables)[32]) {
     float increment = 1.0f / std::max(1.0f, rate * 0.005f);
     for (int offset = 0; offset < frames;) {
       if (s.switching && s.wet <= 0) {
@@ -883,10 +902,17 @@ struct InsertChain::Impl {
           const float smoothSeconds = 0.0005f + 0.0300f * p[6] * p[6];
           const float smooth = 1.0f - expf(-1.0f / (rate * smoothSeconds));
           const float mix = p[7];
+          const uint32_t pattern = tranceGatePatternMask(values[0], wavetables, values[2] + 1);
+          uint64_t lastStep = UINT64_MAX;
+          bool open = false;
           for (int i = 0; i < n; ++i) {
             uint64_t step = (uint64_t)(s.gateFrames / stepFrames);
             double position = fmod(s.gateFrames, stepFrames) / stepFrames;
-            float targetGate = tranceGateOpen(values, step) && position < gate ? 1.0f : 0.0f;
+            if (step != lastStep) {
+              open = tranceGateOpen(values, step, pattern);
+              lastStep = step;
+            }
+            float targetGate = open && position < gate ? 1.0f : 0.0f;
             s.gateLevel += smooth * (targetGate - s.gateLevel);
             float gain = 1.0f + mix * (s.gateLevel - 1.0f);
             l[i] *= gain;
@@ -1001,8 +1027,9 @@ bool InsertChain::active() const {
     if (s.config.module || s.module || s.switching) return true;
   return false;
 }
-void InsertChain::process(float* data, int frames, const uint8_t v[2][8], const float* sidechain[2]) {
+void InsertChain::process(float* data, int frames, const uint8_t v[2][8], const float* sidechain[2],
+                          const uint8_t (*wavetables)[32]) {
   if (!ready()) return;
   for (int slot = 0; slot < 2; ++slot)
-    impl_->process(impl_->slots[slot], data, frames, v[slot], sidechain ? sidechain[slot] : nullptr);
+    impl_->process(impl_->slots[slot], data, frames, v[slot], sidechain ? sidechain[slot] : nullptr, wavetables);
 }

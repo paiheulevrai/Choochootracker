@@ -7,6 +7,8 @@ extern "C" {
 
 // Setup file browser with extension filter and callbacks
 void fileBrowserSetup(const char* title, const char* extension, const char* startPath, void (*fileCallback)(const char*), void (*cancelCallback)(void));
+void fileBrowserSetupSelected(const char* title, const char* extension, const char* startPath,
+  const char* selectedPath, void (*fileCallback)(const char*), void (*cancelCallback)(void));
 void fileBrowserSetupWithPreview(const char* title, const char* extension,
   const char* startPath, void (*fileCallback)(const char*),
   void (*cancelCallback)(void), void (*previewCallback)(const char*), int midiOscillator = -1);
@@ -21,6 +23,7 @@ int fileBrowserGetAdjacentPath(const char* currentPath, const char* extension,
 }
 struct MidiPreviewIntent;
 bool fileBrowserHasMidiPreview(void);
+void fileBrowserStopHeldPreview(void);
 void fileBrowserMidiInput(const MidiPreviewIntent& intent);
 #endif
 

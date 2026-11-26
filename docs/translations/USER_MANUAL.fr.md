@@ -83,6 +83,42 @@ ChooChooTracker fonctionne idéalement avec une manette disposant d’une croix 
 
 Les mappings peuvent être modifiés dans **Settings > Controls > Key mapping**, y compris sur Android avec une manette externe. Sur PortMaster, sauvegardez un nouveau mapping avec **Done**, puis relâchez le bouton avant de continuer dans Settings.
 
+Sur **PortMaster et NextUI uniquement**, les entrées clavier connues du pont
+de commandes et leurs équivalents manette SDL partagent un seul nom et une
+seule affectation (`A`, `B`, `L2`, etc.), y compris pendant le remappage.
+Si les deux sources signalent le même bouton avec des maintiens qui se
+chevauchent, une seule pression est produite ; le bouton reste maintenu
+jusqu'au relâchement des deux sources. Aucun délai anti-rebond ne ralentit
+les frappes rapides. Deux cycles pression/relâchement entièrement séparés
+restent impossibles à distinguer de deux vraies frappes. Les touches
+correspondantes d'un clavier USB partagent aussi ces affectations ; les
+autres touches restent indépendantes.
+
+Les anciens mappings sont convertis automatiquement en conservant les entrées
+personnalisées et les emplacements laissés vides. Les alias redondants d'une
+même action sont supprimés. Si un même bouton se retrouve affecté à plusieurs
+actions, le démarrage impose une calibration explicite plutôt que de deviner.
+Le mapping sauvegardé n'est remplacé qu'après calibration et vérification
+réussies.
+
+Avant chaque capture, relâchez tous les boutons. Effectuez autant de
+modifications que nécessaire : l'ancien mapping reste actif pour naviguer.
+**Done** teste une seule fois les huit commandes principales et les nouvelles
+affectations, puis sauvegarde le résultat. Les suppressions et le retour aux
+valeurs par défaut sont inclus dans ce test. Vous avez 15 secondes par étape ;
+en cas d'expiration, l'ancien mapping reste actif et les autres modifications
+restent disponibles pour être corrigées ou retestées. Quitter l'éditeur,
+mettre en veille ou quitter l'application les annule. Réaffecter une entrée
+déjà utilisée l'échange avec l'emplacement édité ; le test final vérifie le
+résultat.
+**Calibrate controls** reconstruit les huit commandes
+principales ; les affectations Motion sont conservées sauf conflit.
+Les alias en conflit entre commandes optionnelles Motion/Undo/Redo sont
+laissés non assignés, avec un avertissement ; réaffectez-les ensuite si besoin.
+Pendant la calibration ou son test, maintenez un bouton une seconde pour
+recommencer depuis **Up**, puis relâchez tout avant de continuer. Une veille,
+une sortie ou un test inachevé ne remplace pas le mapping sauvegardé.
+
 ### Navigation
 
 - Utilisez **[HAUT/BAS/GAUCHE/DROITE]** pour déplacer le curseur.
@@ -937,7 +973,7 @@ Types de déclenchement LFO :
 
 - **STICK LIVE** (`L1` par défaut) applique la modulation stick sans changer la phrase. Dans **Settings > Stick live mode**, `HOLD` (par défaut) l’active pendant que le bouton est maintenu ; `TOGGLE` l’active à la première pression et le désactive à la suivante ; `FREE` le laisse en permanence activé. Relâcher le bouton en mode `TOGGLE` laisse l’activation active.
 - Pendant la lecture, maintenez **MOTION RECORD** (`L2`) pour appliquer la modulation stick et enregistrer les destinations modifiées comme valeurs FX absolues.
-- Maintenez **MOTION ERASE** (`R2`) pour retirer les FX destination correspondants de la ligne en cours.
+- Maintenez **MOTION ERASE** (`R2`, ou **DEL**) pour retirer les FX correspondant aux destinations stick et aux mappings MIDI CC actifs sur les pistes en lecture. Les FX correspondants saisis manuellement sont aussi supprimés ; les notes et le FX de délai `DEL` restent intacts.
 
 Le `~` en bas à droite indique que Stick live est actif. Record (`*`, ou `!` en cas de débordement) et Erase (`x`) ont la priorité d’affichage et restent momentanés dans les deux modes. Ces deux actions activent le traitement live du stick pendant qu’elles sont maintenues ; les relâcher laisse un toggle live séparément activé intact.
 
@@ -1102,6 +1138,45 @@ Les Tracker FX forçent les valeurs du séquenceur ou du moteur sonore sur les 
 | `SPD` | signé `XX` | Sélectionne un ratio horloge persistant par piste ; voir le tableau de vitesse ci-dessous. |
 | `SLE` | `00-FF` ticks | Définit un glide persistant par piste pour les FX moteur continus. `00` est immédiat. Valeur remise à `00` à l’arrêt de la lecture. |
 
+### Transitions de paramètre : BEG / END
+
+Écrire la valeur initiale, `BEG` et `END` dans **la même colonne FX** :
+
+```text
+DCF 20
+BEG 80
+...
+END E0
+```
+
+`BEG` reprend la commande et la valeur précédentes de sa colonne. Sa valeur
+règle la courbe : `00` décélère fortement (type logarithmique), `80` est
+linéaire et `FF` accélère fortement (type exponentiel). Les valeurs
+intermédiaires font varier la courbe continûment. Ce sont des courbes
+quadratiques, pas des logarithmes ou exponentielles exacts. `END` donne la
+cible, atteinte dès l'entrée sur sa ligne.
+
+La transition évolue à chaque tick selon le groove/SPD, ou la vitesse de
+la colonne de table. Elle peut traverser plusieurs mesures, phrases et
+lignes de chanson, dans les deux vues, et fonctionne dans les deux tables.
+Les notes et changements d'instrument n'annulent pas une transition de
+phrase. L'échelle et la résolution du paramètre restent inchangées.
+
+Seuls les contrôles **absolus continus** conviennent : `PAN`, `TPN`, cutoff,
+vitesse de sample, temps d'enveloppe, envois et paramètres continus d'insert.
+Les commandes relatives cumulatives (`VOL`, `VSL`, `PIT`, offsets de
+modulation), triggers et sélecteurs discrets sont exclus. Une destination
+invalide ou une cible absente produit une notification. Utiliser VSL pour
+les slides de volume ; REP/RTO restent inchangés.
+
+Une nouvelle commande dans la colonne interrompt la transition. Les sauts,
+retours de boucle, redémarrages de table, l'arrêt et Clear Track FX
+l'annulent aussi. La recherche d'END suit uniquement le parcours naturel
+vers l'avant. Démarrer au milieu ne reconstruit pas un BEG antérieur ; END
+applique néanmoins sa cible si la colonne connaît une commande compatible.
+Une modification de la cible pendant la lecture repart de la valeur courante
+sur les lignes restantes ; supprimer ou déplacer la cible annule la transition.
+
 ### Envoyés d’Audio FX
 
 | FX | Valeur | Comportement détaillé |
@@ -1165,6 +1240,20 @@ Les multiplicateurs très élevés peuvent dépasser la résolution de l’ordon
 
 Phrase et table FX peuvent changer une modulation sans modifier l’instrument :
 
+`MRT XX` redéclenche les slots sélectionnés depuis leur début.
+`MKL XX` les désactive immédiatement, y compris les enveloppes absolues,
+sans note-off ni coupure de la note. Ces commandes ponctuelles fonctionnent
+en phrase et en table, y compris sur les enfants actifs d'un Layer.
+
+La valeur est un masque : `01` = slot 1, `02` = slot 2, `04` = slot 3,
+`08` = slot 4. Additionner les bits pour combiner (`05` = 1+3,
+`0F` = les quatre). `00` ne sélectionne rien ; les quatre bits de poids
+fort sont ignorés. MKL dure jusqu'à MRT ou au prochain trigger normal du
+modulateur, selon son mode (note, phrase ou chaîne). Une source libre reste
+désactivée entre les notes, jusqu'à MRT ou un changement d'instrument.
+MRT conserve les offsets FX et ne modifie pas l'instrument ; les entrées
+externes stick/séquence restent des entrées externes.
+
 | Modèle FX | Signification |
 |---|---|
 | `M1A`, `M2A`, `M3A`, `M4A` | Décalage relatif d’Amplitude pour les slots de modulation 1-4 |
@@ -1173,7 +1262,7 @@ Phrase et table FX peuvent changer une modulation sans modifier l’instrument :
 | `M31`, `M32`, `M33`, `M34` | Décalages relatifs P1-P4 pour slot 3 |
 | `M41`, `M42`, `M43`, `M44` | Décalages relatifs P1-P4 pour slot 4 |
 
-La valeur est interprétée comme un changement relatif signé de 8 bits (`01` ajoute `1`, `FF` soustrait `1`). Les commandes répétées s’accumulent. Les valeurs effectives sont clampées dans leur plage valide.
+Pour ces FX d'offset, la valeur est interprétée comme un changement relatif signé de 8 bits (`01` ajoute `1`, `FF` soustrait `1`). Les commandes répétées s’accumulent. Les valeurs effectives sont clampées dans leur plage valide.
 
 `P5` n’est pas exposé en phrase ou table FX. Il est disponible en destination modulation `M1–M4 Wavetable`, un modulateur peut donc scanner l’index AYWavetable d’un autre.
 
@@ -1322,7 +1411,7 @@ Utilisez-le pour équilibrer les 8 pistes, façonner chaque piste avec l’EQ Ti
 | REV | Envoi vers la réverbération partagée, `000-100` |
 | DLY | Envoi vers le delay ping-pong partagé, `000-100` |
 | PAN | Positionne l'audio à gauche ou à droite |
-| TLT | EQ Tilt par piste, `00-FF`; `80` est neutre, les valeurs basses favorisent les graves, les valeurs hautes favorisent les aiguës. Les valeurs basses introduisent une saturation douce. |
+| TLT | EQ Tilt par piste, `00-FF`; `80` est neutre, les valeurs basses favorisent les graves, les valeurs hautes favorisent les aiguës. |
 | M | `*` met la piste en sourdine |
 | S | `*` solo de la piste |
 
@@ -1495,7 +1584,8 @@ Ajustez Repeat delay et Repeat speed dans Paramètres. Si une seule pression pro
 
 Paramètres > **MIDI** ouvre ce sous-menu : **MIDI In** / **MIDI Out** choisit un appareil connecté, en faisant défiler les ports détectés avec `OFF` aux extrémités ; un appareil doit être sélectionné dans chaque sens.
 
-- **Préécoute sonore d’un clavier MIDI** : avec un appareil MIDI In sélectionné, jouer des notes sur le clavier connecté auditionne un instrument sur n’importe quel écran, comme le raccourci à l’écran **EDIT + PLAY** sur la page [Instrument](#5-instruments). C’est une préécoute seulement — cela ne saisit pas les notes dans la chanson.
+- **Clavier MIDI** : avec un appareil MIDI In sélectionné, les notes auditionnent un instrument sur n’importe quel écran. Sans REC, elles ne modifient pas les phrases.
+- **Enregistrement MIDI** : maintenez **MOTION RECORD** pour saisir les notes ; à l’arrêt, le canal Auto écrit à la position du curseur dans Phrase. Pendant la lecture, les notes existantes sur les lignes parcourues entre l’attaque et le relâchement sont effacées, sans supprimer leurs autres FX. La saisie MIDI peut être annulée et rétablie. Si une autre modification intervient pendant une note tenue, l’effacement en attente est ignoré avec un avertissement pour protéger les nouvelles données. Les phrases partagées changent à toutes leurs occurrences.
 - **Affectation des canaux** : ouvre la liste des 16 canaux MIDI; assignez à chacun un instrument (`OFF` par défaut) pour que les notes reçues sur ce canal préécoutent cet instrument quelle que soit la sélection sur la page Instrument — par ex. canal `01` → instrument `05`. Un canal laissé `OFF` revient à l’instrument actuellement sélectionné, comportement original. Cette affectation est sauvegardée dans settings.txt.
 - **Mapping MIDI CC** : mappe un contrôleur entrant à un paramètre d’instrument, y compris son **Volume**, ou à des contrôles globaux. Les lignes globales affichent `TRK 1`-`TRK 8` au lieu d’un instrument et fournissent les commandes piste **Mute**, **Solo**, **Volume**, **Send Reverb**, et **Send Delay** ; la commande **Song play/stop** n’a pas de cible. Un nouveau mapping ignore le CC qui l’a appris/configuré et prend effet au prochain mouvement physique, donc configurer pendant la lecture ne remet pas un patch à zéro. Silence et solo utilisent `0-63` = off, `64-127` = on.
 - **Synchronisation par horloge MIDI** : avec un appareil MIDI In sélectionné, réglez **Clock source** de l’écran Project sur **Midi Clock** pour suivre un séquenceur externe. Le tracker mesure le tempo sur l’horloge entrante (24 impulsions par noire) et l’affiche sur la ligne **Tempo** grisée ; les messages **Start**, **Continue** et **Stop** contrôlent la lecture. La source d’horloge est mémorisée dans settings.txt.

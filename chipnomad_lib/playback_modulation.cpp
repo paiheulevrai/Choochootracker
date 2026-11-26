@@ -317,8 +317,9 @@ static void handleLFOnoteOff(PlaybackModState* state) {
 
 
 
-void playbackModInit(PlaybackModState* state, Modulation* mod) {
+void playbackModInit(PlaybackModState* state, const Modulation* mod) {
   state->modulation = mod;
+  state->stoppedModulation = nullptr;
   state->amountOffset = 0;
   state->p1Offset = 0;
   state->p2Offset = 0;
@@ -357,16 +358,43 @@ void playbackModSetAYWavetables(PlaybackModState* state, const uint8_t (*ayWavet
 }
 
 void playbackModRestart(PlaybackModState* state) {
-  if (!state->modulation ||
-      !modulationIsTickLFO(GET_TYPE(state)) &&
-      !(GET_TYPE(state) == ModulationType::Sequence &&
-        state->modulation->p1 == static_cast<uint8_t>(SequenceSource::tranceGate))) return;
+  const Modulation* definition = state->modulation ? state->modulation : state->stoppedModulation;
+  if (!definition ||
+      (!modulationIsTickLFO(definition->type) &&
+       !(definition->type == ModulationType::Sequence &&
+         definition->p1 == static_cast<uint8_t>(SequenceSource::tranceGate)))) return;
+  if (state->stoppedModulation) {
+    state->modulation = state->stoppedModulation;
+    state->stoppedModulation = nullptr;
+  }
   state->counter = 0;
   state->step = 0;
   state->outValue = 0;
 }
 
+void playbackModKill(PlaybackModState* state) {
+  // An absent source bypasses absolute envelopes as well as additive modulation.
+  if (state->modulation) state->stoppedModulation = state->modulation;
+  state->modulation = nullptr;
+  state->outValue = 0;
+}
+
+void playbackModRetrigger(PlaybackModState* state) {
+  const Modulation* definition = state->modulation ? state->modulation : state->stoppedModulation;
+  if (!definition) return;
+  const auto saved = *state;
+  playbackModInit(state, definition);
+  state->ayWavetables = saved.ayWavetables;
+  state->amountOffset = saved.amountOffset;
+  state->p1Offset = saved.p1Offset;
+  state->p2Offset = saved.p2Offset;
+  state->p3Offset = saved.p3Offset;
+  state->p4Offset = saved.p4Offset;
+  state->p5Offset = saved.p5Offset;
+}
+
 void playbackModNext(PlaybackModState* state) {
+  if (!state->modulation) return;
   // Check if type or LFO trigger mode changed - reinitialize if so
   ModulationType currentType = GET_TYPE(state);
   uint8_t currentP2 = GET_P2(state);
@@ -405,6 +433,7 @@ void playbackModNext(PlaybackModState* state) {
 }
 
 void playbackModNoteOff(PlaybackModState* state) {
+  if (!state->modulation) return;
   switch (GET_TYPE(state)) {
     case ModulationType::ADSR:
       handleADSRnoteOff(state);

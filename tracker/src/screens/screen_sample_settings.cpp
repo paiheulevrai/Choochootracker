@@ -1099,7 +1099,7 @@ static void settingsDrawColHeader(int col, CellState state) {
 
 static void settingsDrawField(int col, int row, CellState state) {
   InstrumentSample* sample = currentSample();
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
   if (row == 0) {
     // Input row: source value, level meter (external only), MON toggle.
     if (col == 0) {

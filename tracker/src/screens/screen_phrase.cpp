@@ -1,4 +1,5 @@
 #include "screens.h"
+#include "edit_history.h"
 #include "common.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -166,24 +167,31 @@ static void setup(int input) {
       // Lazy allocation: new projects start with empty song rows, so a bar
       // may have no phrase yet. Allocate one on the fly so notes entered
       // here stick (and survive scrolling away and back).
-      if (phraseIdx == EMPTY_VALUE_16) {
-        int fresh = patternFindClosestEmptyPhrase(p, currentPatternIdx);
+      if (phraseIdx == EMPTY_VALUE_16 && input != -2) {
+        int fresh = findEmptyPhraseForTrack(p, *pSongTrack);
         if (fresh != EMPTY_VALUE_16) {
+          if (!editHistoryCapture(p, EditObject::pattern, currentPatternIdx) ||
+              !editHistoryCapture(p, EditObject::phrase, fresh)) return;
           phraseClear(&p->phrases[fresh]);
           pat->bars[bar].phrase = (uint16_t)fresh;
           phraseIdx = fresh;
           projectModified = 1;
           chipnomadQueueProjectRefresh(chipnomadState);
+        } else {
+          screenMessage(MESSAGE_TIME_ERROR, "No free phrases");
         }
       }
       // Clone-on-write: a bar sharing its phrase with another bar (multiplied
       // pattern) or any chain row gets its own copy BEFORE the user edits it,
       // so typing notes into one bar never mutates its siblings or the
       // classic view's phrases.
-      if (phraseIdx != EMPTY_VALUE_16) {
+      if (phraseIdx != EMPTY_VALUE_16 && input != -2) {
         int exclusive = patternEnsureBarExclusive(p, NULL, currentPatternIdx,
-          bar);
-        if (exclusive != EMPTY_VALUE_16 && exclusive != phraseIdx) {
+          bar, *pSongTrack);
+        if (exclusive == EMPTY_VALUE_16) {
+          phraseIdx = EMPTY_VALUE_16;
+          screenMessage(MESSAGE_TIME_ERROR, "Cannot isolate phrase");
+        } else if (exclusive != phraseIdx) {
           phraseIdx = exclusive;
           projectModified = 1;
           chipnomadQueueProjectRefresh(chipnomadState);
@@ -300,11 +308,13 @@ int phraseScreenRecordMidi(uint8_t note, uint8_t instrument, uint8_t velocity) {
     screenMessage(MESSAGE_TIME_ERROR, "Exit phrase selection/FX edit to record");
     return 0;
   }
+  EditHistoryScope history("MIDI note");
   if (!canonicalWritable(true)) return 0;
   if (!hasPhrase) {
     screenMessage(MESSAGE_TIME_ERROR, "No phrase at cursor");
     return 0;
   }
+  if (!editHistoryCapture(EditObject::phrase, phraseIdx)) return 0;
   note = noteLockSnap(note, 0);
   midiRecordStep(chipnomadState->project.phrases[phraseIdx], screen.cursorRow, note, instrument, velocity);
   lastNote = note;
@@ -353,14 +363,14 @@ static void drawRowHeader(int row, CellState state) {
   // Classic codebase striping in BOTH views: rows 0/4/8/C use the titles
   // color, the rest the info color (the pattern-view bar shading was
   // removed — the classic look applies everywhere).
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor
                 : ((row & 3) == 0 ? cs.textTitles : cs.textInfo));
   gfxPrintf(1, 3 + row - screen.topRow, "%X", row);
 }
 
 static void drawColHeader(int col, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor : cs.textInfo);
 
   switch (col) {
     case 0:
@@ -1003,6 +1013,8 @@ static const char* velocityApplyPattern(int startRow, int endRow, int pattern) {
 // keep navigating tracks and phrases. Key-ups reset the cycles whenever
 // B is no longer held, in any mode.
 static int fillInput(int isKeyDown, int keys) {
+  if (isKeyDown && screen.selectMode == 1 && (keys & keyOpt) &&
+      !editHistoryCapture(EditObject::phrase, phraseIdx)) return 1;
   if (isKeyDown) {
     if (screen.selectMode != 1) return 0;
     if (keys != (keyOpt | keyLeft) && keys != (keyOpt | keyRight) &&
@@ -1187,7 +1199,7 @@ static bool canonicalWritable(bool phraseEdit = true) {
     refreshCanonicalPhrase();
   }
   if (hasPhrase && phraseEdit && !canonicalBarExclusive) {
-    int exclusive = chainEnsureBarExclusive(&chipnomadState->project, currentPatternIdx, *pChainRow);
+    int exclusive = chainEnsureBarExclusive(&chipnomadState->project, currentPatternIdx, *pChainRow, *pSongTrack);
     if (exclusive == EMPTY_VALUE_16) {
       screenMessage(MESSAGE_TIME_ERROR, "No free phrase: edit cancelled");
       return false;
@@ -1302,6 +1314,10 @@ static int editCell(int col, int row, CellEditAction action) {
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
+  EditHistoryScope history("Phrase edit");
+  if (action != CellEditAction::copy && action != CellEditAction::switchSelection &&
+      (!editHistoryCapture(EditObject::phrase, phraseIdx) ||
+       !editHistoryCapture(EditObject::playhead))) return 1;
   int handled = 0;
   if (canonicalSimplifiedActive && chipnomadState->project.viewMode == ViewMode::classic &&
       patternHeaderField) {
@@ -1333,6 +1349,7 @@ static int onEdit(int col, int row, CellEditAction action) {
       handled = 1;
     } else if (patternHeaderField == 3) {
       if (!canonicalWritable(false)) return 1;
+      if (!editHistoryCapture(EditObject::chain, currentPatternIdx)) return 1;
       handled = edit8noLimit(action, &p->chains[currentPatternIdx].rows[*pChainRow].transpose,
         &lastBarTranspose, p->pitchTable.octaveSize);
     }
@@ -1382,19 +1399,22 @@ static int onEdit(int col, int row, CellEditAction action) {
           if (!patternRemoveLastBar(p, currentPatternIdx)) break;
         }
         while (pat->length < target) {
-          if (!patternAddEmptyBar(p, currentPatternIdx)) break;
+          if (!patternAddEmptyBar(p, currentPatternIdx, *pSongTrack)) {
+            screenMessage(MESSAGE_TIME_ERROR, "No free phrase");
+            break;
+          }
         }
         handled = 1;
       } else if (action == CellEditAction::increaseBig) {
         // ×2: duplicate the existing bars (decision #4).
-        handled = patternMultiplyLengthByTwo(p, currentPatternIdx);
+        handled = patternMultiplyLengthByTwo(p, currentPatternIdx, *pSongTrack);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't double");
       } else if (action == CellEditAction::decreaseBig) {
         handled = patternHalveLengthByTwo(p, currentPatternIdx);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't halve");
       } else if (action == CellEditAction::increase) {
-        handled = patternAddEmptyBar(p, currentPatternIdx);
-        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at max length");
+        handled = patternAddEmptyBar(p, currentPatternIdx, *pSongTrack);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern full or no free phrase");
       } else if (action == CellEditAction::decrease) {
         handled = patternRemoveLastBar(p, currentPatternIdx);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at min length");
@@ -1473,19 +1493,22 @@ static int onEdit(int col, int row, CellEditAction action) {
           if (!patternRemoveLastBar(p, currentPatternIdx)) break;
         }
         while (pat->length < target) {
-          if (!patternAddEmptyBar(p, currentPatternIdx)) break;
+          if (!patternAddEmptyBar(p, currentPatternIdx, *pSongTrack)) {
+            screenMessage(MESSAGE_TIME_ERROR, "No free phrase");
+            break;
+          }
         }
         handled = 1;
       } else if (action == CellEditAction::increaseBig) {
         // ×2: duplicate the existing bars (decision #4).
-        handled = patternMultiplyLengthByTwo(p, currentPatternIdx);
+        handled = patternMultiplyLengthByTwo(p, currentPatternIdx, *pSongTrack);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't double");
       } else if (action == CellEditAction::decreaseBig) {
         handled = patternHalveLengthByTwo(p, currentPatternIdx);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Can't halve");
       } else if (action == CellEditAction::increase) {
-        handled = patternAddEmptyBar(p, currentPatternIdx);
-        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at max length");
+        handled = patternAddEmptyBar(p, currentPatternIdx, *pSongTrack);
+        if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern full or no free phrase");
       } else if (action == CellEditAction::decrease) {
         handled = patternRemoveLastBar(p, currentPatternIdx);
         if (!handled) screenMessage(MESSAGE_TIME_ERROR, "Pattern at min length");
@@ -1724,6 +1747,9 @@ static int inputScreenNavigation(int keys, int tapCount) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  EditHistoryScope history("Phrase edit");
+  if ((isFxEdit || canonicalEditPending || (isKeyDown && screen.selectMode == 1 && (keys & keyOpt))) &&
+      !editHistoryCapture(EditObject::phrase, phraseIdx)) return 1;
   // ── Pattern header navigation (simplified view only) ──────────────────────
   // When the cursor is on the pattern header (patternHeaderField != 0),
   // LEFT/RIGHT move between the Length / Loop fields and UP/DOWN exit the
@@ -1933,6 +1959,8 @@ int phraseKeyJazzHandleRawKey(InputCode input, int isDown) {
   }
 
   if (!keyJazzEnabled) return 0;
+  editHistoryGesture(isDown != 0);
+  EditHistoryScope history("Phrase entry");
   if (!isDown) canonicalFinishEdit();
 
   if (inputIsShiftKey(input)) return 1; // Swallow: see inputIsShiftKey's doc comment
@@ -1970,6 +1998,7 @@ int phraseKeyJazzHandleRawKey(InputCode input, int isDown) {
     screenMessage(MESSAGE_TIME_ERROR, "No compatible Phrase clipboard");
     return 1;
   }
+  if (isDown && writes && !editHistoryCapture(EditObject::phrase, phraseIdx)) return 1;
   if (isDown && writes && !canonicalWritable()) return 1;
 
   if (inputIsCtrlHeld()) {

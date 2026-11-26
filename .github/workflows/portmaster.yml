@@ -151,8 +151,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/release-checksums"
           gh release download "$RELEASE_TAG" --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP/release-checksums"
           sums="$RUNNER_TEMP/release-checksums/SHA256SUMS.txt"
-          python3 scripts/prepare_portmaster_library.py update-checksum \
-            --archive "$archive" --checksums "$sums"
+          if grep -q "  $(basename "$archive")$" "$sums"; then
+            python3 scripts/prepare_portmaster_library.py update-checksum \
+              --archive "$archive" --checksums "$sums"
+          else
+            sha256sum "$archive" | sed "s#  releases/#  #" >> "$sums"
+          fi
           gh release upload "$RELEASE_TAG" "$archive" --clobber
           gh release upload "$RELEASE_TAG" "$sums" --clobber
           mkdir -p "$RUNNER_TEMP/release-verify"

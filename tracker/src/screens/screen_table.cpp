@@ -1,4 +1,5 @@
 #include "screens.h"
+#include "edit_history.h"
 #include "common.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -95,9 +96,9 @@ static void init(void) {
 
 static void setup(int input) {
   isFxEdit = 0;
-  tableIdx = input & 0xff;
+  if (input != -2) tableIdx = input & 0xff;
   tableRows = chipnomadState->project.tables[tableIdx].rows;
-  backToPhrase = (input & 0x1000) != 0;
+  if (input != -2) backToPhrase = (input & 0x1000) != 0;
   screen.selectMode = 0;
 }
 
@@ -157,13 +158,13 @@ static void drawRowHeader(int row, CellState state) {
   if (row && (row < screen.topRow || row >= screen.topRow + screenVisibleRows())) return;
   if (row == 0) return;
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor : cs.textInfo);
   gfxPrintf(1, 2 + row - tableTopRow(), "%X", row - 1);
 }
 
 static void drawColHeader(int col, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
-  gfxSetFgColor((state == CellState::focus) ? cs.textDefault : cs.textInfo);
+  gfxSetFgColor((state == CellState::focus) ? cs.cursor : cs.textInfo);
   switch (col) {
     case 0:
     case 1:
@@ -327,6 +328,9 @@ static int editCell(int col, int row, enum CellEditAction action) {
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
+  EditHistoryScope history("Table edit");
+  if (action != CellEditAction::copy && action != CellEditAction::switchSelection &&
+      !editHistoryCapture(EditObject::table, tableIdx)) return 1;
   int startCol, startRow, endCol, endRow;
   getSelectionBounds(&screen, &startCol, &startRow, &endCol, &endRow);
 
@@ -404,7 +408,7 @@ static int inputScreenNavigation(int keys, int tapCount) {
     return 1;
   } else if (keys == (keyDown | keyShift)) {
     // Go to Wavetable screen
-    screenSetup(&screenAYWavetable, 0);
+    screenAYWavetableOpen(0, NULL);
     return 1;
   } else if (keys == (keyLeft | keyOpt)) {
     // Previous table
@@ -439,7 +443,9 @@ static int inputScreenNavigation(int keys, int tapCount) {
 }
 
 static int onInput(int isKeyDown, int keys, int tapCount) {
+  EditHistoryScope history("Table FX");
   if (isFxEdit) {
+    if (!editHistoryCapture(EditObject::table, tableIdx)) return 1;
     int fxIdx = (screen.cursorCol - 3) / 2;
     int result = fxEditInput(keys, tapCount, &tableRows[screen.cursorRow - 1].fx[fxIdx], &lastFX);
     if (result) {

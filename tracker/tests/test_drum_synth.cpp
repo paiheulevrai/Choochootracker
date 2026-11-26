@@ -47,6 +47,61 @@ TEST_CASE("DrumSynth retriggers and uses the shared filter") {
   CHECK(energy > 0.01);
 }
 
+TEST_CASE("DrumSynth retriggers are continuous across engines and filters") {
+  for (int character = 0; character <= 6; ++character) {
+    float worst = 0.0f;
+    for (bool digi : {false, true}) {
+    for (int engine = 0; engine < (digi ? 4 : (int)DrumSynthEngine::totalCount); ++engine) {
+      InstrumentDrumSynth instrument = {};
+      instrument.engine = (DrumSynthEngine)engine; instrument.decay = 220;
+      instrument.tone = instrument.sweep = instrument.noise = instrument.fm = 128;
+      instrument.drive = 32; instrument.filterEnabled = character != 0;
+      instrument.filterCharacter = character;
+      instrument.sustain = 255;
+      for (int offset : {128, 480, 1200}) {
+        DrumSynthVoice voice;
+        voice.init(48000);
+        voice.configure(&instrument, 6000, 1, 2000, 100, digi);
+        voice.noteOn();
+        std::vector<float> audio(offset);
+        voice.render(audio.data(), audio.size());
+        voice.noteOn();
+        float next = 0;
+        voice.render(&next, 1);
+        worst = std::max(worst, std::fabs(next - audio.back()));
+      }
+    }
+    }
+    INFO("character=", character, " worst=", worst);
+    CHECK(worst < 0.04f);
+  }
+}
+
+TEST_CASE("DrumSynth cut tails drain across callback blocks") {
+  for (bool digi : {false, true}) {
+    InstrumentDrumSynth instrument{};
+    instrument.engine = DrumSynthEngine::cowbell;
+    instrument.decay = 220;
+    instrument.tone = instrument.sweep = instrument.noise = instrument.fm = 128;
+    instrument.sustain = 255;
+    DrumSynthVoice voice;
+    voice.init(48000);
+    voice.configure(&instrument, 6000, 1, 20000, 0, digi);
+    voice.noteOn();
+    float before[601];
+    voice.render(before, 601);
+    REQUIRE(std::fabs(before[600]) > 0.001f);
+    voice.kill();
+    voice.kill();
+    REQUIRE(voice.active());
+    float tail[128];
+    for (float& sample : tail) voice.render(&sample, 1);
+    CHECK(std::fabs(tail[0] - before[600]) < 0.04f);
+    CHECK(tail[127] == 0.0f);
+    CHECK_FALSE(voice.active());
+  }
+}
+
 TEST_CASE("DrumSynth cowbell FM changes the generated waveform") {
   InstrumentDrumSynth instrument = {};
   instrument.engine = DrumSynthEngine::cowbell; instrument.decay = 100; instrument.tone = 128;

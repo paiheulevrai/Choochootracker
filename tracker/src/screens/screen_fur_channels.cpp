@@ -62,7 +62,7 @@ static void drawField(int col, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   int y = 3 + row - screen.topRow;
   gfxClearRect(0, y, 38, 1);
-  gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+  gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
   if (row < listedCount) {
     gfxPrintf(0, y, "[%c] %02d %s", chosen[row] ? 'X' : ' ', listed[row].channel + 1, listed[row].name);
     gfxPrintf(30, y, "%5d", listed[row].notes);

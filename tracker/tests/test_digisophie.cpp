@@ -45,7 +45,9 @@ TEST_CASE("DigiSophie four models render distinctly at native and device rates")
       if (!previous.empty()) CHECK(output != previous);
       previous = output;
       v.kill(); v.render(output.data(), output.size());
-      CHECK(energy(output) == 0);
+      CHECK(std::fabs(output.front() - previous.back()) < 0.04f);
+      CHECK(output.back() == 0);
+      CHECK_FALSE(v.active());
     }
   }
 }

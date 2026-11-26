@@ -1,4 +1,5 @@
 #include "screen_instrument.h"
+#include "edit_history.h"
 #include "field_style.h"
 #include "corelib_gfx.h"
 #include "utils.h"
@@ -6,7 +7,12 @@
 #include <string.h>
 
 static int modelButtonDown;
-static void selectModel(int value) { chipnomadState->project.instruments[cInstrument].chip.sintered.model = (SinteredModel)value; projectModified = 1; screenSetup(&screenInstrument, cInstrument); }
+static void selectModel(int value) {
+  EditHistoryScope history("Instrument model");
+  if (!editHistoryCaptureModel(cInstrument)) return;
+  chipnomadState->project.instruments[cInstrument].chip.sintered.model = (SinteredModel)value;
+  projectModified = 1; screenSetup(&screenInstrument, cInstrument);
+}
 static void cancelModelSelection() { screenSetup(&screenInstrument, cInstrument); }
 static void openModelSelection() {
   InstrumentSintered* s = &chipnomadState->project.instruments[cInstrument].chip.sintered;
@@ -41,7 +47,7 @@ static void drawField(int col, int row, CellState state) {
   if (col && row >= 4 && row <= 8) { instrumentCommonDrawVoicePostField(col, row, state, s); return; }
   // The selected field's label lights up with its value; Model is a title.
   if (row == 3) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textTitles);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textTitles);
     gfxPrint(0, 6, "Model");
   } else {
     fieldDrawLabel(0, row + 4, macroName(s->model, row - 4), state);

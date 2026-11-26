@@ -19,7 +19,7 @@ FXName fxNamesSequencer[] = {
   {fxTBL, "TBL"}, {fxTBX, "TBX"}, {fxTHO, "THO"}, {fxTXH, "TXH"}, {fxGRV, "GRV"},
   {fxGGR, "GGR"}, {fxHOP, "HOP"}, {fxSNG, "SNG"}, {fxPRO, "PRO"},
   {fxMOD, "MOD"}, {fxRNN, "RNN"}, {fxSPD, "SPD"}, {fxSLE, "SLE"}, {fxPAN, "PAN"},
-  {fxREP, "REP"}, {fxRTO, "RTO"}
+  {fxREP, "REP"}, {fxRTO, "RTO"}, {fxNTH, "NTH"}, {fxBEG, "BEG"}, {fxEND, "END"}
 };
 int fxSequencerCount = sizeof(fxNamesSequencer) / sizeof(FXName);
 
@@ -37,7 +37,8 @@ FXName fxNamesModulation[] = {
   {fxM1A, "M1A"}, {fxM11, "M11"}, {fxM12, "M12"}, {fxM13, "M13"}, {fxM14, "M14"},
   {fxM2A, "M2A"}, {fxM21, "M21"}, {fxM22, "M22"}, {fxM23, "M23"}, {fxM24, "M24"},
   {fxM3A, "M3A"}, {fxM31, "M31"}, {fxM32, "M32"}, {fxM33, "M33"}, {fxM34, "M34"},
-  {fxM4A, "M4A"}, {fxM41, "M41"}, {fxM42, "M42"}, {fxM43, "M43"}, {fxM44, "M44"}
+  {fxM4A, "M4A"}, {fxM41, "M41"}, {fxM42, "M42"}, {fxM43, "M43"}, {fxM44, "M44"},
+  {fxMRT, "MRT"}, {fxMKL, "MKL"}
 };
 int fxModulationCount = sizeof(fxNamesModulation) / sizeof(FXName);
 

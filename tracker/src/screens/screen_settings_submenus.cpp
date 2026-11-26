@@ -54,28 +54,28 @@ static void audioField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   if (row == 0) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, 2, "Sample rate");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxClearRect(23, 2, 8, 1);
     if (appSettings.audioSampleRate % 1000) gfxPrintf(23, 2, "%d.%d kHz", appSettings.audioSampleRate / 1000, appSettings.audioSampleRate % 1000 / 100);
     else gfxPrintf(23, 2, "%d kHz", appSettings.audioSampleRate / 1000);
   } else if (row == 1) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, 3, "Buffer size");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxClearRect(23, 3, 4, 1);
     gfxPrintf(23, 3, "%d", appSettings.audioBufferSize);
   } else if (row == 2) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, 7, " - Audio Output");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxClearRect(15, 7, 16, 1);
     gfxPrintf(15, 7, "%.16s", appSettings.audioOutputDeviceName[0] ?
       appSettings.audioOutputDeviceName : "Default");
   } else if (row == 4) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, 8, " - Audio Input");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxClearRect(23, 8, 3, 1);
     gfxPrint(23, 8, appSettings.audioInputEnabled ? "ON" : "OFF");
   } else if (row == 5) {
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textLabel);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textLabel);
     gfxPrint(0, 9, " - Input devices");
   } else {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, 4, "CPU load");
@@ -236,14 +236,14 @@ static void controlsField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   const int y = controlsRowY(row);
   gfxSetFgColor(cs.textLabel);
-  if (row == 0) { gfxPrint(0, y, " - Repeat delay"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrintf(23, y, "%03d", appSettings.keyRepeatDelay); }
-  else if (row == 1) { gfxPrint(0, y, " - Repeat speed"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrintf(23, y, "%03d", appSettings.keyRepeatSpeed); }
-  else if (row == 2) { gfxPrint(0, y, "Stick live mode"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(23, y, appSettings.stickLiveMode == StickLiveMode::free ? "FREE  " : appSettings.stickLiveMode == StickLiveMode::toggle ? "TOGGLE" : "HOLD  "); }
+  if (row == 0) { gfxPrint(0, y, " - Repeat delay"); gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrintf(23, y, "%03d", appSettings.keyRepeatDelay); }
+  else if (row == 1) { gfxPrint(0, y, " - Repeat speed"); gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrintf(23, y, "%03d", appSettings.keyRepeatSpeed); }
+  else if (row == 2) { gfxPrint(0, y, "Stick live mode"); gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(23, y, appSettings.stickLiveMode == StickLiveMode::free ? "FREE  " : appSettings.stickLiveMode == StickLiveMode::toggle ? "TOGGLE" : "HOLD  "); }
 #ifdef TOUCH_INPUT
-  else if (row == controlsHapticsRow) { gfxPrint(0, y, "Touch haptics"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(23, y, appSettings.touchHaptics ? "ON " : "OFF"); }
-  else if (row == controlsHidePadRow) { gfxPrint(0, y, "Hide pad w/ gamepad"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(23, y, appSettings.hideTouchPadWithGamepad ? "ON " : "OFF"); }
+  else if (row == controlsHapticsRow) { gfxPrint(0, y, "Touch haptics"); gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(23, y, appSettings.touchHaptics ? "ON " : "OFF"); }
+  else if (row == controlsHidePadRow) { gfxPrint(0, y, "Hide pad w/ gamepad"); gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(23, y, appSettings.hideTouchPadWithGamepad ? "ON " : "OFF"); }
 #endif
-  else if (row == controlsKeyMappingRow) { gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, y, "Key mapping"); }
+  else if (row == controlsKeyMappingRow) { gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, y, "Key mapping"); }
 }
 static int controlsEdit(int, int row, CellEditAction action) {
   if (row == 0) { uint8_t value = appSettings.keyRepeatDelay; int handled = edit8noLast(action, &value, 4, 4, 30); if (handled) appSettings.keyRepeatDelay = value; return handled; }
@@ -280,14 +280,14 @@ static void synthField(int, int row, CellState state) {
   gfxSetFgColor(cs.textLabel);
   if (row == 0) {
     static const char* names[] = {"LOW   ", "MEDIUM", "HIGH  ", "BEST  "};
-    gfxPrint(0, 2, "AY Quality"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(23, 2, names[appSettings.quality]);
+    gfxPrint(0, 2, "AY Quality"); gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(23, 2, names[appSettings.quality]);
   } else if (row == 1) {
-    gfxPrint(0, 3, "AY Sample dithering"); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(23, 3, appSettings.aySampleDithering ? "ON " : "OFF");
+    gfxPrint(0, 3, "AY Sample dithering"); gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(23, 3, appSettings.aySampleDithering ? "ON " : "OFF");
   } else {
     static const char* labels[] = {"Braids BITS", "Braids DRFT", "Braids SIGN"};
     static const char* bits[] = {"2 BIT ", "3 BIT ", "4 BIT ", "6 BIT ", "8 BIT ", "12 BIT", "16 BIT"};
     static const char* levels[] = {"OFF ", "LOW ", "MED ", "HIGH", "MAX "};
-    gfxPrint(0, 2 + row, labels[row - 2]); gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxPrint(0, 2 + row, labels[row - 2]); gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrint(23, 2 + row, row == 2 ? bits[appSettings.braidsBits] : levels[row == 3 ? appSettings.braidsDrift : appSettings.braidsSignature]);
   }
 }
@@ -311,7 +311,7 @@ static void mixerCursor(int, int row) { gfxCursor(23, 2 + row, 4); }
 static void mixerField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   gfxSetFgColor(cs.textLabel); gfxPrint(0, 2 + row, row == 0 ? "Mix volume" : "Tilt pivot");
-  gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+  gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
   if (row == 0) gfxPrintf(23, 2, "%03d%%", (int)(appSettings.mixVolume * 100.0f + .5f)); else gfxPrintf(23, 3, "%u Hz", chipnomadState->project.tiltPivotHz);
 }
 static int mixerEdit(int, int row, CellEditAction action) {
@@ -330,47 +330,47 @@ static void graphicsField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   const int y = graphicsRowY(row);
   if (row == 0) {
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, y, "Edit color theme");
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, y, "Edit color theme");
   } else if (row == 1) {
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, y, "Load font");
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, y, "Load font");
   } else if (row == 2) {
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, y, "Background");
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, y, "Background");
   } else if (row == 3) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Song waveform");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(23, y, appSettings.persistentWaveform ? "ON " : "OFF");
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(23, y, appSettings.persistentWaveform ? "ON " : "OFF");
   } else if (row == 4) {
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrint(0, y, "Track visuals");
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrint(0, y, "Track visuals");
   } else if (row == 5) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Waveform FPS");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault); gfxPrintf(23, y, "%02d FPS", appSettings.waveformRefreshHz);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault); gfxPrintf(23, y, "%02d FPS", appSettings.waveformRefreshHz);
   } else if (row == 6) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Renderer");
     gfxSetFgColor(cs.textInfo); gfxPrint(23, y, gfxGetRendererType());
   } else if (row == 7) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Boot screen");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrint(23, y, appSettings.bootScreenNight ? "Night   " : "Original");
   } else if (row == 8) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Cursor");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrint(23, y, appSettings.cursorBrackets ? "Brackets" : "Line    ");
   } else if (row == 9) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Battery info");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     static const char* const modes[] = {"Off    ", "Time   ", "Percent"};
     gfxPrint(23, y, modes[appSettings.batteryInfoMode]);
   } else if (row == 10) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, y, "Playback counter");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     static const char* const modes[] = {"Bars", "Time", "Off "};
     gfxPrint(23, y, modes[appSettings.playbackCounterMode]);
   } else if (row == 11) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, y, " - Rows per bar");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrintf(23, y, "%02u", appSettings.playbackBarRows);
   } else if (row == 12) {
     gfxSetFgColor(cs.textLabel); gfxPrint(0, y, " - Ticks per row");
-    gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+    gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
     gfxPrintf(23, y, "%03u", appSettings.playbackBarTicks);
   }
 }
@@ -434,7 +434,8 @@ static int graphicsEdit(int, int row, CellEditAction action) {
   }
   if (row == 6 || action != CellEditAction::tap) return 0;
   if (row == 0) screenSetup(&screenColorTheme, 0);
-  else if (row == 1) { fileBrowserSetup("LOAD FONT", ".cnfont", appSettings.fontFolderPath, fontLoaded, fontCancelled); screenSetup(&screenFileBrowser, 0); }
+  else if (row == 1) { fileBrowserSetupSelected("LOAD FONT", ".cnfont", appSettings.fontFolderPath,
+    appSettings.fontPath, fontLoaded, fontCancelled); screenSetup(&screenFileBrowser, 0); }
   else if (row == 2) screenSetup(&screenBackgroundSettings, 0);
   else if (row == 4) screenSetup(&screenTrackVisuals, 0);
   return 0;
@@ -451,7 +452,7 @@ static void backgroundCursor(int, int row) {
 static void backgroundField(int, int row, CellState state) {
   const ColorScheme cs = appSettings.colorScheme;
   const int y = backgroundRowY(row);
-  gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+  gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
   if (row == 1) {
     gfxPrint(0, y, "Load BMP");
     if (backgroundImageLoadFailed()) { gfxSetFgColor(cs.warning); gfxPrint(12, y, "Missing"); }
@@ -461,7 +462,7 @@ static void backgroundField(int, int row, CellState state) {
   gfxSetFgColor(cs.textLabel);
   static const char* labels[] = {"Type", "", "Layout", "Tint", "Intensity", "Speed", "Reaction", "Resolution"};
   gfxPrint(0, y, labels[row]);
-  gfxSetFgColor(state == CellState::focus ? cs.textValue : cs.textDefault);
+  gfxSetFgColor(state == CellState::focus ? cs.cursor : cs.textDefault);
   if (row == 0) {
     static const char* modes[] = {"Solid   ", "Image   ", "Plasma  ", "Stars   ", "Waves   ",
       "Tunnel  ", "Metaball", "Spectrum", "Rain    ", "Moire   "};

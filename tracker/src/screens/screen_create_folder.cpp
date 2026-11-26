@@ -57,7 +57,7 @@ static void drawField(int col, int row, CellState state) {
     gfxClearRect(13, 3, 16, 1);
     gfxPrint(13, 3, folderName);
   } else if (row == 1) {
-    gfxSetFgColor(state ==  CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state ==  CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     if (col == 0) {
       gfxPrint(0, 5, "Create");
     } else {

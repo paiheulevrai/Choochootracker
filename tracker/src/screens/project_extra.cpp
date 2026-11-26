@@ -4,7 +4,7 @@
 #include "chipnomad_lib.h"
 #include "common.h"
 
-static const char viewLabel[] = "View";
+static const char viewLabel[] = "Editing mode";
 
 static int getColumnCount(int row) {
   if (row < SCR_PROJECT_ROWS) return projectCommonColumnCount(row);
@@ -30,7 +30,7 @@ static void drawCursor(int col, int row) {
 static void drawField(int col, int row, CellState state) {
   if (row < SCR_PROJECT_ROWS) return projectCommonDrawField(col, row, state);
 
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
 
   if (row == SCR_PROJECT_ROWS) {
     gfxClearRect(0, 16, 5, 1);
@@ -55,7 +55,7 @@ static int onEdit(int col, int row, enum CellEditAction action) {
   return 0;
 }
 
-static int isButtonCell(int, int row) { return row >= 7; }
+static int isButtonCell(int col, int row) { return row >= 7 || (row == 4 && col == 1); }
 
 ScreenData screenProjectExtra = {
   .rows = SCR_PROJECT_ROWS + 2,

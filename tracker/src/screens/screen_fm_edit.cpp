@@ -232,7 +232,7 @@ void drawStatic() {
 
 void drawRowHeader(int row, CellState state) {
   if (!visible(row) || row >= int(rows.size())) return;
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textDefault : appSettings.colorScheme.textInfo);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textInfo);
   gfxClearRect(0, rowY(row), 8, 1);
   gfxPrint(0, rowY(row), rows[row].label);
 }
@@ -243,7 +243,7 @@ void drawField(int col, int row, CellState state) {
   int y = rowY(row);
   gfxClearRect(cellX(col), y, 8, 1);
   if (f.tag[0]) { gfxSetFgColor(appSettings.colorScheme.textInfo); gfxPrint(cellX(col), y, f.tag); }
-  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+  gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
   int v = f.get();
   if (f.names) gfxPrint(valueX(f, col), y, f.names[v]);
   else gfxPrintf(valueX(f, col), y, f.max > 15 ? "%02X" : "%X", v);

@@ -105,15 +105,17 @@ TEST_CASE("Lane FX group spacing stays compact when switching help types") {
 TEST_CASE("Extended sequencer IDs and DigiSophie have their own FX help") {
   PopupSession session;
   getInstrumentFunctions(InstrumentType::DigiSophie).init(&chipnomadState->project.instruments[0]);
-  for (FXId fx : {FXId(fxEUC), FXId(fxREP), FXId(fxRTO)}) {
+  for (FXId fx : {FXId(fxEUC), FXId(fxREP), FXId(fxRTO), FXId(fxNTH)}) {
     REQUIRE(fx > 255);
     FXCell cell{fx, 0x4f}, last{};
     CHECK(std::string(helpFXHint(cell, 0, 0)).find("Kill") == std::string::npos);
     CHECK(std::string(helpFXHint(cell, 0, 0)).find("table") == std::string::npos);
     fxEditFullDraw(fx, 0, 0);
-    CHECK(std::string(mockGfxCells[1], 35).find(fx == fxEUC ? "Euclidean" : "Repeat") != std::string::npos);
+    CHECK(std::string(mockGfxCells[1], 35).find(
+      fx == fxEUC ? "Euclidean" : fx == fxNTH ? "Nth" : "Repeat") != std::string::npos);
     editFXValue(CellEditAction::increase, &cell, &last, 0, 0);
-    CHECK(std::string(screenGetActiveMessage()).find(fx == fxEUC ? "EUC" : "Repeat") != std::string::npos);
+    CHECK(std::string(screenGetActiveMessage()).find(
+      fx == fxEUC ? "EUC" : fx == fxNTH ? "NTH" : "Repeat") != std::string::npos);
   }
   for (FXId fx : {FXId(fxDMD), FXId(fxDTO), FXId(fxDNO), FXId(fxDFM), FXId(fxDDR)}) {
     CHECK(std::string(helpFXDescription((FX)fx, 0)).find("DigiSophie") == 0);
@@ -121,6 +123,62 @@ TEST_CASE("Extended sequencer IDs and DigiSophie have their own FX help") {
   }
   getInstrumentFunctions(InstrumentType::DrumSynth).init(&chipnomadState->project.instruments[0]);
   CHECK(std::string(helpFXDescription(fxDTO, 0)).find("Bogie Tone") == 0);
+}
+
+TEST_CASE("NTH footer hints describe musician-facing loop rules") {
+  PopupSession session;
+  CHECK(std::string(helpFXHint(FXCell{fxNTH, 0x02}, 0, 0)) == "NTH L off / R every 2");
+  CHECK(std::string(helpFXHint(FXCell{fxNTH, 0x94}, 0, 0)) == "NTH L 1&3 / R every 4");
+  CHECK(std::string(helpFXHint(FXCell{fxNTH, 0xbc}, 0, 0)) == "NTH L 5-8 / R 7+");
+  CHECK(std::string(helpFXHint(FXCell{fxNTH, 0x00}, 1, 0)) == "NTH table: reset counter");
+  CHECK(std::string(helpFXHint(FXCell{fxNTH, 0x03}, 1, 0)) ==
+        "NTH table: left every 4 loops");
+}
+
+TEST_CASE("Transition and modulation footer hints explain curves targets and selected slots") {
+  PopupSession session;
+  for (int table : {0, 1}) {
+    for (int value : {0, 0x7f, 0x80, 0x81, 0xff}) {
+      const std::string hint = helpFXHint(FXCell{fxBEG, uint8_t(value)}, table, EMPTY_VALUE_8);
+      CHECK(hint.find(value < 0x80 ? "ease-out" : value == 0x80 ? "linear" : "ease-in") != std::string::npos);
+      CHECK(hint.find("END") != std::string::npos);
+      CHECK(hint.find("same col") != std::string::npos);
+      CHECK(hint.size() <= 40);
+    }
+    for (FXId command : {FXId(fxMRT), FXId(fxMKL)}) {
+      for (int value : {0, 0xf0})
+        CHECK(std::string(helpFXHint(FXCell{command, uint8_t(value)}, table, 0)).find("no mods selected") != std::string::npos);
+      for (int slot = 0; slot < 4; ++slot)
+        CHECK(std::string(helpFXHint(FXCell{command, uint8_t(1u << slot)}, table, 0)).find(
+          "mods " + std::to_string(slot + 1)) != std::string::npos);
+      for (int value : {5, 0xf5})
+        CHECK(std::string(helpFXHint(FXCell{command, uint8_t(value)}, table, 0)).find("1+3") != std::string::npos);
+      const std::string all = helpFXHint(FXCell{command, 15}, table, 0);
+      CHECK(all.find("1+2+3+4") != std::string::npos);
+      CHECK(all.find(command == fxMRT ? "no note retrig" : "until trigger/MRT") != std::string::npos);
+      CHECK(all.size() <= 40);
+    }
+  }
+}
+
+TEST_CASE("Editing new FX values updates the bottom-screen message in phrases and tables") {
+  PopupSession session;
+  for (int table : {0, 1}) {
+    for (FXCell cell : {FXCell{fxBEG, 0x7f}, FXCell{fxEND, 0xdf},
+                        FXCell{fxMRT, 4}, FXCell{fxMKL, 14}}) {
+      FXCell last{};
+      editFXValue(CellEditAction::increase, &cell, &last, table, EMPTY_VALUE_8);
+      const std::string message = screenGetActiveMessage();
+      CHECK_FALSE(message.empty());
+      CHECK(message.size() <= 40);
+      switch (cell.command) {
+        case fxBEG: CHECK(message.find("linear") != std::string::npos); break;
+        case fxEND: CHECK(message.find("E0: same-column FX target") != std::string::npos); break;
+        case fxMRT: CHECK(message.find("1+3") != std::string::npos); break;
+        case fxMKL: CHECK(message.find("1+2+3+4") != std::string::npos); break;
+      }
+    }
+  }
 }
 
 TEST_CASE("Lane FX popup bounds context-dependent modulation and drum help") {
@@ -170,10 +228,10 @@ TEST_CASE("Lane FX long groups scroll and use the same grid for drawing and navi
   fxEditInput(0, 1, &selected, &last);
   CHECK(selected.command == fxSLE);
   CHECK(mockCursorY <= 18);
-  fxEditInput(keyEdit | keyRight, 1, &selected, &last);
-  fxEditInput(keyEdit | keyRight, 1, &selected, &last);
-  fxEditInput(keyEdit | keyRight, 1, &selected, &last);
-  fxEditInput(keyEdit | keyRight, 1, &selected, &last);
+  for (int step = 0; step < fxTotalCount && selected.command != fxRSN; ++step) {
+    fxEditInput(keyEdit | keyRight, 1, &selected, &last);
+    fxEditInput(0, 1, &selected, &last);
+  }
   fxEditInput(0, 1, &selected, &last);
   CHECK(selected.command == fxRSN);
   CHECK(mockGfxCells[6][34] == ' '); // New group returns to the compact origin.

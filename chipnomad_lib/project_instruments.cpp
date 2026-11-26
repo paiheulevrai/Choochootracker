@@ -53,9 +53,15 @@ int modulationIsAdditive(ModulationType type) {
          type == ModulationType::Sequence || type == ModulationType::Audio || modulationIsLiveStick(type);
 }
 
-uint8_t sequenceGatePattern(const Modulation* modulation) { return modulation->p3 & 63; }
+uint8_t sequenceGatePattern(const Modulation* modulation) {
+  return modulation->p3 < tranceGateUserFirst + tranceGateUserCount ? modulation->p3 : modulation->p3 & 63;
+}
 uint8_t sequenceGateRate(const Modulation* modulation) { return modulation->p4 & 15; }
-uint8_t sequenceGateLength(const Modulation* modulation) { return (modulation->p4 >> 4) + 1; }
+uint8_t sequenceGateLength(const Modulation* modulation) {
+  // The fifth length bit uses an otherwise unused Sequence Gate parameter bit.
+  return (modulation->p4 >> 4) + 1 +
+    (tranceGatePatternLengthLimit(sequenceGatePattern(modulation)) == 32 && (modulation->p2 & 0x80) ? 16 : 0);
+}
 SequenceGateTrigger sequenceGateTrigger(const Modulation* modulation) {
   uint8_t value = modulation->p5 & 7;
   return value < static_cast<uint8_t>(SequenceGateTrigger::totalCount) ? static_cast<SequenceGateTrigger>(value) : SequenceGateTrigger::free;
@@ -67,9 +73,18 @@ void sequenceGateDefaults(Modulation* modulation) {
   modulation->p4 = (15 << 4) | 9; // 16 steps, 1/16.
   modulation->p5 = 0;
 }
-void sequenceGateSetPattern(Modulation* modulation, uint8_t value) { modulation->p3 = value & 63; }
+void sequenceGateSetPattern(Modulation* modulation, uint8_t value) {
+  uint8_t length = sequenceGateLength(modulation);
+  modulation->p3 = std::min<uint8_t>(tranceGateUserFirst + tranceGateUserCount - 1, value);
+  if (length > tranceGatePatternLengthLimit(modulation->p3))
+    sequenceGateSetLength(modulation, tranceGatePatternLengthLimit(modulation->p3));
+}
 void sequenceGateSetRate(Modulation* modulation, uint8_t value) { modulation->p4 = (modulation->p4 & 0xf0) | std::min<uint8_t>(14, value); }
-void sequenceGateSetLength(Modulation* modulation, uint8_t value) { modulation->p4 = (modulation->p4 & 15) | ((std::min<uint8_t>(16, std::max<uint8_t>(1, value)) - 1) << 4); }
+void sequenceGateSetLength(Modulation* modulation, uint8_t value) {
+  value = std::min<uint8_t>(tranceGatePatternLengthLimit(sequenceGatePattern(modulation)), std::max<uint8_t>(1, value));
+  modulation->p2 = (modulation->p2 & 0x7f) | (value > 16 ? 0x80 : 0);
+  modulation->p4 = (modulation->p4 & 15) | (((value - 1) & 15) << 4);
+}
 void sequenceGateSetTrigger(Modulation* modulation, SequenceGateTrigger value) { modulation->p5 = (modulation->p5 & 0xf8) | static_cast<uint8_t>(value); }
 void sequenceGateSetAccents(Modulation* modulation, uint8_t value) { modulation->p5 = (modulation->p5 & 7) | (std::min<uint8_t>(16, value) << 3); }
 

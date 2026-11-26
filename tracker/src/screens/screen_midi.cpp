@@ -6,6 +6,7 @@
 #include "corelib_input.h"
 #include "screens.h"
 #include "midi/midi_router.h"
+#include "midi_io.h"
 #include <string.h>
 
 static int columnCount(int row) {
@@ -71,6 +72,8 @@ static void drawCursor(int col, int row) {
     gfxCursor(16, 10, 6);
   } else if ((row == 7 || row == 8) && col == 0) {
     gfxCursor(16, row + 5, row == 7 ? 3 : 9);
+  } else if (row == 9 && col == 0) {
+    gfxCursor(28, 14, 3);
   }
 }
 
@@ -84,7 +87,7 @@ static void drawField(int col, int row, CellState state) {
   if (row == 0 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textLabel);
     gfxPrint(0, 2, "MIDI In");
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     char name[DEVICE_FIELD_WIDTH + 1];
     midiDeviceLabel(1, appSettings.midiInputDevice, appSettings.midiInputDeviceName, name, sizeof(name));
     gfxClearRect(DEVICE_FIELD_X, 2, DEVICE_FIELD_WIDTH, 1);
@@ -92,21 +95,21 @@ static void drawField(int col, int row, CellState state) {
   } else if (row == 1 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textLabel);
     gfxPrint(0, 3, "MIDI Out");
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     char name[DEVICE_FIELD_WIDTH + 1];
     midiDeviceLabel(0, appSettings.midiOutputDevice, appSettings.midiOutputDeviceName, name, sizeof(name));
     gfxClearRect(DEVICE_FIELD_X, 3, DEVICE_FIELD_WIDTH, 1);
     gfxPrint(DEVICE_FIELD_X, 3, name);
   } else if (row == 2 && col == 0) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     gfxPrint(0, 5, "Channel mapping");
   } else if (row == 3 && col == 0) {
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     gfxPrint(0, 6, "MIDI CC mapping");
   } else if ((row == 4 || row == 5) && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
     gfxPrint(0, row + 4, row == 4 ? "Send clock" : "Send transport");
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     const int enabled = row == 4 ? appSettings.midiSendClock : appSettings.midiSendTransport;
     gfxClearRect(16, row + 4, 24, 1);
     gfxPrint(16, row + 4, enabled ? "ON" : "OFF");
@@ -115,20 +118,36 @@ static void drawField(int col, int row, CellState state) {
   } else if (row == 6 && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
     gfxPrint(0, 10, "MIDI delay");
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     gfxPrintf(16, 10, "%03u ms", appSettings.midiOutputDelayMs);
   } else if ((row == 7 || row == 8) && col == 0) {
     gfxSetFgColor(appSettings.colorScheme.textDefault);
     gfxPrint(0, row + 5, row == 7 ? "Auto channel" : "MIDI record");
-    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.textValue : appSettings.colorScheme.textDefault);
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
     gfxClearRect(16, row + 5, 24, 1);
     if (row == 8) gfxPrint(16, 13, appSettings.midiRecordMode == MidiRecordMode::free ? "FREE" : "QUANTIZED");
     else if (appSettings.midiAutoChannel) gfxPrintf(16, 12, "%02u", appSettings.midiAutoChannel);
     else gfxPrint(16, 12, "OFF");
+  } else if (row == 9 && col == 0) {
+    gfxSetFgColor(appSettings.colorScheme.textDefault);
+    gfxPrint(0, 14, "Launchpad Mini MK3 Support:");
+    gfxSetFgColor(state == CellState::focus ? appSettings.colorScheme.cursor : appSettings.colorScheme.textDefault);
+    gfxClearRect(28, 14, 4, 1);
+    gfxPrint(28, 14, appSettings.launchpadMiniMk3Enabled ? "ON" : "OFF");
   }
 }
 
 static int onEdit(int col, int row, CellEditAction action) {
+  if (row == 9 && col == 0) {
+    action = convertMultiAction(action);
+    if (action == CellEditAction::tap || action == CellEditAction::doubleTap)
+      appSettings.launchpadMiniMk3Enabled = !appSettings.launchpadMiniMk3Enabled;
+    else if (!edit8noLast(action, &appSettings.launchpadMiniMk3Enabled, 1, 0, 1)) return 0;
+    if (appSettings.launchpadMiniMk3Enabled) midiIoLaunchpadStart();
+    else midiIoLaunchpadStop();
+    if (settingsSave()) screenMessage(MESSAGE_TIME_ERROR, "Could not save MIDI settings");
+    return 1;
+  }
   if ((row == 7 || row == 8) && col == 0) {
     uint8_t value = row == 7 ? appSettings.midiAutoChannel : (uint8_t)appSettings.midiRecordMode;
     action = convertMultiAction(action);
@@ -205,7 +224,7 @@ static int onEdit(int col, int row, CellEditAction action) {
 }
 
 static ScreenData screenMidiData = {
-  .rows = 9,
+  .rows = 10,
   .cursorRow = 0,
   .cursorCol = 0,
   .topRow = 0,

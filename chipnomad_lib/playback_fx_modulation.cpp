@@ -1,6 +1,20 @@
 #include "playback.h"
 #include "playback_internal.h"
 
+static void initFX_ModulationTrigger(PlaybackState* state, PlaybackTrackState* track, int trackIdx,
+                                    PlaybackFXState* fx, PlaybackTableState*, int) {
+  const bool kill = fx == &track->note.fx[fxMKL];
+  for (int slot = 0; slot < 4; ++slot) {
+    const uint8_t bit = 1u << slot;
+    if (!(fx->fxValue & bit)) continue;
+    track->modulationEvents &= ~(bit | (bit << 4));
+    track->modulationEvents |= kill ? bit << 4 : bit;
+    if (kill) playbackModKill(&track->note.modulation[slot]);
+    else playbackModRetrigger(&track->note.modulation[slot]);
+  }
+  fx->isOn = 0;
+}
+
 // Modulation 1 Amount
 static void initFX_M1A(PlaybackState* state, PlaybackTrackState* track, int trackIdx, PlaybackFXState* fx, PlaybackTableState* tableState, int tableFXColumn) {
   fx->acc += (int8_t)fx->fxValue;
@@ -263,6 +277,8 @@ static void handleFX_M44(PlaybackState* state, PlaybackTrackState* track, int tr
 
 void registerFXHandlers_Modulation(void) {
   // Modulation 1
+  fxHandlers[fxMRT] = (PlaybackFXHandler){initFX_ModulationTrigger, nullptr, nullptr};
+  fxHandlers[fxMKL] = (PlaybackFXHandler){initFX_ModulationTrigger, nullptr, nullptr};
   fxHandlers[fxM1A] = (PlaybackFXHandler){initFX_M1A, handleFX_M1A, restartFX_M1A};
   fxHandlers[fxM11] = (PlaybackFXHandler){initFX_M11, handleFX_M11, restartFX_M11};
   fxHandlers[fxM12] = (PlaybackFXHandler){initFX_M12, handleFX_M12, restartFX_M12};

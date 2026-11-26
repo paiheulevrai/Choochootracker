@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include "screens.h"
+#include "edit_history.h"
 #include "field_style.h"
 #include "screen_settings.h"
 #include "screen_project.h"
@@ -469,6 +470,8 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
     } else if (field <= 3) {
       column = col - 7;
       if (column < 0 || column >= touchScreenData->getColumnCount(field)) return 0;
+    } else if (field == 4 && col >= 21 && col < 26) {
+      column = 1;
     } else if (field >= 6) {
       if (col < 0 || col >= 34) return 0;
     } else {
@@ -547,10 +550,15 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
     return 0;
   }
   if (currentScreen == &screenSettings) {
-    int field = row >= 2 && row <= 7 ? row - 2 : row == 10 ? 6 : row == 18 ? 7 : -1;
+    int field = row >= 2 && row <= 7 ? row - 2 : row == 10 ? 6 :
+      row == 14 ? touchScreenData->rows - 2 : row == 18 ? touchScreenData->rows - 1 : -1;
+#ifdef ANDROID_BUILD
+    if (row == 12) field = 7;
+#endif
     if (field < 0) return 0;
-    static const int widths[] = {8, 5, 4, 6, 5, 8, 14, 19};
-    if (col < 0 || col >= widths[field]) return 0;
+    static const int widths[] = {8, 5, 4, 6, 5, 8};
+    const int width = field < 6 ? widths[field] : row == 14 ? 12 : row == 18 ? 19 : 14;
+    if (col < 0 || col >= width) return 0;
     if (targetCol) *targetCol = 0;
     if (targetRow) *targetRow = field;
     return 1;
@@ -631,15 +639,18 @@ static int screenTouchCellAt(int col, int row, int* targetCol, int* targetRow) {
 }
 
 int screenTouchTap(int col, int row) {
+  EditHistoryScope history("Touch edit");
   row -= screenScopeRows(currentScreen);
   int targetCol, targetRow;
   if (!screenTouchCellAt(col, row, &targetCol, &targetRow)) return 0;
+  if (currentScreen == &screenSong) screenSongRememberSelected();
   touchScreenData->cursorCol = targetCol;
   touchScreenData->cursorRow = targetRow;
   // Button cells activate on the tap itself; value cells only select so
   // touch adjustment keeps working.
   if (touchScreenData->isButtonCell &&
       touchScreenData->isButtonCell(targetCol, targetRow)) {
+    if (currentScreen == &screenInstrument && !editHistoryCaptureModel(cInstrument)) return 1;
     touchScreenData->onEdit(targetCol, targetRow, CellEditAction::tap);
   }
   // A button may open another screen, which clears touchScreenData.
@@ -1050,7 +1061,7 @@ void setCellColor(CellState state, int isEmpty, int hasContent) {
       gfxSetFgColor(cs.selection);
     }
   } else if (state == CellState::focus) {
-    gfxSetFgColor(cs.textDefault);
+    gfxSetFgColor(cs.cursor);
   } else if (isEmpty) {
     gfxSetFgColor(cs.textEmpty);
   } else if (hasContent) {

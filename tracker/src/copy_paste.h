@@ -42,7 +42,7 @@ void pasteWavetable(int wavetableIdx);
 int cloneChain(int srcIdx, int dstIdx);
 int clonePhrase(int srcIdx, int dstIdx);
 int cloneInstrument(int srcIdx, int dstIdx);
-int deepCloneChain(int chainIdx);
+int deepCloneChain(int chainIdx, int track = -1);
 int cloneChainToNext(int srcIdx);
 int clonePhraseToNext(int srcIdx);
 int cloneInstrumentToNext(int srcIdx);

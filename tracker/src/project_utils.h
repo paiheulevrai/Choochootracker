@@ -28,6 +28,11 @@ void instrumentSwap(Project* p, uint8_t inst1, uint8_t inst2);
 int findEmptyChain(Project* p, int start);
 int findEmptyPhrase(Project* p, int start);
 int findEmptyInstrument(Project* p, int start);
+int allocateTrackSlot(bool* freeSlots, int size, int track);
+bool chainSlotIsPristine(Project* p, int chain);
+void collectFreePhraseSlots(Project* p, bool* freeSlots);
+int findEmptyChainForTrack(Project* p, int track);
+int findEmptyPhraseForTrack(Project* p, int track);
 
 // Cleanup functions
 int cleanupUnusedPhrases(Project* p);

@@ -158,6 +158,54 @@ const char* helpFXHint(const FXCell& fx, int isTable, uint8_t instrumentIdx) {
     case fxRTO:
       snprintf(buffer, bufferSize, "Repeat stops at %02X", fx.value);
       break;
+    case fxNTH:
+      if (isTable) {
+        if (fx.value == 0) snprintf(buffer, bufferSize, "NTH table: reset counter");
+        else snprintf(buffer, bufferSize, "NTH table: left every %u loops",
+          (unsigned)fx.value + 1);
+      } else {
+        const auto phraseLabel = [](uint8_t value, char* output) {
+          if (value == 0) strcpy(output, "off");
+          else if (value == 1) strcpy(output, "1st");
+          else if (value <= 8) snprintf(output, 12, "every %u", value);
+          else if (value == 9) strcpy(output, "1&3");
+          else if (value == 0xa) strcpy(output, "1&4");
+          else if (value == 0xb) strcpy(output, "5-8");
+          else if (value == 0xc) strcpy(output, "7+");
+          else if (value == 0xd) strcpy(output, "2nd");
+          else if (value == 0xe) strcpy(output, "odd");
+          else strcpy(output, "even");
+        };
+        char left[12], right[12];
+        phraseLabel(fx.value >> 4, left);
+        phraseLabel(fx.value & 15, right);
+        snprintf(buffer, bufferSize, "NTH L %s / R %s", left, right);
+      }
+      break;
+    case fxBEG:
+      snprintf(buffer, bufferSize, "BEG %02X: %s to END (same col)", fx.value,
+        fx.value < 0x80 ? "ease-out" : fx.value == 0x80 ? "linear" : "ease-in");
+      break;
+    case fxEND:
+      snprintf(buffer, bufferSize, "END %02X: same-column FX target", fx.value);
+      break;
+    case fxMRT: case fxMKL: {
+      char slots[8];
+      int length = 0;
+      for (int slot = 0; slot < 4; ++slot) {
+        if (!(fx.value & (1u << slot))) continue;
+        if (length) slots[length++] = '+';
+        slots[length++] = '1' + slot;
+      }
+      slots[length] = 0;
+      if (!length)
+        snprintf(buffer, bufferSize, "%s: no mods selected", fx.command == fxMRT ? "MRT" : "MKL");
+      else if (fx.command == fxMRT)
+        snprintf(buffer, bufferSize, "Retrig mods %s (no note retrig)", slots);
+      else
+        snprintf(buffer, bufferSize, "Bypass mods %s until trigger/MRT", slots);
+      break;
+    }
     case fxTIC: // Table speed
       snprintf(buffer, bufferSize, "Set table speed to %hhu tics", fx.value);
       break;
@@ -482,6 +530,7 @@ static void initFxHelpText() {
   fxHelpText[fxEUC] = "Euclidean Retrigger\nX hits over Y+1 rows, looping\nSame note and instrument\nNew note, OFF, KIL or EUC stops";
   fxHelpText[fxREP] = "Repeat Previous FX\nSigned increment per row\nPersists through new notes\nREP00 or new FX stops; RTO limits";
   fxHelpText[fxRTO] = "Repeat To\nSets REP's min/max boundary\nFinal value applied once\nThen repetition stops";
+  fxHelpText[fxNTH] = "Nth Trigger\nPhrase: X left, Y right (0 off)\n2-8 every N; 9/A/B/C patterns\nD 2nd, E odd, F even; Table +1";
   fxHelpText[fxTIC] = "Table Speed\nSets table playback speed";
   fxHelpText[fxTBL] = "Set Table\nSwitches to specified\ninstrument table";
   fxHelpText[fxTBX] = "Aux Table\nSets auxiliary table\nfor this note";

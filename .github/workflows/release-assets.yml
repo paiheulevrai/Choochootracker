@@ -1,0 +1,117 @@
+name: Assemble release assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Draft release tag to update
+        required: true
+        type: string
+      windows_run:
+        required: true
+        type: string
+      android_run:
+        required: true
+        type: string
+      web_run:
+        required: true
+        type: string
+      appimage_run:
+        required: true
+        type: string
+      raspberry_run:
+        required: true
+        type: string
+      portmaster_run:
+        required: true
+        type: string
+      macos_run:
+        required: true
+        type: string
+      miyoo_run:
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  assemble:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download validated platform artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          root="$RUNNER_TEMP/release-assets"
+          mkdir -p "$root"/{input,output}
+          gh run download "${{ inputs.windows_run }}" --repo "$GITHUB_REPOSITORY" \
+            --name choochootracker-windows --dir "$root/input/windows"
+          gh run download "${{ inputs.android_run }}" --repo "$GITHUB_REPOSITORY" \
+            --name choochootracker-android --dir "$root/input/android"
+          gh run download "${{ inputs.web_run }}" --repo "$GITHUB_REPOSITORY" \
+            --name choochootracker-web --dir "$root/input/web"
+          gh run download "${{ inputs.appimage_run }}" --repo "$GITHUB_REPOSITORY" \
+            --name choochootracker-appimage --dir "$root/input/appimage"
+          gh run download "${{ inputs.raspberry_run }}" --repo "$GITHUB_REPOSITORY" \
+            --name choochootracker-raspberry-pi --dir "$root/input/raspberry"
+          gh run download "${{ inputs.portmaster_run }}" --repo "$GITHUB_REPOSITORY" \
+            --name choochootracker-portmaster --dir "$root/input/portmaster"
+          gh run download "${{ inputs.portmaster_run }}" --repo "$GITHUB_REPOSITORY" \
+            --name choochootracker-nextui --dir "$root/input/nextui"
+          gh run download "${{ inputs.macos_run }}" --repo "$GITHUB_REPOSITORY" \
+            --name choochootracker-macos --dir "$root/input/macos"
+          gh run download "${{ inputs.miyoo_run }}" --repo "$GITHUB_REPOSITORY" \
+            --name choochootracker-miyooports --dir "$root/input/miyoo"
+          echo "RELEASE_ASSETS=$root" >> "$GITHUB_ENV"
+
+      - name: Rename and validate release packages
+        run: |
+          set -eu
+          tag="${{ inputs.release_tag }}"
+          [[ "$tag" =~ ^v[0-9][A-Za-z0-9._-]*$ ]]
+          in="$RELEASE_ASSETS/input"
+          out="$RELEASE_ASSETS/output"
+          version="${tag#v}"
+
+          cp "$in/windows/"*.zip "$out/ChooChooTracker-${tag}-Windows.zip"
+          cp "$in/android/apk/direct/release/"*.apk \
+            "$out/ChooChooTracker-${tag}-Android-direct.apk"
+          cp "$in/android/apk/store/release/"*.apk \
+            "$out/ChooChooTracker-${tag}-Android-store.apk"
+          cp "$in/android/bundle/storeRelease/"*.aab \
+            "$out/ChooChooTracker-${tag}-Android-store.aab"
+          cp "$in/portmaster/"*.zip "$out/ChooChooTracker-${tag}-PortMaster.zip"
+          cp "$in/nextui/"*.zip "$out/ChooChooTracker.pak.zip"
+          cp "$in/appimage/"*.AppImage "$out/"
+          cp "$in/raspberry/"*.tar.gz "$out/"
+          cp "$in/miyoo/"*.zip "$out/"
+          cp "$in/macos/"* "$out/"
+          (cd "$in/web" && zip -qr "$out/ChooChooTracker-${tag}-Web.zip" .)
+
+          for archive in "$out/"*.zip "$out/"*.apk "$out/"*.aab; do
+            unzip -tq "$archive"
+          done
+          tar -tzf "$out/"*-RaspberryPi-*.tar.gz > /dev/null
+          test -n "$(find "$out" -maxdepth 1 -name '*.AppImage' -size +1M -print -quit)"
+          python3 -m json.tool "$out/ChooChooTracker-${tag}-macOS-build-info.json" \
+            > /dev/null
+
+      - name: Generate checksums and attach assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          out="$RELEASE_ASSETS/output"
+          (cd "$out" && sha256sum * | sort -k2 > SHA256SUMS.txt)
+          gh release view "${{ inputs.release_tag }}" --json isDraft --jq 'select(.isDraft)'
+          gh release upload "${{ inputs.release_tag }}" "$out/"* --clobber
+          mkdir -p "$RUNNER_TEMP/verify"
+          gh release download "${{ inputs.release_tag }}" --pattern SHA256SUMS.txt \
+            --dir "$RUNNER_TEMP/verify"
+          cmp "$out/SHA256SUMS.txt" "$RUNNER_TEMP/verify/SHA256SUMS.txt"
+          (cd "$out" && sha256sum --check SHA256SUMS.txt)

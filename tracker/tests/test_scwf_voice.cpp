@@ -9,6 +9,26 @@
 #include <memory>
 #include <vector>
 
+TEST_CASE("2xSCWF advances its stereo attack once per frame") {
+  int16_t waveform[] = {16000, 16000, 16000, 16000};
+  InstrumentSCWF instrument{};
+  instrument.oscillator[0].data = waveform;
+  instrument.oscillator[0].frameCount = 4;
+  instrument.oscillator[0].channels = 1;
+  instrument.attack = 64;
+  instrument.sustain = 255;
+  instrument.envelopeShape = 128;
+  SCWFVoice voice;
+  voice.init(48000);
+  voice.configure(&instrument, 6000, 1, 0, 0, 20000, 0);
+  voice.noteOn();
+  std::vector<float> output(2048 * 2);
+  voice.render(output.data(), 2048);
+  for (int i = 0; i < 2048; ++i) CHECK(output[2 * i] == output[2 * i + 1]);
+  const float attackFrames = (64.0f / 255.0f) * (64.0f / 255.0f) * 5.0f * 48000.0f;
+  CHECK(output[2000] == doctest::Approx((16000.0f / 32768.0f) * 1000 / attackFrames).epsilon(0.01));
+}
+
 TEST_CASE("2xSCWF mixes two forward-looping oscillators and keeps the detune scale musical") {
   int16_t a[] = {0, 16000, 0, -16000};
   int16_t b[] = {16000, 0, -16000, 0};

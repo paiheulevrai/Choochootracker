@@ -2,27 +2,70 @@
 
 ChooChooTracker is an 8-track music tracker for handheld consoles.
 
-Release **v1.0.24-alpha** adds MIDI recording and stopped browser audition,
-on-the-fly Simplified editing, track audio cross-modulation and vocoder,
-Fatty/DigiSophie engines, Echoverb and experimental universal macOS packages.
+Release **v1.0.25-alpha** adds Launchpad Mini MK3 control, stereo Link Audio,
+MIDI CC recording, curved modulation transitions and bounded undo/redo, while
+improving Simplified pattern ownership, AY Trance Gates and console controls.
 Back up projects before upgrading: existing Bogie Clap presets load with the
 redesigned sound, and removed experimental engine-specific audio FM/PM modes
 are rejected explicitly. See [the changelog](../CHANGELOG.md) for release details.
 
-## Three-view text prototype
+## Undo / redo
 
-Project -> View mode - Editing style -> Mode cycles through Classic, Groovebox and Simplified with
+Phrase, Chain, Song and Table edits share a session-only undo/redo history.
+It includes recorded MIDI notes, cell/selection edits, fills, clipboard edits, clones, structural
+bar/length edits and Song highlights. Shared-bar isolation and end-of-gesture
+reference reconciliation are restored together; redo restores the recorded
+result, rather than rerunning a random fill. Held-button repeats form one
+action. Navigation, copying and unchanged edits do not discard redo.
+
+- Desktop: **Ctrl+Z** and **Ctrl+Shift+Z**; macOS: **Cmd+Z** and
+  **Cmd+Shift+Z**. Shortcuts are unavailable inside text entry, mapping capture,
+  selection popups or active motion/MIDI REC.
+- Controller/touch: **Settings > Edit history > Undo / Redo**.
+- **Settings > Controls > Key mapping** also provides optional **Undo** and
+  **Redo** actions, initially unmapped. Each has three physical input slots.
+
+Instrument engine/type changes are included, preserving the previous patch,
+envelopes, modulation and sample/wavetable data. Model changes are included for
+Braids, Plaits/Plaits-Alt, Bogie/DigiSophie, MME, Sintered and aChChid.
+Undoing an engine change briefly pauses audio and rebuilds the required engines;
+it does not restore running voices, playback position or an effect tail.
+
+The journal is limited to **64 actions / 256 KiB**, plus **8 MiB** of retained
+instrument resources. Oldest undo actions are dropped when space is needed.
+If an action itself cannot fit, it is explicitly refused and its captured
+changes are rolled back. Large sampler engine changes can therefore be refused.
+SoundFont history retains prepared data, not another synthesizer instance.
+History is not saved in project files.
+
+Loading/replacing projects, recorded motion/CC edits, sample/bank resource
+operations and instrument parameter/preset edits outside the scope above clear
+the history with a message. Other editors keep their existing local undo;
+using Groovebox's local Tools undo also clears this shared history. A new
+recorded edit after undo discards redo; clearing history never changes the music.
+
+## Editing modes
+
+Project -> Editing mode -> Editing style -> Mode switches between Classic and Simplified with
 EDIT + LEFT/RIGHT. There is one Simplified behaviour: bars isolate automatically
 when edited, directly in the canonical Song/Chains/Phrases arrangement.
 Changing editor does not convert the project.
-The Groovebox choice is session-only; Default mode remains Classic/Simplified.
+Default mode selects Classic or Simplified for new projects.
 
 ### Simplified: on-the-fly bar editing
 
 Simplified reuses Reip's Phrase editor navigation and header, but each
 pattern is an existing chain and each bar is a chain row. The project remains
-Classic internally. Classic, Simplified and Groovebox switch directly without
+Classic internally. Classic and Simplified switch directly without
 rewriting Song, changing phrase IDs, baking transposes, or allocating on browse.
+
+In both Classic and Simplified, a tap on an empty Song cell recalls the last
+used ID. Reusing an existing ID links the same content, so edits affect every
+occurrence. A double-tap on a filled Song cell selects the first available ID
+after its current value, without wrapping or preferring a track bank.
+If none remains, the cell is unchanged. Existing IDs and manual ID editing
+are unchanged. Other automatic allocations, including phrases and clones,
+retain their hexadecimal track banks.
 Historical Pattern-format projects are reconciled to chains once when loaded,
 using the existing importer. A failed import leaves the current project and
 source file unchanged. The combined writer still retains historical arrays/maps.
@@ -75,7 +118,9 @@ saved projects retain Classic backing and the combined prototype's writer.
 The header remains Pattern / Length / TR / Loop, without a permanent
 copy/status control. Slot exhaustion cancels the edit with an error message.
 
-In Groovebox mode, **SCENES** replaces Song in the navigation, using the same
+### Groovebox prototype (not available in the main build)
+
+In the experimental Groovebox editor, **SCENES** replaces Song in the navigation, using the same
 canonical arrangement and all its selection, copy/paste, clone and row-editing
 functions. There is no separate scene overview inside the step editor.
 SHIFT + LEFT/RIGHT follows the usual screen navigation:
@@ -221,12 +266,12 @@ Editing a missing bar may
 append only the next bar; gaps and more complex extensions must be handled
 in Classic. Song cells in this mode use Classic's chain editing semantics:
 tapping an empty cell inserts the last used chain value, and double-tapping
-creates the closest free chain. Chains created this way that are still empty
-and unreferenced are materialized at the configured default length
+selects the first available chain after the current value. Chains created
+this way that are still empty and unreferenced are materialized at the configured default length
 immediately, so the Phrase editor's Length header shows the default
 (e.g. `01`) rather than `00`.
-Phrases retain 128-slot banks: track 1 `000-07F`, track 2 `080-0FF`,
-... track 5 `200-27F`, with free-slot fallback. These are independent ID
+Phrases use 16-slot banks: track 1 `010-01F`, track 2 `020-02F`,
+... track 8 `080-08F`, with free-slot fallback. These are independent ID
 pools, not a decimal numbering scheme. Existing IDs are never renumbered.
 The free chain/phrase meters exclude referenced empty bars and retained
 material. Multi-slot actions reserve everything before committing; pool
@@ -387,21 +432,36 @@ The calibration and tested-remapping workflow below is exclusive to
 **PortMaster and NextUI Pak** builds. Other builds keep the direct mapping
 editor without calibration, timed tests or startup recovery.
 
-On PortMaster and NextUI, before capturing a replacement, release all buttons. Keyboard and controller
-events from the same press are allowed to finish before the next step.
-Each change (including clearing a binding or resetting defaults) is tested:
-press and release the eight core controls when prompted. A changed motion
-control is tested too. You have 15 seconds per step; if the test cannot be
-completed, the previous mapping stays active. Only tested mappings can be
-saved with **Done**. `A`/`B` on handheld builds name keyboard inputs;
-`Pad A`/`Pad B` name SDL controller inputs, not extra physical buttons.
-When reassigning an already used input, swaps stay within its keyboard or
-controller path. If no equivalent binding exists, use **Calibrate controls**
-instead of removing another action's only controller binding.
+On PortMaster and NextUI, release all buttons before capturing a replacement.
+Make as many changes as needed; the previous mapping remains active for
+navigation while you edit. **Done** tests the eight core controls once, plus
+any newly assigned inputs, then saves the result. Clearing a binding and
+resetting defaults are included in this final test. You have 15 seconds per
+step; if a capture or test times out, the previous mapping stays active and
+the other staged changes remain available to edit or retry. Leaving the
+editor, sleep or exit discards staged changes.
+
+On these two builds, known keyboard-bridge and SDL controller inputs share
+one console-button name and binding (`A`, `B`, `L2`, etc.). Either input path
+works, including while remapping. Overlapping reports of the same button
+produce one press; it stays held until both sources release it. There is no
+timed debounce, so rapid separate taps are preserved. Fully separate duplicate
+press/release pairs cannot be distinguished from real taps. Matching keys on a
+USB keyboard share these bindings too; other keys remain independent.
+Reassigning an occupied binding swaps it with the edited slot; the final
+test checks the result.
+
+Existing mappings are converted automatically, keeping custom inputs and
+intentionally empty slots. Redundant aliases within one action are removed.
+If aliases now assign the same console button to different actions, startup
+requires explicit calibration instead of guessing. The saved mapping is not
+replaced until calibration and verification succeed.
 
 **Calibrate controls**, immediately above **Done** on the Key mapping screen, rebuilds the eight core
 controls from physical button presses, then tests them. Existing motion
 bindings are kept unless they conflict with the new controls.
+Conflicting aliases shared by different optional Motion/Undo/Redo actions are
+also left unassigned, with a warning; reassign them afterwards if needed.
 If you make a mistake during calibration or its test, hold any button for
 one second to restart from **Up**, then release all buttons before continuing.
 Repeating an incorrect assignment during the test cannot reveal that physical
@@ -418,7 +478,10 @@ on the next launch. Sleep or exit also discards an unfinished test.
 Desktop layout defaults use QWERTZ only for QWERTZ regions; Polish keyboards
 keep the standard QWERTY defaults.
 
-Windows, web, and Android users can also use a game controller. On Android,
+Windows, web, and Android users can also use a game controller. On Windows,
+Linux, macOS and Android, up to four controllers can be used at the same time
+with the same key mapping, for example an Android handheld's built-in controls
+and a docked controller. PortMaster and Miyoo builds use one controller. On Android,
 touch controls appear automatically when no gamepad is connected: in portrait
 they sit below the tracker, with a square D-pad, A/EDIT, B/OPT, START/PLAY and
 SELECT/SHIFT controls, then a separate Live/Motion section with two modulation
@@ -433,7 +496,7 @@ If an Android import or export fails, a message appears with the storage checks 
 
 ### Navigation
 
-- Use **[UP/DOWN/LEFT/RIGHT]** to move the cursor. It underlines the current field; with **Settings → Graphics → Cursor** set to **Brackets** it frames the field with four corner brackets instead, which briefly dim when the cursor lands somewhere new so it is easy to find after moving or switching screens.
+- Use **[UP/DOWN/LEFT/RIGHT]** to move the cursor. It uses the theme's cursor colour on the current field text and underlines it; with **Settings → Graphics → Cursor** set to **Brackets** it frames the field with four corner brackets instead, which briefly dim when the cursor lands somewhere new so it is easy to find after moving or switching screens.
 - Hold **SELECT + [DIRECTION]** to move between screens.
 - SELECT + [LEFT/RIGHT] also exits branch pages to the neighbouring MSCPIT
   screen, like Instrument Pool: Project/Settings (including Settings submenus)
@@ -528,6 +591,8 @@ with rhythm patterns:
 ## 3. Song structure and screen map
 
 Hold **SELECT + [DIRECTION]** to move between screens.
+To return to Song, use **SELECT + DOWN** from Project or **SELECT + UP**
+from Settings. **OPT** (**B** on PortMaster) alone does not leave either screen.
 
 The main navigation row is:
 
@@ -572,7 +637,21 @@ A song has 8 tracks. Each track contains a sequence of chains, and each chain co
 
 Settings → Load font → fonts/Pixel16x24 contains TechMonoAudit (converted from Share Tech Mono), Departure Mono, Spleen and Cozette. Each supplies the complete printable ASCII set in 16×24 cells for a 640×480 display. Pixel-built fonts keep their native pixels or integer scaling with padding; Cozette remains smaller because doubling its 13-pixel ink height would exceed the cell. The NostromoAmberDa2 theme is available through Settings → Edit color theme → Load. It retains the Nostromo amber background and informational text, with red primary text, darker orange values and a teal cursor. Loading the assets does not change your selected font or theme. See the accompanying README.txt for attribution and licenses.
 
-The themes folder also includes Bb22200, Eclair, Greydark and Reddeep. NostromoAmberDa2 is in the IDEColorThemes subfolder.
+The themes folder also includes Bb22200, Bliss, Eclair, Greydark and Reddeep. Bliss uses a classic blue installer palette with cyan and yellow accents. NostromoAmberDa2 is in the IDEColorThemes subfolder.
+
+The fonts folder also includes Minitel, a five-size pixel font based on the
+Minitel-Canvas font. It is optional and does not change the default font;
+see Minitel-README.txt for its source, license and character adaptation.
+RetroC64 and RetroWorkbench offer additional optional five-size retro styles.
+See Retro-README.txt for sources, licenses and conversion details.
+Segment14 is a 14-segment display font; lowercase letters look like capitals,
+and several punctuation glyphs are supplied by IBM Plex Mono.
+Elektron is an unofficial fan recreation of an instrument-display font; most
+lowercase letters look like capitals.
+OldCamcorder offers an OSD-inspired pixel font; PixelOperator provides a
+monospace pixel font. Both include five sizes.
+CodeMono and MachineMono are five-size conversions of mononoki and IBM Plex
+Mono, respectively; their names differ from the upstream Reserved Font Names.
 
 ### Project page spacing
 
@@ -613,6 +692,8 @@ You can keep multiple sub-songs in a project by creating "islands": sections sep
 Double-tap **OPT** to enter or leave Live Mode; `LIVE` replaces the Song title. The switch happens a moment after the second tap, so tapping **OPT** 3 times adds a highlight without entering or leaving Live Mode. In Live Mode, **PLAY** queues the selected chain for the next chain boundary. A playing track finishes its own chain; a stopped track waits for the first active track (lowest track number) to finish its chain. When no track is playing, playback starts immediately. Selected stopped tracks launch together on their reference boundary. Press **PLAY** twice for an urgent change at the next phrase boundary instead. A selected empty Song cell queues a quantised stop on a playing track, or cancels a stopped track's pending launch. `+` marks a queued chain, `!` an urgent chain and `-` a queued stop.
 
 Select one Song row across several columns to queue or stop those tracks together. Multi-row selections are deliberately rejected. Live queues are cleared while a Song range loop is active. Live is a performance mode and is not saved in the project.
+
+In Simplified view, chain boundaries follow the playing pattern's length and bars. If playback is looping a single phrase or an active bar, that phrase or bar's end is the boundary for a normal Live change and for stopped tracks waiting on it.
 
 #### Controls
 
@@ -969,6 +1050,8 @@ Existing Clap instruments remain loadable, but sound different: their former Noi
 
 Every model can use the shared LP/BP/HP multimode filter, with Clean, Classic, Aggro, Acid, Roar or Snarl character, cutoff and resonance. Clean, Classic, Aggro and Acid expose `12`/`24 dB` slope; Roar and Snarl expose Color instead. Bogie supports all of its active macros plus Volume, Pitch, Cutoff and Resonance as modulation and motion-recording destinations. Use short Decay with Cowbell for sharp phonk attacks; increase FM for a harder, more metallic bell.
 
+Bogie and DigiSophie smooth retriggers and cuts over 2 ms to reduce clicks; Bogie's initial percussive attack is unchanged.
+
 On the Modulation screen, press **EDIT** on a source to choose a family (Envelopes, LFO or Sticks), then its source. **Left** and **Right** still cycle sources directly.
 
 Changing an instrument's **Type** keeps its four modulation sources, all source
@@ -1016,6 +1099,8 @@ target-console performance check.
 The seventh control, **Gate**, is a toggle: **OFF** preserves the one-shot decay (including in older projects); **ON** sustains the note while its gate is open, then fades out using **Decay** on note-off. Press **EDIT** to toggle it. Motion and the initial impact still run once per trigger; retriggering resets the voice in either mode.
 
 Motion is an internal macro envelope, not pitch glide: values below `80` use an AD shape, `80` disables it, and values above `80` use a decay-only shape. Moving farther from the centre makes the sweep deeper and longer. Its destinations are fixed per model, so Sintered stays predictable in tracker patterns: Knot animates Mod/Fold; Crease Feedback/Bite; Burst Noise/Color/Feedback; Comb Damping/Regen; Logic Rate/Crush; Melt Chaos/Drive; Squall FM. All models reset their state on a note trigger and bound internal feedback for repeatable hits.
+
+Sintered smooths note attacks, retriggers and cuts over 2 ms to reduce clicks, including when playing chords.
 
 ### MonkSynth
 
@@ -1183,7 +1268,7 @@ Fatty now uses its own type ID without replacing DigiSophie.
 
 This clean Sample engine plays mono or stereo PCM samples loaded into RAM.
 
-- Tap **Sample** to load an uncompressed `8-bit`, `16-bit` or `24-bit` PCM WAV. Press **PLAY** in the browser to audition the highlighted file.
+- Tap **Sample** to load an uncompressed `8-bit`, `16-bit` or `24-bit` PCM WAV. In the file browser, hold **PLAY** to audition the highlighted file, use **Up/Down** while holding it to audition other files, and release **PLAY** to stop. Folders are silent.
 - When a sample is loaded, **EDIT** appears next to its name. Tap it to open the Sample Edit screen. **OPT** or **SELECT + [LEFT]** returns to the instrument.
 - The Sample Edit screen shows the filename (with a `*` marker when the sample in RAM differs from the file on disk), a format readout (sample rate, channels), a tall waveform, and the **Region**, **Select**, **Loop**, **Slice**, **Process** and **File** fields.
 - Processing edits start in RAM. Project saves and autosaves embed the current sample audio in the `.cct`; **Save**/**Save As** in Sample Edit writes the separate WAV. The `*` marker means the sample in RAM differs from that WAV. Loading another sample replaces the current audio in RAM and resets the Region to the full sample (Start `00`, End `FF`).
@@ -1326,6 +1411,14 @@ To turn an input off, select its **[x]** box in that list and press **EDIT**. To
 
 Select an input's **ARM** box to make it available to the Sampler recorder; its small meter shows the incoming level. Arm one interface at a time: this version opens only the first armed interface, even if several boxes are checked. Your selection is remembered by device name, so an unavailable interface stays unarmed rather than being replaced by another input. Press **OPT** to return to Audio settings.
 
+On TrimUI Smart Pro with NextUI, the internal `audiocodec` input also needs its microphone route enabled outside the tracker, for example with ChooChooHacker. If arming fails, try the default 48 kHz sample rate; capture support at other rates depends on the device.
+
+To sample audio from a compatible phone or computer on TrimUI Smart Pro with NextUI:
+
+1. Connect the source to the console's USB-C device port with a data cable. In [ChooChooHacker](https://github.com/paiheulevrai/ChooChooHacker#try-usb-audio-in-experimental), select **Test USB audio IN** and confirm. This mode is experimental and the source must support USB audio output.
+2. Launch the Tracker Pak (save your work and relaunch if it was already open). Leave **Audio Output** on `Default` to keep listening through the console.
+3. Enable **Audio Input**, arm `UAC1_Gadget` in **Input devices**, then play audio on the source and record it in the Sampler.
+
 ##### Recording audio input
 
 On the Sample instrument screen, **REC** (or **EDIT/REC** when a sample is loaded) opens the sample editor, which hosts recording and editing in one screen. Arm inputs on the **Settings → Audio → Input devices** screen first (see [Audio input](#audio-input)). The editor's top rows control recording:
@@ -1391,6 +1484,10 @@ Other slots are unchanged. Runtime modulation state is also reset when its sourc
 or destination changes, including in Layer children.
 
 PITCH and VOL Sequence sources have a **Mode**. **Normal** keeps the tracker value audible while also using it as modulation. **Bypass** makes it a source only: PITCH retriggers at the last pitch (or C-4 for the first note), and VOL keeps the last audible level. Trance Gate is already source-only. If any active Sequence slot bypasses PITCH or VOL, bypass wins. To prevent feedback, PITCH and VOL cannot target Pitch or Volume.
+
+The Trance Gate insert and Sequence source both offer preset patterns `00`–`3F` (up to 16 steps) and eight user patterns `40`–`47`, mapped to AY wavetables `00`–`07` (up to 32 steps). For user patterns, `0` closes the gate and any other value opens it; Length selects how many steps are used and defaults to 16. For all 32 steps, set insert Length to `1F` or Sequence Length to `32`. User and preset patterns use the same rate and trigger behavior: at `1/16`, each gate step lasts six ticks, so 16 steps span 16 sequencer rows at the default groove and track speed. Notes restart the track insert's pattern; the Sequence source follows its selected Trigger setting. On a user Pattern/Motif, double-tap **EDIT** to open its AY wavetable; **SHIFT + UP** returns to the insert or modulation screen.
+
+These are the project's shared AY wavetables, not copies: editing or importing one also changes any AY instruments or wavetable LFOs using it, and vice versa. Existing waves are never replaced automatically. They are saved with the project and can be exported/imported with the AY editor's **Save/Load** buttons (`.aywave`); export the waves separately when sharing an instrument that uses a user gate.
 
 Envelope/LFO duration parameters are measured in ticks, except the Audio follower's Attack and Release, which are independent of song tempo.
 
@@ -1532,7 +1629,7 @@ LFO trigger types:
 - **STICK LIVE** (`L1` by default) applies stick modulation without changing the phrase. In **Settings > Stick live mode**, `HOLD` (the default) enables it while held; `TOGGLE` enables it on one press and disables it on the next; `FREE` leaves it permanently enabled. Releasing the button in `TOGGLE` leaves it enabled.
 - During playback, hold **MOTION RECORD** (`L2`) to apply stick modulation and record changed destinations as absolute FX values.
 - Hold **MOTION ERASE** (`R2`) to remove matching destination FX from the current row.
-- **MOTION ERASE** (the **DEL** control) only removes FX matching the active stick modulation destinations. It never clears notes, instruments, velocity or the `DEL` note-delay FX, whether notes were entered manually or recorded over MIDI. Without stick mappings, it does not change the phrase. Phrases do not store FX provenance: a manually entered FX matching a stick destination is also removed.
+- **MOTION ERASE** (the **DEL** control) removes FX matching active stick destinations and enabled MIDI CC mappings on playing tracks, even without moving the controller. It never clears notes, instruments, velocity or the `DEL` note-delay FX. Phrases do not store FX provenance: matching FX entered manually are also removed.
 
 The bottom-right `~` indicates active Stick live. Record (`*`, or `!` for overflow) and Erase (`x`) take indicator priority and remain momentary in both modes. Both enable live stick processing while held; releasing them leaves a separately enabled live toggle intact.
 
@@ -1671,6 +1768,45 @@ a new command stops REP. A repeated relative FX still has its usual relative
 meaning; RTO stops reapplying it after the final value. Playback stop or Clear
 Track FX resets the repetition state.
 
+### Parameter transitions: BEG / END
+
+Write the starting absolute FX, `BEG` and `END` in **the same FX column**:
+
+```text
+DCF 20
+BEG 80
+...
+END E0
+```
+
+`BEG` inherits that column's preceding command and value. Its value controls
+the curve: `00` decelerates strongly (log-like), `80` is linear, and `FF`
+accelerates strongly (exp-like); intermediate values vary the curve continuously.
+`END` supplies the target, reached on entry to its row. These are quadratic
+easing curves, not literal logarithmic/exponential functions.
+
+Transitions update every tracker tick, following groove/SPD or the table
+column's speed. They can span many bars, phrases and song rows, in classic
+and simplified views, and work independently in both tables. Notes and
+instrument triggers do not cancel a phrase transition. The destination keeps
+its existing control scale and resolution: for example a cutoff control
+already mapped logarithmically stays logarithmic.
+
+Use continuous **absolute** controls, such as `PAN`, `TPN`, filter cutoff,
+sample speed, envelope times, sends and continuous insert parameters.
+Cumulative relative commands (`VOL`, `VSL`, `PIT`, modulation offsets),
+triggers and discrete selectors cannot be transition destinations; invalid
+destinations or missing endpoints produce a notification. Use VSL for volume
+slides. REP/RTO retain their existing behavior.
+
+A replacement command in that column interrupts the transition. Jumps,
+backward wraps, table restarts, stop and Clear Track FX cancel it too; END
+is sought only along the natural forward arrangement, not through jumps.
+Starting midway does not reconstruct a previous BEG. An END with known
+eligible command context still applies its target. Editing the target during
+playback rebases from the current value over the remaining rows; removing
+or moving the endpoint cancels the active transition.
+
 ### Audio FX sends
 
 | FX | Value | Detailed behaviour |
@@ -1695,10 +1831,22 @@ Inspired by Swedish "trig conditions", the tracker supports trigger probabilitie
 |---|---|---|
 | `PRO` | `00-64` | Absolute trigger probability from `0%` to `100%` |
 | `MOD` | `AB` | Trigger on iteration `A` of `B`; for example `12`, `22`, `14`, `34` |
+| `NTH` | `XY` | Gate cells around the command by Phrase loop count: `X` controls everything left, `Y` everything right. In a Table, `XX` gates columns left of the command. |
 
 `MOD` counters are local to the track and phrase. Invalid combinations, such as `A` greater than `B`, do not trigger.
 
 `MOD34` triggers on the 3rd pass of every 4-pass cycle. `MOD1F` triggers on the 1st pass of every 16-pass cycle.
+
+`NTH` Phrase digits follow this map: `0` is off; `1` is the first pass only;
+`2-F` select these cycle rules: `2-8` every Nth pass, `9` passes 1&3,
+`A` passes 1&4, `B` passes 5–8, `C` from pass 7 onward. ChooChooTracker extends
+the final values: `D` is pass 2 only, `E` is odd passes, and `F` is even
+passes. For example, `NTH20` gates the note and earlier FX on every second
+loop, while `NTH02` gates only later FX.
+
+In a Table, the full `XX` byte is an interval: `00` resets the column counter,
+while `01-FF` gate columns to the left on every `XX+1` pass. Counters are local
+to the running Table.
 
 #### Playback speed
 
@@ -1724,6 +1872,19 @@ Very high multipliers can exceed the resolution of the tracker tick scheduler an
 
 Phrase and table FX can change a modulation slot without editing the instrument:
 
+`MRT XX` retriggers selected modulation slots from their beginning.
+`MKL XX` immediately bypasses them, including absolute envelopes: it does
+not send note-off, kill the note or reset other slots. Both commands are
+one-shot and work in phrases and tables, including active Layer children.
+
+Their value is a bitmask: `01` = slot 1, `02` = slot 2, `04` = slot 3,
+`08` = slot 4; add bits to combine slots (`05` = 1+3, `0F` = all four).
+`00` selects none; the upper four bits are ignored. MKL lasts until MRT or
+that modulator's next normal trigger (note, phrase or chain, according to
+its mode). Free-running sources stay bypassed across notes until MRT or an
+instrument change. MRT preserves FX offsets and does not change the
+instrument definition; external stick/sequence inputs remain external inputs.
+
 | FX pattern | Meaning |
 |---|---|
 | `M1A`, `M2A`, `M3A`, `M4A` | Relative Amount offset for modulation slots 1-4 |
@@ -1732,7 +1893,7 @@ Phrase and table FX can change a modulation slot without editing the instrument:
 | `M31`, `M32`, `M33`, `M34` | Relative P1-P4 offsets for modulation slot 3 |
 | `M41`, `M42`, `M43`, `M44` | Relative P1-P4 offsets for modulation slot 4 |
 
-The value is interpreted as a signed `8-bit` relative change (`01` adds `1`, `FF` subtracts `1`). Repeated commands accumulate. Effective values are clamped to their valid range.
+For these offset FX, the value is interpreted as a signed `8-bit` relative change (`01` adds `1`, `FF` subtracts `1`). Repeated commands accumulate. Effective values are clamped to their valid range.
 
 `P5` is not exposed as a phrase or table FX. It is available as the `M1–M4 Wavetable` modulation destination, so one modulator can scan the AYWavetable index of another.
 
@@ -1883,11 +2044,15 @@ Use it to balance the 8 tracks, shape each track with Tilt EQ, and send audio to
 | LVL | Post-engine track level, `000-100` |
 | REV | Send to the shared Clouds reverb, `000-100` |
 | DLY | Send to the shared ping-pong delay, `000-100` |
-| TLT | Per-track Tilt EQ, `00-FF`; `80` is neutral, low values favour bass and high values favour treble. Low values will introduce a soft overdrive. |
+| TLT | Per-track Tilt EQ, `00-FF`; `80` is neutral, low values favour bass and high values favour treble. |
 | M | `*` mutes this track |
 | S | `*` solos this track |
 
 The mixer is track-based, not instrument-based. If a track changes instruments, its level, PAN, Tilt and sends remain attached to the track. Instruments also have their own `00-FF` **Vol** and **Pan** in the top row of the Instrument screen. Instrument PAN is applied first, then track PAN. Both preserve an existing stereo image at centre; they progressively attenuate the opposite side when moved left or right.
+
+Tilt EQ processes the combined sound of all chord voices and Layer children on a
+track once, before the track's instrument EQ and inserts. This also applies to its
+low-setting overdrive; it is not applied separately to each note.
 
 On the master row, select **MASTER FX** to open the master effects. **EQ** opens the master three-band EQ; the EQ screen identifies it as `FE`, the number reserved for the master. It uses the same controls as an instrument EQ, but affects the complete mix. Select **LEVEL** to adjust the overall output volume from `001%` to `100%`. This is the same **Mix volume** setting found in Settings > Mixer and is saved for the device, so it is useful on consoles without a physical volume control.
 
@@ -2029,6 +2194,7 @@ Both modes share the same root, scale, **Custom** note editing and track checkbo
 - **Sync** selects **Off** (local tempo), **MIDI** (incoming MIDI clock and transport) or **Link** (shared network tempo). With MIDI selected, Tempo is read-only and shows the measured incoming tempo. With Link selected, Tempo remains editable: edits are shared with the other participants, and their edits update this field too. This setting applies to all projects.
 - **Sync out** groups **MIDI clock** and **MIDI transport**. Clock follows the current tempo, including a shared Link tempo; transport sends start/stop. These are the same preferences as Settings > MIDI. Select the MIDI output device there. Output is suppressed while Sync is MIDI; the saved output preferences are retained.
 - **Tempo** sets the project tempo in whole BPM (`3-500`). Internally the tracker still stores its tick rate in Hz (`tick rate = BPM x 0.4`), so existing projects load and save unchanged; a project with a fractional tempo displays it rounded and snaps to a whole BPM on the first tempo edit. Coarse adjustment steps by 5 BPM, fine adjustment by 1 BPM; clearing resets to the default 125 BPM.
+- **[Tap]** beside Tempo sets the tempo from repeated **EDIT** presses or touchscreen taps. The first tap starts a measurement; subsequent taps average up to four intervals. Gaps outside 120 ms to 4 seconds start a new measurement (15–500 BPM). Tap is disabled while following MIDI clock and updates the shared tempo when using Link.
 - ChooChooTracker saves projects as `.cct`. This format is not compatible with ChipNomad.
 
 Use **Save** before changing instrument types or loading another project.
@@ -2038,32 +2204,23 @@ Use **Save** before changing instrument types or loading another project.
 The **View** row opens the view window, which controls how the Song screen is
 interpreted:
 
-- **Mode** is the active project view: **Classic** (LSDJ-style
-  Song → Chain → Phrase) or **Simplified** (Song rows are patterns of 1–16
-  bars). Switching the mode opens a warning screen — a conversion rewrites
-  the whole song structure and might damage it. Choose **Save and proceed**
-  (saves the project first, asking for a filename if it has none yet),
-  **Proceed without saving**, or **Cancel**. While the conversion runs the
-  status line shows `Converting...`, afterwards `Converted!`.
-
-  Conversion preserves the music: in classic → simplified each chain becomes
-  a pattern with the same number (or the closest free one), containing the
-  chain's phrases as bars in order, with chain transposes baked into the
-  notes. In simplified → classic each pattern becomes a chain whose phrase
-  numbers follow the pattern number (skipping occupied numbers), and bars
-  with identical content share one phrase. The conversion scans for changes:
-  chains and patterns that are unchanged since the last conversion keep
-  their converted state exactly, while ones edited (or added) since are
-  rebuilt from the current content — so edits made in either mode carry
-  across, and untouched parts are never disturbed.
+- **Mode** is the active editor: **Classic** (Song → Chain → Phrase) or
+  **Simplified** (Song rows show patterns of 1–16 bars). Switching between
+  these editors does not convert or renumber a canonical project. Older projects
+  stored in the legacy Simplified format are converted to Classic backing.
 - **Default mode** is the view new projects start in (a global setting,
   remembered in `settings.txt`).
 - **Default length** (visible in Simplified mode) is the length of newly
-  created patterns. It applies when you type a pattern number onto an
-  empty Song row (the pattern starts that long) and when clearing the
-  Length field on the Phrase screen header.
+  created patterns and the length restored when clearing the Length field
+  on the Phrase screen header.
+- In both modes, tapping an empty Song cell recalls the last used ID;
+  double-tapping an occupied cell selects the first free ID after it,
+  without track banks or wrapping. In Simplified, a newly assigned pristine
+  pattern gets the default length immediately. Existing or shared patterns
+  retain their contents and length.
 - **Playhead** (visible in Simplified mode) chooses between looping the bar
-  the cursor views and playing the whole pattern.
+  the cursor views and playing the whole pattern. In **PAT**, playback starts
+  at the viewed bar, then continues through and loops the full pattern.
 
 ### Ableton Link
 
@@ -2146,7 +2303,7 @@ it is not available on Miyoo, original RG35XX, Web or Android builds.
 - **MIDI** opens the [MIDI](#14-midi) submenu: device selection and the MIDI In channel-to-instrument mapping.
 - **Synths** contains **AY Quality**, **Sample dithering**, and global **Braids BITS / DRFT / SIGN** settings.
 - **Mixer** contains **Mix volume** and the per-project `250-4000 Hz` **Tilt pivot** (default `1 kHz`) used by all Mixer Tilt controls.
-- **Graphics** contains **Edit color theme**, **Load font**, **Persistent waveform**, **Track visuals**, **Waveform FPS**, **Boot screen**, **Cursor**, battery information, and the playback counter settings. **Cursor** draws the cursor as a **Line** under the field (the default) or as corner **Brackets** around it; the original RG35XX build always uses the line. In the color theme, **Text Labels** colors the names of settings, a little dimmer than their values; **Named Values** colors values that are words (Off, Classic, LFO) rather than numbers; and **Value Bars** colors the bars that show where a value sits in its range. Themes saved before these existed get Text Default dimmed towards the background for labels, Text Default for names and the cursor color for bars. **Waveform FPS** sets the refresh rate of the instrument scope and mixer visualizers from `01` to `60`. Track visuals selects **Detailed** (the synth waveform and its overlays) or **Audio waveform** (the actual summed output of that track) independently for every track; audio waveform clears any prior ADSR overlay immediately when playback starts. ChipNomad fonts and themes should work.
+- **Graphics** contains **Edit color theme**, **Load font**, **Persistent waveform**, **Track visuals**, **Waveform FPS**, **Boot screen**, **Cursor**, battery information, and the playback counter settings. The theme and font browsers reopen on the last loaded file for quick comparison; this position is session-local. **Cursor** draws the cursor as a **Line** under the field (the default) or as corner **Brackets** around it; the original RG35XX build always uses the line. In the color theme, **Text Labels** colors the names of settings, a little dimmer than their values; **Named Values** colors values that are words (Off, Classic, LFO) rather than numbers; and **Value Bars** colors the bars that show where a value sits in its range. Themes saved before these existed get Text Default dimmed towards the background for labels, Text Default for names and the cursor color for bars. **Waveform FPS** sets the refresh rate of the instrument scope and mixer visualizers from `01` to `60`. Track visuals selects **Detailed** (the synth waveform and its overlays) or **Audio waveform** (the actual summed output of that track) independently for every track; audio waveform clears any prior ADSR overlay immediately when playback starts. ChipNomad fonts and themes should work.
 - **Key mapping** customises the controls.
 - **Support report** writes a small diagnostic text file with the app version, platform, audio settings and CPU load, playback/overflow state, and a compact project summary. It does not include sample data or project title/author text. On Android and Web it opens the normal export/download flow; desktop and handheld builds save `support-report.txt` in the app's writable folder.
 - **Quit ChooChooTracker** exits cleanly.
@@ -2187,6 +2344,7 @@ Adjust Repeat delay and Repeat speed in Settings. If a single press moves twice,
 
 Desktop and PortMaster. Settings > **MIDI** opens this submenu: **MIDI In** / **MIDI Out** pick a connected device, cycling through detected ports with `OFF` at either end; both directions need a device selected. The device selection is per session: it is not saved to settings.txt, since a port's position in the list can change across reboots or when devices are plugged in a different order. The app's **PLAY** control remains available from this screen and starts the song. On PortMaster, connect a USB MIDI device before launching; it must be exposed by the handheld's OS through ALSA.
 
+- **Launchpad Mini MK3 Support**: off by default and saved in settings. On PortMaster/NextUI, enable it to control Song/Scenes with a Launchpad Mini MK3 on its dedicated MIDI 2 port. Grid pads queue chains or stops, scene buttons queue the row, and a second press makes the launch urgent; the top arrow buttons navigate. LEDs indicate populated, queued, urgent and playing cells. Other platforms do not currently support this controller.
 - **Playing from a MIDI keyboard**: with a MIDI In device selected, incoming notes play on any screen and during playback. External notes take priority over internal phrase notes while held, without stopping or moving the sequencer; phrase notes resume on subsequent steps after release. Note Off follows the original track even if you select another track while holding the key, and triggers the instrument's ADSR release with REC off too. Without REC, playing does not modify phrases, start song transport, or advance the playback counter.
 - **Auto channel**: `01`-`16`, or `OFF`; defaults to `16`. This channel remembers the instrument associated with your navigation: the selected instrument in Instrument, Modulation and instrument effect/edit screens; the last known phrase instrument at the cursor when stopped or on the playing track during playback; the instrument associated with a Table or track Insert FX; and the highlighted Instrument Pool entry. Screens without an instrument context, such as Mixer, keep that memory. An empty/unresolved context does not replace the last valid instrument. New notes follow the current context even when stopped. Phrase and track Insert FX contexts keep the selected track. Instrument-related contexts use the instrument's unique track in the song arrangement (including Layer references); if unassigned or used on multiple tracks, they use the selected track. The selected UI track is not changed. Auto works with REC off too and overrides that channel's instrument mapping. Other channels keep their instrument mappings and always use the selected track. Overlapping notes on a track use last-note priority; releasing the current note resumes the previous held note.
 - **Browser audition with Auto**: while the sequencer is stopped, Auto Channel notes audition the highlighted WAV sample, SCWF/wavetable, native/FM preset, or SoundFont/SFZ/EXS preset in its picker without selecting or replacing the project's instrument. MIDI pitch, velocity and Note Off apply to the temporary sound. Banks prepare asynchronously; releasing the key before preparation finishes cancels the pending note. Moving to another item, leaving the picker or starting playback stops the preview. Folders do not sound. REC never writes browser audition into phrases; other MIDI channels keep their normal routing. During playback, stop the sequencer before auditioning a browser candidate.
@@ -2195,10 +2353,12 @@ Desktop and PortMaster. Settings > **MIDI** opens this submenu: **MIDI In** / **
 - **MIDI recording** uses the existing **MOTION RECORD** control alongside stick automation. At rest, in the Phrase screen, Auto Channel Note On writes the note, instrument and velocity at the cursor and advances one row, staying on row `F` at the end. Dedicated channels remain play-only at rest. If REC receives another channel, a message shows its actual number and the configured Auto Channel: match these to enable step entry. During sequencer playback, REC records incoming Note On events from any channel into the selected destination track's playing phrase, even on another screen.
 - **MIDI record** selects `QUANTIZED` (default) or `FREE`. Quantized writes to the step current at the note's arrival, never the next step. Free uses that same step and adds `DEL` for the preceding audio tick, not the nearest or following tick. Tick `0` needs no `DEL`. Timestamped input is matched against actual playback ticks, including groove and track-speed changes. Both settings are saved.
 
-  Only one note is stored per phrase step: the last recorded note replaces the previous note, instrument and volume. Releasing the last held MIDI key records `NOTE OFF` while REC and playback are active, using the same Quantized/Free timing. A musical note always takes priority over `NOTE OFF` on the same step, regardless of message order; an OFF never replaces a musical note. Releasing a key while another remains held resumes that note without inserting OFF. Recording replaces/removes an existing `DEL`, but preserves unrelated FX. If Free needs `DEL` and all three FX slots are occupied, the event is not written and an error is shown; the original row stays intact. Notes are never spilled onto neighboring tracks. Shared phrases change at every occurrence. Save the project normally to retain recorded notes.
-- **MIDI CC mapping**: 64 mapping rows are available per project; each row shows **ON**, **CH**, **CC**, and **DESTINATION**. Press **EDIT** on **CC** to learn a controller. On **DESTINATION**, press **EDIT** to open the category popup: choose **Song**, a track, or a named instrument on the left, then its parameter on the right. This selects the target and parameter together, for example `Track 2: Mute` or `03 Bass: Cutoff`. **EDIT + Left/Right** cycles through the same choices without opening the popup. Choose **Unassigned** to clear a destination. Disabled rows retain their destination label. **PLAY** starts or stops the song from this screen.
+  Only one note is stored per phrase step: the last recorded note replaces the previous note, instrument and volume. While a recorded note is held during playback, existing notes on the intervening played rows are cleared; their unrelated FX remain. Releasing the last held MIDI key records `NOTE OFF` while REC and playback are active, using the same Quantized/Free timing. A note on the trigger step takes priority over `NOTE OFF` on that same step; on a later covered step, the release replaces the old note. Releasing a key while another remains held resumes that note without inserting OFF. Stopping playback or releasing REC closes the held span without writing OFF. An intervening edit causes the pending erase to be skipped with a warning to protect newer changes. Recording replaces/removes an existing `DEL`, but preserves unrelated FX. If Free needs `DEL` and all three FX slots are occupied, the event is not written and an error is shown; the original row stays intact. Notes are never spilled onto neighboring tracks. Shared phrases change at every occurrence. Recorded MIDI notes support undo/redo; save the project normally to retain them.
+- **MIDI CC mapping**: 64 mapping rows are available per project; each row shows **ON**, **CH**, **CC**, and **DESTINATION**. Press **EDIT** on **CC** to learn a controller. On **DESTINATION**, press **EDIT** to open the category popup: choose **Song**, a track, or a named instrument on the left, then its parameter on the right. The next unassigned row reopens on the last selected destination, so consecutive CCs can be mapped without repeatedly navigating to the same instrument. This choice is session-local. It selects the target and parameter together, for example `Track 2: Mute` or `03 Bass: Cutoff`. **EDIT + Left/Right** cycles through the same choices without opening the popup. Choose **Unassigned** to clear a destination. Disabled rows retain their destination label. **PLAY** starts or stops the song from this screen.
 
   Use momentary buttons for **Song play/stop**, **Mute**, and **Solo**. Each press toggles playback or the selected track's mute/solo state; releasing the button leaves that state unchanged. Each transition from `0-63` to `64-127` counts as a press. A new mapping ignores the CC that learned/configured it and takes effect on the next physical movement, so setting up mappings during playback cannot reset a patch to zero.
+
+  During playback, hold **MOTION RECORD** to record incoming mapped CC changes as FX in each playing phrase using the mapped instrument, or in the mapped track for reverb and delay sends. The same three-slot and overflow rules as stick motion apply; repeated unchanged values are not written again. If a row is full, free an FX slot and send the CC value again to retry. CC changes continue to update the mapped project parameter. Only destinations with a corresponding absolute FX can be recorded: instrument and track volume, AY controls without absolute FX, and song/mute/solo controls cannot be captured. An unsupported continuous destination shows a message while recording. Some FX have coarser or narrower ranges than their instrument controls (for example aChChid decay); playback uses the nearest available FX value. **MOTION ERASE** removes matching mapped FX, including manually entered ones.
 - **Driving an external MIDI device**: give a track the [MIDI Out](#midi-out) instrument type and set its Channel; triggering notes on that track sends real MIDI to the selected MIDI Out device instead of making sound in ChooChooTracker.
 - **Send clock / Send transport**: in Settings > MIDI, select a **MIDI Out** device and enable either switch as needed. Both default to OFF and are remembered for this device. **Send clock** sends 24 pulses per quarter note during sequencer playback, following the internal tempo or the Ableton Link session. **Send transport** sends **Start** when playback begins and **Stop** when it ends; note and row previews do not start external gear. Each playback starts the receiver from its beginning; Continue and song-position pointers are not sent. Both outputs are suppressed while **Sync** is **MIDI** to prevent feedback; the switches retain their settings. Enable external MIDI sync on the receiving device.
 - **MIDI delay**: delay the outgoing notes, controllers, clock and transport together by `0–200 ms` to align an external synth with ChooChooTracker's audio output. Start at `0 ms`, then increase it if the external synth sounds early. Compare short attacks recorded together and fine-tune in `1 ms` steps; larger edits move by `10 ms`. The setting is saved. Switching between the console jack and a USB audio interface may require a different value.
@@ -2448,7 +2608,8 @@ respectively. The additions cover linked/periodic Sega noise, GB pitch sweeps,
 short percussion, metallic noise, drones and rises. These are original programs,
 not extracted game sounds.
 The page offers native mode/duty/width, envelope/sweep/noise controls as
-applicable, plus a software amplitude ADSR. These save in version-6 native files.
+applicable, plus a software amplitude ADSR. Retriggers and cuts are smoothed
+over 2 ms; the initial chip attack is unchanged. These save in version-6 native files.
 Automated ARM64 performance/audio checks pass within the reported workload
 limits; human listening remains pending.
 

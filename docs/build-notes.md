@@ -295,8 +295,11 @@ python3 -m unittest discover -s tracker/tests -p 'test_portmaster_*.py'
 The `PortMaster` GitHub Actions workflow produces the normal installable ZIP
 and a `choochootracker-portmaster-library` artifact. The latter contains
 `ports/choochootracker/`, `PR_BODY.md` and `provenance.json`. Metadata is moved
-to the Library source root; component/font licenses are flattened without
-changing their contents. All runtime assets are retained.
+to the Library source root; component/font notices are flattened without
+changing their contents or duplicating filename extensions. Preset source banks
+and conversion files are also placed under `sources/chip-banks/expansion`
+instead of being presented as license texts. The original `data.tar.gz` and
+all runtime assets and source material are retained.
 
 Publishing a GitHub release triggers preparation automatically. Its source
 is the release tag. The workflow replaces that release's versioned PortMaster
@@ -540,6 +543,21 @@ matching the application build's CRT math constants for the vendored SID core.
 If MSYS2 reports exit code 127 after `Built: build/tests/run_tests.exe`, run
 `build/tests/run_tests.exe` directly; the executable is the authoritative test
 result in that environment.
+
+The PortMaster SDL capture fallback has a separate Linux host check using SDL2
+development files and the GNU linker (from `tracker`):
+
+```sh
+g++ -std=c++17 -Wall -Wextra -DPORTMASTER_BUILD -Isrc/corelib \
+  $(pkg-config --cflags sdl2) tests/audio_input_sdl_check.cpp \
+  platforms/sdl2/corelib_audio.cpp \
+  -Wl,--wrap=SDL_GetAudioDeviceName,--wrap=SDL_GetCurrentAudioDriver,--wrap=SDL_OpenAudioDevice,--wrap=SDL_PauseAudioDevice,--wrap=SDL_CloseAudioDevice,--wrap=setenv,--wrap=unsetenv \
+  $(pkg-config --libs sdl2) -o build/tests/audio_input_sdl_check
+build/tests/audio_input_sdl_check
+```
+
+Create `build/tests` first if the main suite has not been built. This mocked
+check does not replace capture and playback validation on the handheld.
 
 ## Native chip instruments
 
