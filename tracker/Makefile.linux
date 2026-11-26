@@ -78,7 +78,10 @@ linux-package: linux
 # the same ones the plain tar.gz release's README tells users to
 # `apt install`); everything else (X11, ALSA, glibc...) resolves from the
 # host system, to avoid the ABI-mismatch risk of bundling core OS libraries.
-APPIMAGE_LIBS = /lib/x86_64-linux-gnu/libSDL2-2.0.so.0 /lib/x86_64-linux-gnu/libsamplerate.so.0
+SDL2_LIBDIR := $(shell pkg-config --variable=libdir sdl2)
+SAMPLERATE_LIBDIR := $(shell pkg-config --variable=libdir samplerate)
+
+APPIMAGE_LIBS = $(SDL2_LIBDIR)/libSDL2-2.0.so.0 $(SAMPLERATE_LIBDIR)/libsamplerate.so.0
 
 .PHONY: appimage
 appimage: linux
