@@ -17,6 +17,7 @@
     "tracker/packaging/portmaster/screenshot.png"
   ],
   "platforms": [
-    "tg5040"
+    "tg5040",
+    "h700"
   ]
 }

@@ -361,7 +361,7 @@ Focused checks, from the repository root with Python and Bash:
 python3 -m unittest discover -s tracker/tests -p 'test_portmaster_*.py'
 ```
 
-## NextUI Pak Store (TrimUI tg5040)
+## NextUI Pak Store (TrimUI tg5040 / Anbernic H700)
 
 The NextUI package reuses the same ARM64 executable as PortMaster:
 
@@ -372,7 +372,9 @@ make -j4 -f Makefile.portmaster NextUI-deploy \
 ```
 
 This writes `releases/ChooChooTracker.pak.zip`. Its files must be at the ZIP
-root; Pak Store extracts them into `Tools/tg5040/ChooChooTracker.pak`.
+root; Pak Store extracts them into `Tools/tg5040/ChooChooTracker.pak` on
+TrimUI or `Tools/h700/ChooChooTracker.pak` on Anbernic RG XX devices such as
+the RG34XX.
 Keep the root `pak.json` version equal to the GitHub release tag and validate
 the archive before upload:
 

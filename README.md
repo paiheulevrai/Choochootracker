@@ -94,11 +94,14 @@ and extract it into your device's `ports` directory.
 
 Tested on ArkOS, DarkOs, Knulli, amberElec, Anbernic and TrimUI devices, among others.
 
-### 🚂 TrimUI Brick / Smart Pro — NextUI
+### 🚂 NextUI — TrimUI Brick / Smart Pro and Anbernic RG XX
 
-ChooChooTracker is also distributed as a NextUI tool Pak for the `tg5040`
-platform. Install `ChooChooTracker.pak.zip` from Pak Store, or extract its
-contents into `Tools/tg5040/ChooChooTracker.pak` on the SD card.
+ChooChooTracker is also distributed as a NextUI tool Pak. Install
+`ChooChooTracker` from Pak Store, or extract its contents into the matching
+platform folder on the SD card:
+
+- TrimUI Brick / Smart Pro: `Tools/tg5040/ChooChooTracker.pak`
+- Anbernic RG XX (H700), including RG34XX: `Tools/h700/ChooChooTracker.pak`
 
 ### 🕹️ Miyoo Mini / Mini Plus
 
