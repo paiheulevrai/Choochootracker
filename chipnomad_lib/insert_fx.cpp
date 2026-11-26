@@ -146,7 +146,44 @@ static const InsertDescriptor descriptors[] = {
       {"Mid Freq", "Mid frequency", "Hz", 400, 8000, 137, M::exponential},
       {"Mid Gain", "Side mid gain", "dB", -12, 12, 128, M::bipolar},
       {"Side High", "Side high shelf", "dB", -12, 12, 128, M::bipolar},
-      {"Mix", "Dry / wet", "%", 0, 1, 255, M::linear}}}};
+      {"Mix", "Dry / wet", "%", 0, 1, 255, M::linear}}},
+    {"Clouds Reverb", 6,
+     {{"Time", "Time", "s", 0.2f, 0.98f, 128, M::linear},
+      {"Damp", "Damping", "%", 0, 1, 128, M::linear},
+      {"LP", "Low-pass", "Hz", 20, 20000, 220, M::exponential},
+      {"HP", "High-pass", "Hz", 20, 2000, 0, M::exponential},
+      {"Mix", "Mix", "%", 0, 1, 160, M::linear},
+      {"Duck Src", "Duck source", "", 0, 8, 0, M::discrete}}},
+    {"Beads Reverb", 5,
+     {{"Time", "Time", "%", 0, 1, 128, M::linear},
+      {"Tone", "Tone", "%", 0, 1, 192, M::linear},
+      {"HP", "High-pass", "Hz", 20, 2000, 0, M::exponential},
+      {"Mix", "Mix", "%", 0, 1, 160, M::linear},
+      {"Duck Src", "Duck source", "", 0, 8, 0, M::discrete}}},
+    {"Ping-Pong", 5,
+     {{"Ticks", "Delay time", "ticks", 1, 255, 12, M::discrete},
+      {"Feedback", "Feedback", "%", 0, 0.95f, 128, M::linear},
+      {"LP", "Low-pass", "Hz", 20, 20000, 220, M::exponential},
+      {"Mix", "Mix", "%", 0, 1, 160, M::linear},
+      {"Duck Src", "Duck source", "", 0, 8, 0, M::discrete}}},
+    {"Tape Echo", 8,
+     {{"Time", "Delay time", "ticks", 0, 6, 2, M::discrete},
+      {"Heads", "Heads", "", 0, 6, 6, M::discrete},
+      {"Feedback", "Feedback", "%", 0, 0.95f, 128, M::linear},
+      {"Tone", "Tone", "%", 0, 1, 128, M::linear},
+      {"Flutter", "Flutter", "%", 0, 1, 0, M::linear},
+      {"Spring", "Spring", "%", 0, 1, 0, M::linear},
+      {"Mix", "Mix", "%", 0, 1, 160, M::linear},
+      {"Duck Src", "Duck source", "", 0, 8, 0, M::discrete}}},
+    {"Diffusing Echoverb", 8,
+     {{"Ticks", "Time", "ticks", 1, 255, 12, M::discrete},
+      {"Feedback", "Feedback", "%", 0, 0.95f, 128, M::linear},
+      {"Diffuse", "Diffusion", "%", 0, 1, 160, M::linear},
+      {"Age", "Age", "%", 0, 1, 64, M::linear},
+      {"HP", "High-pass", "Hz", 20, 2000, 0, M::exponential},
+      {"LP", "Low-pass", "Hz", 20, 20000, 220, M::exponential},
+      {"Mix", "Mix", "%", 0, 1, 160, M::linear},
+      {"Duck Src", "Duck src", "", 0, 8, 0, M::discrete}}}};
 static_assert(sizeof(descriptors) / sizeof(descriptors[0]) == insertModuleCount,
               "Stable module catalogue");
 const InsertDescriptor& insertDescriptor(int m) {
@@ -165,8 +202,18 @@ bool insertParameterActive(int m, int p, int mode) {
 bool insertParameterModulatable(int m, int p, int mode) {
   return insertParameterActive(m, p, mode) && !(m == insertFormant && p == 0);
 }
+int insertDuckSourceParameter(int m) {
+  if (m == insertCompressor) return 5;
+  return insertSpatialModule(m) ? insertDescriptor(m).count - 1 : -1;
+}
+bool insertSpatialModule(int m) {
+  return m >= insertCloudsReverb && m <= insertDiffusingEchoverb;
+}
 uint8_t insertClamp(int m, int p, int v) {
-  return std::clamp(v, 0, insertParameterMaximum(m, p));
+  const auto& d = insertDescriptor(m);
+  const int minimum = p >= 0 && p < d.count && d.parameters[p].mapping == M::discrete
+    ? (int)d.parameters[p].minimum : 0;
+  return std::clamp(v, minimum, insertParameterMaximum(m, p));
 }
 float insertMap(int m, int p, int v) {
   const auto& d = insertDescriptor(m);
@@ -252,6 +299,19 @@ void insertDescribe(char* text, size_t size, int m, int p, int value) {
     snprintf(text, size, "%s", n[(int)v]);
   } else if (m == insertStereoWidth && p == 2 && value == 0) {
     snprintf(text, size, "Off");
+  } else if (insertSpatialModule(m) && p == insertDuckSourceParameter(m)) {
+    if (v == 0) snprintf(text, size, "OFF");
+    else snprintf(text, size, "Track %d", (int)v);
+  } else if (m == insertTapeEcho && (p == 0 || p == 1)) {
+    if (p == 0) {
+      static const int ticks[] = {6, 8, 12, 18, 24, 36, 48};
+      snprintf(text, size, "%d ticks", ticks[(int)v]);
+    } else {
+      static const char* names[] = {"H1", "H2", "H3", "H1+H2", "H1+H3", "H2+H3", "All"};
+      snprintf(text, size, "%s", names[(int)v]);
+    }
+  } else if ((m == insertPingPongDelay || m == insertDiffusingEchoverb) && p == 0) {
+    snprintf(text, size, "%d ticks", (int)v);
   } else if (m == insertRotary && p == 0) {
     // Keep neighboring very slow rates distinguishable in the edit hint.
     snprintf(text, size, "%.4g Hz", v);
@@ -419,6 +479,7 @@ struct InsertChain::Impl {
     float wet = 0;
     bool switching = false;
     BeadsPool::Handle beads;
+    SpatialInsertPool::Handle spatial, preparedSpatial;
     FormantFilter formant;
     WorkCompressor work;
     insert_dsp::Distortion distortion;
@@ -438,11 +499,16 @@ struct InsertChain::Impl {
     Biquad eq[2][3];
     int delayWrite = 0, holdCounter = 0;
     float toneCoefficient = 1;
+    float duckEnvelope = 0;
+    size_t tailFrames = 0;
     bool eqNeutral = true;
   } slots[2];
   float rate;
   float tickRate = 50;
-  explicit Impl(float sr) : rate(sr) {
+  float duckAttack, duckRelease;
+  explicit Impl(float sr) : rate(sr),
+    duckAttack(1.0f - expf(-1.0f / (0.005f * std::max(1.0f, sr)))),
+    duckRelease(1.0f - expf(-1.0f / (0.100f * std::max(1.0f, sr)))) {
     for (auto& s : slots) {
       s.ott[0] = ott_dsp_new(sr);
       s.ott[1] = ott_dsp_new(sr);
@@ -455,9 +521,19 @@ struct InsertChain::Impl {
   }
   void resetDSP(Slot& s, int m) {
     if (m != insertBeads) s.beads = {};
+    if (insertSpatialModule(m)) {
+      if (s.preparedSpatial) s.spatial = s.preparedSpatial;
+      else if (s.module != m) s.spatial = {};
+      s.preparedSpatial = {};
+      if (s.spatial) s.spatial->reset();
+    } else {
+      s.spatial = {};
+      s.preparedSpatial = {};
+    }
     s.module = m;
     s.pending = m;
     s.dirty = true;
+    s.tailFrames = 0;
     switch (m) {
       case insertFormant:
         s.formant.reset(rate);
@@ -499,6 +575,7 @@ struct InsertChain::Impl {
     s.gateFrames = 0;
     s.gateLevel = 0;
     s.delayWrite = s.holdCounter = 0;
+    s.duckEnvelope = 0.0f;
   }
   float readDelay(const Slot& s, int channel, float samples) const {
     samples = std::max(1.0f, std::min(samples, (float)delaySize - 2));
@@ -683,6 +760,13 @@ struct InsertChain::Impl {
           break;
         case insertBeads:
           if (s.beads) s.beads->process(l, r, n, p);
+          break;
+        case insertCloudsReverb:
+        case insertBeadsReverb:
+        case insertPingPongDelay:
+        case insertTapeEcho:
+        case insertDiffusingEchoverb:
+          if (s.spatial) s.spatial->process(l, r, n, p, tickRate);
           break;
         case insertCompressor:
           s.work.process(l, r, n, sidechain ? sidechain + offset : nullptr);
@@ -956,16 +1040,48 @@ struct InsertChain::Impl {
           break;
         }
       }
+      const bool spatial = insertSpatialModule(s.module);
+      const int mixParameter = spatial ? (s.module == insertCloudsReverb ? 4 :
+        (s.module == insertBeadsReverb || s.module == insertPingPongDelay) ? 3 : 6) : 0;
+      const int duckParameter = spatial ? insertDuckSourceParameter(s.module) : 0;
+      const float mix = spatial ? p[mixParameter] : 0.0f;
+      bool spatialSignal = false;
       for (int i = 0; i < n; ++i) {
+        float duck = 1.0f;
+        if (spatial) {
+          const float detector = values[duckParameter] && sidechain
+            ? fabsf(sidechain[offset + i]) : 0.0f;
+          s.duckEnvelope += (detector > s.duckEnvelope ? duckAttack : duckRelease) *
+            (detector - s.duckEnvelope);
+          duck = 1.0f / (1.0f + 4.0f * s.duckEnvelope);
+        }
         s.wet = target > s.wet ? std::min(target, s.wet + increment)
                                : std::max(target, s.wet - increment);
         for (int c = 0; c < 2; ++c) {
           float v = c ? r[i] : l[i];
+          if (spatial) {
+            const float dry = data[2 * (offset + i) + c];
+            spatialSignal |= fabsf(dry) > 0.000001f || fabsf(v) > 0.000001f;
+            v = s.spatial ? dry + mix * (v * duck - dry) : dry;
+          }
           if (!std::isfinite(v)) v = 0;
           v = std::max(-32.0f, std::min(32.0f, v));
           float& dry = data[2 * (offset + i) + c];
           dry += s.wet * (v - dry);
         }
+      }
+      if (spatial && s.spatial) {
+        float horizon = rate;
+        if (s.module == insertPingPongDelay || s.module == insertDiffusingEchoverb)
+          horizon = std::min(rate * 8.0f, rate * p[0] / tickRate) +
+            (s.module == insertDiffusingEchoverb ? rate * 2.0f : 0.0f);
+        else if (s.module == insertTapeEcho) {
+          static constexpr int ticks[] = {6, 8, 12, 18, 24, 36, 48};
+          horizon = std::min(rate * 8.0f, rate * ticks[(int)p[0]] * 3.0f / tickRate);
+          horizon = std::max(horizon, rate * 0.05f);
+        }
+        if (spatialSignal) s.tailFrames = (size_t)horizon + n;
+        else s.tailFrames = s.tailFrames > (size_t)n ? s.tailFrames - n : 0;
       }
       offset += n;
     }
@@ -980,9 +1096,13 @@ bool InsertChain::ready() const {
 void InsertChain::attachBeads(int slot, const BeadsPool::Handle& beads) {
   if (impl_ && slot >= 0 && slot < 2) impl_->slots[slot].beads = beads;
 }
-void InsertChain::reset() {
+void InsertChain::attachSpatial(int slot, const SpatialInsertPool::Handle& spatial) {
+  if (impl_ && slot >= 0 && slot < 2) impl_->slots[slot].preparedSpatial = spatial;
+}
+void InsertChain::reset(bool preserveSpatialTails) {
   if (!ready()) return;
   for (auto& s : impl_->slots) {
+    if (preserveSpatialTails && insertSpatialModule(s.module) && s.spatial) continue;
     impl_->resetDSP(s, s.config.module);
     s.wet = 0;
     s.switching = false;
@@ -1006,6 +1126,10 @@ uint16_t InsertChain::sync(const InsertConfig c[2], InsertAutomation* a, bool re
     // Muted/hidden tracks do not run process(), so a removed instance cannot
     // wait for a fade there. Keep selected/bypassed Beads and its history intact.
     if (c[slot].module != insertBeads && (!rendered || s.wet == 0)) s.beads = {};
+    if (!insertSpatialModule(c[slot].module) && (!rendered || s.wet == 0))
+      s.preparedSpatial = {};
+    if (c[slot].module != s.module && (!rendered || s.wet == 0))
+      s.spatial = {};
     if (c[slot].module != s.config.module || c[slot].selection != s.config.selection) {
       a->valid[slot] = 0;
       cleared |= 0xffu << (slot * 8);
@@ -1025,6 +1149,13 @@ bool InsertChain::active() const {
   if (!ready()) return false;
   for (auto& s : impl_->slots)
     if (s.config.module || s.module || s.switching) return true;
+  return false;
+}
+bool InsertChain::tailActive() const {
+  if (!ready()) return false;
+  for (const auto& s : impl_->slots)
+    if (!s.config.bypass && s.spatial && s.tailFrames &&
+        s.previous[insertDescriptor(s.module).count - 2]) return true;
   return false;
 }
 void InsertChain::process(float* data, int frames, const uint8_t v[2][8], const float* sidechain[2],

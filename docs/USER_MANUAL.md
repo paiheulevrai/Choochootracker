@@ -2399,6 +2399,15 @@ the current screen.
 | Destruction | Crush, Rate, Fold, Distort, Saturate, Tone, Mix, Input |
 | Beads | Time, Size, Density, Pitch, Scatter, Feedback, Shape / Freeze, Mix |
 | FORMANT | Mode, Vowel, First formant, Second formant, Resonance, Mix |
+| Clouds Reverb | Time, Damping, LP, HP, Mix, Duck Src |
+| Beads Reverb | Time, Tone, HP, Mix, Duck Src |
+| Ping-Pong Delay | Ticks, Feedback, LP, Mix, Duck Src |
+| Tape Echo | Time, Heads, Feedback, Tone, Flutter, Spring, Mix, Duck Src |
+| Diffusing Echoverb | Ticks, Feedback, Diffuse, Age, HP, LP, Mix, Duck Src |
+
+The insert names deliberately include “Reverb”: **Clouds Reverb** and
+**Beads Reverb** are reverb-only effects, distinct from the granular Clouds and
+Beads effects.
 
 Continuous controls use 00–FF, except FORMANT VOW (00–7F). Bipolar
 controls have an exact neutral at 80. Distortion modes are 00 Density, 01 Drive,
@@ -2447,6 +2456,20 @@ without conversion. Its old parameters are reinterpreted, so an old project
 can sound different or dry until Mix and the stages are edited.
 Saturation and distortion include output level or mix controls for balancing them
 against the unprocessed signal.
+
+The five spatial inserts are separate effects from the existing global reverb
+and delay sends; they can be used together or repeated in either serial slot.
+Each track and slot has its own effect instance and history.
+Ping-Pong and Diffusing Echoverb use tracker ticks for delay time. Tape Echo's
+Time selects 6, 8, 12, 18, 24, 36 or 48 ticks, and Heads selects one, two or all
+three repeats. Each Mix blends its wet result with the original signal.
+**Duck Src** defaults to **OFF**; choose track 1–8 to make that track's
+pre-insert signal duck only the insert's wet output. The shared curve has a
+5 ms attack and 100 ms release; stereo detection uses the louder channel.
+A silent or unavailable source releases the ducking;
+the dry signal and delay feedback remain unchanged. The same modules and
+controls are available in the two master insert slots. Existing global sends,
+returns and their routing are unchanged.
 
 Track level and tilt EQ precede the inserts, so both affect the signal entering
 compression and distortion. All voices/chord notes on the track feed one insert

@@ -42,6 +42,7 @@
 #include <initializer_list>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <new>
 #include <limits.h>
 #include <stdlib.h>
@@ -164,6 +165,7 @@ class AudioCommandQueue {
     int old = projectPublished_.exchange(-1, std::memory_order_acq_rel);
     if (old >= 0) releaseProject(old);
     beadsPool_.collect();
+    spatialInsertPool_.collect();
     vocoderPool_.collect();
   }
 
@@ -176,6 +178,7 @@ class AudioCommandQueue {
     projectSlots_[slot].state.store(kReading, std::memory_order_relaxed);
     auto& snapshot = projectSlots_[slot].value;
     attachBeads(state, snapshot);
+    attachSpatial(state, snapshot);
     attachVocoders(state, snapshot.vocoders);
     auto refreshModulations = [&](PlaybackTrackState& track) {
       if (track.note.instrument >= PROJECT_MAX_INSTRUMENTS) return;
@@ -203,6 +206,7 @@ class AudioCommandQueue {
     state->audioProject = snapshot.project;
     state->playbackState.blends = &snapshot.blends;
     for (auto& handle : snapshot.beads) handle = {};
+    for (auto& handle : snapshot.spatial) handle = {};
     for (auto& handle : snapshot.vocoders) handle = {};
     if (activeProjectSlot_ >= 0)
       projectSlots_[activeProjectSlot_].state.store(kFree, std::memory_order_release);
@@ -221,15 +225,20 @@ class AudioCommandQueue {
     beadsSampleRate_ = (float)state->sampleRate;
     for (auto& handle : activeVocoders_) handle = {};
     vocoderPool_.collect();
+    spatialInsertPool_.collect();
     BeadsPool::Handle handles[BeadsPool::capacity];
     prepareBeads(state->audioProject, handles);
     attachBeads(state, state->audioProject, handles);
+    SpatialInsertPool::Handle spatial[SpatialInsertPool::slots];
+    if (!prepareSpatial(state->audioProject, spatial))
+      std::fprintf(stderr, "Unable to initialize all spatial inserts\n");
+    attachSpatial(state, state->audioProject, spatial);
     VocoderPool::Handle vocoders[VOICE_OWNER_COUNT * 4];
     prepareVocoders(state->audioProject, vocoders);
     attachVocoders(state, vocoders);
   }
 
-  void collectBeads() { beadsPool_.collect(); vocoderPool_.collect(); }
+  void collectBeads() { beadsPool_.collect(); spatialInsertPool_.collect(); vocoderPool_.collect(); }
 
   int pushTrackEnabled(const uint8_t enabled[PROJECT_MAX_TRACKS]) {
     uint64_t mask = 0;
@@ -497,6 +506,7 @@ class AudioCommandQueue {
     Project project;
     PreparedBlends blends;
     BeadsPool::Handle beads[BeadsPool::capacity];
+    SpatialInsertPool::Handle spatial[SpatialInsertPool::slots];
     VocoderPool::Handle vocoders[VOICE_OWNER_COUNT * 4];
   };
   struct AudioCommand { uint8_t type; int a, b, c, d; uint64_t timestamp; PhraseRow row; InstrumentOPLL patch; InstrumentOPL opl; InstrumentSimpleChip simple; InstrumentDX7 dx7; InstrumentFourOp fourOp; InstrumentSID sid; InstrumentMonk monk; };
@@ -538,15 +548,29 @@ class AudioCommandQueue {
   }
   int publishProject(const Project& project) {
     int slot = findFree(projectSlots_);
-    if (slot < 0) return 0;
+    if (slot < 0) {
+      int superseded = projectPublished_.exchange(-1, std::memory_order_acq_rel);
+      if (superseded >= 0) releaseProject(superseded);
+      slot = findFree(projectSlots_);
+      if (slot < 0) return 0;
+    }
     projectSlots_[slot].value.project = project;
     projectSlots_[slot].value.blends.prepare(project);
     prepareBeads(project, projectSlots_[slot].value.beads);
+    if (!prepareSpatial(project, projectSlots_[slot].value.spatial)) {
+      for (auto& handle : projectSlots_[slot].value.beads) handle = {};
+      for (auto& handle : projectSlots_[slot].value.spatial) handle = {};
+      projectSlots_[slot].state.store(kFree, std::memory_order_release);
+      spatialInsertPool_.collect();
+      beadsPool_.collect();
+      return 0;
+    }
     prepareVocoders(project, projectSlots_[slot].value.vocoders);
     projectSlots_[slot].state.store(kPublished, std::memory_order_release);
     int old = projectPublished_.exchange(slot, std::memory_order_acq_rel);
     if (old >= 0) releaseProject(old);
     beadsPool_.collect();
+    spatialInsertPool_.collect();
     vocoderPool_.collect();
     return 1;
   }
@@ -554,6 +578,7 @@ class AudioCommandQueue {
     int expected = kPublished;
     if (projectSlots_[slot].state.compare_exchange_strong(expected, kReading, std::memory_order_acq_rel)) {
       for (auto& handle : projectSlots_[slot].value.beads) handle = {};
+      for (auto& handle : projectSlots_[slot].value.spatial) handle = {};
       for (auto& handle : projectSlots_[slot].value.vocoders) handle = {};
       projectSlots_[slot].state.store(kFree, std::memory_order_release);
     }
@@ -608,6 +633,20 @@ class AudioCommandQueue {
       }
     }
   }
+  bool prepareSpatial(const Project& project, SpatialInsertPool::Handle* handles) {
+    for (int chain = 0; chain <= PROJECT_MAX_TRACKS; ++chain) {
+      const auto* config = chain == PROJECT_MAX_TRACKS ? project.masterInserts : project.trackInserts[chain];
+      for (int slot = 0; slot < 2; ++slot) {
+        const int index = chain * 2 + slot;
+        handles[index] = insertSpatialModule(config[slot].module) && beadsSampleRate_ > 0
+          ? spatialInsertPool_.prepare(index, config[slot].module, beadsSampleRate_)
+          : SpatialInsertPool::Handle{};
+        if (insertSpatialModule(config[slot].module) && beadsSampleRate_ > 0 && !handles[index])
+          return false;
+      }
+    }
+    return true;
+  }
   static void attachBeads(ChipNomadState* state, const Project& project, const BeadsPool::Handle* handles) {
     for (int chain = 0; chain <= PROJECT_MAX_TRACKS; ++chain) {
       auto* target = chain == PROJECT_MAX_TRACKS ? state->masterInsertChain : state->insertChains[chain];
@@ -619,8 +658,22 @@ class AudioCommandQueue {
       }
     }
   }
+  static void attachSpatial(ChipNomadState* state, const Project& project,
+                            const SpatialInsertPool::Handle* handles) {
+    for (int chain = 0; chain <= PROJECT_MAX_TRACKS; ++chain) {
+      auto* target = chain == PROJECT_MAX_TRACKS ? state->masterInsertChain : state->insertChains[chain];
+      const auto* config = chain == PROJECT_MAX_TRACKS ? project.masterInserts : project.trackInserts[chain];
+      if (!target) continue;
+      for (int slot = 0; slot < 2; ++slot)
+        if (insertSpatialModule(config[slot].module))
+          target->attachSpatial(slot, handles[chain * 2 + slot]);
+    }
+  }
   static void attachBeads(ChipNomadState* state, const ProjectSnapshot& snapshot) {
     attachBeads(state, snapshot.project, snapshot.beads);
+  }
+  static void attachSpatial(ChipNomadState* state, const ProjectSnapshot& snapshot) {
+    attachSpatial(state, snapshot.project, snapshot.spatial);
   }
   int publishSettings() {
     int old = settingsPublished_.exchange(-1, std::memory_order_acq_rel);
@@ -634,6 +687,7 @@ class AudioCommandQueue {
   }
   // Declared before snapshots so handles are destroyed before their pool.
   BeadsPool beadsPool_;
+  SpatialInsertPool spatialInsertPool_;
   VocoderPool vocoderPool_;
   VocoderPool::Handle activeVocoders_[VOICE_OWNER_COUNT * 4];
   float beadsSampleRate_ = 0;
@@ -882,7 +936,7 @@ static int resizeMixBuffers(ChipNomadState* state, int requiredSize) {
   float* insertBuffer = (float*)malloc((size_t)requiredSize * PROJECT_MAX_TRACKS * sizeof(float));
   float* audioInputTrackCurrent = (float*)calloc((size_t)requiredSize * PROJECT_MAX_TRACKS, sizeof(float));
   float* audioInputTrackPrevious = (float*)calloc((size_t)requiredSize * PROJECT_MAX_TRACKS, sizeof(float));
-  float* sidechainBuffer = (float*)malloc((size_t)(requiredSize / 2) * PROJECT_MAX_TRACKS * sizeof(float));
+  float* sidechainBuffer = (float*)malloc((size_t)requiredSize * PROJECT_MAX_TRACKS * sizeof(float));
   if (!mixBuffer || !reverbBuffer || !delayBuffer || !insertBuffer || !audioInputTrackCurrent || !audioInputTrackPrevious || !sidechainBuffer) {
     free(sidechainBuffer);
     free(audioInputTrackPrevious);
@@ -1333,7 +1387,7 @@ ChipNomadState* chipnomadCreate(void) {
   state->insertBuffer = (float*)malloc((size_t)state->mixBufferSize * PROJECT_MAX_TRACKS * sizeof(float));
   state->audioInputTrackCurrent = (float*)calloc((size_t)state->mixBufferSize * PROJECT_MAX_TRACKS, sizeof(float));
   state->audioInputTrackPrevious = (float*)calloc((size_t)state->mixBufferSize * PROJECT_MAX_TRACKS, sizeof(float));
-  state->sidechainBuffer = (float*)malloc((size_t)(state->mixBufferSize / 2) * PROJECT_MAX_TRACKS * sizeof(float));
+  state->sidechainBuffer = (float*)malloc((size_t)state->mixBufferSize * PROJECT_MAX_TRACKS * sizeof(float));
   if (!state->mixBuffer || !state->reverbBuffer || !state->delayBuffer || !state->insertBuffer || !state->audioInputTrackCurrent || !state->audioInputTrackPrevious || !state->sidechainBuffer) {
     free(state->sidechainBuffer);
     free(state->audioInputTrackPrevious);
@@ -2098,7 +2152,8 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   for (int t = 0; t < PROJECT_MAX_TRACKS; ++t) {
     auto& track = state->playbackState.tracks[t];
     if (track.insertReset != state->insertResetSeen[t]) {
-      if (state->insertChains[t]) state->insertChains[t]->reset();
+      if (state->insertChains[t])
+        state->insertChains[t]->reset(wasPlaying && !playbackIsPlaying(&state->playbackState));
       state->insertResetSeen[t] = track.insertReset;
     }
   }
@@ -2166,7 +2221,12 @@ static int advancePlaybackFrame(ChipNomadState* state, uint64_t dueMicros) {
   state->audioCommands->publishStatus(&state->playbackState, state->linkPhaseTicks, dueMicros);
   if (playbackIsPlaying(&state->playbackState) && state->opllPreviewTrack >= 0)
     stopStandalonePreview(state);
-  return allTracksStopped && state->opllPreviewTrack < 0 && !state->masterEffects->tailActive();
+  bool insertTail = state->masterInsertChain && state->masterInsertChain->tailActive();
+  for (int t = 0; t < state->audioProject.tracksCount; ++t)
+    if (trackNeedsRender(state, t) && state->insertChains[t] && state->insertChains[t]->tailActive())
+      insertTail = true;
+  return allTracksStopped && state->opllPreviewTrack < 0 &&
+    !state->masterEffects->tailActive() && !insertTail;
 }
 
 static void activeEffectBuses(ChipNomadState* state, bool* reverb, bool* delay) {
@@ -2193,21 +2253,31 @@ static int prepareRenderChunk(ChipNomadState* state, float* output, int frames,
       memset(state->audioInputTrackCurrent + (size_t)t * state->mixBufferSize, 0,
         (size_t)requiredSize * sizeof(float));
   state->sidechainSourceMask = 0;
+  state->spatialSidechainSourceMask = 0;
   state->masterSidechainExcludeMask = 0;
   for (int t = 0; t < state->audioProject.tracksCount; ++t)
-    for (int slot = 0; slot < 2; ++slot)
-      if (state->audioProject.trackInserts[t][slot].module == insertCompressor) {
-        int source = state->insertValues[t][slot][5] - 3;
-        if (source >= 0 && source < state->audioProject.tracksCount)
+    for (int slot = 0; slot < 2; ++slot) {
+      const auto& c = state->audioProject.trackInserts[t][slot];
+      const int parameter = insertDuckSourceParameter(c.module);
+      if (parameter >= 0) {
+        const int source = state->insertValues[t][slot][parameter] -
+          (c.module == insertCompressor ? 3 : 1);
+        if (source >= 0 && source < state->audioProject.tracksCount) {
           state->sidechainSourceMask |= 1u << source;
+          if (insertSpatialModule(c.module)) state->spatialSidechainSourceMask |= 1u << source;
+        }
       }
+    }
   for (int slot = 0; slot < 2; ++slot) {
     const auto& c = state->audioProject.masterInserts[slot];
-    if (c.module != insertCompressor) continue;
-    int source = c.values[5] - 3;
+    const int parameter = insertDuckSourceParameter(c.module);
+    if (parameter < 0) continue;
+    const int source = c.values[parameter] - (c.module == insertCompressor ? 3 : 1);
     if (source < 0 || source >= state->audioProject.tracksCount) continue;
     state->sidechainSourceMask |= 1u << source;
-    if (!c.bypass && c.values[7]) state->masterSidechainExcludeMask |= 1u << source;
+    if (insertSpatialModule(c.module)) state->spatialSidechainSourceMask |= 1u << source;
+    if (c.module == insertCompressor && !c.bypass && c.values[7])
+      state->masterSidechainExcludeMask |= 1u << source;
   }
   for (int t = 0; t < state->audioProject.tracksCount; ++t)
     if (!state->insertChains[t]) {
@@ -2243,11 +2313,17 @@ static int prepareRenderChunk(ChipNomadState* state, float* output, int frames,
   return 1;
 }
 
-static const float* sidechainFor(ChipNomadState* state, int detect) {
-  int source = detect - 3;
+static int sidechainTrack(int module, const uint8_t values[8]) {
+  const int parameter = insertDuckSourceParameter(module);
+  return parameter < 0 ? -1 : values[parameter] - (module == insertCompressor ? 3 : 1);
+}
+static const float* sidechainFor(ChipNomadState* state, int module, const uint8_t values[8]) {
+  const int source = sidechainTrack(module, values);
   return source >= 0 && source < state->audioProject.tracksCount &&
          (state->sidechainSourceMask & (1u << source))
-    ? state->sidechainBuffer + (size_t)source * (state->mixBufferSize / 2) : nullptr;
+    ? state->sidechainBuffer + (size_t)(source +
+        (insertSpatialModule(module) ? PROJECT_MAX_TRACKS : 0)) * (state->mixBufferSize / 2)
+    : nullptr;
 }
 
 static void processTrackFilters(ChipNomadState* state, int frames) {
@@ -2275,10 +2351,15 @@ static void captureSidechains(ChipNomadState* state, int frames) {
     if (!(state->sidechainSourceMask & (1u << t))) continue;
     const float* source = state->insertBuffer + (size_t)t * state->mixBufferSize;
     float* detector = state->sidechainBuffer + (size_t)t * (state->mixBufferSize / 2);
+    float* spatial = state->spatialSidechainSourceMask & (1u << t)
+      ? state->sidechainBuffer + (size_t)(PROJECT_MAX_TRACKS + t) * (state->mixBufferSize / 2)
+      : nullptr;
     for (int i = 0; i < frames; ++i) {
       float left = source[i * 2], right = source[i * 2 + 1];
-      detector[i] = (std::isfinite(left) ? left : 0.0f) * 0.5f +
-                    (std::isfinite(right) ? right : 0.0f) * 0.5f;
+      left = std::isfinite(left) ? left : 0.0f;
+      right = std::isfinite(right) ? right : 0.0f;
+      detector[i] = left * 0.5f + right * 0.5f;
+      if (spatial) spatial[i] = std::max(fabsf(left), fabsf(right));
     }
   }
 }
@@ -2419,8 +2500,8 @@ static void processTrackMix(ChipNomadState* state, float* output, int frames) {
     float* samples = state->insertBuffer + (size_t)t * state->mixBufferSize;
     if (state->insertActive[t]) {
       const float* sidechain[2] = {
-        sidechainFor(state, state->insertValues[t][0][5]),
-        sidechainFor(state, state->insertValues[t][1][5])
+        sidechainFor(state, state->audioProject.trackInserts[t][0].module, state->insertValues[t][0]),
+        sidechainFor(state, state->audioProject.trackInserts[t][1].module, state->insertValues[t][1])
       };
       state->insertChains[t]->process(samples, frames, state->insertValues[t], sidechain, state->audioProject.ayWavetables);
     }
@@ -2457,7 +2538,8 @@ static void processMasterMix(ChipNomadState* state, float* output, int frames,
     uint8_t values[2][8];
     for (int slot = 0; slot < 2; ++slot) memcpy(values[slot], state->audioProject.masterInserts[slot].values, 8);
     const float* sidechain[2] = {
-      sidechainFor(state, values[0][5]), sidechainFor(state, values[1][5])
+      sidechainFor(state, state->audioProject.masterInserts[0].module, values[0]),
+      sidechainFor(state, state->audioProject.masterInserts[1].module, values[1])
     };
     state->masterInsertChain->process(output, frames, values, sidechain, state->audioProject.ayWavetables);
   }

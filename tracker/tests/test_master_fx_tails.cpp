@@ -11,7 +11,7 @@
 // only send into the effect is the per-note FX on the first note.
 using State = std::unique_ptr<ChipNomadState, decltype(&chipnomadDestroy)>;
 
-static State startTwoNotes(FX sendFX, bool withSend) {
+static State startTwoNotes(FX sendFX, bool withSend, int insertModule = insertOff, bool master = false) {
   State s(chipnomadCreate(), chipnomadDestroy);
   REQUIRE(projectLoad(&s->project, "packaging/common/projects/gm-midi-demo.cct") == 0);
   Project& p = s->project;
@@ -27,6 +27,13 @@ static State startTwoNotes(FX sendFX, bool withSend) {
   p.delayReturn = 100;
   p.delayFeedback = 70;
   p.delayTicks = 3;
+  if (insertModule != insertOff) {
+    InsertConfig& insert = master ? p.masterInserts[0] : p.trackInserts[0][0];
+    insertSelect(&insert, insertModule);
+    insertEdit(&insert, insertDescriptor(insertModule).count - 2, 255);
+    if (insertModule == insertPingPongDelay || insertModule == insertDiffusingEchoverb)
+      insertEdit(&insert, 0, 1);
+  }
   p.song[0][0] = 0;
   p.chains[0].rows[0].phrase = 0;
   p.chains[0].rows[0].transpose = 0;
@@ -100,5 +107,29 @@ TEST_CASE("Effect tails ring out after stop, then the effects switch off") {
     CHECK(tailFrames > 48000 / 5);       // the tail rang on after the stop
     CHECK(tailFrames < 48000 * 60);      // and then the effects switched off
     CHECK_FALSE(s->masterEffects->tailActive());
+  }
+}
+
+TEST_CASE("Spatial insert tails survive stop on tracks and master") {
+  const int modules[] = {insertCloudsReverb, insertBeadsReverb, insertPingPongDelay,
+                         insertTapeEcho, insertDiffusingEchoverb};
+  for (int module : modules) {
+    for (bool master : {false, true}) {
+      INFO("module ", module, " master ", master);
+      State s = startTwoNotes(fxRSN, false, module, master);
+      float block[1024];
+      for (int i = 0; i < 30; ++i) REQUIRE(chipnomadRender(s.get(), block, 512) == 512);
+      chipnomadQueuePlaybackStop(s.get());
+      int total = 0, rendered;
+      double energy = 0.0;
+      do {
+        rendered = chipnomadRender(s.get(), block, 512);
+        for (int i = 0; i < rendered * 2; ++i) energy += block[i] * block[i];
+        total += rendered;
+      } while (rendered && total < 48000 * 30);
+      CHECK(total > 4800);
+      CHECK(total < 48000 * 30);
+      CHECK(energy > 0.000001);
+    }
   }
 }

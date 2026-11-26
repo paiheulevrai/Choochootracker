@@ -1,9 +1,99 @@
 #include "doctest.h"
 #include "project.h"
+#include "spatial_insert_pool.h"
 #include "synth/master_effects.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
+
+TEST_CASE("spatial DSP matches the corresponding global effect") {
+  const int modules[] = {insertCloudsReverb, insertBeadsReverb, insertPingPongDelay,
+                         insertTapeEcho, insertDiffusingEchoverb};
+  for (int module : modules) {
+    INFO("module ", module);
+    Project project;
+    projectInit(&project);
+    project.perceptualEffects = 0;
+    project.tickRate = 100.0f;
+    project.reverbReturn = project.delayReturn = 100;
+    project.delayReverbSend = 0;
+    project.reverbAlgorithm = module == insertBeadsReverb ? 1 : 0;
+    project.reverbTime = project.beadsReverbTime = 128;
+    project.reverbDamping = project.beadsReverbTone = 150;
+    project.reverbFilterCutoffHz = project.delayFilterCutoffHz = 3000;
+    project.reverbHighpassCutoffHz = project.beadsReverbHighpassCutoffHz =
+      project.echoHighpassCutoffHz = 100;
+    project.delayAlgorithm = module == insertTapeEcho ? 1 :
+      module == insertDiffusingEchoverb ? 2 : 0;
+    project.delayTicks = 2;
+    project.delayFeedback = 50;
+    project.tapeDivision = 0;
+    project.tapeHeads = 3;
+    project.tapeTone = 150;
+    project.tapeFlutter = 20;
+    project.tapeSpring = 30;
+    project.echoDiffuse = 80;
+    project.echoAge = 30;
+    MasterEffects effects{};
+    effects.init(8000.0f);
+    SpatialInsertPool pool;
+    auto insert = pool.prepare(0, module, 8000.0f);
+    REQUIRE(insert);
+    for (int block = 0; block < 100; ++block) {
+      if (block == 40) {
+        project.tickRate = 123.0f;
+        project.echoDiffuse = 220;
+        project.echoAge = 180;
+      }
+      float parameters[8]{};
+      if (module == insertCloudsReverb) {
+        parameters[0] = 0.2f + 0.78f * project.reverbTime / 255.0f;
+        parameters[1] = project.reverbDamping / 255.0f;
+        parameters[2] = project.reverbFilterCutoffHz;
+        parameters[3] = project.reverbHighpassCutoffHz;
+      } else if (module == insertBeadsReverb) {
+        parameters[0] = project.beadsReverbTime / 255.0f;
+        parameters[1] = project.beadsReverbTone / 255.0f;
+        parameters[2] = project.beadsReverbHighpassCutoffHz;
+      } else if (module == insertPingPongDelay) {
+        parameters[0] = project.delayTicks;
+        parameters[1] = project.delayFeedback / 100.0f;
+        parameters[2] = project.delayFilterCutoffHz;
+      } else if (module == insertTapeEcho) {
+        parameters[0] = project.tapeDivision;
+        parameters[1] = project.tapeHeads;
+        parameters[2] = project.delayFeedback / 100.0f;
+        parameters[3] = project.tapeTone / 255.0f;
+        parameters[4] = project.tapeFlutter / 100.0f;
+        parameters[5] = project.tapeSpring / 100.0f;
+      } else {
+        parameters[0] = project.delayTicks;
+        parameters[1] = project.delayFeedback / 100.0f;
+        parameters[2] = project.echoDiffuse / 255.0f;
+        parameters[3] = project.echoAge / 255.0f;
+        parameters[4] = project.echoHighpassCutoffHz;
+        parameters[5] = project.delayFilterCutoffHz;
+      }
+      float left[128], right[128], bus[256], expected[256]{};
+      for (int i = 0; i < 128; ++i) {
+        const int position = block * 128 + i;
+        left[i] = bus[i * 2] = position < 3000 ? 0.2f * sinf(position * 0.13f) : 0.0f;
+        right[i] = bus[i * 2 + 1] = position < 3000 ? 0.1f * cosf(position * 0.19f) : 0.0f;
+      }
+      const bool reverb = module == insertCloudsReverb || module == insertBeadsReverb;
+      effects.process(reverb ? bus : nullptr, reverb ? nullptr : bus, expected, 128, &project);
+      insert->process(left, right, 128, parameters, project.tickRate);
+      float maximumError = 0.0f;
+      for (int i = 0; i < 128; ++i) {
+        maximumError = std::max(maximumError, std::abs(left[i] - expected[i * 2]));
+        maximumError = std::max(maximumError, std::abs(right[i] - expected[i * 2 + 1]));
+      }
+      INFO("block ", block);
+      CHECK(maximumError < 1.0e-5f);
+    }
+  }
+}
 
 TEST_CASE("Ping-pong delay follows the project tick duration") {
   MasterEffects* effects = new MasterEffects();
@@ -25,6 +115,49 @@ TEST_CASE("Ping-pong delay follows the project tick duration") {
   CHECK(std::fabs(output[10 * 2]) > 0.1f);
   CHECK(std::fabs(output[20 * 2 + 1]) > 0.01f);
   delete effects;
+}
+
+TEST_CASE("spatial inserts leave the existing global send processors unchanged") {
+  Project sends;
+  projectInit(&sends);
+  sends.tickRate = 100.0f;
+  sends.reverbReturn = 100;
+  sends.reverbTime = 180;
+  sends.reverbDamping = 150;
+  sends.reverbFilterCutoffHz = 18000;
+  sends.reverbHighpassCutoffHz = 30;
+  sends.delayAlgorithm = 2;
+  sends.delayTicks = 1;
+  sends.delayFeedback = 55;
+  sends.delayReturn = 100;
+  sends.delayFilterCutoffHz = 18000;
+  sends.echoDiffuse = 160;
+  sends.echoAge = 80;
+  sends.echoHighpassCutoffHz = 30;
+  Project withInserts = sends;
+  const int modules[] = {insertCloudsReverb, insertBeadsReverb, insertPingPongDelay,
+                         insertTapeEcho, insertDiffusingEchoverb};
+
+  MasterEffects effects;
+  effects.init(1000.0f);
+  std::vector<float> reverbInput(512 * 2, 0.0f), delayInput(512 * 2, 0.0f);
+  reverbInput[0] = 0.5f;
+  delayInput[0] = 1.0f;
+  std::vector<float> expected(512 * 2, 0.0f);
+  effects.process(reverbInput.data(), delayInput.data(), expected.data(), 512, &sends);
+  for (int i = 0; i < 5; ++i) {
+    insertSelect(&withInserts.masterInserts[0], modules[i]);
+    insertSelect(&withInserts.masterInserts[1], modules[(i + 1) % 5]);
+    effects.reset();
+    auto reverb = std::vector<float>(512 * 2, 0.0f);
+    auto delay = std::vector<float>(512 * 2, 0.0f);
+    reverb[0] = 0.5f;
+    delay[0] = 1.0f;
+    std::vector<float> output(512 * 2, 0.0f);
+    effects.process(reverb.data(), delay.data(), output.data(), 512, &withInserts);
+    CHECK(std::equal(output.begin(), output.end(), expected.begin(),
+      [](float a, float b) { return std::abs(a - b) < 1.0e-5f; }));
+  }
 }
 
 TEST_CASE("Reverb high-pass removes low-frequency send energy") {
