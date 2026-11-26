@@ -312,12 +312,14 @@ its bundled presets, samples, fonts and other assets. Back up your projects
 before replacing an existing installation. The PortMaster Library submission
 and its review are separate from the downloadable GitHub release.
 
-### TrimUI Brick / Smart Pro (NextUI)
+### NextUI (TrimUI Brick / Smart Pro and Anbernic RG XX)
 
 Install **ChooChooTracker** from Pak Store's **Media** category, then start it
 from NextUI's Tools menu. For a manual installation, extract
-`ChooChooTracker.pak.zip` into `Tools/tg5040/ChooChooTracker.pak` on the SD
-card. Back up the Pak's `projects` folder before uninstalling it.
+`ChooChooTracker.pak.zip` into the matching platform folder on the SD card:
+`Tools/tg5040/ChooChooTracker.pak` for TrimUI Brick / Smart Pro, or
+`Tools/h700/ChooChooTracker.pak` for Anbernic RG XX devices such as the RG34XX.
+Back up the Pak's `projects` folder before uninstalling it.
 
 Use the console's D-pad to navigate, **A** to edit or confirm, **B** for
 options or back, **START** to play, and **SELECT** for selection. Controls
