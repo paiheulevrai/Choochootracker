@@ -8,12 +8,12 @@
 #include "app.h"
 #include "common.h"
 #include "startup_timing.h"
-#ifdef MACOS_BUILD
+#if defined(MACOS_BUILD) || defined(SNDSTATION_BUILD)
 #include "corelib_assets.h"
 #endif
 
 int main(int argv, char** args) {
-#ifdef MACOS_BUILD
+#if defined(MACOS_BUILD) || defined(SNDSTATION_BUILD)
   if (assetsInit() != 0) return 1;
 #endif
   { StartupTiming timing("settings"); settingsLoad(); }

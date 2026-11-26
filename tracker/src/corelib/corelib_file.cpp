@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
-#ifdef MACOS_BUILD
+#if defined(MACOS_BUILD) || defined(SNDSTATION_BUILD)
 #include <errno.h>
 #endif
 #ifdef _WIN32
@@ -139,6 +139,27 @@ int fileGetDefaultDirectory(char* buffer, int bufferSize) {
 #ifdef ANDROID_BUILD
   extern int androidGetWorkspacePath(char*, int);
   return androidGetWorkspacePath(buffer, bufferSize);
+#elif defined(SNDSTATION_BUILD)
+  const char* dataHome = getenv("XDG_DATA_HOME");
+  const char* home = getenv("HOME");
+  if (!buffer || bufferSize <= 0 ||
+      (dataHome && dataHome[0] && dataHome[0] != '/') ||
+      ((!dataHome || !dataHome[0]) && (!home || home[0] != '/'))) {
+    fprintf(stderr, "SNDStation workspace requires an absolute XDG_DATA_HOME or HOME\n");
+    return -1;
+  }
+  int length = dataHome && dataHome[0]
+    ? snprintf(buffer, bufferSize, "%s/ChooChooTracker", dataHome)
+    : snprintf(buffer, bufferSize, "%s/.local/share/ChooChooTracker", home);
+  if (length < 0 || length >= bufferSize) {
+    fprintf(stderr, "SNDStation workspace path is too long\n");
+    return -1;
+  }
+  if (fileCreateDirectoryRecursive(buffer) != 0 || access(buffer, W_OK | X_OK) != 0) {
+    fprintf(stderr, "Cannot access SNDStation workspace '%s': %s\n", buffer, strerror(errno));
+    return -1;
+  }
+  return 0;
 #elif defined(MACOS_BUILD)
   const char* home = getenv("HOME");
   if (!home || home[0] != '/' || !buffer || bufferSize <= 0) {

@@ -25,7 +25,7 @@ endif
 # information, but optimize the entire application for execution speed rather
 # than binary size; the DSP sources already use the same policy.
 PORTMASTER_CFLAGS = $(filter-out -Os,$(COMMON_CFLAGS)) -O3
-CFLAGS = $(PORTMASTER_CFLAGS) $(INCLUDES) $(SDL_CFLAGS) -DPORTMASTER_BUILD -D__LINUX_ALSASEQ__ -DGAMEPAD_SUPPORT -DTOUCH_INPUT \
+CFLAGS = $(PORTMASTER_CFLAGS) $(INCLUDES) $(SDL_CFLAGS) $(PLATFORM_CFLAGS) -DPORTMASTER_BUILD -D__LINUX_ALSASEQ__ -DGAMEPAD_SUPPORT -DTOUCH_INPUT \
 	-DLINK_PLATFORM_LINUX=1 -DASIO_STANDALONE=1 -DASIO_NO_TYPEID=1 -DASIO_VERSION_NAMESPACE=link_asio_1_38_2 -Wno-multichar
 TARGET = $(BUILD)/choochootracker.aarch64
 OUTPUT = -o $(TARGET)
@@ -35,7 +35,7 @@ OBJECTS := $(foreach source,$(SOURCES),$(call object_for,$(source)))
 DEPS := $(OBJECTS:.o=.d)
 
 define compile_source
-$(call object_for,$(1)): $(1) Makefile.portmaster Makefile.common Makefile.native-chip-flags
+$(call object_for,$(1)): $(1) Makefile.portmaster Makefile.common Makefile.native-chip-flags $(PLATFORM_MAKEFILE)
 	@mkdir -p $$(dir $$@)
 	@$(CXX) $(CFLAGS) $(call native_chip_opt_flags,$(1)) -MMD -MP -c $$< -o $$@
 endef

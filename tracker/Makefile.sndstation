@@ -1,0 +1,12 @@
+# Development build for SNDStation, using the existing ARM64 toolchain.
+override PLATFORM = sndstation
+PLATFORM_CFLAGS = -DSNDSTATION_BUILD
+PLATFORM_MAKEFILE = Makefile.sndstation
+.DEFAULT_GOAL := SNDStation
+include Makefile.portmaster
+
+.PHONY: SNDStation SNDStation-package-dev
+SNDStation: PortMaster
+
+SNDStation-package-dev: SNDStation
+	bash packaging/sndstation/package-dev.sh "$(TARGET)" "$(VERSION)"

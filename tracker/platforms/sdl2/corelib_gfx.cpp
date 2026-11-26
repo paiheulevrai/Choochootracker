@@ -12,6 +12,15 @@
 #include <math.h>
 #include <errno.h>
 
+#ifdef SNDSTATION_BUILD
+#include "sndstation_display.h"
+static int sndOutputW, sndOutputH;
+static SDL_Texture* sndPresentationTexture = NULL;
+static SDL_Texture* sndRotatedTexture = NULL;
+static uint32_t* sndRotationPixels = NULL;
+static bool sndRotationFailed = false;
+#endif
+
 #ifdef TOUCH_INPUT
 #include "button_icons.h"
 #endif
@@ -202,12 +211,46 @@ static int createCompositionTexture(void) {
   compositionH = logicalH;
   SDL_SetTextureBlendMode(compositionTexture, SDL_BLENDMODE_NONE);
   setTextureNearest(compositionTexture);
+#ifdef SNDSTATION_BUILD
+  sndPresentationTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+    SDL_TEXTUREACCESS_TARGET, logicalW, logicalH);
+  if (!sndPresentationTexture) {
+    destroyRenderTarget(compositionTexture);
+    return 0;
+  }
+  SDL_SetTextureBlendMode(sndPresentationTexture, SDL_BLENDMODE_NONE);
+  setTextureNearest(sndPresentationTexture);
+  if (!rendererUsesGpu && sndOutputW == 720 && sndOutputH == 1280 &&
+      logicalW == 640 && logicalH == 360) {
+    sndRotatedTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+      SDL_TEXTUREACCESS_STREAMING, logicalH, logicalW);
+    sndRotationPixels = (uint32_t*)malloc(logicalW * logicalH * sizeof(uint32_t));
+    if (!sndRotatedTexture || !sndRotationPixels) {
+      fprintf(stderr, "Cannot allocate SNDStation software rotation resources\n");
+      destroyRenderTarget(sndRotatedTexture);
+      free(sndRotationPixels);
+      sndRotationPixels = NULL;
+      destroyRenderTarget(sndPresentationTexture);
+      destroyRenderTarget(compositionTexture);
+      return 0;
+    }
+    SDL_SetTextureBlendMode(sndRotatedTexture, SDL_BLENDMODE_NONE);
+    setTextureNearest(sndRotatedTexture);
+  }
+#endif
   useCompositionTarget();
   return 1;
 #endif
 }
 
 static void destroyCompositionTexture(void) {
+#ifdef SNDSTATION_BUILD
+  destroyRenderTarget(sndRotatedTexture);
+  free(sndRotationPixels);
+  sndRotationPixels = NULL;
+  sndRotationFailed = false;
+  destroyRenderTarget(sndPresentationTexture);
+#endif
   destroyRenderTarget(compositionTexture);
   compositionW = compositionH = 0;
 }
@@ -651,7 +694,7 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
   // resolution saved on another device and query the display each time.
   bool detectDisplay = screenWidth == NULL || screenHeight == NULL ||
     *screenWidth == 0 || *screenHeight == 0;
-#ifdef MIYOOPORTS_BUILD
+#if defined(MIYOOPORTS_BUILD) || defined(SNDSTATION_BUILD)
   detectDisplay = true;
 #endif
   if (detectDisplay) {
@@ -712,10 +755,21 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
   rendererUsesGpu = 0;
 #endif
 #else
-  renderer = SDL_CreateRenderer(window, -1,
-    SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-  rendererUsesGpu = renderer != NULL && SDL_RenderTargetSupported(renderer);
-  if (!rendererUsesGpu && !createSoftwareRenderer()) renderer = NULL;
+#ifdef SNDSTATION_BUILD
+  const char* requestedRenderer = SDL_GetHint(SDL_HINT_RENDER_DRIVER);
+  if (requestedRenderer && strcmp(requestedRenderer, "software") == 0) {
+    if (!createSoftwareRenderer()) {
+      if (renderer) SDL_DestroyRenderer(renderer);
+      renderer = NULL;
+    }
+  } else
+#endif
+  {
+    renderer = SDL_CreateRenderer(window, -1,
+      SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    rendererUsesGpu = renderer != NULL && SDL_RenderTargetSupported(renderer);
+    if (!rendererUsesGpu && !createSoftwareRenderer()) renderer = NULL;
+  }
 #endif
   if (!renderer) {
     fprintf(stderr, "SDL2 Create Renderer Error: %s\n", SDL_GetError());
@@ -752,6 +806,18 @@ int gfxSetup(int *screenWidth, int *screenHeight) {
   // SDL scales it to the window while preserving its 4:3 aspect ratio.
   screenW = 640;
   screenH = 480;
+#endif
+#ifdef SNDSTATION_BUILD
+  if (SDL_GetRendererOutputSize(renderer, &sndOutputW, &sndOutputH) != 0 ||
+      sndOutputW <= 0 || sndOutputH <= 0) {
+    fprintf(stderr, "Cannot determine SNDStation display size: %s\n", SDL_GetError());
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return 1;
+  }
+  screenW = 640;
+  screenH = 360;
 #endif
   logicalW = screenW;
   logicalH = screenH;
@@ -1226,6 +1292,8 @@ void gfxUpdateScreen(void) {
 #else
 #ifdef ANDROID_BUILD
     useWindowPixels();
+#elif defined(SNDSTATION_BUILD)
+    selectRenderTarget(sndPresentationTexture);
 #else
     selectRenderTarget(NULL);
     SDL_RenderSetLogicalSize(renderer, logicalW, logicalH);
@@ -1243,6 +1311,34 @@ void gfxUpdateScreen(void) {
     drawCursorOverlay();
 #endif
     gfxDrawHUD();
+#ifdef SNDSTATION_BUILD
+    bool softwareRotated = false;
+    if (sndRotatedTexture && !sndRotationFailed) {
+      void* pixels = NULL;
+      int pitch = 0;
+      if (SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_RGBA8888,
+                               sndRotationPixels, logicalW * sizeof(uint32_t)) == 0 &&
+          SDL_LockTexture(sndRotatedTexture, NULL, &pixels, &pitch) == 0) {
+        sndstationRotatePixels(sndRotationPixels, logicalW, logicalH, pixels, pitch);
+        SDL_UnlockTexture(sndRotatedTexture);
+        softwareRotated = true;
+      } else {
+        fprintf(stderr, "Cannot rotate SNDStation software frame: %s\n", SDL_GetError());
+        sndRotationFailed = true;
+      }
+    }
+    selectRenderTarget(NULL);
+    setColor(bgColor);
+    SDL_RenderClear(renderer);
+    const SNDStationDisplay display = sndstationDisplay(sndOutputW, sndOutputH, logicalW, logicalH);
+    const int result = softwareRotated
+      ? SDL_RenderCopy(renderer, sndRotatedTexture, NULL, &display.bounds)
+      : SDL_RenderCopyEx(renderer, sndPresentationTexture, NULL, &display.destination,
+                         display.rotated ? -90.0 : 0.0, NULL, SDL_FLIP_NONE);
+    if (result != 0) {
+      fprintf(stderr, "Cannot present SNDStation frame: %s\n", SDL_GetError());
+    }
+#endif
     SDL_RenderPresent(renderer);
     useCompositionTarget();
 #endif
@@ -1458,6 +1554,11 @@ void gfxHandleResize(int width, int height) {
   resizePresentDelay = 2;
   screenW = 640;
   screenH = 480;
+#elif defined(SNDSTATION_BUILD)
+  sndOutputW = width;
+  sndOutputH = height;
+  screenW = 640;
+  screenH = 360;
 #elif defined(DESKTOP_BUILD) || defined(MIYOOPORTS_BUILD)
   // Desktop windows resize the presentation only. The tracker itself remains
   // a 640x480 canvas, avoiding font/layout changes during a live resize.
@@ -1517,6 +1618,9 @@ void gfxGetPhysicalSize(int* width, int* height) {
   if (renderer) getAndroidSurfaceSize(&outputW, &outputH);
   if (outputW <= 0) outputW = physicalW;
   if (outputH <= 0) outputH = physicalH;
+#elif defined(SNDSTATION_BUILD)
+  outputW = sndOutputW;
+  outputH = sndOutputH;
 #else
   if (renderer) SDL_GetRendererOutputSize(renderer, &outputW, &outputH);
   if (outputW <= 0) outputW = screenW;
@@ -1525,6 +1629,13 @@ void gfxGetPhysicalSize(int* width, int* height) {
   if (width) *width = outputW;
   if (height) *height = outputH;
 }
+
+#ifdef SNDSTATION_BUILD
+void gfxMapSNDStationInput(int* x, int* y) {
+  const SNDStationDisplay display = sndstationDisplay(sndOutputW, sndOutputH, logicalW, logicalH);
+  sndstationMapInput(display, logicalW, logicalH, x, y);
+}
+#endif
 
 int gfxGetTouchGridPosition(int physicalX, int physicalY, int* col, int* row) {
   int logicalX = physicalX;

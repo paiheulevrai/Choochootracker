@@ -56,6 +56,11 @@ android android-deploy:
 PortMaster PortMaster-deploy:
 	$(MAKE) -f Makefile.portmaster $@
 
+# SNDStation ARM64 development build
+.PHONY: SNDStation SNDStation-package-dev
+SNDStation SNDStation-package-dev:
+	$(MAKE) -f Makefile.sndstation $@
+
 # NextUI Pak Store (reuses the PortMaster ARM64 binary)
 .PHONY: NextUI NextUI-deploy
 NextUI NextUI-deploy:

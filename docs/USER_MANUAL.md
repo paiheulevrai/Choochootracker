@@ -296,6 +296,20 @@ It follows the classic LSDj workflow and navigation system, with several sound d
 
 ## 1. Installation and files
 
+### SNDStation (experimental)
+
+The SNDStation build presents portrait-oriented displays in landscape.
+It uses the existing per-user ChooChooTracker workspace for projects and
+settings. On the TrimUI Smart Pro's built-in audio, the hardware volume buttons
+adjust the DAC up to its level at launch (never above 0 dB). The previous
+level is restored on normal exit; this local control does not change
+SNDStation's shared software volume. A forced termination or power loss can
+prevent restoration. If a change in the codec's output route is detected,
+restoration is refused rather than altering a different application's audio.
+The package also provides **ChooChooTracker (software test)** in the launcher.
+It selects the experimental software renderer; the normal entry keeps the
+default renderer selection.
+
 ### ArkOS / PortMaster
 
 Install `choochootracker.zip` through PortMaster, or copy the extracted package to the console's `ports` directory. Start **ChooChooTracker** from the Ports menu.
