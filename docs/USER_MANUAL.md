@@ -59,12 +59,13 @@ pattern is an existing chain and each bar is a chain row. The project remains
 Classic internally. Classic and Simplified switch directly without
 rewriting Song, changing phrase IDs, baking transposes, or allocating on browse.
 
-Automatic chain, pattern and phrase allocations prefer hexadecimal banks by
-track: `10–1F` (`010–01F` for phrases) on track 1, `20–2F` (`020–02F`)
-on track 2, and so on. When a bank is full, another free slot is used.
-Existing IDs and manual ID editing are unchanged.
-In Classic, a single tap on an empty cell still recalls the last selected ID;
-double-tap and clone actions select free IDs automatically.
+In both Classic and Simplified, a tap on an empty Song cell recalls the last
+used ID. Reusing an existing ID links the same content, so edits affect every
+occurrence. A double-tap on a filled Song cell selects the first available ID
+after its current value, without wrapping or preferring a track bank.
+If none remains, the cell is unchanged. Existing IDs and manual ID editing
+are unchanged. Other automatic allocations, including phrases and clones,
+retain their hexadecimal track banks.
 Historical Pattern-format projects are reconciled to chains once when loaded,
 using the existing importer. A failed import leaves the current project and
 source file unchanged. The combined writer still retains historical arrays/maps.
@@ -80,8 +81,10 @@ source file unchanged. The combined writer still retains historical arrays/maps.
   UP/DOWN returns to notes; a second SHIFT + UP opens Groove.
 - Length: EDIT + LEFT/RIGHT removes/adds a bar, EDIT + UP/DOWN doubles/halves,
   B + A resets the default. Limits are 1..16. Added bars reference independent
-  no-event phrases; no-event does not force silence. New patterns created in
-  Song use the configured default length immediately, without allocating on browse.
+  no-event phrases; no-event does not force silence. New empty patterns are
+  materialized at the configured default length as soon as they are created
+  in Song (tap, double-tap or typed hex), so the Length header shows the
+  default (e.g. `01`) immediately, not on the first edit.
   Doubling copies bar references; each bar isolates automatically on editing.
   Length edits affect every Song occurrence of the same pattern.
 - Loop BAR uses the existing phrase loop; PAT uses the existing chain loop.
@@ -261,11 +264,12 @@ reserves all slots before mutation and can be undone as one Tools action.
 No-event bars do not force silence: held notes and effect tails may continue.
 Editing a missing bar may
 append only the next bar; gaps and more complex extensions must be handled
-in Classic. New chains prefer one-based hexadecimal track banks:
-track 1 `10-1F`, track 2 `20-2F`, ... track 8 `80-8F`.
-Occupied/referenced slots are skipped. Overflow prefers `90-9F` for track 1,
-`A0-AF` for track 2, ... `F0-FE` for track 7, `00-0F` for track 8,
-then any free slot. `FF` is not a valid chain.
+in Classic. Song cells in this mode use Classic's chain editing semantics:
+tapping an empty cell inserts the last used chain value, and double-tapping
+selects the first available chain after the current value. Chains created
+this way that are still empty and unreferenced are materialized at the configured default length
+immediately, so the Phrase editor's Length header shows the default
+(e.g. `01`) rather than `00`.
 Phrases use 16-slot banks: track 1 `010-01F`, track 2 `020-02F`,
 ... track 8 `080-08F`, with free-slot fallback. These are independent ID
 pools, not a decimal numbering scheme. Existing IDs are never renumbered.
@@ -2209,9 +2213,11 @@ interpreted:
 - **Default length** (visible in Simplified mode) is the length of newly
   created patterns and the length restored when clearing the Length field
   on the Phrase screen header.
-- In Simplified, tap an empty Song cell or double-tap an occupied cell to
-  create a new pattern at the default length. IDs use the selected track's
-  `10`, `20`, `30`… bank; if that bank is full, other IDs are searched.
+- In both modes, tapping an empty Song cell recalls the last used ID;
+  double-tapping an occupied cell selects the first free ID after it,
+  without track banks or wrapping. In Simplified, a newly assigned pristine
+  pattern gets the default length immediately. Existing or shared patterns
+  retain their contents and length.
 - **Playhead** (visible in Simplified mode) chooses between looping the bar
   the cursor views and playing the whole pattern. In **PAT**, playback starts
   at the viewed bar, then continues through and loops the full pattern.

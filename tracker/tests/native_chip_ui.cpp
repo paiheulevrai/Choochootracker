@@ -516,73 +516,90 @@ int main(int argc,char** argv){
     puts("PASS: B stays in Project and Settings; Shift navigation still works.");
     return 0;
   }
-  if(argc==3 && !strcmp(argv[2],"--pattern-copy-only")) {
+  if(argc==3 && !strcmp(argv[2],"--song-creation-only")) {
     screensInitAll(); waveformDisplayInit(); monitorDisplayInit();
-    require(audioManager.start(48000, 256) == 0, "pattern copy audio fixture");
+    require(audioManager.start(48000, 256) == 0, "Song creation audio fixture");
     audioPause(1);
-    projectFree(&chipnomadState->project); projectInitAY(&chipnomadState->project);
-    auto& p = chipnomadState->project;
-    for (auto& row : p.song) for (auto& cell : row) cell = EMPTY_VALUE_16;
-    p.viewMode = ViewMode::simplified;
-    p.song[9][0] = 0;
-    p.patterns[0].bars[0].phrase = 7;
-    p.phrases[7].rows[0].note = 69;
-    appSettings.defaultPatternLength = 4;
-    screenSong.init();
-    *pSongRow = *pSongTrack = *pChainRow = 0;
-    chipnomadInitChips(chipnomadState, 48000, nullptr);
-    screenSetup(&screenSong, 0); appDraw();
-    editHistoryClear();
-    appChord(0, keyEdit);
-    require(p.song[0][0] == 0x10 && p.patterns[0x10].length == 4 &&
-      p.patterns[0x10].bars[0].phrase == EMPTY_VALUE_16,
-      "first pattern uses track bank and default length without copying unselected pattern zero");
-    p.patterns[0x10].bars[0].phrase = 5;
-    p.phrases[5].rows[0].note = 60;
-    appChord(0, keyDown);
-    editHistoryClear();
-    appChord(0, keyEdit);
-    const int copy = p.song[1][0];
-    require(copy == 0x11 && p.patterns[copy].length == 4, "tap copies pattern into next free track slot");
-    const int phrase = p.patterns[copy].bars[0].phrase;
-    require(phrase != 5 && phrase < PROJECT_MAX_PHRASES && p.phrases[phrase].rows[0].note == 60,
-      "tap makes an independent phrase copy");
-    appChord(0, keyUndo);
-    require(p.song[1][0] == EMPTY_VALUE_16 && p.phrases[phrase].rows[0].note == EMPTY_VALUE_8,
-      "undo removes copied pattern and phrase");
-    appChord(0, keyRedo);
-    require(p.song[1][0] == copy && p.phrases[phrase].rows[0].note == 60, "redo restores independent copy");
-    p.phrases[phrase].rows[0].note = 72;
-    require(p.phrases[5].rows[0].note == 60, "copy edits preserve source");
-    p.song[3][0] = 0x14;
-    p.patterns[0x14].length = 2;
-    p.patterns[0x14].bars[0].phrase = 6;
-    p.phrases[6].rows[0].note = 64;
-    appChord(0, keyDown); appChord(0, keyDown); appChord(0, keyUp);
-    appChord(0, keyEdit);
-    const int selectedCopy = p.song[2][0];
-    require(selectedCopy == 0x12 && p.patterns[selectedCopy].length == 2 &&
-      p.phrases[p.patterns[selectedCopy].bars[0].phrase].rows[0].note == 64,
-      "tap copies the last navigated pattern");
-    require(screenTouchTap(3, 6) && screenTouchTap(3, 7), "touch selects source and empty Song cells");
-    appChord(0, keyEdit);
-    const int touchCopy = p.song[4][0];
-    require(touchCopy == 0x13 && p.patterns[touchCopy].length == 2 &&
-      p.phrases[p.patterns[touchCopy].bars[0].phrase].rows[0].note == 64,
-      "tap copies the last touch-selected pattern");
-    screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
-    const int empty = p.song[4][0];
-    require(empty == 0x15 && p.patterns[empty].length == 4 &&
-      p.patterns[empty].bars[0].phrase == EMPTY_VALUE_16, "double-tap creates a new empty pattern");
-    require(screenTouchTap(3, 6) && screenTouchTap(3, 8), "select source and another empty cell");
-    for (auto& full : p.phrases) full.rows[0].note = 48;
-    editHistoryClear(); projectModified = 0;
-    appChord(0, keyEdit);
-    require(p.song[5][0] == EMPTY_VALUE_16 && !projectModified &&
-      strstr(screenGetActiveMessage(), "No free phrases"), "full phrase pool refuses copying without a partial edit");
+    for (bool simplified : {false, true}) {
+      projectFree(&chipnomadState->project); projectInitAY(&chipnomadState->project);
+      auto& p = chipnomadState->project;
+      canonicalSimplifiedActive = simplified;
+      appSettings.defaultPatternLength = 4;
+      screenSong.init();
+      *pChainRow = 0;
+      chipnomadInitChips(chipnomadState, 48000, nullptr);
+      screenSetup(&screenSong, 0); appDraw();
+      editHistoryClear();
+      appChord(0, keyEdit);
+      require(p.song[0][0] == 0, "tap recalls initial ID without a track bank");
+      require(grooveboxTrackLength(&p, 0, 0) == (simplified ? 4 : 0),
+        "only Simplified materializes the default length");
+      appChord(0, keyUndo);
+      require(p.song[0][0] == EMPTY_VALUE_16 && chainSlotIsPristine(&p, 0),
+        "creation undo includes materialized bars");
+      appChord(0, keyRedo);
+      require(p.song[0][0] == 0 && grooveboxTrackLength(&p, 0, 0) == (simplified ? 4 : 0),
+        "creation redo restores the exact length");
+      p.chains[0].rows[0].phrase = 5;
+      p.phrases[5].rows[0].note = 60;
+      appChord(0, keyDown); appChord(0, keyEdit);
+      require(p.song[1][0] == 0, "tap links the last selected chain");
+      appChord(0, keyUndo);
+      require(p.song[1][0] == EMPTY_VALUE_16, "undo removes the linked occurrence");
+      appChord(0, keyRedo);
+      require(p.song[1][0] == 0 && p.phrases[5].rows[0].note == 60, "redo preserves shared content");
+      screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+      require(p.song[1][0] == 1, "double-tap chooses the next free ID");
+      require(grooveboxTrackLength(&p, 1, 0) == (simplified ? 4 : 0), "double-tap default length");
+      p.chains[2].rows[7].transpose = 1;
+      p.chainToPatternMap[3] = 20;
+      p.patternToChainMap[21] = 4;
+      p.song[9][0] = 5;
+      screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+      require(p.song[1][0] == 6, "next ID skips retained, converted and referenced slots");
+      chainClear(&p.chains[2]); p.chainToPatternMap[3] = EMPTY_VALUE_16;
+      p.patternToChainMap[21] = EMPTY_VALUE_16; p.song[9][0] = EMPTY_VALUE_16;
+      p.song[1][0] = PROJECT_MAX_CHAINS - 1;
+      screenSong.onInput(1, keyEdit, 2); screenSong.onInput(0, 0, 2); appDraw();
+      require(p.song[1][0] == PROJECT_MAX_CHAINS - 1 &&
+        strstr(screenGetActiveMessage(), "No free"), "allocation at the last ID does not wrap");
+      if (!simplified) continue;
+
+      auto raw = [&](SDL_Keycode code) {
+        MainLoopEventData event{};
+        event.data.input = {InputDeviceType::keyboard, code};
+        event.type = MainLoopEvent::keyDown; appOnEvent(event); appDraw();
+        event.type = MainLoopEvent::keyUp; appOnEvent(event); appDraw();
+      };
+      appChord(0, keyDown);
+      raw(SDLK_ESCAPE);
+      raw(SDLK_2);
+      require(p.song[2][0] == 2 && grooveboxTrackLength(&p, 2, 0) == 4, "first hex digit materializes");
+      raw(SDLK_a);
+      require(p.song[2][0] == 0x2a && grooveboxTrackLength(&p, 2, 0) == 4, "second hex digit materializes final ID");
+      require(chainSlotIsPristine(&p, 2), "typing two digits leaves no intermediate chain");
+      require(editHistoryUndo(), "hex second digit undo");
+      require(p.song[2][0] == 2 && grooveboxTrackLength(&p, 2, 0) == 4, "hex undo restores first digit and bars");
+      require(editHistoryRedo() && p.song[2][0] == 0x2a && chainSlotIsPristine(&p, 2), "hex redo restores final ID");
+      appChord(0, keyDown);
+      p.chains[0x3f].rows[0].phrase = 6;
+      p.phrases[6].rows[0].note = 68;
+      raw(SDLK_3); raw(SDLK_f);
+      require(p.song[3][0] == 0x3f && p.phrases[6].rows[0].note == 68 &&
+        grooveboxTrackLength(&p, 3, 0) == 1 && chainSlotIsPristine(&p, 3),
+        "typing an existing ID preserves its contents and frees the intermediate chain");
+      appChord(0, keyDown);
+      for (auto& full : p.phrases) full.rows[0].note = 48;
+      projectModified = 0; raw(SDLK_b);
+      require(p.song[4][0] == EMPTY_VALUE_16 && !projectModified &&
+        strstr(screenGetActiveMessage(), "No free phrase"), "hex allocation failure leaves no partial assignment");
+      raw(SDLK_ESCAPE); appChord(0, keyEdit);
+      require(p.song[4][0] == 0x3f, "failed hex entry preserves last selected ID");
+    }
+    canonicalSimplifiedActive = false;
     editHistoryClear(); audioManager.stop(); chipnomadDestroy(chipnomadState); chipnomadState = nullptr;
     gfxCleanup(); SDL_Quit();
-    printf("Simplified pattern copy UI passed\n");
+    printf("Classic and Simplified Song creation UI passed\n");
     return 0;
   }
   if(argc==3 && !strcmp(argv[2],"--undo-only")) {
