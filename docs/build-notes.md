@@ -131,9 +131,10 @@ gh workflow run macos.yml --repo paiheulevrai/Choochootracker \
 
 Choose a source ref whose `appVersion` matches the requested release tag.
 Manual backfills build that selected ref, not necessarily the old tag commit.
-The uploaded `*-macOS-build-info.json` records the exact source SHA, ref and
-Actions URL. A dedicated `*-macOS-SHA256SUMS.txt` covers the ZIP without racing
-other platform workflows updating the shared checksum manifest.
+Only the universal application ZIP is attached to the GitHub release.
+The `*-macOS-build-info.json` (source SHA, ref and Actions URL) and
+`*-macOS-SHA256SUMS.txt` remain in the internal Actions artifact for validation;
+they are not published as separate release downloads.
 
 Before removing experimental status, community testers must check Finder
 launch/Gatekeeper, Retina/resizing, keyboard/gamepad, real audio playback and
@@ -277,8 +278,14 @@ extracted application with `./chipnomad.sh`.
 
 ## Web
 
+GitHub Actions (`.github/workflows/web.yml`) generates and commits the Web
+bundle after relevant source changes are pushed to `main`. Routine fixes,
+commits, and pushes do not require a local Web build or generated `web/dist/`
+changes. Build locally only when explicitly requested or needed to investigate
+a Web-specific build or runtime problem.
+
 Emscripten is installed locally at `.tmp/emsdk`; do not search for or install
-another copy. In PowerShell:
+another copy. For an optional local build, in PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force

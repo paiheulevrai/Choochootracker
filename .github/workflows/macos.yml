@@ -129,6 +129,4 @@ jobs:
           archive="releases/ChooChooTracker-${RELEASE_TAG}-macOS-universal.zip"
           test -f "$archive"
           gh release view "$RELEASE_TAG" --json tagName --jq .tagName
-          gh release upload "$RELEASE_TAG" "$archive" \
-            "releases/ChooChooTracker-${RELEASE_TAG}-macOS-build-info.json" \
-            "releases/ChooChooTracker-${RELEASE_TAG}-macOS-SHA256SUMS.txt" --clobber
+          gh release upload "$RELEASE_TAG" "$archive" --clobber

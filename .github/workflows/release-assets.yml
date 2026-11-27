@@ -31,6 +31,9 @@ on:
       miyoo_run:
         required: true
         type: string
+      sndstation_run:
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -66,6 +69,8 @@ jobs:
             --name choochootracker-macos --dir "$root/input/macos"
           gh run download "${{ inputs.miyoo_run }}" --repo "$GITHUB_REPOSITORY" \
             --name choochootracker-miyooports --dir "$root/input/miyoo"
+          gh run download "${{ inputs.sndstation_run }}" --repo "$GITHUB_REPOSITORY" \
+            --name choochootracker-sndstation --dir "$root/input/sndstation"
           echo "RELEASE_ASSETS=$root" >> "$GITHUB_ENV"
 
       - name: Rename and validate release packages
@@ -89,7 +94,8 @@ jobs:
           cp "$in/appimage/"*.AppImage "$out/"
           cp "$in/raspberry/"*.tar.gz "$out/"
           cp "$in/miyoo/"*.zip "$out/"
-          cp "$in/macos/"* "$out/"
+          cp "$in/macos/"*-macOS-universal.zip "$out/"
+          cp "$in/sndstation/"*.deb "$out/ChooChooTracker-${tag}-SNDStation-experimental.deb"
           (cd "$in/web" && zip -qr "$out/ChooChooTracker-${tag}-Web.zip" .)
 
           for archive in "$out/"*.zip "$out/"*.apk "$out/"*.aab; do
@@ -97,7 +103,9 @@ jobs:
           done
           tar -tzf "$out/"*-RaspberryPi-*.tar.gz > /dev/null
           test -n "$(find "$out" -maxdepth 1 -name '*.AppImage' -size +1M -print -quit)"
-          python3 -m json.tool "$out/ChooChooTracker-${tag}-macOS-build-info.json" \
+          python3 -m json.tool "$in/macos/"*-macOS-build-info.json > /dev/null
+          (cd "$in/macos" && sha256sum --check *-macOS-SHA256SUMS.txt)
+          dpkg-deb --info "$out/ChooChooTracker-${tag}-SNDStation-experimental.deb" \
             > /dev/null
 
       - name: Generate checksums and attach assets

@@ -352,7 +352,7 @@ D#2 02 0F PSL 00 --- 00 --- 00
 - Sample pitch: 0
 - Sample speed: 100
 - Sample start: 0
-- Sample end: 0
+- Sample end: 255
 - Sample loop: 0
 - Filter enabled: 0
 - Filter character: 0

@@ -1,6 +1,24 @@
 # ChooChooTracker changelog
 
-## v1.0.25-alpha (draft)
+## v1.0.26-alpha (draft)
+
+Changes since v1.0.25-alpha.
+
+- Add spatial insert effects with track sidechain ducking, plus an experimental
+  SNDStation package for TrimUI Smart Pro with local volume and rotation controls.
+- Audition WAV files in the browser while holding PLAY. Support multiple game
+  controllers at once and improve audio capture, sidebar visuals and tap tempo.
+- Improve NextUI H700 support and experimental USB audio input while preserving
+  console audio output; clarify sampling setup and PortMaster installation.
+- Align Simplified Song creation with Classic defaults, improve Classic slot
+  allocation and picker behavior, and refine controller navigation and NTH hints.
+- Align application, Android, F-Droid and NextUI Pak versions at 1.0.26-alpha;
+  increment Android version code to 26.
+
+Alpha release: back up projects before upgrading. SNDStation is experimental;
+rendering performance is still under investigation.
+
+## v1.0.25-alpha (November 18, 2026)
 
 Changes since v1.0.24-alpha.
 

@@ -2,12 +2,14 @@
 
 ChooChooTracker is an 8-track music tracker for handheld consoles.
 
-Release **v1.0.25-alpha** adds Launchpad Mini MK3 control, stereo Link Audio,
-MIDI CC recording, curved modulation transitions and bounded undo/redo, while
-improving Simplified pattern ownership, AY Trance Gates and console controls.
-Back up projects before upgrading: existing Bogie Clap presets load with the
-redesigned sound, and removed experimental engine-specific audio FM/PM modes
-are rejected explicitly. See [the changelog](../CHANGELOG.md) for release details.
+Release **v1.0.26-alpha** adds spatial insert effects with track sidechain
+ducking, browser WAV audition, support for multiple gamepads and an experimental
+SNDStation package. It also improves NextUI H700 support, USB audio capture,
+tap tempo and Simplified Song creation. Back up projects before upgrading:
+existing Bogie Clap presets load with the redesigned sound, and removed
+experimental engine-specific audio FM/PM modes are rejected explicitly.
+SNDStation remains experimental while rendering performance is investigated.
+See [the changelog](../CHANGELOG.md) for release details.
 
 ## Undo / redo
 
@@ -1434,6 +1436,7 @@ To sample audio from a compatible phone or computer on TrimUI Smart Pro with Nex
 1. Connect the source to the console's USB-C device port with a data cable. In [ChooChooHacker](https://github.com/paiheulevrai/ChooChooHacker#try-usb-audio-in-experimental), select **Test USB audio IN** and confirm. This mode is experimental and the source must support USB audio output.
 2. Launch the Tracker Pak (save your work and relaunch if it was already open). Leave **Audio Output** on `Default` to keep listening through the console.
 3. Enable **Audio Input**, arm `UAC1_Gadget` in **Input devices**, then play audio on the source and record it in the Sampler.
+When launching the NextUI Pak with ChooChooHacker's USB audio IN active, keep **Audio Output** on `Default` to play through the console while capturing from `UAC1_Gadget`. If you enabled USB audio IN after opening the tracker, save your work and relaunch it.
 
 ##### Recording audio input
 
