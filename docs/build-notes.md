@@ -24,6 +24,9 @@ The build rotates portrait displays into landscape and provides local volume
 buttons for the Smart Pro's built-in codec. Mixer and animated-background
 performance still needs investigation on the console.
 
+The SNDStation GitHub Actions workflow also builds this development package
+as the `choochootracker-sndstation` artifact.
+
 For SNDStation rendering diagnostics, set `CCT_SNDSTATION_PROFILE=1` and
 capture stderr. Every five seconds it reports renderer type, frame rate,
 average draw and presentation time, and the maximum combined time.

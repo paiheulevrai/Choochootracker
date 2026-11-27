@@ -172,8 +172,12 @@ static const SelectionItem spatial[] = {
   {"Rotary", insertRotary, nullptr, 0, nullptr},
   {"Doubler", insertDoubler, nullptr, 0, nullptr},
   {"Stereo Width", insertStereoWidth, nullptr, 0, nullptr},
+};
+static const SelectionItem reverb[] = {
   {"Clouds Reverb", insertCloudsReverb, nullptr, 0, nullptr},
   {"Beads Reverb", insertBeadsReverb, nullptr, 0, nullptr},
+};
+static const SelectionItem delay[] = {
   {"Ping-Pong Delay", insertPingPongDelay, nullptr, 0, nullptr},
   {"Tape Echo", insertTapeEcho, nullptr, 0, nullptr},
   {"Diffusing Echoverb", insertDiffusingEchoverb, nullptr, 0, nullptr},
@@ -188,6 +192,8 @@ static const SelectionItem insertCategories[] = {
   {"Character", -1, character, (int)(sizeof(character) / sizeof(character[0])), nullptr},
   {"Modulation", -1, modulation, (int)(sizeof(modulation) / sizeof(modulation[0])), nullptr},
   {"Spatial", -1, spatial, (int)(sizeof(spatial) / sizeof(spatial[0])), nullptr},
+  {"Reverb", -1, reverb, (int)(sizeof(reverb) / sizeof(reverb[0])), nullptr},
+  {"Delay", -1, delay, (int)(sizeof(delay) / sizeof(delay[0])), nullptr},
   {"Texture", -1, texture, (int)(sizeof(texture) / sizeof(texture[0])), nullptr},
 };
 

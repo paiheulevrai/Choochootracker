@@ -1,0 +1,49 @@
+name: SNDStation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - insert-reverb-delay
+    paths:
+      - '.github/workflows/sndstation.yml'
+      - 'tracker/**'
+      - 'chipnomad_lib/**'
+      - 'docs/USER_MANUAL.md'
+
+permissions:
+  contents: read
+
+jobs:
+  sndstation:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libsdl2-dev libasound2-dev apt-utils
+      - name: Test SNDStation packaging and workspace
+        run: python3 -m unittest discover -s tracker/tests -p 'test_sndstation_*.py'
+      - name: Test insert categories
+        run: |
+          cd tracker
+          mkdir -p build/tests
+          g++ -std=c++17 -ffunction-sections -fdata-sections \
+            -Isrc -Isrc/corelib -I../chipnomad_lib -I../chipnomad_lib/external/mutable \
+            tests/insert_fx_categories.cpp -Wl,--gc-sections -o build/tests/insert_fx_categories
+          build/tests/insert_fx_categories
+      - name: Build experimental package
+        run: |
+          cd tracker
+          make -j4 -f Makefile.sndstation SNDStation-package-dev CXX=g++ STRIP=strip
+          readelf -h build/sndstation/choochootracker.aarch64 | grep -q AArch64
+          dpkg-deb --info build/sndstation/*.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: choochootracker-sndstation
+          path: tracker/build/sndstation/*.deb
+          if-no-files-found: error

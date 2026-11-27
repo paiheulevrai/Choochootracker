@@ -2398,6 +2398,10 @@ The navigation display keeps the full F–M–I–P column visible throughout th
 instrument screens, including Insert FX and the instrument pool, and highlights
 the current screen.
 
+In the module chooser, **Reverb** contains Clouds and Beads Reverb; **Delay**
+contains Ping-Pong Delay, Tape Echo and Diffusing Echoverb. Rotary, Doubler
+and Stereo Width remain under **Spatial**.
+
 | Module | Parameters in order |
 | --- | --- |
 | Work Compressor | Threshold, Attack, Release, Makeup, Ratio, Detector source, Detector filter, Mix |
