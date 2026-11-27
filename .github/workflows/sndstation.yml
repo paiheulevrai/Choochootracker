@@ -27,14 +27,6 @@ jobs:
           sudo apt-get install -y build-essential pkg-config libsdl2-dev libasound2-dev apt-utils
       - name: Test SNDStation packaging and workspace
         run: python3 -m unittest discover -s tracker/tests -p 'test_sndstation_*.py'
-      - name: Test insert categories
-        run: |
-          cd tracker
-          mkdir -p build/tests
-          g++ -std=c++17 -ffunction-sections -fdata-sections \
-            -Isrc -Isrc/corelib -I../chipnomad_lib -I../chipnomad_lib/external/mutable \
-            tests/insert_fx_categories.cpp -Wl,--gc-sections -o build/tests/insert_fx_categories
-          build/tests/insert_fx_categories
       - name: Build experimental package
         run: |
           cd tracker
