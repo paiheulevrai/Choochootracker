@@ -2414,6 +2414,9 @@ the current screen.
 | Phaser | Rate, Depth, Feedback, Mix |
 | Rotary | Speed, Depth, Drive, Mix |
 | Saturation | Drive, Tone, Level, Mix |
+| Finisher | Low Cut, Drive, Clip, Ceiling, Release |
+| Transient | Attack, Sustain, Mix |
+| Amp | Drive, Tone, Cabinet, Output, Mix |
 | Bitcrusher | Bit depth, Rate reduction, Tone, Mix |
 | Destruction | Crush, Rate, Fold, Distort, Saturate, Tone, Mix, Input |
 | Beads | Time, Size, Density, Pitch, Scatter, Feedback, Shape / Freeze, Mix |
@@ -2475,6 +2478,27 @@ without conversion. Its old parameters are reinterpreted, so an old project
 can sound different or dry until Mix and the stages are edited.
 Saturation and distortion include output level or mix controls for balancing them
 against the unprocessed signal.
+
+**Finisher** is a creative end-of-chain processor: Low Cut removes bass before
+Drive, Clip moves from a softer overload to a harder clip, and a linked-stereo
+limiter follows. Low Cut `00` is off; Ceiling sets the sample-peak limit from
+-12 to 0 dBFS and Release controls recovery from 20 to 500 ms. There is no
+lookahead or true-peak guarantee, and clipping can create audible aliasing.
+Once the insert's normal enable transition completes, the ceiling applies at
+its output, not necessarily at the final output: master EQ, volume and an
+excluded master sidechain source are applied afterwards. The separate playback
+safety limiter can still lower dense signals. WAV export renders the master
+without that playback safety limiter, so it can sound different at high levels.
+
+**Transient** uses linked stereo detection. Attack and Sustain are bipolar:
+`80` is neutral, lower values reduce and higher values emphasize the respective
+portion of the sound. Mix blends the gain change with the dry signal.
+
+**Amp** provides a stylized preamp and synthetic cabinet for instruments or
+mixes. Drive increases saturation; Tone sets the cabinet's low-pass cutoff,
+Cabinet switches the cabinet on or off, Output balances level, and Mix blends
+with dry. This is not a model of a specific amp or an impulse-response cabinet;
+strong settings can alias.
 
 The five spatial inserts are separate effects from the existing global reverb
 and delay sends; they can be used together or repeated in either serial slot.

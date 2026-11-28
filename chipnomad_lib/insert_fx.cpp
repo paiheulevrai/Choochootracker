@@ -183,7 +183,23 @@ static const InsertDescriptor descriptors[] = {
       {"HP", "High-pass", "Hz", 20, 2000, 0, M::exponential},
       {"LP", "Low-pass", "Hz", 20, 20000, 220, M::exponential},
       {"Mix", "Mix", "%", 0, 1, 160, M::linear},
-      {"Duck Src", "Duck src", "", 0, 8, 0, M::discrete}}}};
+      {"Duck Src", "Duck src", "", 0, 8, 0, M::discrete}}},
+    {"Finisher", 5,
+     {{"Low Cut", "Low cut", "Hz", 0, 200, 0, M::linear},
+      {"Drive", "Drive", "dB", 0, 24, 0, M::linear},
+      {"Clip", "Clip", "%", 0, 1, 0, M::linear},
+      {"Ceiling", "Ceiling", "dB", -12, 0, 234, M::linear},
+      {"Release", "Release", "ms", 20, 500, 94, M::exponential}}},
+    {"Transient", 3,
+     {{"Attack", "Attack", "%", -1, 1, 128, M::bipolar},
+      {"Sustain", "Sustain", "%", -1, 1, 128, M::bipolar},
+      {"Mix", "Mix", "%", 0, 1, 255, M::linear}}},
+    {"Amp", 5,
+     {{"Drive", "Drive", "dB", 0, 30, 48, M::linear},
+      {"Tone", "Tone", "Hz", 1400, 8000, 170, M::exponential},
+      {"Cab", "Cabinet", "", 0, 1, 1, M::discrete},
+      {"Output", "Output", "dB", -18, 12, 128, M::bipolar},
+      {"Mix", "Mix", "%", 0, 1, 255, M::linear}}}};
 static_assert(sizeof(descriptors) / sizeof(descriptors[0]) == insertModuleCount,
               "Stable module catalogue");
 const InsertDescriptor& insertDescriptor(int m) {
@@ -299,6 +315,10 @@ void insertDescribe(char* text, size_t size, int m, int p, int value) {
     snprintf(text, size, "%s", n[(int)v]);
   } else if (m == insertStereoWidth && p == 2 && value == 0) {
     snprintf(text, size, "Off");
+  } else if (m == insertFinisher && p == 0 && value == 0) {
+    snprintf(text, size, "Off");
+  } else if (m == insertAmp && p == 2) {
+    snprintf(text, size, "%s", value ? "On" : "Off");
   } else if (insertSpatialModule(m) && p == insertDuckSourceParameter(m)) {
     if (v == 0) snprintf(text, size, "OFF");
     else snprintf(text, size, "Track %d", (int)v);
@@ -496,6 +516,7 @@ struct InsertChain::Impl {
     float feedback[2]{}, held[2]{};
     float destructionDcInput[2]{}, destructionDcOutput[2]{};
     float destructionDryPower = 0, destructionWetPower = 0, destructionGain = 1;
+    float dynamicsFast = 0, dynamicsSlow = 0, dynamicsGain = 1;
     Biquad eq[2][3];
     int delayWrite = 0, holdCounter = 0;
     float toneCoefficient = 1;
@@ -569,6 +590,8 @@ struct InsertChain::Impl {
     memset(s.destructionDcOutput, 0, sizeof(s.destructionDcOutput));
     s.destructionDryPower = s.destructionWetPower = 0;
     s.destructionGain = 1;
+    s.dynamicsFast = s.dynamicsSlow = 0;
+    s.dynamicsGain = 1;
     for (auto& channel : s.eq) for (auto& band : channel) band.reset();
     s.eqNeutral = true;
     s.phase = 0;
@@ -783,6 +806,74 @@ struct InsertChain::Impl {
         case insertOTT:
           ott_dsp_process_stereo(s.ott[0], s.ott[1], l, r, l, r, n);
           break;
+        case insertFinisher: {
+          const float hp = p[0] > 0 ? coefficient(p[0], rate) : 0;
+          const float drive = powf(10.0f, p[1] / 20.0f);
+          const float ceiling = powf(10.0f, p[3] / 20.0f);
+          const float release = 1.0f - expf(-1000.0f / (p[4] * rate));
+          for (int i = 0; i < n; ++i) {
+            float input[2] = {l[i], r[i]};
+            for (int ch = 0; ch < 2; ++ch) {
+              s.filter[ch] += hp * (input[ch] - s.filter[ch]);
+              float x = (hp > 0 ? input[ch] - s.filter[ch] : input[ch]) * drive;
+              float rounded = softClip(x);
+              input[ch] = rounded + p[2] * (std::clamp(x, -1.0f, 1.0f) - rounded);
+            }
+            const float peak = std::max(fabsf(input[0]), fabsf(input[1]));
+            const float targetGain = peak > ceiling ? ceiling / peak : 1.0f;
+            s.dynamicsGain = targetGain < s.dynamicsGain ? targetGain :
+              s.dynamicsGain + release * (1.0f - s.dynamicsGain);
+            s.dynamicsGain = std::min(s.dynamicsGain, targetGain);
+            l[i] = input[0] * s.dynamicsGain;
+            r[i] = input[1] * s.dynamicsGain;
+          }
+          break;
+        }
+        case insertTransient: {
+          const float fastAttack = 1.0f - expf(-1.0f / (0.001f * rate));
+          const float fastRelease = 1.0f - expf(-1.0f / (0.015f * rate));
+          const float slowAttack = 1.0f - expf(-1.0f / (0.020f * rate));
+          const float slowRelease = 1.0f - expf(-1.0f / (0.100f * rate));
+          const float gainSmooth = 1.0f - expf(-1.0f / (0.001f * rate));
+          const bool neutral = values[0] == 128 && values[1] == 128;
+          for (int i = 0; i < n; ++i) {
+            const float detector = std::max(fabsf(l[i]), fabsf(r[i]));
+            s.dynamicsFast += (detector > s.dynamicsFast ? fastAttack : fastRelease) *
+              (detector - s.dynamicsFast);
+            s.dynamicsSlow += (detector > s.dynamicsSlow ? slowAttack : slowRelease) *
+              (detector - s.dynamicsSlow);
+            const float attack = std::max(0.0f, s.dynamicsFast - s.dynamicsSlow) /
+              std::max(s.dynamicsFast, 0.0001f);
+            const float sustain = std::min(1.0f, s.dynamicsSlow / std::max(s.dynamicsFast, 0.0001f));
+            const float gain = std::max(0.0f, 1.0f + p[0] * attack + p[1] * sustain);
+            s.dynamicsGain = neutral ? 1.0f :
+              s.dynamicsGain + gainSmooth * (gain - s.dynamicsGain);
+            const float mixedGain = 1.0f + p[2] * (s.dynamicsGain - 1.0f);
+            l[i] *= mixedGain;
+            r[i] *= mixedGain;
+          }
+          break;
+        }
+        case insertAmp: {
+          const float drive = powf(10.0f, p[0] / 20.0f);
+          const float output = powf(10.0f, p[3] / 20.0f);
+          const float hp = coefficient(90.0f, rate);
+          const float tone = coefficient(p[1], rate);
+          for (int i = 0; i < n; ++i) {
+            float input[2] = {l[i], r[i]};
+            for (int ch = 0; ch < 2; ++ch) {
+              const float shaped = audioTanh(input[ch] * drive);
+              s.filter[ch] += hp * (shaped - s.filter[ch]);
+              s.feedback[ch] += tone * (shaped - s.filter[ch] - s.feedback[ch]);
+              s.held[ch] += tone * (s.feedback[ch] - s.held[ch]);
+              const float wet = (values[2] ? s.held[ch] : shaped) * output;
+              input[ch] += p[4] * (wet - input[ch]);
+            }
+            l[i] = input[0];
+            r[i] = input[1];
+          }
+          break;
+        }
         case insertChorus:
         case insertFlanger:
         case insertRotary: {

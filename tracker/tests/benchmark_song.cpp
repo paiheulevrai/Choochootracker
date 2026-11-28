@@ -70,7 +70,11 @@ class LegacyOutputLimiter {
 
 bool configureVariant(Project* project, const char* variant) {
   const bool spatial = !std::strcmp(variant, "layer-spatial");
-  const bool pair = spatial || !std::strcmp(variant, "layer-pair");
+  const bool colorBase = !std::strcmp(variant, "layer-color-base");
+  const bool colorMaster = !std::strcmp(variant, "layer-color-master");
+  const bool colorTracks = !std::strcmp(variant, "layer-color-tracks");
+  const bool color = colorBase || colorMaster || colorTracks;
+  const bool pair = spatial || color || !std::strcmp(variant, "layer-pair");
   if (!std::strcmp(variant, "layer") || pair) {
     int slot = PROJECT_MAX_INSTRUMENTS - 1;
     while (slot > 0 && project->instruments[slot].type != InstrumentType::none) --slot;
@@ -124,6 +128,25 @@ bool configureVariant(Project* project, const char* variant) {
     for (int track = 0; track < project->tracksCount; ++track)
       for (int slot = 0; slot < 2; ++slot)
         insertSelect(&project->trackInserts[track][slot], modules[(track * 2 + slot) % 5]);
+  }
+  if (color) {
+    for (auto& inserts : project->trackInserts)
+      for (auto& insert : inserts) insertSelect(&insert, insertOff);
+    for (auto& insert : project->masterInserts) insertSelect(&insert, insertOff);
+    if (!colorBase) {
+      insertSelect(&project->masterInserts[0], insertFinisher);
+      insertEdit(&project->masterInserts[0], 1, 96);
+      insertEdit(&project->masterInserts[0], 2, 64);
+    }
+    if (colorTracks) {
+      const int modules[] = {insertAmp, insertTransient, insertFinisher};
+      for (int track = 0; track < project->tracksCount; ++track)
+        for (int slot = 0; slot < 2; ++slot) {
+          insertSelect(&project->trackInserts[track][slot], modules[(track * 2 + slot) % 3]);
+          if (project->trackInserts[track][slot].module == insertTransient)
+            insertEdit(&project->trackInserts[track][slot], 0, 192);
+        }
+    }
   }
   return true;
 }
@@ -218,7 +241,9 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "Cannot load %s: %s\n", path, projectFileError);
     return 1;
   }
-  const char* variants[] = {"full", "layer", "layer-pair", "layer-spatial", "no-effects", "no-tilt", "no-drive", "no-inserts", "no-pan", "no-monitor"};
+  const char* variants[] = {"full", "layer", "layer-pair", "layer-spatial", "layer-color-base",
+                            "layer-color-master", "layer-color-tracks", "no-effects", "no-tilt",
+                            "no-drive", "no-inserts", "no-pan", "no-monitor"};
   bool knownVariant = false;
   for (const char* candidate : variants) knownVariant |= !std::strcmp(candidate, variant);
   if (!knownVariant) {

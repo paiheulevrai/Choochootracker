@@ -328,7 +328,7 @@ TEST_SUITE("track inserts") {
     CHECK(fxF28 < 255);
     CHECK(genericModFirstInsert == 29);
     const int counts[] = {0, 8, 4, 2, 6, 6, 5, 4, 5, 4, 4, 4, 8, 6, 8, 8, 6, 8,
-                         6, 5, 5, 8, 8};
+                         6, 5, 5, 8, 8, 5, 3, 5};
     static_assert(sizeof(counts) / sizeof(counts[0]) == insertModuleCount, "Test covers every module");
     for (int m = 0; m < insertModuleCount; ++m) {
       CHECK(insertDescriptor(m).count == counts[m]);
@@ -1220,6 +1220,137 @@ TEST_SUITE("track inserts") {
       CHECK(out == dry);
     }
   }
+  TEST_CASE("finisher limits linked stereo peaks and recovers after overload") {
+    for (int rate : {32000, 44100, 48000}) {
+      InsertConfig config[2]{};
+      insertSelect(&config[0], insertFinisher);
+      insertEdit(&config[0], 1, 120);
+      insertEdit(&config[0], 2, 100);
+      insertEdit(&config[0], 3, 128);
+      InsertAutomation automation{};
+      InsertChain chain((float)rate);
+      chain.sync(config, &automation);
+      uint8_t effective[2][8];
+      values(config, effective);
+      std::vector<float> warm(rate / 100 * 2, 0);
+      chain.process(warm.data(), rate / 100, effective);
+      const float ceiling = powf(10.0f, insertMap(insertFinisher, 3, 128) / 20.0f);
+      std::vector<float> audio(rate * 2, 0);
+      audio[0] = 4;
+      audio[1] = 2;
+      for (int i = 1; i < rate; ++i) {
+        audio[2 * i] = 0.01f;
+        audio[2 * i + 1] = 0.005f;
+      }
+      chain.process(audio.data(), rate, effective);
+      CHECK(audio[0] == doctest::Approx(ceiling).epsilon(0.00001));
+      for (float sample : audio) {
+        CHECK(std::isfinite(sample));
+        CHECK(fabsf(sample) <= ceiling + 0.000001f);
+      }
+      CHECK(audio[2 * (rate - 1)] > audio[2] * 1.5f);
+      CHECK(audio[2 * (rate - 1) + 1] == doctest::Approx(audio[2 * (rate - 1)] * .5f).epsilon(.001));
+    }
+  }
+  TEST_CASE("finisher low cut reduces sub bass") {
+    auto energy = [](int cutoff) {
+      InsertConfig config[2]{};
+      insertSelect(&config[0], insertFinisher);
+      insertEdit(&config[0], 0, cutoff);
+      InsertAutomation automation{};
+      InsertChain chain(48000);
+      chain.sync(config, &automation);
+      uint8_t effective[2][8];
+      values(config, effective);
+      std::vector<float> audio(48000 * 2);
+      for (int i = 0; i < 48000; ++i)
+        audio[2 * i] = audio[2 * i + 1] = .1f * sinf(6.28318530718f * 20 * i / 48000);
+      chain.process(audio.data(), 48000, effective);
+      float result = 0;
+      for (int i = 24000; i < 48000; ++i) result += audio[2 * i] * audio[2 * i];
+      return result;
+    };
+    CHECK(energy(255) < energy(0) * .02f);
+  }
+  TEST_CASE("finisher clip changes the limiter recovery after a peak") {
+    auto recovery = [](int clip) {
+      InsertConfig config[2]{};
+      insertSelect(&config[0], insertFinisher);
+      insertEdit(&config[0], 2, clip);
+      InsertAutomation automation{};
+      InsertChain chain(48000);
+      chain.sync(config, &automation);
+      uint8_t effective[2][8];
+      values(config, effective);
+      std::vector<float> audio(1024 * 2, 0);
+      chain.process(audio.data(), 1024, effective);
+      audio[0] = audio[1] = 4;
+      audio[2] = audio[3] = .1f;
+      chain.process(audio.data(), 1024, effective);
+      return audio[2];
+    };
+    CHECK(recovery(255) > recovery(0) * 1.3f);
+  }
+  TEST_CASE("transient shaper adjusts attack and sustain independently") {
+    auto render = [](int attack, int sustain) {
+      InsertConfig config[2]{};
+      insertSelect(&config[0], insertTransient);
+      insertEdit(&config[0], 0, attack);
+      insertEdit(&config[0], 1, sustain);
+      InsertAutomation automation{};
+      InsertChain chain(48000);
+      chain.sync(config, &automation);
+      uint8_t effective[2][8];
+      values(config, effective);
+      std::vector<float> audio(24000 * 2, 0);
+      for (int i = 2400; i < 18000; ++i) {
+        audio[2 * i] = .2f;
+        audio[2 * i + 1] = .1f;
+      }
+      chain.process(audio.data(), 24000, effective);
+      return audio;
+    };
+    auto neutral = render(128, 128);
+    auto attackUp = render(255, 128), attackDown = render(0, 128);
+    auto sustainUp = render(128, 255), sustainDown = render(128, 0);
+    const int onset = 2400 + 240, sustained = 2400 + 9000;
+    CHECK(neutral[2 * onset] == doctest::Approx(.2f));
+    CHECK(attackUp[2 * onset] > neutral[2 * onset] * 1.2f);
+    CHECK(attackDown[2 * onset] < neutral[2 * onset] * .8f);
+    CHECK(sustainUp[2 * sustained] > neutral[2 * sustained] * 1.5f);
+    CHECK(sustainDown[2 * sustained] < neutral[2 * sustained] * .5f);
+    CHECK(attackUp[2 * onset + 1] == doctest::Approx(attackUp[2 * onset] * .5f));
+    for (float sample : sustainUp) CHECK(std::isfinite(sample));
+  }
+  TEST_CASE("amp drive and cabinet alter sound and dry mix is transparent") {
+    auto render = [](int drive, int cabinet, int mix) {
+      InsertConfig config[2]{};
+      insertSelect(&config[0], insertAmp);
+      insertEdit(&config[0], 0, drive);
+      insertEdit(&config[0], 2, cabinet);
+      insertEdit(&config[0], 4, mix);
+      InsertAutomation automation{};
+      InsertChain chain(48000);
+      chain.sync(config, &automation);
+      uint8_t effective[2][8];
+      values(config, effective);
+      auto audio = signal(4096);
+      chain.process(audio.data(), 4096, effective);
+      return audio;
+    };
+    const auto dry = signal(4096), noMix = render(255, 1, 0);
+    const auto clean = render(0, 0, 255), driven = render(200, 0, 255);
+    const auto cabinet = render(200, 1, 255);
+    CHECK(noMix == dry);
+    float driveDifference = 0, cabinetDifference = 0;
+    for (size_t i = 2048; i < dry.size(); ++i) {
+      driveDifference += fabsf(driven[i] - clean[i]);
+      cabinetDifference += fabsf(cabinet[i] - driven[i]);
+      CHECK(std::isfinite(cabinet[i]));
+    }
+    CHECK(driveDifference > 100);
+    CHECK(cabinetDifference > 10);
+  }
   TEST_CASE("parametric EQ is neutral at zero gain, shapes bands and soft clips boosts") {
     InsertConfig c[2]{};
     insertSelect(&c[0], insertParametricEQ);
@@ -1415,6 +1546,18 @@ TEST_SUITE("track inserts") {
     }
     CHECK(loaded->masterInserts[1].module == insertTapeEcho);
     CHECK(loaded->masterInserts[1].values[insertDuckSourceParameter(insertTapeEcho)] == 8);
+    for (int module : {insertFinisher, insertTransient, insertAmp}) {
+      insertSelect(&p->trackInserts[0][0], module);
+      insertSelect(&p->masterInserts[0], module);
+      insertEdit(&p->trackInserts[0][0], 0, 211);
+      insertEdit(&p->masterInserts[0], 0, 77);
+      REQUIRE(projectSave(p.get(), path) == 0);
+      REQUIRE(projectLoad(loaded.get(), path) == 0);
+      CHECK(loaded->trackInserts[0][0].module == module);
+      CHECK(loaded->trackInserts[0][0].values[0] == 211);
+      CHECK(loaded->masterInserts[0].module == module);
+      CHECK(loaded->masterInserts[0].values[0] == 77);
+    }
     auto start = original.find("- Track inserts:");
     auto end = original.find("- Track volumes:");
     REQUIRE(start != std::string::npos);
@@ -2040,7 +2183,8 @@ TEST_CASE("insert tips return after real key release and categorized chooser sel
   insertSelect(&insert, insertOff);
   const int popupOrder[] = {
       insertOff, insertOTT, insertCompressor, insertParametricEQ,
-      insertDistortion, insertSaturation, insertBitcrusher, insertDestruction, insertTape,
+      insertFinisher, insertTransient,
+      insertDistortion, insertSaturation, insertBitcrusher, insertDestruction, insertTape, insertAmp,
       insertChorus, insertPhaser, insertFlanger, insertTranceGate,
       insertRotary, insertDoubler, insertStereoWidth, insertCloudsReverb,
       insertBeadsReverb, insertPingPongDelay, insertTapeEcho, insertDiffusingEchoverb,

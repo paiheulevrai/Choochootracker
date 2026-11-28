@@ -154,6 +154,8 @@ static const SelectionItem mix[] = {
   {"OTT", insertOTT, nullptr, 0, nullptr},
   {"Compressor", insertCompressor, nullptr, 0, nullptr},
   {"EQ", insertParametricEQ, nullptr, 0, nullptr},
+  {"Finisher", insertFinisher, nullptr, 0, nullptr},
+  {"Transient", insertTransient, nullptr, 0, nullptr},
 };
 static const SelectionItem character[] = {
   {"Distortion", insertDistortion, nullptr, 0, nullptr},
@@ -161,6 +163,7 @@ static const SelectionItem character[] = {
   {"Bitcrusher", insertBitcrusher, nullptr, 0, nullptr},
   {"Destruction", insertDestruction, nullptr, 0, nullptr},
   {"TAPESCAM", insertTape, nullptr, 0, nullptr},
+  {"Amp", insertAmp, nullptr, 0, nullptr},
 };
 static const SelectionItem modulation[] = {
   {"Chorus", insertChorus, nullptr, 0, nullptr},

@@ -29,6 +29,9 @@ enum InsertModule : uint8_t {
   insertPingPongDelay,
   insertTapeEcho,
   insertDiffusingEchoverb,
+  insertFinisher,
+  insertTransient,
+  insertAmp,
   insertModuleCount
 };
 enum class InsertMapping : uint8_t { linear, exponential, bipolar, discrete };
